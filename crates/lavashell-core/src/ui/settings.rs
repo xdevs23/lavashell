@@ -251,7 +251,9 @@ impl Modifier {
 
     /// Calls `action` with the pinch of the first two touch points pressed on this node or inside
     /// it. The pinch starts when the node has claimed both touch points. `action` is then called for
-    /// each change.
+    /// each change. While a handler inside this node holds a touch point, the node takes both points
+    /// once the distance between them changed by more than the touch slop, and the `on_pointer`
+    /// handlers there receive `PointerPhase::Cancelled`.
     pub fn on_transform(self, action: impl FnMut(TransformInput) + 'static) -> Self {
         let action: TransformHandler = Rc::new(RefCell::new(action));
         self.set(NodeSetting::Transform(action))

@@ -87,6 +87,23 @@ impl View {
         }
     }
 
+    /// Ends the challengers that their nodes no longer declare, such as a pinch on a node composed again without
+    /// `on_transform`.
+    pub(super) fn withdraw_challengers(&mut self) {
+        let pointers: Vec<_> = self.pointers.keys().copied().collect();
+        for pointer in pointers {
+            let arena = (self.pointers.get_mut(&pointer)).and_then(|state| state.arena.take());
+            let Some(mut arena) = arena else {
+                continue;
+            };
+            let outcome = arena.withdraw(|challenger| !challenger.declared(self));
+            if let Some(state) = self.pointers.get_mut(&pointer) {
+                state.arena = Some(arena);
+            }
+            self.apply_outcome(outcome);
+        }
+    }
+
     pub(super) fn cancel_pointers(&mut self) {
         self.end_captures(|_| true);
         self.pointers.clear();
