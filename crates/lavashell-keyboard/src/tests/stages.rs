@@ -88,8 +88,8 @@ fn under_reduced_motion_the_keyboard_shows_and_hides_whole_at_once() -> Result<(
 
 /// A view in which the host shows a taskbar island, shared under the key `taskbar`, while the
 /// keyboard is hidden. The keyboard grows out of that island. The returned state sets the text
-/// session of the field edited by the host.
-fn with_taskbar() -> Result<(View, State<Option<TextSession>>), TestError> {
+/// session of the field edited by the host. The returned keyboard is the one composed in the view.
+fn with_taskbar() -> Result<(View, State<Option<TextSession>>, Keyboard), TestError> {
     let field = State::new(None);
     let target = Target::Host {
         session: field.clone(),
@@ -97,10 +97,11 @@ fn with_taskbar() -> Result<(View, State<Option<TextSession>>), TestError> {
     };
     let settings = State::new(settings());
     let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH))?;
+    let composed = keyboard.clone();
     let top = 390.dp();
     let view = View::new(lavashell_test_platform::facts(), move |ui| {
         ui.layout(Arrangement::Overlay, Modifier::new(), |ui| {
-            if !keyboard.shown() {
+            if !composed.shown() {
                 let blur = constant!(Backdrop::blur(Dp::new(3.0)));
                 let glass = Material::new(Color::WHITE).backdrop(blur);
                 ui.shared(
@@ -118,18 +119,18 @@ fn with_taskbar() -> Result<(View, State<Option<TextSession>>), TestError> {
                 ui,
                 |_| {},
                 |ui| {
-                    ui.keyboard_from(&keyboard, "taskbar", SCREEN.height - top, Modifier::new());
+                    ui.keyboard_from(&composed, "taskbar", SCREEN.height - top, Modifier::new());
                 },
             );
         });
     });
-    Ok((view, field))
+    Ok((view, field, keyboard))
 }
 
 #[test]
 fn the_glass_grows_out_of_the_shared_node_of_the_host_and_shrinks_back_into_it()
 -> Result<(), TestError> {
-    let (mut view, field) = with_taskbar()?;
+    let (mut view, field, _) = with_taskbar()?;
     let mut scene = Scene::default();
     frame(&mut view, &mut scene, 0)?;
     let taskbar = composed_bounds(&view, "taskbar")?;
@@ -162,7 +163,7 @@ fn the_glass_grows_out_of_the_shared_node_of_the_host_and_shrinks_back_into_it()
 #[test]
 fn the_content_above_ends_at_the_glass_in_every_frame_while_it_grows_out_of_the_island_and_back()
 -> Result<(), TestError> {
-    let (mut view, field) = with_taskbar()?;
+    let (mut view, field, _) = with_taskbar()?;
     let mut scene = Scene::default();
     frame(&mut view, &mut scene, 0)?;
     assert!(ends_at_glass(&view, &scene), "at rest in the taskbar");
@@ -224,5 +225,35 @@ fn the_return_to_an_island_waits_for_one_pixel_of_the_view() -> Result<(), TestE
     };
     assert_eq!(after(1.0)?, look::hide_time(300.dp(), 1.dp()));
     assert!(after(2.0)? > after(1.0)?, "a finer pixel takes longer");
+    Ok(())
+}
+
+#[test]
+fn a_keyboard_from_an_island_covers_nothing_until_it_rises_and_rests_hidden_once_its_glass_is_back()
+-> Result<(), TestError> {
+    let (mut view, field, keyboard) = with_taskbar()?;
+    let mut scene = Scene::default();
+    frame(&mut view, &mut scene, 0)?;
+    assert!(keyboard.rests_hidden());
+    assert_eq!(keyboard.covered(), Dp::ZERO);
+    field.set(Some(empty()));
+    frame(&mut view, &mut scene, 0)?;
+    assert!(!keyboard.rests_hidden());
+    assert!(
+        keyboard.covered() < panel().height,
+        "the panel has not risen yet"
+    );
+    settle(&mut view, &mut scene)?;
+    assert!((keyboard.covered() - panel().height).abs() < 0.5.dp());
+    field.set(None);
+    refresh(&mut view, &mut scene)?;
+    run_until(&mut view, &mut scene, |_, _| !keyboard.shown())?;
+    assert!(
+        !keyboard.rests_hidden(),
+        "the glass is still on its way back"
+    );
+    settle(&mut view, &mut scene)?;
+    assert!(keyboard.rests_hidden());
+    assert_eq!(keyboard.covered(), Dp::ZERO);
     Ok(())
 }

@@ -151,3 +151,23 @@ fn a_keyboard_shown_in_one_view_rises_from_below_when_it_is_composed_in_another(
     assert_eq!(height(&second)?, panel);
     Ok(())
 }
+
+#[test]
+fn a_keyboard_hidden_by_its_key_shows_for_no_session_until_the_field_is_pressed_again()
+-> Result<(), TestError> {
+    let mut host = Host::new(settings())?;
+    assert_eq!(host.keyboard.session(), None);
+    host.start(TextHints::default(), "")?;
+    assert!(host.keyboard.session().is_some());
+    host.keyboard.hide();
+    host.settle()?;
+    assert_eq!(host.keyboard.session(), None);
+    assert!(host.keyboard.rests_hidden());
+    let current = host.session.peek().ok_or(TestError::NoSession)?;
+    host.session.set(Some(TextSession {
+        presses: FieldPresses(current.presses.0 + 1),
+        ..current
+    }));
+    assert!(host.keyboard.session().is_some());
+    Ok(())
+}
