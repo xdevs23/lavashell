@@ -152,27 +152,6 @@ struct Inner<T: Animatable> {
     owner: RefCell<Weak<Registry>>,
 }
 
-struct CachedPlaying<T: Animatable> {
-    revision: u64,
-    playing: Option<Rc<Playing<T>>>,
-}
-
-impl<T: Animatable> CachedPlaying<T> {
-    fn get_or_build(
-        &mut self,
-        revision: u64,
-        build: impl FnOnce() -> Option<Playing<T>>,
-    ) -> Option<Rc<Playing<T>>> {
-        if self.revision != revision {
-            *self = Self {
-                revision,
-                playing: build().map(Rc::new),
-            };
-        }
-        self.playing.clone()
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum Status {
     Running,
@@ -301,10 +280,7 @@ impl<T: Animatable> Animation<T> {
             value: State::new(value.clone()),
             status: State::new(Status::Finished),
             revision: State::new(0),
-            playing: RefCell::new(CachedPlaying {
-                revision: 0,
-                playing: None,
-            }),
+            playing: RefCell::default(),
             track: RefCell::new(Track::resting(value, Duration::ZERO, 1.0)),
             reduced: Cell::new(false),
             owner: RefCell::new(Weak::new()),
@@ -419,6 +395,9 @@ impl<T: Animatable> Animation<T> {
         t.timing.start = t.now;
         t.timing.offset = Duration::ZERO;
         t.timing.paused = None;
+        if t.program.as_ref().and_then(Scheduled::rest) == Some(Duration::ZERO) {
+            t.sample();
+        }
         self.0.publish(t);
         self.0.revise();
     }
@@ -474,6 +453,10 @@ impl<T: Animatable> Animation<T> {
         self.rest_at(value);
     }
 }
+
+mod cached_playing;
+
+use cached_playing::CachedPlaying;
 
 mod error;
 

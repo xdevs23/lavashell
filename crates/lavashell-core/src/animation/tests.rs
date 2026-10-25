@@ -53,6 +53,17 @@ fn a_running_spring_ends_where_the_device_pixel_of_its_view_shows_no_change() ->
 }
 
 #[test]
+fn a_retarget_by_less_than_a_device_pixel_ends_at_once() -> TestResult {
+    let motion = Motion::default();
+    let a = motion.animation(Dp::ZERO)?;
+    motion.set_device_pixel(1.dp());
+    a.animate_to(1e-9.dp(), Spring::new(ms(400), 1.0)?)?;
+    assert!(!motion.is_active());
+    assert_eq!(a.get(), 1e-9.dp());
+    Ok(())
+}
+
+#[test]
 fn spring_and_tween_retarget_without_position_or_velocity_discontinuity() -> TestResult {
     for spec in [
         MotionSpec::Spring(Spring::new(ms(450), 0.85)?),
