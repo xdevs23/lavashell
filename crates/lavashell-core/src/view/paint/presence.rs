@@ -24,10 +24,10 @@ pub(super) struct TransitionSpace {
 impl TransitionSpace {
     /// The space of a node with an identity in the whole view. `resting` maps the paint coordinates into the view once
     /// every motion around the node has ended, and `laid_out` is the origin of the paint coordinates in the view as
-    /// laid out.
-    pub fn in_view(resting: Transform, laid_out: Point) -> Self {
+    /// laid out. The bounds animate in the coordinates of the host, in which the viewport lies at `viewport`.
+    pub fn in_view(resting: Transform, laid_out: Point, viewport: Point) -> Self {
         Self {
-            origin: Point::new(-laid_out.x, -laid_out.y),
+            origin: Point::new(-laid_out.x - viewport.x, -laid_out.y - viewport.y),
             outer: resting.inverse().then(Transform::translation(laid_out)),
         }
     }

@@ -116,3 +116,9 @@ view.record_presentation(shown_at);
 ```
 
 Wake the host at `View::next_deadline` and `SceneTree::next_change`. See [frame timing](frame-timing.md).
+
+Nodes created with `ui.shared` animate in the coordinates of the host.
+`View::set_viewport_origin` places the viewport in those coordinates, and the
+origin is zero until the host sets it. A host that moves the viewport over
+content that does not move on the screen, such as a window that grows over the
+screen, sets that origin, so shared nodes do not move on the screen either.

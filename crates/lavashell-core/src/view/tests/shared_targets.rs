@@ -150,3 +150,30 @@ fn a_shared_node_in_moved_content_shows_where_it_is_laid_out() -> TestResult {
     }
     Ok(())
 }
+
+/// The host grows the window of the view 300 dp upwards over the screen and moves its viewport by
+/// as much, while the content does not move on the screen.
+#[test]
+fn a_shared_node_does_not_move_on_the_screen_while_the_host_moves_the_viewport_with_the_content()
+-> TestResult {
+    let grown = State::new(false);
+    let read = grown.clone();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let top = if read.get() { 300.dp() } else { 0.dp() };
+        ui.layout(
+            Axis::Vertical,
+            Modifier::new().offset(10.dp(), 20.dp() + top),
+            shared,
+        );
+    });
+    view.set_viewport_origin(Point::new(0.dp(), 300.dp()));
+    let mut scene = Scene::default();
+    show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    grown.set(true);
+    view.set_viewport_origin(Point::default());
+    let window = Size::new(WINDOW_SIZE.width, WINDOW_SIZE.height + 300.dp());
+    show_frame(&mut scene, &mut view, window, 0)?;
+    let rest = view.bounds_of("shared");
+    assert_eq!(rest, Some(shown(scene.at(500))?));
+    Ok(())
+}
