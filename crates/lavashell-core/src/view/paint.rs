@@ -271,7 +271,7 @@ impl View {
         let space = match node.identity {
             Identity::InView => {
                 let resting = self.moving.resting().then(parent_transform);
-                TransitionSpace::in_view(resting, laid_out)
+                TransitionSpace::in_view(resting, laid_out, self.viewport_origin)
             }
             Identity::InParent => TransitionSpace::in_parent(origin),
         };

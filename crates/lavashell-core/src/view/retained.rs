@@ -63,8 +63,8 @@ struct PaintKey {
     /// transition. The transition animates from that position.
     offset: Option<Point>,
     /// The transform of the component in the view once every motion around it ends, and the laid-out origin of the
-    /// component, while the component contains a node shared in the whole view. Such a node animates in the
-    /// coordinates of the view.
+    /// component in the coordinates of the host, while the component contains a node shared in the whole view. Such a
+    /// node animates in the coordinates of the host.
     placed: Option<(Affine, Point)>,
     sizes: Vec<(NodeId, Size)>,
     interaction: InteractionKey,
@@ -258,7 +258,8 @@ impl View {
             offset: (self.nodes[index].transition)
                 .map(|_| Point::new(position.x - origin.x, position.y - origin.y)),
             placed: shared.then(|| {
-                let laid_out = inherited.laid_out.offset(position.x, position.y);
+                let laid_out = (inherited.laid_out.offset(position.x, position.y))
+                    .offset(self.viewport_origin.x, self.viewport_origin.y);
                 (self.moving.resting().then(placed).affine(), laid_out)
             }),
             sizes: indices

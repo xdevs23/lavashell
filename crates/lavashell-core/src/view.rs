@@ -236,6 +236,8 @@ pub struct View {
     window_focused: bool,
     interaction_visuals: BTreeMap<NodeId, interaction::StyledAppearance>,
     redraw: bool,
+    /// Where the viewport lies in the coordinates of the host, in which shared nodes animate.
+    viewport_origin: Point,
     size: Size,
     memory: Memory,
     shortcuts: Vec<(Shortcut, Action)>,
@@ -306,6 +308,7 @@ impl View {
             window_focused: true,
             interaction_visuals: BTreeMap::new(),
             redraw: true,
+            viewport_origin: Point::default(),
             size: Size::ZERO,
             memory: Memory::default(),
             shortcuts: Vec::new(),
@@ -369,6 +372,17 @@ impl View {
 
     pub fn invalidate(&mut self) {
         self.redraw = true;
+    }
+
+    /// Places the viewport at `origin` in the coordinates of the host, such as the screen on which the host shows the
+    /// view. Shared nodes animate in those coordinates. They do not move on the screen while the host moves the
+    /// viewport and the content of the view with it, as when a window grows over the screen while its content does
+    /// not move.
+    pub fn set_viewport_origin(&mut self, origin: Point) {
+        if self.viewport_origin != origin {
+            self.viewport_origin = origin;
+            self.redraw = true;
+        }
     }
 
     #[must_use]
