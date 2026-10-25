@@ -147,6 +147,8 @@ mod content_sizes;
 mod deferred;
 #[path = "tests/editing.rs"]
 mod editing;
+#[path = "tests/first_fitting.rs"]
+mod first_fitting;
 #[path = "tests/layout_cycles.rs"]
 mod layout_cycles;
 

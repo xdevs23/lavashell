@@ -81,8 +81,8 @@ impl View {
         if inherited {
             let _always_new_as_each_node_is_visited_once = disabled.insert(node.id);
         }
-        for child in &node.children {
-            self.collect_disabled(*child, inherited, disabled);
+        for (position, &child) in node.children.iter().enumerate() {
+            self.collect_disabled(child, inherited || !self.shows(index, position), disabled);
         }
     }
 

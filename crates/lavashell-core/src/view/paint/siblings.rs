@@ -9,6 +9,7 @@ enum Slot {
 
 #[derive(Clone, Copy)]
 struct Sibling {
+    position: usize,
     id: NodeId,
     can_exit: bool,
 }
@@ -53,7 +54,7 @@ impl SiblingOrders {
             }
         }
         let (mut slots, mut painted) = (Vec::new(), Vec::new());
-        let ids = children.map(|child| child.id).enumerate().map(Some);
+        let ids = children.map(|child| Some((child.position, child.id)));
         for start in std::iter::once(None).chain(ids) {
             let mut anchor = None;
             if let Some((child, id)) = start {
@@ -109,17 +110,22 @@ impl View {
             }
         } else {
             for child in 0..self.nodes[index].children.len() {
-                self.paint_child(index, child, pos, transform, inherited, text);
+                if self.shows(index, child) {
+                    self.paint_child(index, child, pos, transform, inherited, text);
+                }
             }
         }
     }
 
     fn sibling_order(&mut self, index: usize) -> Option<Vec<Slot>> {
-        let nodes = &self.nodes;
-        let children = nodes[index].children.iter().map(|&child| Sibling {
-            id: nodes[child].id,
-            can_exit: nodes[child].transition.is_some_and(|t| t.exits()),
-        });
+        let (nodes, layout) = (&self.nodes, self.layout.get(index));
+        let children = (nodes[index].children.iter().enumerate())
+            .filter(move |(_, child)| layout.is_none_or(|layout| layout.shows(&nodes[**child])))
+            .map(|(position, &child)| Sibling {
+                position,
+                id: nodes[child].id,
+                can_exit: nodes[child].transition.is_some_and(|t| t.exits()),
+            });
         let transitions = &self.transitions;
         self.sibling_orders
             .order(nodes[index].id, children, |id| transitions.is_leaving(id))

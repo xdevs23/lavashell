@@ -58,12 +58,16 @@ pub type AccessibilityHandler =
 pub type SemanticsProvider = Rc<dyn Fn(&mut crate::accessibility::Semantics)>;
 pub(crate) type Memory = Rc<RefCell<crate::states::States<(NodeId, u64)>>>;
 
-/// How a container places its children: one after another along an axis, or each at the origin
-/// of the container over the children before it.
+/// How a container places its children: one after another along an axis, each at the origin of the
+/// container over the children before it, or one child chosen by the room available.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Arrangement {
     Along(Axis),
     Overlay,
+    /// The first child in the flow whose size fits within the size proposed to the container, or
+    /// the last one when none fits, at the origin of the container. The other children in the flow
+    /// do not show.
+    FirstFitting,
 }
 
 impl From<Axis> for Arrangement {

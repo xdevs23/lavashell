@@ -80,8 +80,10 @@ impl<'a> NodeLocations<'a> {
         for tree in trees {
             for (node, layout) in tree.nodes.iter().zip(&tree.layout) {
                 for (&child, &offset) in node.children.iter().zip(&layout.children) {
-                    let _location_in_an_earlier_tree =
-                        locations.insert(tree.nodes[child].id, (tree, child, offset));
+                    if layout.shows(&tree.nodes[child]) {
+                        let _location_in_an_earlier_tree =
+                            locations.insert(tree.nodes[child].id, (tree, child, offset));
+                    }
                 }
             }
         }

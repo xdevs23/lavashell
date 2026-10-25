@@ -44,10 +44,8 @@ impl View {
         content: Vec<Painted>,
     ) {
         let local = transform.inverse();
-        let islands: Vec<_> = self.nodes[index]
-            .children
-            .iter()
-            .filter_map(|&child| {
+        let islands: Vec<_> = (self.shown_children(index))
+            .filter_map(|child| {
                 let corners = self.nodes[child].modifier.iter().find_map(|e| match e {
                     ModifierElement::Island(corners) => Some(*corners),
                     _ => None,

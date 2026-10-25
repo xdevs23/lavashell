@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod content_sizes;
+mod fitting;
 mod placement;
 mod weights;
 
@@ -11,7 +12,7 @@ use super::{
 };
 use crate::protected_text::ProtectedInput;
 use crate::scene::TextStyle;
-use crate::ui::{ContentSizes, FieldContent, Flow, Measured};
+use crate::ui::{ContentSizes, FieldContent, Flow, Measured, NodeId};
 use crate::units::{NonNegativeDp, NumberError};
 use placement::place_in_flow;
 use weights::WeightedChildren;
@@ -32,6 +33,7 @@ pub(super) struct Layout {
     pub rect: Rect,
     /// One step of the arrow keys in a scrolling node: the height of one line of its text.
     pub line_step: Dp,
+    pub shown_face: Option<NodeId>,
 }
 
 impl Layout {
@@ -324,6 +326,7 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
                     };
                     Size::new(length, length)
                 }
+                NodeKind::Container(Arrangement::FirstFitting) => self.measure_faces(index, c),
                 NodeKind::Container(arrangement) => self.measure_children(index, *arrangement, c),
             };
             c.constrain(desired)

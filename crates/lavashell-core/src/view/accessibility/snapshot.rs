@@ -31,8 +31,8 @@ impl View {
             let merge = suppress_passive
                 || semantics.mode == SemanticsMode::MergeDescendants
                 || matches!(node.kind, NodeKind::Container(_)) && self.has_activation(index);
-            for child in &node.children {
-                self.accessibility_subtree(*child, disabled, merge, nodes, &mut children);
+            for child in self.shown_children(index) {
+                self.accessibility_subtree(child, disabled, merge, nodes, &mut children);
             }
         }
         if omitted {
@@ -268,8 +268,8 @@ impl View {
         {
             values.push(value.clone());
         }
-        for child in &node.children {
-            self.accessibility_name_parts(*child, false, values);
+        for child in self.shown_children(index) {
+            self.accessibility_name_parts(child, false, values);
         }
     }
 

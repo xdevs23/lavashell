@@ -228,6 +228,13 @@ impl Ui {
         self.add(node, children);
     }
 
+    /// A container that shows the first of the `faces` composed in it that fits within the size
+    /// proposed to it, or the last one when none fits. An icon with a word, followed by the icon
+    /// alone, shows the icon alone where the word does not fit.
+    pub fn first_fitting(&mut self, modifier: Modifier, faces: impl FnOnce(&mut Self)) {
+        self.layout(Arrangement::FirstFitting, modifier, faces);
+    }
+
     pub fn key(&mut self, key: impl Hash, modifier: Modifier, children: impl FnOnce(&mut Self)) {
         let node = self.keyed(key, modifier);
         self.add(node, children);
