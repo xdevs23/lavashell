@@ -4,6 +4,8 @@
 //! between dp and px, and a `TextScaling` converts sp to dp.
 
 mod checked;
+#[cfg(feature = "serde")]
+mod encoding;
 mod positive;
 
 pub use checked::{FiniteDp, Fraction, NonNegative, NonNegativeDp, NumberError};
@@ -40,6 +42,7 @@ use std::ops::{
 /// let length = Dp::new(2.0) + Px::new(1.0);
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Dp(f64);
 
@@ -58,11 +61,13 @@ pub struct Px(f64);
 /// let size: Dp = 14.sp().into();
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Sp(f64);
 
 /// A fraction of the font size, so letter spacing grows with the text.
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Em(f64);
 
@@ -338,7 +343,14 @@ impl Density {
 
     #[must_use]
     pub fn from_scale(scale: f64) -> Option<Self> {
-        (scale.is_finite() && scale > 0.0).then_some(Self(scale))
+        Self::try_new(scale).ok()
+    }
+
+    const fn try_new(scale: f64) -> Result<Self, NumberError> {
+        match Positive::try_new(scale) {
+            Ok(scale) => Ok(Self(scale.get())),
+            Err(error) => Err(error),
+        }
     }
 
     /// # Errors

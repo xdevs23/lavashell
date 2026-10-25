@@ -3,9 +3,13 @@ use super::program::SMOOTH_MIN_DEPTH;
 use super::smoothing;
 use crate::test_error::TestError;
 use lavashell_core::prelude::*;
-use lavashell_core::shape::PointsError;
+use lavashell_core::shape::{Hollow, PointsError};
 
 pub(crate) fn star(points: u16, inner: f64) -> Result<Shape, PointsError> {
+    Ok(Shape::Contour(star_polygon(points, inner)?))
+}
+
+pub(crate) fn star_polygon(points: u16, inner: f64) -> Result<Polygon, PointsError> {
     polygon((0..points).map(|i| {
         let angle = std::f64::consts::TAU * f64::from(i) / f64::from(points);
         let radius = if i % 2 == 0 { 50.0 } else { inner };
@@ -17,22 +21,23 @@ pub(crate) fn star(points: u16, inner: f64) -> Result<Shape, PointsError> {
 }
 
 pub(crate) fn ellipse(points: u16, bounds: Rect) -> Result<Shape, PointsError> {
-    polygon((0..points).map(|i| {
+    let outline = polygon((0..points).map(|i| {
         let angle = std::f64::consts::TAU * f64::from(i) / f64::from(points);
         Point::new(
             bounds.x + bounds.width / 2.0 * (1.0 + angle.cos()),
             bounds.y + bounds.height / 2.0 * (1.0 + angle.sin()),
         )
-    }))
+    }))?;
+    Ok(Shape::Contour(outline))
 }
 
-fn polygon(points: impl Iterator<Item = Point>) -> Result<Shape, PointsError> {
-    Ok(Shape::Contour(Polygon::new(points.collect::<Vec<_>>())?))
+fn polygon(points: impl Iterator<Item = Point>) -> Result<Polygon, PointsError> {
+    Polygon::new(points.collect::<Vec<_>>())
 }
 
 /// The union of `members`. Fails when `members` is empty.
 pub(crate) fn union(
-    members: impl IntoIterator<Item = Shape>,
+    members: impl IntoIterator<Item = UnionMember>,
     spacing: Dp,
 ) -> Result<Shape, TestError> {
     Shape::union(members, NonNegativeDp::saturating(spacing)?).ok_or(TestError::NoMembers)
@@ -51,13 +56,29 @@ impl Distance for Shape {
                 // The smooth minimum of infinity and the first distance is that distance, so the fold starts at
                 // infinity.
                 let fused = (union.members().iter())
-                    .map(|shape| shape.distance(p))
+                    .map(|member| member.distance(p))
                     .fold(f64::INFINITY, |a, b| smooth_min(a, b, smoothing(union)));
                 let bounds = RoundedRect::new(self.bounds(), Corners::default());
                 fused.max(bounds.distance(p))
             }
-            Shape::Hollow(shape) => shape.outer().distance(p).max(-shape.hole().distance(p)),
+            Shape::Hollow(shape) => shape.distance(p),
         }
+    }
+}
+
+impl Distance for UnionMember {
+    fn distance(&self, p: Point) -> f64 {
+        match self {
+            UnionMember::Rounded(rounded) => rounded.distance(p),
+            UnionMember::Contour(polygon) => polygon.distance(p),
+            UnionMember::Hollow(shape) => shape.distance(p),
+        }
+    }
+}
+
+impl Distance for Hollow {
+    fn distance(&self, p: Point) -> f64 {
+        self.outer().distance(p).max(-self.hole().distance(p))
     }
 }
 
@@ -129,7 +150,7 @@ mod tests {
         assert!(same_at(actual, expected, size), "{actual} != {expected}");
     }
 
-    fn island(x: f64, width: f64) -> Shape {
+    fn island(x: f64, width: f64) -> UnionMember {
         RoundedRect::new(
             Rect::new(Dp::new(x), 0.dp(), Dp::new(width), 40.dp()),
             Corners::all(20.dp()),

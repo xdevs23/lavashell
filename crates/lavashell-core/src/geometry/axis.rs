@@ -5,6 +5,7 @@ use crate::units::Dp;
 /// The direction along which a row or a column places its children, and along which a drag or a
 /// scroll moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Axis {
     Horizontal,
     Vertical,

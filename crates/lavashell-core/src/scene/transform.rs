@@ -39,6 +39,12 @@ impl Transform {
         })
     }
 
+    /// `None` when `affine` rotates or skews, or when it is not finite or not invertible.
+    #[cfg(feature = "serde")]
+    pub fn checked(affine: Affine) -> Option<Self> {
+        Self::try_of(affine).filter(|transform| *transform == transform.saturated())
+    }
+
     pub fn scaled_about(bounds: Rect, scale: f64) -> Self {
         Self::scaled_about_point(bounds.center(), scale)
     }

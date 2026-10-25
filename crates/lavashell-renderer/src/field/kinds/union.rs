@@ -58,8 +58,8 @@ impl Kind for Union {
             .members()
             .iter()
             .map(|member| match member {
-                Shape::Rounded(rounded) => Some(Single::new(rounded)),
-                _ => None,
+                UnionMember::Rounded(rounded) => Some(Single::new(rounded)),
+                UnionMember::Contour(_) | UnionMember::Hollow(_) => None,
             })
             .collect::<Option<Vec<_>>>()
             .ok_or(exceeding)?;
@@ -117,7 +117,7 @@ impl Texels<shape::Union> for Union {
             .map(|member| fields.texels(content, grid, target, member));
         let fold = programs.fold(content, smoothing(union))?;
         let folded = grid.combined(target, members, &fold)?;
-        let limit = fields.texels(content, grid, target, &union.bounds().into());
+        let limit = fields.texels(content, grid, target, &Shape::from(union.bounds()));
         grid.combined(target, [Ok(folded), limit], &programs.limit(content)?)
     }
 }

@@ -6,9 +6,15 @@ use crate::geometry::{ContourPoint, Point, Rect};
 use crate::units::{Dp, NonNegativeDp, NumberError};
 use std::borrow::Cow;
 
+#[cfg(feature = "serde")]
+mod encoding;
+mod union;
+pub use union::{Union, UnionMember};
+
 /// The radii of the four corners of a rectangle, clockwise from the top left.
 /// A radius of type `Dp` is circular. A `Radius` has a horizontal and a vertical length.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Corners<R = Dp> {
     pub top_left: R,
     pub top_right: R,
@@ -161,6 +167,7 @@ impl DrawnRoundedRect {
 
 /// The horizontal and vertical radius of an elliptical corner.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Radius {
     pub x: Dp,
     pub y: Dp,
@@ -179,6 +186,7 @@ impl Radius {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RoundedRect {
     pub rect: Rect,
     pub corners: Corners,
@@ -226,23 +234,30 @@ impl RoundedRect {
     /// height cuts nothing, so the result is this rectangle.
     #[must_use]
     pub fn minus(self, hole: RoundedRect) -> Shape {
-        if hole.rect.width > Dp::ZERO && hole.rect.height > Dp::ZERO {
-            Shape::Hollow(Hollow { outer: self, hole })
-        } else {
-            self.into()
-        }
+        Hollow::new(self, hole).map_or_else(|| self.into(), Shape::Hollow)
     }
 }
 
 /// A rounded rectangle with a rounded rectangle cut out of it. In a union,
 /// the hole is open wherever no other member covers it.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "encoding::HollowParts")
+)]
 pub struct Hollow {
     outer: RoundedRect,
     hole: RoundedRect,
 }
 
 impl Hollow {
+    /// `None` when the hole has no positive width and height, so that it cuts nothing.
+    fn new(outer: RoundedRect, hole: RoundedRect) -> Option<Self> {
+        let cuts = hole.rect.width > Dp::ZERO && hole.rect.height > Dp::ZERO;
+        cuts.then_some(Self { outer, hole })
+    }
+
     #[must_use]
     pub fn outer(&self) -> RoundedRect {
         self.outer
@@ -324,47 +339,8 @@ impl Polygon {
     }
 }
 
-/// A union of shapes. Members merge into one outline wherever the gap between them is at most
-/// `spacing`. The merged outline lies inside the bounding box of all members.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Union {
-    members: Vec<Shape>,
-    spacing: NonNegativeDp,
-    bounds: Rect,
-}
-
-impl Union {
-    /// The member shapes of the union. A union has at least one member.
-    #[must_use]
-    pub fn members(&self) -> &[Shape] {
-        &self.members
-    }
-
-    /// The largest gap at which members fuse.
-    #[must_use]
-    pub fn spacing(&self) -> Dp {
-        self.spacing.get()
-    }
-
-    #[must_use]
-    pub fn bounds(&self) -> Rect {
-        self.bounds
-    }
-
-    fn translated(&self, offset: Point) -> Self {
-        Self {
-            members: self
-                .members
-                .iter()
-                .map(|shape| shape.translated(offset))
-                .collect(),
-            spacing: self.spacing,
-            bounds: self.bounds.translated(offset),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Shape {
     Rounded(RoundedRect),
     Contour(Polygon),
@@ -391,14 +367,11 @@ impl Shape {
     }
 
     /// The union of `members`, or `None` when `members` is empty.
-    pub fn union(members: impl IntoIterator<Item = Shape>, spacing: NonNegativeDp) -> Option<Self> {
-        let members: Vec<_> = members.into_iter().collect();
-        let bounds = members.iter().map(Self::bounds).reduce(Rect::union)?;
-        Some(Self::Union(Union {
-            members,
-            spacing,
-            bounds,
-        }))
+    pub fn union(
+        members: impl IntoIterator<Item = UnionMember>,
+        spacing: NonNegativeDp,
+    ) -> Option<Self> {
+        Union::new(members.into_iter().collect(), spacing).map(Self::Union)
     }
 
     /// The bounds of the outline, which for a shape with a hole are the
@@ -438,24 +411,13 @@ impl Shape {
     }
 
     /// This shape with every hole filled, borrowed when it has none.
+    #[must_use]
     pub fn without_holes(&self) -> Cow<'_, Self> {
         match self {
             Self::Rounded(_) | Self::Contour(_) => Cow::Borrowed(self),
             Self::Hollow(shape) => Cow::Owned(shape.outer.into()),
-            Self::Union(union) => {
-                let members: Vec<_> = union.members.iter().map(Self::without_holes).collect();
-                if members
-                    .iter()
-                    .all(|member| matches!(member, Cow::Borrowed(_)))
-                {
-                    return Cow::Borrowed(self);
-                }
-                Cow::Owned(Self::Union(Union {
-                    members: members.into_iter().map(Cow::into_owned).collect(),
-                    spacing: union.spacing,
-                    bounds: union.bounds,
-                }))
-            }
+            Self::Union(union) => (union.without_holes())
+                .map_or(Cow::Borrowed(self), |union| Cow::Owned(Self::Union(union))),
         }
     }
 }

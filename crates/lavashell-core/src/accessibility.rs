@@ -5,10 +5,12 @@
 //! Text offsets count Unicode scalar values. Reading the tree does not move the keyboard focus.
 //! Only a `Focus` action moves it.
 
+mod action_kinds;
 mod actions;
 mod semantics;
 mod tree;
 
+pub use action_kinds::ActionKinds;
 pub use actions::*;
 pub use semantics::*;
 pub use tree::*;

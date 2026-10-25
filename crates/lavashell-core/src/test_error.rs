@@ -51,6 +51,9 @@ pub(crate) enum TestError {
     Scroll(#[from] ScrollError),
     #[error("a view could not be laid out")]
     Layout(#[from] LayoutError),
+    #[cfg(feature = "serde")]
+    #[error("a value could not be written or read")]
+    Encoding(#[from] postcard::Error),
     #[error("no node has the tag {0:?}")]
     NoTag(String),
     #[error("no text paints {0:?}")]

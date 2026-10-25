@@ -6,6 +6,9 @@ use super::{
 use crate::numbers::duration_from_nanos;
 use std::time::Duration;
 
+#[cfg(feature = "serde")]
+mod encoding;
+
 /// The error returned by `Program::target` and `Playing::new` for values from which no motion can be shown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MotionError {
@@ -18,6 +21,15 @@ pub enum MotionError {
 }
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(
+        serialize = "T: serde::Serialize, T::Vector: serde::Serialize",
+        deserialize = "T: serde::Deserialize<'de>, T::Vector: serde::Deserialize<'de>"
+    )),
+    serde(try_from = "encoding::ProgramParts<T>")
+)]
 pub enum Program<T: Animatable> {
     Target {
         from: T::Vector,
@@ -79,6 +91,11 @@ impl<T: Animatable> Scheduled<T> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "encoding::TimingParts")
+)]
 pub struct Timing {
     pub start: Duration,
     pub paused: Option<Duration>,

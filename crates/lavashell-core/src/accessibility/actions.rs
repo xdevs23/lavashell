@@ -5,7 +5,7 @@ use crate::ui::NodeId;
 use crate::units::{Dp, NumberError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ActionKind {
     Focus,
     Activate,
@@ -21,7 +21,7 @@ pub enum ActionKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AccessibilityAction {
     Focus,
     Activate,
@@ -62,13 +62,22 @@ impl AccessibilityAction {
         match self {
             Self::SetValue(AccessibleValue::Number(value)) => value.is_finite(),
             Self::Scroll(_, delta) => delta.is_finite(),
-            _ => true,
+            Self::Focus
+            | Self::Activate
+            | Self::SetValue(_)
+            | Self::Increment
+            | Self::Decrement
+            | Self::ScrollIntoView
+            | Self::SetTextSelection(_)
+            | Self::ReplaceSelectedText(_)
+            | Self::RevealCollectionItem { .. } => true,
         }
     }
 }
 
 /// An accessibility action on the node `target`, sent from a platform worker thread to the UI thread.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ActionRequest {
     pub target: NodeId,
     pub action: AccessibilityAction,

@@ -6,10 +6,15 @@ use super::{SecretText, mask_text};
 use crate::text_edit::TextGeometry;
 use std::{fmt, sync::Arc};
 
+#[cfg(feature = "serde")]
+mod encoding;
+
 /// A copy of revealed protected text in a draw command, which never changes. It is never used as a scene string or
 /// as a cache key. A renderer must shape and paint the text without storing the plain text in a cache.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrivateText {
+    #[cfg_attr(feature = "serde", serde(with = "encoding"))]
     secret: Arc<SecretText>,
     /// The character the editor shows for each character of the secret.
     pub(super) mask: char,

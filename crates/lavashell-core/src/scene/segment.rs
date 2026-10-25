@@ -4,6 +4,7 @@ use crate::geometry::Point;
 /// One piece of a path, as a straight line or a Bézier curve. A piece starts where the piece before it ends, or at the
 /// start of the path for the first piece.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Segment {
     Line(Point),
     Quadratic {

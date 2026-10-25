@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    AccessibleState, AccessibleText, AccessibleValue, ActionKind, CollectionInfo, CollectionItem,
+    AccessibleState, AccessibleText, AccessibleValue, ActionKinds, CollectionInfo, CollectionItem,
     LiveRegion, RangeInfo, Relations, Role,
 };
 use crate::geometry::Rect;
 use crate::ui::NodeId;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccessibleNode {
     pub id: NodeId,
     pub role: Role,
@@ -19,9 +20,13 @@ pub struct AccessibleNode {
     /// The part of `bounds` that is visible after clipping, or `None` for a node with no visible part,
     /// such as a node outside the screen.
     pub visible_bounds: Option<Rect>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub children: Vec<NodeId>,
     pub state: AccessibleState,
-    pub actions: BTreeSet<ActionKind>,
+    pub actions: ActionKinds,
     pub relations: Relations,
     pub live: LiveRegion,
     pub range: Option<RangeInfo>,

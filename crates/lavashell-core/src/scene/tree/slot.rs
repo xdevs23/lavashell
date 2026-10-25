@@ -8,9 +8,17 @@ use crate::units::Dp;
 use std::time::Duration;
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(
+        serialize = "T: serde::Serialize, T::Motion: serde::Serialize",
+        deserialize = "T: serde::Deserialize<'de>, T::Motion: serde::Deserialize<'de>"
+    ))
+)]
 pub enum Slot<T: SlotValue> {
     Value(T),
-    Motion(Box<T::Motion>),
+    Motion(#[cfg_attr(feature = "serde", serde(with = "crate::encoding::boxed"))] Box<T::Motion>),
 }
 
 impl<T: SlotValue> Slot<T> {
@@ -93,6 +101,7 @@ impl SlotValue for Affine {
 }
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransformMotion {
     Affine(Playing<Affine>),
     Clamp {
@@ -140,6 +149,7 @@ impl SlotMotion<Affine> for TransformMotion {
 /// A translation along `axis` by an offset clamped to `min` and `max`, then multiplied by `scale`. When `min` lies
 /// above `max`, the offset becomes `max`. A bound that is NaN does not limit the offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Clamp {
     pub min: Dp,
     pub max: Dp,
@@ -159,6 +169,7 @@ impl Clamp {
 }
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Group {
     /// Maps the coordinates of the children into those of the parent.
     pub transform: Slot<Affine>,

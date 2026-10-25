@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::failure::{DrawFailure, FailedDraw};
-use crate::field::test_shapes::{Distance, star, union};
+use crate::field::test_shapes::{Distance, star, star_polygon, union};
 use crate::field::{FieldRoom, Fields, Solid, UniformRange};
 use crate::test_error::TestError;
 use lavashell_core::surface::SurfaceId;
 use skia_safe::surfaces;
 
-fn rounded(x: f64, y: f64, width: f64, corners: Corners) -> Shape {
+fn rounded(x: f64, y: f64, width: f64, corners: Corners) -> UnionMember {
     RoundedRect::new(
         Rect::new(Dp::new(x), Dp::new(y), Dp::new(width), 40.dp()),
         corners,
@@ -21,28 +21,23 @@ fn field_textures_match_shape_distance_at_texel_centres() -> Result<(), TestErro
         (0..10_u8).map(|i| rounded(4.0 + f64::from(i) * 19.0, 40.0, 16.0, Corners::all(8.dp()))),
         10.dp(),
     )?;
-    let nested = union(
+    let fused = union(
         [
-            star(12, 30.0)?,
-            union(
-                [
-                    rounded(
-                        10.0,
-                        70.0,
-                        60.0,
-                        Corners::new(20.dp(), 0.dp(), 4.dp(), 12.dp()),
-                    ),
-                    rounded(74.0, 74.0, 40.0, Corners::all(20.dp())),
-                ],
-                16.dp(),
-            )?,
+            UnionMember::Contour(star_polygon(12, 30.0)?),
+            rounded(
+                10.0,
+                70.0,
+                60.0,
+                Corners::new(20.dp(), 0.dp(), 4.dp(), 12.dp()),
+            ),
+            rounded(74.0, 74.0, 40.0, Corners::all(20.dp())),
         ],
         20.dp(),
     )?;
     let info = ImageInfo::new((200, 120), ColorType::RGBAF16, AlphaType::Premul, None);
     let mut surface = surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
     let fields = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED))?;
-    for shape in [star(40, 30.0)?, row, nested] {
+    for shape in [star(40, 30.0)?, row, fused] {
         let field = fields
             .exact(surface.canvas(), &shape, 0.0, TexelPixels::DEVICE_PIXEL)?
             .ok_or(TestError::Missing("field texture"))?;
@@ -72,7 +67,7 @@ fn field_textures_match_shape_distance_at_texel_centres() -> Result<(), TestErro
             );
             let expected = shape.distance(p);
             let found = f64::from(f32::from_ne_bytes(texel[..4].try_into()?));
-            // Every nesting level rounds the distance to a half float once more.
+            // Each texel stores the distance as a half float.
             assert!(
                 (found - expected).abs() <= 0.02 + expected.abs() * 2e-3,
                 "{shape:?} at {p:?}: texture {found} and CPU {expected}"

@@ -7,6 +7,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ColorStop {
     pub position: f64,
     pub color: Color,
@@ -20,6 +21,7 @@ impl ColorStop {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TileMode {
     #[default]
     Clamp,
@@ -29,6 +31,7 @@ pub enum TileMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GradientKind {
     Linear {
         from: Point,
@@ -119,8 +122,13 @@ fn visit_radius(visit: &mut impl FnMut(&mut f64), radius: &mut Dp) {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Gradient {
     pub kind: GradientKind,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub stops: Vec<ColorStop>,
     pub tile: TileMode,
     pub interpolation: ColorInterpolation,

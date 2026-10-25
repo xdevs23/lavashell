@@ -5,21 +5,21 @@ use crate::test_error::{Required, TestError, TestResult};
 use crate::units::{Density, DpExt, NonNegativeDp, NumberError, PxExt};
 use std::f64::consts::FRAC_PI_2;
 
-fn union<const N: usize>(members: [Shape; N], spacing: Dp) -> Result<Shape, TestError> {
+fn union<const N: usize>(members: [UnionMember; N], spacing: Dp) -> Result<Shape, TestError> {
     Shape::union(members, NonNegativeDp::saturating(spacing)?).required("union")
 }
 
-fn island(x: Dp, width: Dp) -> Shape {
+fn island(x: Dp, width: Dp) -> UnionMember {
     RoundedRect::new(Rect::new(x, 0.dp(), width, 40.dp()), Corners::all(20.dp())).into()
 }
 
-fn triangle(x: Dp, y: Dp) -> Result<Shape, PointsError> {
+fn triangle(x: Dp, y: Dp) -> Result<UnionMember, PointsError> {
     let polygon = Polygon::new([
         Point::new(x, y),
         Point::new(x + 4.dp(), y),
         Point::new(x, y + 4.dp()),
     ])?;
-    Ok(Shape::Contour(polygon))
+    Ok(UnionMember::Contour(polygon))
 }
 
 #[test]
@@ -226,7 +226,11 @@ fn a_shape_with_a_hole_moves_its_card_and_hole_together() {
 
 #[test]
 fn a_union_without_holes_fills_the_holes_of_its_members() -> TestResult {
-    let hollow = card().minus(lens(Rect::new(60.dp(), 30.dp(), 80.dp(), 40.dp())));
+    let hole = lens(Rect::new(60.dp(), 30.dp(), 80.dp(), 40.dp()));
+    let Shape::Hollow(cut) = card().minus(hole) else {
+        return Err(TestError::Absent("a card with a hole"));
+    };
+    let hollow = UnionMember::Hollow(cut);
     let pills = union([island(0.dp(), 80.dp()), island(90.dp(), 80.dp())], 8.dp())?;
     assert!(matches!(pills.without_holes(), Cow::Borrowed(_)));
     let mixed = union([hollow, island(300.dp(), 80.dp())], 8.dp())?;

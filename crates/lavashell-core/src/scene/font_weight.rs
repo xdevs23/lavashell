@@ -60,6 +60,9 @@ impl Hash for FontWeight {
     }
 }
 
+#[cfg(feature = "serde")]
+crate::encoding::checked_serde!(FontWeight(f64));
+
 #[cfg(test)]
 mod tests {
     use super::*;

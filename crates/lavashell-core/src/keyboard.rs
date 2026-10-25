@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Key {
     Tab,
     Enter,
@@ -19,6 +20,7 @@ pub enum Key {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Shortcut {
     pub key: Key,
     pub control: bool,

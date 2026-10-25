@@ -3,6 +3,7 @@ use super::{Easing, Spring};
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tween {
     pub duration: Duration,
     pub delay: Duration,
@@ -44,6 +45,7 @@ impl Tween {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MotionSpec {
     Instant,
     Tween(Tween),

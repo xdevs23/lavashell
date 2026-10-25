@@ -4,7 +4,7 @@ use crate::ui::NodeId;
 use std::fmt;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Role {
     Window,
     #[default]
@@ -84,12 +84,14 @@ pub enum SemanticsMode {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AccessibleValue {
     Text(String),
     Number(f64),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Checked {
     False,
     True,
@@ -98,6 +100,7 @@ pub enum Checked {
 
 /// Whether the value of a form field is read-only, required or invalid.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FormState {
     pub read_only: bool,
     pub required: bool,
@@ -107,6 +110,7 @@ pub struct FormState {
 /// The states that a component or an application sets in `Semantics`.
 /// The view derives the remaining states of `AccessibleState`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SemanticsState {
     pub disabled: bool,
     pub form: FormState,
@@ -120,6 +124,7 @@ pub struct SemanticsState {
 /// also adds to the states set in `Semantics`: `disabled` for a disabled node and for every node below a disabled
 /// ancestor, `modal` for a modal node, and `read_only` for selectable text.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccessibleState {
     pub semantics: SemanticsState,
     pub focusable: bool,
@@ -127,6 +132,7 @@ pub struct AccessibleState {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LiveRegion {
     #[default]
     Off,
@@ -135,6 +141,7 @@ pub enum LiveRegion {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TextDirection {
     #[default]
     Auto,
@@ -143,15 +150,33 @@ pub enum TextDirection {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Relations {
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub labelled_by: Vec<NodeId>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub described_by: Vec<NodeId>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub controls: Vec<NodeId>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub error_message: Vec<NodeId>,
     pub member_of: Option<NodeId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RangeInfo {
     pub min: f64,
     pub max: f64,
@@ -169,6 +194,7 @@ impl RangeInfo {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CollectionInfo {
     pub rows: Option<usize>,
     pub columns: Option<usize>,
@@ -179,6 +205,7 @@ pub struct CollectionInfo {
 /// The zero-based row and column of an item in the data of a collection, with its spans and whether it is a heading.
 /// The position does not depend on the holder that a recycled list binds the item to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CollectionItem {
     pub row: usize,
     pub column: usize,
@@ -202,6 +229,7 @@ impl Default for CollectionItem {
 /// A text selection in Unicode scalar offsets, from `anchor`, where the selection started, to `focus`, the end that
 /// moves. `focus` can be before `anchor`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextSelection {
     pub anchor: usize,
     pub focus: usize,
@@ -209,6 +237,7 @@ pub struct TextSelection {
 
 /// A run of shaped text with its line, word starts and character bounds, filled in by the view.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccessibleTextRun {
     pub start: usize,
     pub text: String,
@@ -218,16 +247,29 @@ pub struct AccessibleTextRun {
     /// The offsets of the word starts in the run, in Unicode scalar values from the start of the run. `None` means
     /// that the word starts are unknown. An empty list means that the run has no word start, as in a run that begins
     /// in the middle of a word.
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::optional_sequence")
+    )]
     pub word_starts: Option<Vec<usize>>,
     /// The bounds of each Unicode scalar value of the run, relative to the surface.
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub character_bounds: Vec<Rect>,
     /// The length in Unicode scalar values of each unit that the keyboard caret moves over in the shaped text.
     /// Platform adapters convert each length to the text encoding of their platform.
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub selectable_lengths: Vec<usize>,
     pub direction: TextDirection,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AccessibleText {
     pub value: String,
     pub selection: Option<TextSelection>,
@@ -235,6 +277,10 @@ pub struct AccessibleText {
     pub placeholder: Option<String>,
     pub language: Option<String>,
     pub direction: TextDirection,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub runs: Vec<AccessibleTextRun>,
 }
 

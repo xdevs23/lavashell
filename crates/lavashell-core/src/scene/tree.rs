@@ -6,6 +6,8 @@ mod commands;
 mod damage;
 #[cfg(test)]
 mod damage_tests;
+#[cfg(all(test, feature = "serde"))]
+mod encoding_tests;
 mod order;
 mod presence;
 mod slot;
@@ -29,8 +31,8 @@ use crate::geometry::Rect;
 use crate::retained::Footprint;
 use crate::scene::DrawCommand;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NamespaceId(u64);
@@ -42,6 +44,7 @@ impl std::fmt::Display for NamespaceId {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SceneNodeId(pub u64);
 
 impl std::fmt::Display for SceneNodeId {
@@ -70,10 +73,36 @@ impl NodeKey {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "PacketCommands")
+)]
 pub struct Packet {
+    #[cfg_attr(feature = "serde", serde(skip))]
     generation: PacketGeneration,
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "crate::encoding::shared_slice::serialize")
+    )]
     commands: Arc<[DrawCommand]>,
-    footprint: Footprint,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    footprint: OnceLock<Footprint>,
+}
+
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "Packet")]
+struct PacketCommands {
+    #[serde(deserialize_with = "crate::encoding::shared_slice::deserialize")]
+    commands: Arc<[DrawCommand]>,
+}
+
+#[cfg(feature = "serde")]
+impl From<PacketCommands> for Packet {
+    fn from(packet: PacketCommands) -> Self {
+        Self::new(packet.commands)
+    }
 }
 
 impl Packet {
@@ -83,8 +112,8 @@ impl Packet {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         Self {
             generation: PacketGeneration(NEXT.fetch_add(1, Ordering::Relaxed)),
-            footprint: Footprint::analyze(&commands),
             commands,
+            footprint: OnceLock::new(),
         }
     }
 
@@ -98,19 +127,24 @@ impl Packet {
         &self.commands
     }
 
+    /// Analyzed when it is first read, so that a read packet allocates nothing for it while it is read.
     #[must_use]
     pub fn footprint(&self) -> &Footprint {
-        &self.footprint
+        (self.footprint).get_or_init(|| Footprint::analyze(&self.commands))
     }
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Content {
     Packet(Packet),
-    Graft(NamespaceId),
+    Graft(
+        #[cfg_attr(feature = "serde", serde(with = "crate::encoding::process_local"))] NamespaceId,
+    ),
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Node {
     Group(Group),
     Leaf(Content),

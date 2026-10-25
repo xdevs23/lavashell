@@ -7,13 +7,19 @@ use crate::scene::Affine;
 use crate::shape::RoundedRect;
 
 #[derive(Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SceneUpdate {
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub changes: Vec<Change>,
 }
 
 /// One change to the nodes of a namespace. A `parent` of `None` means the top level of the namespace. `index` is a
 /// position among the children of that parent.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Change {
     Insert {
         id: SceneNodeId,
@@ -41,6 +47,7 @@ pub enum Change {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SlotChange {
     Transform(Slot<Affine>),
     Opacity(Slot<f64>),

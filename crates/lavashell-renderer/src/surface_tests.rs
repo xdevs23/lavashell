@@ -152,7 +152,7 @@ fn union() -> Result<DrawCommand, TestError> {
         Rect::new(200.dp(), 90.dp(), 110.dp(), 160.dp()),
     ];
     Ok(DrawCommand::Fill {
-        shape: crate::field::test_shapes::union(halves.map(Shape::from), Dp::ZERO)?,
+        shape: crate::field::test_shapes::union(halves.map(UnionMember::from), Dp::ZERO)?,
         brush: Color::rgb(0x00e9_b5a3).into(),
     })
 }

@@ -7,9 +7,31 @@ use std::time::Duration;
 const TICK: Duration = Duration::from_nanos(1);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "SpringParts")
+)]
 pub struct Spring {
     frequency: f64,
     damping: f64,
+}
+
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "Spring")]
+struct SpringParts {
+    frequency: f64,
+    damping: f64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<SpringParts> for Spring {
+    type Error = SpringError;
+
+    fn try_from(SpringParts { frequency, damping }: SpringParts) -> Result<Self, SpringError> {
+        Self::checked(frequency, damping)
+    }
 }
 
 /// The reason why the parameters given to `Spring::new` or `Spring::physical` do not form a spring.
@@ -42,13 +64,7 @@ impl Spring {
             return Err(SpringError::Damping);
         }
         let frequency = std::f64::consts::TAU / response.as_secs_f64();
-        if !(frequency * damping_ratio).is_finite() {
-            return Err(SpringError::OutOfRange);
-        }
-        Ok(Self {
-            frequency,
-            damping: damping_ratio,
-        })
+        Self::checked(frequency, damping_ratio)
     }
 
     /// A spring from a mass, a stiffness and a damping coefficient.
@@ -66,18 +82,17 @@ impl Spring {
         }
         let frequency = stiffness.sqrt() / mass.sqrt();
         let ratio = (damping / mass.sqrt()) / (2.0 * stiffness.sqrt());
-        if !frequency.is_finite()
-            || frequency <= 0.0
-            || !ratio.is_finite()
-            || ratio <= 0.0
-            || !(frequency * ratio).is_finite()
-        {
-            return Err(SpringError::OutOfRange);
+        Self::checked(frequency, ratio)
+    }
+
+    const fn checked(frequency: f64, damping: f64) -> Result<Self, SpringError> {
+        let frequency_positive = frequency.is_finite() && frequency > 0.0;
+        let damping_positive = damping.is_finite() && damping > 0.0;
+        if frequency_positive && damping_positive && (frequency * damping).is_finite() {
+            Ok(Self { frequency, damping })
+        } else {
+            Err(SpringError::OutOfRange)
         }
-        Ok(Self {
-            frequency,
-            damping: ratio,
-        })
     }
 
     /// The position relative to the end and the velocity after `seconds` of a motion that starts at

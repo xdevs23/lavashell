@@ -22,7 +22,7 @@ fn node(id: u64, role: Role, name: &str) -> AccessibleNode {
         visible_bounds: Some(Rect::new(10.dp(), 20.dp(), 100.dp(), 30.dp())),
         children: Vec::new(),
         state: AccessibleState::default(),
-        actions: BTreeSet::new(),
+        actions: ActionKinds::default(),
         relations: Relations::default(),
         live: LiveRegion::Off,
         range: None,

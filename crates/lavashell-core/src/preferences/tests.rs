@@ -215,3 +215,18 @@ fn reduced_motion_at_the_root_ends_a_running_motion_and_makes_later_changes_inst
     assert!(!view.motion().is_active());
     Ok(())
 }
+
+#[cfg(feature = "serde")]
+#[test]
+fn a_text_scaling_reads_back_and_one_that_fails_its_checks_is_not_read() -> TestResult {
+    let points = [(10.sp(), 20.dp()), (20.sp(), 30.dp())];
+    let table = TextScaling::table(points).required("a table")?;
+    let bytes = postcard::to_allocvec(&table)?;
+    assert_eq!(postcard::from_bytes::<TextScaling>(&bytes)?, table);
+    let falling = Scaling::Table(Arc::from([(20.sp(), 20.dp()), (10.sp(), 30.dp())]));
+    let bytes = postcard::to_allocvec(&falling)?;
+    assert!(postcard::from_bytes::<TextScaling>(&bytes).is_err());
+    let bytes = postcard::to_allocvec(&Scaling::Linear(0.0))?;
+    assert!(postcard::from_bytes::<TextScaling>(&bytes).is_err());
+    Ok(())
+}

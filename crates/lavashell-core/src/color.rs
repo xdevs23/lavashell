@@ -9,6 +9,8 @@ use palette::rgb::channels::Argb;
 use std::hash::{Hash, Hasher};
 
 mod convert;
+#[cfg(all(test, feature = "serde"))]
+mod encoding_tests;
 mod interpolation;
 #[cfg(test)]
 pub(crate) mod samples;
@@ -19,6 +21,7 @@ pub use interpolation::{ColorIn, ColorInterpolation, HuePath};
 const CHANNEL_MAX: f64 = u8::MAX as f64;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Gamut {
     #[default]
     Srgb,
@@ -27,6 +30,7 @@ pub enum Gamut {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Model {
     Oklch,
     Oklab,
@@ -35,6 +39,7 @@ enum Model {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Color {
     model: Model,
     channels: [f64; 3],

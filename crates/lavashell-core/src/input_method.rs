@@ -7,10 +7,12 @@ use crate::reactive::State;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// What the action key of an input method does in a field, and what Enter does in a single-line
 /// field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TextAction {
     Search,
     Done,
@@ -22,6 +24,7 @@ pub enum TextAction {
 /// The kind of text expected by a field. An input method can show a matching keyboard, such as digits for
 /// `Number`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TextPurpose {
     #[default]
     Text,
@@ -33,6 +36,7 @@ pub enum TextPurpose {
 
 /// The letters written as capitals automatically by an input method.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Capitalization {
     #[default]
     None,
@@ -47,6 +51,7 @@ pub enum Capitalization {
 /// The settings that tell an input method how to present itself for a field: the action key, the kind of text and
 /// the automatic capitals.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextHints {
     /// The action of the field, or None for a plain Enter key.
     pub action: Option<TextAction>,
@@ -56,6 +61,7 @@ pub struct TextHints {
 
 /// The number of a text session. A new number starts whenever another field gains focus.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SessionId(pub u64);
 
 impl SessionId {
@@ -67,10 +73,12 @@ impl SessionId {
 
 /// The number of presses on the field of a session since the field gained focus.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldPresses(pub u64);
 
 /// The field being edited, as an input method sees it.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextSession {
     pub id: SessionId,
     pub presses: FieldPresses,
@@ -81,17 +89,21 @@ pub struct TextSession {
 
 /// What an input method may know of the text in the field being edited.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FieldText {
     /// A protected field, such as a password field. The input method does not see its text.
     Protected,
     /// A field in a host that does not report the text of the field.
     Unknown,
     /// The text before the cursor, or before the selection.
-    BeforeCursor(Rc<str>),
+    BeforeCursor(
+        #[cfg_attr(feature = "serde", serde(with = "crate::encoding::shared_str"))] Arc<str>,
+    ),
 }
 
 /// An edit sent by an input method to the field being edited.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TextCommand {
     /// Replaces the selection with the text.
     Commit(String),

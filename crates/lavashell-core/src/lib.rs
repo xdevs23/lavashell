@@ -6,6 +6,8 @@ pub mod animation;
 pub mod color;
 mod compile_time;
 pub mod effects;
+#[cfg(feature = "serde")]
+pub mod encoding;
 pub mod error;
 pub mod frame;
 pub mod geometry;
@@ -55,7 +57,7 @@ pub mod prelude {
     pub use crate::cubic_bezier;
     pub use crate::effects::{
         Backdrop, BlendMode, BorderPlacement, Glass, Material, Shadow, ShapedMaterial,
-        SourceFilter, Stroke,
+        SourceFilter, SourceFilterId, Stroke,
     };
     pub use crate::frame::{
         FrameClock, FrameMetrics, FrameTime, PresentationTracker, PresentedFrame,
@@ -88,7 +90,7 @@ pub mod prelude {
         tree::{DamageTracker, Presented, SceneTree, SceneUpdate},
     };
     pub use crate::scroll::{ScrollState, ScrollView, Scrolling};
-    pub use crate::shape::{Corners, Polygon, Radius, RoundedRect, Shape};
+    pub use crate::shape::{Corners, Polygon, Radius, RoundedRect, Shape, UnionMember};
     pub use crate::spring;
     pub use crate::style::{
         BorderStyle, FocusState, INTERACTION_STYLE, InteractionAppearance, InteractionState,

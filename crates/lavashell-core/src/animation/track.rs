@@ -478,3 +478,5 @@ mod rate;
 mod timeline;
 
 pub use rate::PlaybackRateError;
+#[cfg(feature = "serde")]
+pub(crate) use rate::checked_rate;

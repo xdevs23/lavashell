@@ -3,7 +3,7 @@ use super::*;
 use crate::animation::Tween;
 use crate::effects::Backdrop;
 use crate::scroll::ScrollState;
-use crate::shape::RoundedRect;
+use crate::shape::{RoundedRect, UnionMember};
 use crate::style::{InteractionAppearance, StateStyles};
 use crate::units::ScaleFactor;
 
@@ -26,7 +26,7 @@ fn frame(view: &mut View, scene: &mut Scene, time_ms: u64) -> Result<Vec<DrawCom
     Ok(scene.commands())
 }
 
-pub(super) fn islands(commands: &[DrawCommand]) -> Result<(usize, Vec<Shape>), TestError> {
+pub(super) fn islands(commands: &[DrawCommand]) -> Result<(usize, Vec<UnionMember>), TestError> {
     commands
         .iter()
         .enumerate()
@@ -70,7 +70,7 @@ fn glass() -> Material {
         .border(BORDER)
 }
 
-pub(super) fn island(view: &View, tag: &str) -> Result<Shape, TestError> {
+pub(super) fn island(view: &View, tag: &str) -> Result<UnionMember, TestError> {
     Ok(RoundedRect::new(view.tagged_bounds(tag)?, Corners::all(20.dp())).into())
 }
 
@@ -188,7 +188,7 @@ fn a_pressed_island_shrinks_the_glass_of_its_group_with_its_content() -> TestRes
     assert_eq!(view.bounds_of("second"), Some(second));
     let (_, members) = islands(&commands)?;
     assert_eq!(members[0], island(&view, "first")?);
-    let Some(Shape::Rounded(member)) = members.get(1) else {
+    let Some(UnionMember::Rounded(member)) = members.get(1) else {
         return Err(TestError::Absent("a rounded shape as the second island"));
     };
     let shrunk = [second.x + 20.dp(), second.y + 10.dp(), 40.dp(), 20.dp()];
