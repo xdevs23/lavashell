@@ -76,3 +76,8 @@ let view = View::new(platform, move |ui| {
 `ui.keyboard_from(&keyboard, origin, closed, modifier)` expands the panel from the node composed with
 `ui.shared(origin, ..)`. `Target::Host { session, sink }` types into a field in another view or process. See the
 [keyboard example](../examples/keyboard/README.md).
+
+A host reads the state of the keyboard from the keyboard itself. `Keyboard::covered` returns the height that the panel
+covers above the bottom of the view as it moves. `Keyboard::rests_hidden` is true once the keyboard is hidden and its
+glass is back in the node of the host. `Keyboard::session` returns the session of the field that the keyboard shows for,
+which leaves out a field that the keyboard was hidden for.

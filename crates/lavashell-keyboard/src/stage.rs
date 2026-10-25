@@ -167,6 +167,15 @@ impl Stages {
 }
 
 impl Keyboard {
+    /// Whether the keyboard is hidden and its panel has finished sinking, so the panel covers
+    /// nothing and the glass of a host island is back in the island. Reading it during
+    /// composition makes the composition run again when it changes.
+    #[must_use]
+    pub fn rests_hidden(&self) -> bool {
+        let stages = self.stages();
+        stages.get() == Stage::Hidden && stages.open().is_finished()
+    }
+
     /// Moves the panel toward open when `shows` is true, which means that the target has a field
     /// that takes text, and toward hidden otherwise. Once the animation awaited by the current
     /// stage has ended, the panel moves on to the next stage. `panel` is the height of the panel.

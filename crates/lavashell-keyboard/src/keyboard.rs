@@ -213,6 +213,16 @@ impl Keyboard {
         }
     }
 
+    /// The height covered by the panel above the bottom of the view, as the panel moves at the
+    /// moment of the read: zero before the panel rises and once it has sunk. Unlike
+    /// `Keyboard::height`, it follows the panel, so a host reads it to inset what lies under the
+    /// panel, also for a keyboard composed with `UiKeyboard::keyboard_from`. Reading it during
+    /// composition makes the composition run again when it changes.
+    #[must_use]
+    pub fn covered(&self) -> Dp {
+        self.stages().open().get().height()
+    }
+
     /// Hides the keyboard until another field gains focus or the field is pressed again.
     pub fn hide(&self) {
         if let Some(session) = (self.0.view.get()).and_then(|view| self.target_session(&view)) {
@@ -357,7 +367,11 @@ impl Keyboard {
         }
     }
 
-    pub(crate) fn session(&self) -> Option<TextSession> {
+    /// The session of the field that the keyboard shows for: the field of the target, unless the
+    /// keyboard was hidden for it. `None` before the keyboard is composed. Reading it during
+    /// composition makes the composition run again when it changes.
+    #[must_use]
+    pub fn session(&self) -> Option<TextSession> {
         self.shown_session(&self.0.view.get()?)
     }
 

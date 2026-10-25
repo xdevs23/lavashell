@@ -17,13 +17,18 @@ impl Opening {
     pub fn share(self) -> f64 {
         self.share
     }
+
+    /// The height of the panel that has risen above the bottom of the view.
+    pub fn height(self) -> Dp {
+        self.panel * self.share
+    }
 }
 
 impl Animatable for Opening {
     type Vector = Vector<1>;
 
     fn vector(&self) -> Vector<1> {
-        (self.panel * self.share).vector()
+        self.height().vector()
     }
 
     fn visible_step(pixel: Dp) -> f64 {
