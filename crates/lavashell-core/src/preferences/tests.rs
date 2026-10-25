@@ -59,19 +59,39 @@ fn scaling_validates_inputs_and_supports_non_linear_policy() -> TestResult {
     for value in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         assert!(TextScaling::linear(value).is_none());
     }
-    let scale = TextScaling::custom(|size| {
-        let factor = if size < 20.sp() { 2.0 } else { 1.5 };
-        Dp::new(size.get() * factor)
-    });
-    assert_eq!(scale.to_dp(12.sp()), 24.dp());
-    assert_eq!(scale.to_dp(30.sp()), 45.dp());
+    let table = TextScaling::table([(10.sp(), 20.dp()), (20.sp(), 30.dp())]).required("a table")?;
+    assert_eq!(table.to_dp(5.sp()), 10.dp());
+    assert_eq!(table.to_dp(10.sp()), 20.dp());
+    assert_eq!(table.to_dp(15.sp()), 25.dp());
+    assert_eq!(table.to_dp(20.sp()), 30.dp());
+    assert_eq!(table.to_dp(40.sp()), 60.dp());
     assert_eq!(
         TextScaling::linear(1.5).required("scaling")?.to_dp(12.sp()),
         18.dp()
     );
-    let broken = TextScaling::custom(|_| Dp::new(f64::NAN));
-    assert_eq!(broken.to_dp(12.sp()), 12.dp());
+    let overflowing = TextScaling::linear(f64::MAX).required("scaling")?;
+    assert_eq!(overflowing.to_dp(12.sp()), 12.dp());
     Ok(())
+}
+
+#[test]
+fn a_table_needs_positive_sizes_that_increase() {
+    assert!(TextScaling::table([]).is_none());
+    assert!(TextScaling::table([(10.sp(), 20.dp()), (10.sp(), 30.dp())]).is_none());
+    assert!(TextScaling::table([(20.sp(), 20.dp()), (10.sp(), 30.dp())]).is_none());
+    assert!(TextScaling::table([(0.sp(), 1.dp())]).is_none());
+    assert!(TextScaling::table([(10.sp(), Dp::INFINITY)]).is_none());
+}
+
+#[test]
+fn tables_compare_by_value() {
+    let points = [(10.sp(), 20.dp()), (20.sp(), 30.dp())];
+    assert_eq!(TextScaling::table(points), TextScaling::table(points));
+    assert_ne!(
+        TextScaling::table(points),
+        TextScaling::table([(10.sp(), 20.dp())])
+    );
+    assert_ne!(TextScaling::table(points), Some(TextScaling::default()));
 }
 
 #[test]

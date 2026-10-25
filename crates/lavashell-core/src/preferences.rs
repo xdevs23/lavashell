@@ -6,17 +6,18 @@
 //! `View::provide_preferences`.
 
 use crate::local::Local;
-use crate::units::{Dp, Sp};
-use std::{fmt, sync::Arc};
+use crate::units::{Dp, Positive, Sp};
+use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 enum Scaling {
     Linear(f64),
-    Custom(Arc<dyn Fn(Sp) -> Dp + Send + Sync>),
+    /// Font sizes in increasing order, each with the size it becomes.
+    Table(Arc<[(Sp, Dp)]>),
 }
 
 /// Converts font sizes from sp to dp before layout, shaping and drawing.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextScaling(Scaling);
 
 impl Default for TextScaling {
@@ -28,11 +29,21 @@ impl Default for TextScaling {
 impl TextScaling {
     #[must_use]
     pub fn linear(factor: f64) -> Option<Self> {
-        (factor.is_finite() && factor > 0.0).then_some(Self(Scaling::Linear(factor)))
+        positive(factor).then_some(Self(Scaling::Linear(factor)))
     }
 
-    pub fn custom(scale: impl Fn(Sp) -> Dp + Send + Sync + 'static) -> Self {
-        Self(Scaling::Custom(Arc::new(scale)))
+    /// Sizes between two points of the table interpolate linearly. Below the first point the table runs from zero,
+    /// and past the last point a size has the ratio of the last point, as the font scale tables of AOSP do. `None`
+    /// without points, for a size that is not finite and above zero, or when the font sizes do not increase.
+    #[must_use]
+    pub fn table(points: impl IntoIterator<Item = (Sp, Dp)>) -> Option<Self> {
+        let points: Arc<[(Sp, Dp)]> = points.into_iter().collect();
+        let valid = !points.is_empty()
+            && points
+                .iter()
+                .all(|(sp, dp)| positive(sp.get()) && positive(dp.get()))
+            && points.is_sorted_by(|from, to| from.0 < to.0);
+        valid.then_some(Self(Scaling::Table(points)))
     }
 
     /// `size` converted into dp. Where the scaled size is not finite or not positive, one sp becomes one dp.
@@ -40,7 +51,7 @@ impl TextScaling {
     pub fn to_dp(&self, size: Sp) -> Dp {
         let scaled = match &self.0 {
             Scaling::Linear(factor) => Dp::new(size.get() * factor),
-            Scaling::Custom(scale) => scale(size),
+            Scaling::Table(points) => interpolated(points, size),
         };
         if scaled.is_finite() && scaled > Dp::ZERO {
             scaled
@@ -50,22 +61,27 @@ impl TextScaling {
     }
 }
 
-impl PartialEq for TextScaling {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.0, &other.0) {
-            (Scaling::Linear(a), Scaling::Linear(b)) => a == b,
-            (Scaling::Custom(a), Scaling::Custom(b)) => Arc::ptr_eq(a, b),
-            _ => false,
-        }
-    }
+fn positive(value: f64) -> bool {
+    Positive::try_new(value).is_ok()
 }
 
-impl fmt::Debug for TextScaling {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            Scaling::Linear(factor) => f.debug_tuple("Linear").field(&factor).finish(),
-            Scaling::Custom(_) => f.write_str("Custom"),
+/// The size in dp that `points`, sorted by font size, give for `size`.
+fn interpolated(points: &[(Sp, Dp)], size: Sp) -> Dp {
+    let above = points.partition_point(|(sp, _)| *sp < size);
+    let below = above
+        .checked_sub(1)
+        .and_then(|index| points.get(index))
+        .copied();
+    match points.get(above) {
+        Some(&(next_font, next_scaled)) => {
+            let (previous_font, previous_scaled) = below.unwrap_or((Sp::ZERO, Dp::ZERO));
+            let span = next_font.get() - previous_font.get();
+            let progress = (size.get() - previous_font.get()) / span;
+            previous_scaled * (1.0 - progress) + next_scaled * progress
         }
+        None => below.map_or(Dp::new(size.get()), |(last_font, last_scaled)| {
+            last_scaled * (size.get() / last_font.get())
+        }),
     }
 }
 
