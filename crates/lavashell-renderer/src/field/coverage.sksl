@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Inner and outer distance of the covered band. A side whose flag is 1 has no limit.
+uniform float inner;
+uniform float outer;
+uniform float inner_open;
+uniform float outer_open;
+// Blur sigma, and dp per device pixel.
+uniform float sigma;
+uniform float pixel;
+uniform float2 offset;
+// Deviations beyond which the blurred coverage rounds to exactly 0 or 1.
+uniform float saturation;
+
+// Coverage of the distances below x: antialiased over one device pixel, or
+// blurred by sigma through the erf approximation 7.1.26 of Abramowitz and Stegun.
+float edge(float x) {
+    if (sigma <= 0.0) {
+        return clamp(0.5 + x / pixel, 0.0, 1.0);
+    }
+    float z = clamp(x / (sqrt(sigma * sigma + pixel * pixel / 12.0) * sqrt(2.0)), -saturation, saturation);
+    float t = 1.0 / (1.0 + 0.3275911 * abs(z));
+    float tail = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741
+        + t * (-1.453152027 + t * 1.061405429)))) * exp(-z * z);
+    return 0.5 + 0.5 * sign(z) * (1.0 - tail);
+}
+
+half4 main(float2 p) {
+    float3 field = exactField(p - offset);
+    float gradient = length(field.xy);
+    float distance = gradient > 0.0 ? field.z / gradient : field.z;
+    float below = outer_open > 0.5 ? 1.0 : edge(outer - distance);
+    float above = inner_open > 0.5 ? 0.0 : edge(inner - distance);
+    return half4(below - above);
+}

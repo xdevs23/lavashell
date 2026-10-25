@@ -1,0 +1,21 @@
+subtitle	You can interrupt Lavashell motion while each demonstration runs.
+auto_title	Automatic geometry
+auto_hint	You can click the card to expand or collapse it while its geometry changes.
+expand	Expand
+collapse	Collapse
+spring_title	Spring retargeting
+spring_hint	You move the target with the slider, and retargeting preserves the spring's velocity.
+morph_title	Contour morph
+morph_hint	You morph a circle into a rounded star using equal arc-length samples.
+morph	Change shape
+timeline_title	Keyframe timeline
+timeline_hint	You can seek, pause or restart while the timeline alternates forward and backward.
+pause	Pause
+play	Resume
+replay	Restart
+auto_play	Autoplay
+reduced_motion	Apply targets immediately
+frame_time	Frame render time
+refresh	Refresh prediction
+variable	Variable or unknown
+title	Lavashell / Motion

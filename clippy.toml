@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+disallowed-methods = [
+    { path = "std::thread::sleep", reason = "block on the event that ends the wait" },
+    { path = "std::thread::yield_now", reason = "block on the event that ends the wait" },
+    { path = "std::thread::park_timeout", reason = "block on the event that ends the wait" },
+    { path = "std::sync::mpsc::Receiver::try_recv", reason = "block on the event with recv" },
+    { path = "std::sync::mpsc::Receiver::recv_timeout", reason = "block on the event with recv" },
+    { path = "std::sync::Condvar::wait_timeout", reason = "block on the event with wait" },
+    { path = "std::sync::Condvar::wait_timeout_while", reason = "block on the event with wait_while" },
+    { path = "std::sync::Mutex::try_lock", reason = "lock and recover a poisoned guard" },
+    { path = "std::hint::spin_loop", reason = "block on the event that ends the wait" },
+    { path = "std::net::TcpStream::connect_timeout", reason = "block on the connection with connect" },
+    { path = "std::net::TcpStream::set_read_timeout", reason = "block on the event that ends the read" },
+    { path = "std::net::TcpStream::set_write_timeout", reason = "block on the event that ends the write" },
+    { path = "std::os::unix::net::UnixStream::set_read_timeout", reason = "block on the event that ends the read" },
+    { path = "std::os::unix::net::UnixStream::set_write_timeout", reason = "block on the event that ends the write" },
+    { path = "std::mem::transmute", reason = "convert with a checked mapping that rejects unknown values" },
+]

@@ -1,0 +1,6 @@
+key	intent
+previous	Name the action that plays the track before the current one
+next	Name the action that plays the track after the current one
+track_play	Name the action that starts playback of the current track
+track_pause	Name the action that pauses playback of the current track
+title	Name the sample in its window title

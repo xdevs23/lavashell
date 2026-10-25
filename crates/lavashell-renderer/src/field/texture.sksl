@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Signed distance in dp in the red channel of an image that maps to dp coordinates.
+uniform shader field;
+uniform float texel;
+
+float3 exactField(float2 p) {
+    float h = texel;
+    float2 gradient = float2(
+        field.eval(p + float2(h, 0.0)).r - field.eval(p - float2(h, 0.0)).r,
+        field.eval(p + float2(0.0, h)).r - field.eval(p - float2(0.0, h)).r);
+    return float3(gradient / (2.0 * h), field.eval(p).r);
+}

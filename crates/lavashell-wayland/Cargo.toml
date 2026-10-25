@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-wayland"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only AND BSD-3-Clause"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+lavashell-core.workspace = true
+lavashell-effect-quality.workspace = true
+lavashell-renderer.workspace = true
+smithay-client-toolkit.workspace = true
+log.workspace = true
+num-traits.workspace = true
+env_logger.workspace = true
+thiserror.workspace = true
+raw-window-handle.workspace = true
+serde.workspace = true
+wayland-backend.workspace = true
+wayland-scanner.workspace = true
+rustix = { workspace = true, features = ["fs", "pipe", "time"] }
+accesskit.workspace = true
+accesskit_unix.workspace = true
+calloop = { workspace = true, features = ["executor"] }
+futures-lite.workspace = true
+icu_locale_core.workspace = true
+sys-locale.workspace = true
+unicode-segmentation.workspace = true
+zbus = { workspace = true, features = ["async-io"] }
+
+[build-dependencies]
+lavashell-build-script.workspace = true
+quote.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+accesskit_consumer.workspace = true
+lavashell-test-platform.workspace = true
+zbus = { workspace = true, features = ["async-io", "blocking-api"] }

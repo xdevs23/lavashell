@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The length over which the field around a corner of the radius is smooth.
+float lensLength(float radius) {
+    return max(radius * LENS_SHARE, SHORTEST_LENS);
+}
+
+float smoothShare(float a, float b, float k) {
+    return k > 0.0 ? max(k - abs(a - b), 0.0) / k : 0.0;
+}
+
+float smoothMin(float a, float b, float k) {
+    float h = smoothShare(a, b, k);
+    return min(a, b) - h * h * k * SMOOTH_MIN_DEPTH;
+}
+
+// Smooth minimum of two fields whose xy is the gradient and z the distance.
+// The gradient follows the share of each side in the blend.
+float3 smoothUnion(float3 a, float3 b, float k) {
+    float3 near = a.z < b.z ? a : b;
+    float3 far = a.z < b.z ? b : a;
+    return float3(mix(near.xy, far.xy, smoothShare(a.z, b.z, k) * 0.5), smoothMin(a.z, b.z, k));
+}
+
+float3 smoothIntersection(float3 a, float3 b, float k) {
+    return -smoothUnion(-a, -b, k);
+}
+
+// The smooth minimum of lens fields, whose w is the lens length. The lens
+// length blends with the gradient. The blend spans at least the longer lens
+// length, so the normal turns smoothly where the fields meet.
+float4 smoothUnionLens(float4 a, float4 b, float k) {
+    k = max(k, max(a.w, b.w));
+    float4 near = a.z < b.z ? a : b;
+    float4 far = a.z < b.z ? b : a;
+    float4 blended = mix(near, far, smoothShare(a.z, b.z, k) * 0.5);
+    return float4(blended.xy, smoothMin(a.z, b.z, k), blended.w);
+}
+
+// The lens field limited by the lens field of a box, with the lens length of
+// the field.
+float4 limitLens(float4 field, float4 box) {
+    return float4(smoothIntersection(field.xyz, box.xyz, SMOOTHING), field.w);
+}

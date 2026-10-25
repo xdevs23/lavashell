@@ -1,0 +1,535 @@
+{
+  "dependencyPlans": {
+    "x86_64-unknown-linux-gnu": {
+      "registry": {
+        "plan": {
+          "crates": [
+            {
+              "manifest": {
+                "dependencies": {
+                  "proc-macro2": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro",
+                      "span-locations"
+                    ],
+                    "package": "proc-macro2",
+                    "version": "=1.0.107"
+                  },
+                  "quote": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro"
+                    ],
+                    "package": "quote",
+                    "version": "=1.0.47"
+                  },
+                  "serde": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "package": "serde",
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "serde_json",
+                    "version": "=1.0.151"
+                  },
+                  "syn": {
+                    "default-features": false,
+                    "features": [
+                      "clone-impls",
+                      "default",
+                      "derive",
+                      "full",
+                      "parsing",
+                      "printing",
+                      "proc-macro",
+                      "visit"
+                    ],
+                    "package": "syn",
+                    "version": "=3.0.6"
+                  },
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
+                  }
+                },
+                "features": {},
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "package": {
+                  "autobenches": false,
+                  "autobins": false,
+                  "autoexamples": false,
+                  "autotests": false,
+                  "build": false,
+                  "edition": "2024",
+                  "name": "lavashell-source-rules",
+                  "version": "0.0.0"
+                }
+              },
+              "member": "tools/source-rules",
+              "targets": [
+                {
+                  "main": false,
+                  "path": "src/lib.rs"
+                }
+              ]
+            }
+          ],
+          "externalUnits": [
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"alloc\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"memchr\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"std\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.151\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\", \"{\\\"features\\\": [\\\"result\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"serde_core\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"itoa\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"zmij\\\"}}\"], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.151\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"serde_json\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"clone-impls\\\", \\\"default\\\", \\\"derive\\\", \\\"parsing\\\", \\\"printing\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#syn@3.0.6\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"syn\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"quote\\\"}}\"], \"unit\": {\"features\": [\"default\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.229\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"proc-macro\"], \"kind\": [\"proc-macro\"], \"name\": \"serde_derive\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"clone-impls\\\", \\\"default\\\", \\\"derive\\\", \\\"parsing\\\", \\\"printing\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#syn@3.0.6\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"syn\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"quote\\\"}}\"], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.21\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"proc-macro\"], \"kind\": [\"proc-macro\"], \"name\": \"thiserror_impl\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"derive\\\", \\\"serde_derive\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"derive\", \"serde_derive\", \"std\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"derive\\\", \\\"serde_derive\\\", \\\"std\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\", \"{\\\"features\\\": [\\\"default\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.229\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"proc-macro\\\"], \\\"kind\\\": [\\\"proc-macro\\\"], \\\"name\\\": \\\"serde_derive\\\"}}\", \"{\\\"features\\\": [\\\"result\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"serde_core\\\"}}\"], \"unit\": {\"features\": [\"default\", \"derive\", \"serde_derive\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"serde\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\", \\\"span-locations\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"quote\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"unicode_ident\\\"}}\"], \"unit\": {\"features\": [\"clone-impls\", \"default\", \"derive\", \"full\", \"parsing\", \"printing\", \"proc-macro\", \"visit\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#syn@3.0.6\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"syn\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\", \\\"span-locations\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"quote\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\", \\\"span-locations\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\", \"span-locations\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\", \\\"span-locations\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"unicode_ident\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\", \"span-locations\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"proc_macro2\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"quote\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"unicode_ident\\\"}}\"], \"unit\": {\"features\": [\"clone-impls\", \"default\", \"derive\", \"parsing\", \"printing\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#syn@3.0.6\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"syn\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"proc_macro2\\\"}}\", \"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"quote\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"proc-macro\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"lib\\\"], \\\"kind\\\": [\\\"lib\\\"], \\\"name\\\": \\\"unicode_ident\\\"}}\"], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"proc_macro2\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.151\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.151\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"default\\\", \\\"std\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\", \"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.21\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"proc-macro\\\"], \\\"kind\\\": [\\\"proc-macro\\\"], \\\"name\\\": \\\"thiserror_impl\\\"}}\"], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"thiserror\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"result\\\", \\\"std\\\"], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"result\", \"std\"], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [\\\"result\\\", \\\"std\\\"], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [\"result\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"serde_core\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [], \\\"mode\\\": \\\"build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\\\", \\\"platform\\\": null, \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"0\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [], \"mode\": \"run-custom-build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [\"{\\\"features\\\": [], \\\"mode\\\": \\\"run-custom-build\\\", \\\"package\\\": \\\"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\\\", \\\"platform\\\": \\\"x86_64-unknown-linux-gnu\\\", \\\"profile\\\": {\\\"codegen_backend\\\": null, \\\"codegen_units\\\": null, \\\"debug_assertions\\\": false, \\\"debuginfo\\\": 0, \\\"incremental\\\": false, \\\"lto\\\": \\\"false\\\", \\\"name\\\": \\\"packaged\\\", \\\"opt_level\\\": \\\"3\\\", \\\"overflow_checks\\\": false, \\\"panic\\\": \\\"unwind\\\", \\\"rpath\\\": false, \\\"split_debuginfo\\\": null, \\\"strip\\\": {\\\"resolved\\\": {\\\"Named\\\": \\\"debuginfo\\\"}}}, \\\"target\\\": {\\\"crate_types\\\": [\\\"bin\\\"], \\\"kind\\\": [\\\"custom-build\\\"], \\\"name\\\": \\\"build-script-build\\\"}}\"], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"zmij\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"alloc\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.3\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"memchr\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"derive\", \"serde_derive\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"proc-macro\", \"span-locations\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"proc-macro\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.151\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"default\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [\"result\", \"std\"], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"itoa\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\", \"platform\": \"x86_64-unknown-linux-gnu\", \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"3\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"unicode_ident\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.26\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"lib\"], \"kind\": [\"lib\"], \"name\": \"unicode_ident\"}}}",
+            "{\"dependencies\": [], \"unit\": {\"features\": [], \"mode\": \"build\", \"package\": \"registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.23\", \"platform\": null, \"profile\": {\"codegen_backend\": null, \"codegen_units\": null, \"debug_assertions\": false, \"debuginfo\": 0, \"incremental\": false, \"lto\": \"false\", \"name\": \"packaged\", \"opt_level\": \"0\", \"overflow_checks\": false, \"panic\": \"unwind\", \"rpath\": false, \"split_debuginfo\": null, \"strip\": {\"resolved\": {\"Named\": \"debuginfo\"}}}, \"target\": {\"crate_types\": [\"bin\"], \"kind\": [\"custom-build\"], \"name\": \"build-script-build\"}}}"
+          ],
+          "lock": {
+            "package": [
+              {
+                "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+                "name": "itoa",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.18"
+              },
+              {
+                "dependencies": [
+                  "proc-macro2",
+                  "quote",
+                  "serde",
+                  "serde_json",
+                  "syn",
+                  "thiserror"
+                ],
+                "name": "lavashell-source-rules",
+                "version": "0.0.0"
+              },
+              {
+                "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+                "name": "memchr",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "2.8.3"
+              },
+              {
+                "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+                "dependencies": [
+                  "unicode-ident"
+                ],
+                "name": "proc-macro2",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.107"
+              },
+              {
+                "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+                "dependencies": [
+                  "proc-macro2"
+                ],
+                "name": "quote",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.47"
+              },
+              {
+                "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+                "dependencies": [
+                  "serde_core",
+                  "serde_derive"
+                ],
+                "name": "serde",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.229"
+              },
+              {
+                "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+                "dependencies": [
+                  "serde_derive"
+                ],
+                "name": "serde_core",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.229"
+              },
+              {
+                "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+                "dependencies": [
+                  "proc-macro2",
+                  "quote",
+                  "syn"
+                ],
+                "name": "serde_derive",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.229"
+              },
+              {
+                "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+                "dependencies": [
+                  "itoa",
+                  "memchr",
+                  "serde",
+                  "serde_core",
+                  "zmij"
+                ],
+                "name": "serde_json",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.151"
+              },
+              {
+                "checksum": "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee",
+                "dependencies": [
+                  "proc-macro2",
+                  "quote",
+                  "unicode-ident"
+                ],
+                "name": "syn",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "3.0.6"
+              },
+              {
+                "checksum": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+                "dependencies": [
+                  "thiserror-impl"
+                ],
+                "name": "thiserror",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "2.0.21"
+              },
+              {
+                "checksum": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+                "dependencies": [
+                  "proc-macro2",
+                  "quote",
+                  "syn"
+                ],
+                "name": "thiserror-impl",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "2.0.21"
+              },
+              {
+                "checksum": "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954",
+                "name": "unicode-ident",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.26"
+              },
+              {
+                "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+                "name": "zmij",
+                "source": "registry+https://github.com/rust-lang/crates.io-index",
+                "version": "1.0.23"
+              }
+            ],
+            "version": 4
+          },
+          "manifest": {
+            "profile": {
+              "dev": {
+                "debug": 1
+              },
+              "packaged": {
+                "inherits": "release"
+              }
+            },
+            "workspace": {
+              "members": [
+                "tools/source-rules"
+              ],
+              "resolver": "3"
+            }
+          },
+          "schema": 1,
+          "selection": {
+            "features": [],
+            "packages": [
+              "lavashell-source-rules"
+            ],
+            "profile": "packaged",
+            "target": "x86_64-unknown-linux-gnu"
+          }
+        },
+        "seedHash": "f55399e8a2a3d9175da22b8a7818e0a57c2708b00f3a8495058739f5da072688"
+      }
+    }
+  },
+  "normalLock": {
+    "package": [
+      {
+        "checksum": "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06",
+        "name": "bitflags",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.13.2"
+      },
+      {
+        "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
+        "name": "cfg-if",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.5"
+      },
+      {
+        "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+        "dependencies": [
+          "libc",
+          "windows-sys"
+        ],
+        "name": "errno",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.14"
+      },
+      {
+        "checksum": "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223",
+        "name": "fastrand",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.5.0"
+      },
+      {
+        "checksum": "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099",
+        "dependencies": [
+          "cfg-if",
+          "libc",
+          "r-efi"
+        ],
+        "name": "getrandom",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.4.3"
+      },
+      {
+        "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+        "name": "itoa",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.18"
+      },
+      {
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "serde",
+          "serde_json",
+          "syn",
+          "tempfile",
+          "thiserror"
+        ],
+        "name": "lavashell-source-rules",
+        "version": "0.1.0"
+      },
+      {
+        "checksum": "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2",
+        "name": "libc",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.189"
+      },
+      {
+        "checksum": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53",
+        "name": "linux-raw-sys",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.12.1"
+      },
+      {
+        "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+        "name": "memchr",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.8.3"
+      },
+      {
+        "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+        "name": "once_cell",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.21.4"
+      },
+      {
+        "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+        "dependencies": [
+          "unicode-ident"
+        ],
+        "name": "proc-macro2",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.107"
+      },
+      {
+        "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+        "dependencies": [
+          "proc-macro2"
+        ],
+        "name": "quote",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.47"
+      },
+      {
+        "checksum": "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf",
+        "name": "r-efi",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "6.0.0"
+      },
+      {
+        "checksum": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+        "dependencies": [
+          "bitflags",
+          "errno",
+          "libc",
+          "linux-raw-sys",
+          "windows-sys"
+        ],
+        "name": "rustix",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.1.5"
+      },
+      {
+        "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+        "dependencies": [
+          "serde_core",
+          "serde_derive"
+        ],
+        "name": "serde",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.229"
+      },
+      {
+        "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+        "dependencies": [
+          "serde_derive"
+        ],
+        "name": "serde_core",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.229"
+      },
+      {
+        "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn"
+        ],
+        "name": "serde_derive",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.229"
+      },
+      {
+        "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+        "dependencies": [
+          "itoa",
+          "memchr",
+          "serde",
+          "serde_core",
+          "zmij"
+        ],
+        "name": "serde_json",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.151"
+      },
+      {
+        "checksum": "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "unicode-ident"
+        ],
+        "name": "syn",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.0.6"
+      },
+      {
+        "checksum": "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd",
+        "dependencies": [
+          "fastrand",
+          "getrandom",
+          "once_cell",
+          "rustix",
+          "windows-sys"
+        ],
+        "name": "tempfile",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "3.27.0"
+      },
+      {
+        "checksum": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+        "dependencies": [
+          "thiserror-impl"
+        ],
+        "name": "thiserror",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.21"
+      },
+      {
+        "checksum": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+        "dependencies": [
+          "proc-macro2",
+          "quote",
+          "syn"
+        ],
+        "name": "thiserror-impl",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.21"
+      },
+      {
+        "checksum": "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954",
+        "name": "unicode-ident",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.26"
+      },
+      {
+        "checksum": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+        "name": "windows-link",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.2.1"
+      },
+      {
+        "checksum": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+        "dependencies": [
+          "windows-link"
+        ],
+        "name": "windows-sys",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.61.2"
+      },
+      {
+        "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+        "name": "zmij",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.0.23"
+      }
+    ],
+    "version": 4
+  }
+}

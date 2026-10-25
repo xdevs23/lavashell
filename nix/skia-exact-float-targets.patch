@@ -1,0 +1,260 @@
+--- a/src/gpu/ganesh/GrColor.h
++++ b/src/gpu/ganesh/GrColor.h
+@@ -10,6 +10,7 @@
+ 
+ #include "include/core/SkColor.h"
+ #include "include/gpu/ganesh/GrTypes.h"
++#include "include/private/gpu/ganesh/GrTypesPriv.h"
+ #include "src/core/SkColorData.h"
+ #include "src/core/SkColorPriv.h"
+ #include "src/core/SkHalf.h"
+@@ -71,10 +72,24 @@
+     return value * ONE_OVER_255;
+ }
+ 
+-/** Used to pick vertex attribute types. */
+-static inline bool SkPMColor4fFitsInBytes(const SkPMColor4f& color) {
+-    // Might want to instead check that the components are [0...a] instead of [0...1]?
+-    return color.fitsInBytes();
++/** Used to pick vertex attribute types. A target with float channels gets every color in
++    floats, so that the color it stores does not depend on the other draws in the same op. */
++static inline bool SkPMColor4fFitsInBytes(const SkPMColor4f& color, GrClampType clampType) {
++    return clampType == GrClampType::kAuto && color.fitsInBytes();
++}
++
++/** Rounds a color to the precision of a target with half float channels and returns other colors
++    unchanged. A driver may round a color into such a target differently when it clears it than
++    when it draws it, but stores a color that the target holds exactly the same either way. */
++static inline SkPMColor4f SkPMColor4fRoundForTarget(const SkPMColor4f& color,
++                                                    GrColorType colorType) {
++    GrColorFormatDesc desc = GrGetColorTypeDesc(colorType);
++    if (desc.encoding() != GrColorTypeEncoding::kFloat || (desc.r() != 16 && desc.a() != 16)) {
++        return color;
++    }
++    SkPMColor4f rounded;
++    skvx::from_half(skvx::to_half(skvx::float4::Load(color.vec()))).store(rounded.vec());
++    return rounded;
+ }
+ 
+ static inline uint64_t SkPMColor4f_toFP16(const SkPMColor4f& color) {
+--- a/src/gpu/ganesh/ops/FillRectOp.cpp
++++ b/src/gpu/ganesh/ops/FillRectOp.cpp
+@@ -176,7 +176,7 @@
+         iter = fQuads.metadata();
+         SkPMColor4f colorOverride;
+         if (quadColors.isConstant(&colorOverride)) {
+-            fColorType = skgpu::ganesh::QuadPerEdgeAA::MinColorType(colorOverride);
++            fColorType = skgpu::ganesh::QuadPerEdgeAA::MinColorType(colorOverride, clampType);
+             while(iter.next()) {
+                 iter->fColor = colorOverride;
+             }
+@@ -184,8 +184,9 @@
+             // Otherwise compute the color type needed as the max over all quads.
+             fColorType = ColorType::kNone;
+             while(iter.next()) {
+-                fColorType = std::max(fColorType,
+-                                      skgpu::ganesh::QuadPerEdgeAA::MinColorType(iter->fColor));
++                fColorType = std::max(
++                        fColorType,
++                        skgpu::ganesh::QuadPerEdgeAA::MinColorType(iter->fColor, clampType));
+             }
+         }
+         // Most SkShaders' FPs multiply their calculated color by the paint color or alpha. We want
+--- a/src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelper.cpp
++++ b/src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelper.cpp
+@@ -10,6 +10,7 @@
+ #include "src/core/SkArenaAlloc.h"
+ #include "src/gpu/Swizzle.h"
+ #include "src/gpu/ganesh/GrAppliedClip.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrDstProxyView.h"
+ #include "src/gpu/ganesh/GrOpFlushState.h"
+ #include "src/gpu/ganesh/GrProcessorAnalysis.h"
+@@ -79,7 +80,7 @@
+     auto result = this->finalizeProcessors(caps, clip, clampType, geometryCoverage, &color);
+     color.isConstant(geometryColor);
+     if (wideColor) {
+-        *wideColor = !geometryColor->fitsInBytes();
++        *wideColor = !SkPMColor4fFitsInBytes(*geometryColor, clampType);
+     }
+     return result;
+ }
+--- a/src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelperWithStencil.cpp
++++ b/src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelperWithStencil.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelperWithStencil.h"
+ 
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrProcessorAnalysis.h"
+ #include "src/gpu/ganesh/GrUserStencilSettings.h"
+ 
+@@ -33,7 +34,7 @@
+     auto result = this->finalizeProcessors(caps, clip, clampType, geometryCoverage, &color);
+     color.isConstant(geometryColor);
+     if (wideColor) {
+-        *wideColor = !geometryColor->fitsInBytes();
++        *wideColor = !SkPMColor4fFitsInBytes(*geometryColor, clampType);
+     }
+     return result;
+ }
+--- a/src/gpu/ganesh/ops/LatticeOp.cpp
++++ b/src/gpu/ganesh/ops/LatticeOp.cpp
+@@ -36,6 +36,7 @@
+ #include "src/gpu/SkBackingFit.h"
+ #include "src/gpu/ganesh/GrAppliedClip.h"
+ #include "src/gpu/ganesh/GrCaps.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrColorSpaceXform.h"
+ #include "src/gpu/ganesh/GrGeometryProcessor.h"
+ #include "src/gpu/ganesh/GrOpFlushState.h"
+@@ -246,7 +247,7 @@
+                                                  GrProcessorAnalysisCoverage::kNone,
+                                                  &analysisColor);
+         analysisColor.isConstant(&fPatches[0].fColor);
+-        fWideColor = !fPatches[0].fColor.fitsInBytes();
++        fWideColor = !SkPMColor4fFitsInBytes(fPatches[0].fColor, clampType);
+         return result;
+     }
+ 
+--- a/src/gpu/ganesh/ops/PathTessellateOp.cpp
++++ b/src/gpu/ganesh/ops/PathTessellateOp.cpp
+@@ -11,6 +11,7 @@
+ #include "include/gpu/ganesh/GrRecordingContext.h"
+ #include "src/gpu/ganesh/GrAppliedClip.h"
+ #include "src/gpu/ganesh/GrCaps.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrOpFlushState.h"
+ #include "src/gpu/ganesh/GrPipeline.h"
+ #include "src/gpu/ganesh/GrProcessorAnalysis.h"
+@@ -41,6 +42,9 @@
+                                          caps,
+                                          clampType,
+                                          &this->headDraw().fColor);
++    if (!SkPMColor4fFitsInBytes(this->headDraw().fColor, clampType)) {
++        fPatchAttribs |= PatchAttribs::kWideColorIfEnabled;
++    }
+     if (!analysis.usesLocalCoords()) {
+         // Since we don't need local coords, we can transform on CPU instead of in the shader. This
+         // gives us better batching potential.
+--- a/src/gpu/ganesh/ops/PathTessellateOp.h
++++ b/src/gpu/ganesh/ops/PathTessellateOp.h
+@@ -62,9 +62,6 @@
+             , fProcessors(std::move(paint))
+             , fShaderMatrix(viewMatrix) {
+         SkASSERT(!path.isInverseFillType());
+-        if (!this->headDraw().fColor.fitsInBytes()) {
+-            fPatchAttribs |= PatchAttribs::kWideColorIfEnabled;
+-        }
+         this->setBounds(drawBounds, HasAABloat::kNo, IsHairline::kNo);
+     }
+ 
+--- a/src/gpu/ganesh/ops/QuadPerEdgeAA.cpp
++++ b/src/gpu/ganesh/ops/QuadPerEdgeAA.cpp
+@@ -17,6 +17,7 @@
+ #include "src/gpu/KeyBuilder.h"
+ #include "src/gpu/ganesh/GrBuffer.h"
+ #include "src/gpu/ganesh/GrCaps.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrColorSpaceXform.h"
+ #include "src/gpu/ganesh/GrGeometryProcessor.h"
+ #include "src/gpu/ganesh/GrMeshDrawTarget.h"
+@@ -333,11 +334,11 @@
+ }
+ 
+ // This is a more elaborate version of fitsInBytes() that allows "no color" for white
+-ColorType MinColorType(SkPMColor4f color) {
++ColorType MinColorType(SkPMColor4f color, GrClampType clampType) {
+     if (color == SK_PMColor4fWHITE) {
+         return ColorType::kNone;
+     } else {
+-        return color.fitsInBytes() ? ColorType::kByte : ColorType::kFloat;
++        return SkPMColor4fFitsInBytes(color, clampType) ? ColorType::kByte : ColorType::kFloat;
+     }
+ }
+ 
+--- a/src/gpu/ganesh/ops/QuadPerEdgeAA.h
++++ b/src/gpu/ganesh/ops/QuadPerEdgeAA.h
+@@ -55,7 +55,7 @@
+ IndexBufferOption CalcIndexBufferOption(GrAAType aa, int numQuads);
+ 
+ // Gets the minimum ColorType that can represent a color.
+-ColorType MinColorType(SkPMColor4f);
++ColorType MinColorType(SkPMColor4f, GrClampType);
+ 
+ // Specifies the vertex configuration for an op that renders per-edge AA quads. The vertex
+ // order (when enabled) is device position, color, local position, subset, aa edge equations.
+--- a/src/gpu/ganesh/ops/StrokeTessellateOp.cpp
++++ b/src/gpu/ganesh/ops/StrokeTessellateOp.cpp
+@@ -15,6 +15,7 @@
+ #include "src/core/SkSafeMath.h"
+ #include "src/gpu/ganesh/GrAppliedClip.h"
+ #include "src/gpu/ganesh/GrCaps.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrOpFlushState.h"
+ #include "src/gpu/ganesh/GrPaint.h"
+ #include "src/gpu/ganesh/GrProcessorAnalysis.h"
+@@ -39,9 +40,6 @@
+         , fPathStrokeList(path, stroke, paint.getColor4f())
+         , fTotalCombinedVerbCnt(path.countVerbs())
+         , fProcessors(std::move(paint)) {
+-    if (!this->headColor().fitsInBytes()) {
+-        fPatchAttribs |= PatchAttribs::kWideColorIfEnabled;
+-    }
+     SkRect devBounds = path.getBounds();
+     if (!this->headStroke().isHairlineStyle()) {
+         // Non-hairlines inflate in local path space (pre-transform).
+@@ -81,6 +79,9 @@
+     const GrProcessorSet::Analysis& analysis = fProcessors.finalize(
+             this->headColor(), GrProcessorAnalysisCoverage::kNone, clip,
+             &GrUserStencilSettings::kUnused, caps, clampType, &this->headColor());
++    if (!SkPMColor4fFitsInBytes(this->headColor(), clampType)) {
++        fPatchAttribs |= PatchAttribs::kWideColorIfEnabled;
++    }
+     fNeedsStencil = !analysis.unaffectedByDstValue();
+     return analysis;
+ }
+--- a/src/gpu/ganesh/ops/TextureOp.cpp
++++ b/src/gpu/ganesh/ops/TextureOp.cpp
+@@ -299,7 +299,7 @@
+         SkASSERT(fMetadata.colorType() == ColorType::kNone);
+         auto iter = fQuads.metadata();
+         while(iter.next()) {
+-            auto colorType = skgpu::ganesh::QuadPerEdgeAA::MinColorType(iter->fColor);
++            auto colorType = skgpu::ganesh::QuadPerEdgeAA::MinColorType(iter->fColor, clampType);
+             colorType = std::max(static_cast<ColorType>(fMetadata.fColorType),
+                                  colorType);
+             if (caps.reducedShaderMode()) {
+--- a/src/gpu/ganesh/SkGr.cpp
++++ b/src/gpu/ganesh/SkGr.cpp
+@@ -34,6 +34,7 @@
+ #include "src/gpu/ResourceKey.h"
+ #include "src/gpu/Swizzle.h"
+ #include "src/gpu/ganesh/GrCaps.h"
++#include "src/gpu/ganesh/GrColor.h"
+ #include "src/gpu/ganesh/GrColorInfo.h"
+ #include "src/gpu/ganesh/GrColorSpaceXform.h"
+ #include "src/gpu/ganesh/GrFPArgs.h"
+@@ -553,6 +554,9 @@
+ 
+     if (paintFP) {
+         grPaint->setColorFragmentProcessor(std::move(paintFP));
++    } else {
++        grPaint->setColor4f(
++                SkPMColor4fRoundForTarget(grPaint->getColor4f(), dstColorInfo.colorType()));
+     }
+ 
+     return true;
+--- a/src/gpu/ganesh/SurfaceDrawContext.cpp
++++ b/src/gpu/ganesh/SurfaceDrawContext.cpp
+@@ -513,7 +513,9 @@
+         // modify geometry and edge flags to represent intersected shape of clip and draw.
+         if (GrQuadUtils::CropToRect(clippedBounds, result.fAA, quad,
+                                     /*compute local*/ !constColor)) {
+-            if (simpleColor && quad->fDevice.quadType() == GrQuad::Type::kAxisAligned) {
++            GrColorType colorType = this->colorInfo().colorType();
++            if (simpleColor && quad->fDevice.quadType() == GrQuad::Type::kAxisAligned &&
++                SkPMColor4fRoundForTarget(*constColor, colorType) == *constColor) {
+                 // Clear optimization is possible
+                 drawBounds = quad->fDevice.bounds();
+                 if (drawBounds.contains(rtRect)) {

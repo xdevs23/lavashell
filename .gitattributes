@@ -1,0 +1,1 @@
+nix/cargo-projections/*.json -diff linguist-generated

@@ -1,0 +1,39 @@
+intro	Use this example to inspect text, transfers, control states and window contours.
+text	Text
+states	Control states
+transfers	Transfers
+shapes	Window shapes
+selectable_label	Read-only text
+singleline_label	Single-line field
+multiline_label	Multiline field
+selectable_sample	You packed the notebook beside the map and left room for a pencil.
+editable_sample	Your bag contains a blue notebook, a folded map and a pencil for today's notes.
+multiline_sample	You sketch a route across the map before leaving. Your notebook holds the stops you want to visit.
+selection_drag	Select a few words, then drag them to another place in the same field.
+copy	Copy selected text
+cut	Cut selected text
+paste	Paste text
+reset	Reset sample text
+clear	Clear received data
+state_button	Press the sample button
+state_hint	Move your pointer over the button, focus it and press it to inspect each state.
+idle	Idle
+hover	Hovered
+focus	Focused
+pressed	Pressed
+keyboard_hint	Use Tab for focus and Enter or Space for buttons. You can reduce motion in your system settings.
+copy_image	Copy image
+copy_document	Copy document
+copy_file_uri	Copy file URI
+receive_preferred	Paste preferred data
+source_hint	Drag a source item into another window or application to inspect the transfer.
+target_hint	Paste your clipboard data here, or drop an item onto this target.
+transfer_empty	You have no received data here, so paste or drop a transfer.
+transfer_success	You received data with the type and size shown below.
+transfer_rejected	The app could not accept this transfer, so choose another item and try again.
+clipboard_offered	The app has offered the selected data to your clipboard.
+clipboard_failed	The app could not offer this data to your clipboard, so try again.
+shape_open	Open shaped window
+shape_close	Close shaped window
+shape_hint	Move the shaped window and click through its transparent edges and holes.
+title	Lavashell / Interactions

@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Images that map to dp coordinates: the signed distance in the red channel of
+// field, and the lens field.
+uniform shader field;
+uniform shader lens;
+
+float4 lensField(float2 p, out float exact) {
+    exact = field.eval(p).r;
+    return float4(lens.eval(p));
+}

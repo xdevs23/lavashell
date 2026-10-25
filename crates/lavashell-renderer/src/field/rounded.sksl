@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Radii are ordered top left, top right, bottom right, bottom left. Within a
+// band around each centre axis the radius blends between neighbouring corners,
+// so a box with different radii has no seam on its axes.
+float cornerRadius(float2 local, float4 radii) {
+    float band = lensLength(max(max(radii.x, radii.y), max(radii.z, radii.w)));
+    float right = smoothstep(-band, band, local.x);
+    float below = smoothstep(-band, band, local.y);
+    float top = radii.x + (radii.y - radii.x) * right;
+    float bottom = radii.w + (radii.z - radii.w) * right;
+    return top + (bottom - top) * below;
+}
+
+// Smooth rounded-box distance with its analytic gradient and lens length. A
+// hard nearest-edge normal jumps by 90 degrees across each interior corner
+// bisector. Refraction makes that jump visible even though the silhouette
+// itself is continuous. The optical field is smooth over one lens length; the
+// canvas still clips to the exact outline.
+float4 roundedLens(float2 p, float4 bounds, float4 radii) {
+    float2 halfSize = bounds.zw * 0.5;
+    float2 local = p - bounds.xy - halfSize;
+    float radius = cornerRadius(local, radii);
+    float smoothing = lensLength(radius);
+
+    // Compact polynomial smoothing leaves the original field unchanged away
+    // from its creases. Smooth abs also makes the field continuous at the center
+    // of circular/pill lenses, where a unit signed-distance normal is undefined.
+    float2 center = max(smoothing - abs(local), float2(0));
+    float2 q = abs(local) + center * center / (2.0 * smoothing) - (halfSize - radius);
+    float2 localGradient = sign(local) * (1.0 - center / smoothing);
+
+    float2 positiveWeight = clamp(0.5 + 0.5 * q / smoothing, 0.0, 1.0);
+    float2 outside = q * positiveWeight + smoothing * positiveWeight * (1.0 - positiveWeight);
+    float outsideLength = length(outside);
+
+    float edgeWeight = clamp(0.5 + 0.5 * (q.x - q.y) / smoothing, 0.0, 1.0);
+    float nearest = mix(q.y, q.x, edgeWeight) + smoothing * edgeWeight * (1.0 - edgeWeight);
+    float insideWeight = clamp(0.5 - 0.5 * nearest / smoothing, 0.0, 1.0);
+    float inside = nearest * insideWeight - smoothing * insideWeight * (1.0 - insideWeight);
+
+    float2 outsideGradient = outsideLength > 0.0 ? outside * positiveWeight / outsideLength : float2(0.0);
+    float2 gradient = outsideGradient + insideWeight * float2(edgeWeight, 1.0 - edgeWeight);
+    return float4(gradient * localGradient, outsideLength + inside - radius, lensLength(radius));
+}
+
+float3 roundedExact(float2 p, float4 bounds, float4 radii) {
+    float2 halfSize = bounds.zw * 0.5;
+    float2 local = p - bounds.xy - halfSize;
+    float2 side = float2(local.x > 0.0 ? 1.0 : -1.0, local.y > 0.0 ? 1.0 : -1.0);
+    float radius = local.x > 0.0 ? (local.y > 0.0 ? radii.z : radii.y)
+                                 : (local.y > 0.0 ? radii.w : radii.x);
+    float2 q = abs(local) - halfSize + radius;
+    float2 outside = max(q, 0.0);
+    float outsideLength = length(outside);
+    float2 gradient = outsideLength > 0.0 ? outside / outsideLength
+                                          : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    return float3(gradient * side, min(max(q.x, q.y), 0.0) + outsideLength - radius);
+}
+

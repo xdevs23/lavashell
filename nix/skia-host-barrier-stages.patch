@@ -1,0 +1,31 @@
+--- a/src/gpu/ganesh/vk/GrVkCommandBuffer.cpp
++++ b/src/gpu/ganesh/vk/GrVkCommandBuffer.cpp
+@@ -30,6 +30,12 @@
+ 
+ using namespace skia_private;
+ 
++// A barrier on host access needs the host stage, which ALL_COMMANDS for the GENERAL layout does not include.
++static VkPipelineStageFlags with_host_stage(VkPipelineStageFlags stages, VkAccessFlags access) {
++    constexpr VkAccessFlags kHostAccess = VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT;
++    return (access & kHostAccess) ? (stages | VK_PIPELINE_STAGE_HOST_BIT) : stages;
++}
++
+ void GrVkCommandBuffer::invalidateState() {
+     for (auto& boundInputBuffer : fBoundInputBuffers) {
+         boundInputBuffer = VK_NULL_HANDLE;
+@@ -176,6 +182,15 @@
+             fImageBarriers.clear(); // Sets the size to 0
+         }
+ 
++        for (const VkBufferMemoryBarrier& barrier : fBufferBarriers) {
++            fSrcStageMask = with_host_stage(fSrcStageMask, barrier.srcAccessMask);
++            fDstStageMask = with_host_stage(fDstStageMask, barrier.dstAccessMask);
++        }
++        for (const VkImageMemoryBarrier& barrier : fImageBarriers) {
++            fSrcStageMask = with_host_stage(fSrcStageMask, barrier.srcAccessMask);
++            fDstStageMask = with_host_stage(fDstStageMask, barrier.dstAccessMask);
++        }
++
+         VkDependencyFlags dependencyFlags = fBarriersByRegion ? VK_DEPENDENCY_BY_REGION_BIT : 0;
+         GR_VK_CALL(gpu->vkInterface(), CmdPipelineBarrier(
+                 fCmdBuffer, fSrcStageMask, fDstStageMask, dependencyFlags, 0, nullptr,

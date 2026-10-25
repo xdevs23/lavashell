@@ -1,0 +1,10 @@
+{
+  "name": "lavashell-example-assets",
+  "private": true,
+  "description": "Asset dependencies for the native Rust examples",
+  "dependencies": {
+    "@fontsource-variable/dm-sans": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/manrope": "5.3.0"
+  }
+}

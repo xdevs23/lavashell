@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni.workspace = true
+lavashell-core.workspace = true
+lavashell-renderer.workspace = true
+ndk.workspace = true
+rustix = { workspace = true, features = ["event"] }
+thiserror.workspace = true
+
+[target.'cfg(target_os = "android")'.dev-dependencies]
+lavashell-vulkan.workspace = true
+
+# The tests run the adapter on the host against a simulated platform.
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+lavashell-core.workspace = true
+lavashell-renderer.workspace = true
+log.workspace = true
+rustix = { workspace = true, features = ["event", "pipe"] }
+thiserror.workspace = true
+
+# The native library of the round trips of streams, packaged by the surface-stream-round-trip flake package.
+[[example]]
+name = "surface-stream-round-trip"
+path = "emulator/lib.rs"
+crate-type = ["cdylib"]
+test = true

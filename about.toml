@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The notices list the first accepted license that a crate allows, and the dependency check accepts any of them.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MIT-0",
+    "CC0-1.0",
+    "Unlicense",
+]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+private = { ignore = true }

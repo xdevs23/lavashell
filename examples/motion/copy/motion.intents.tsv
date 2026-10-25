@@ -1,0 +1,22 @@
+key	intent
+subtitle	Explain that the screen demonstrates interruptible UI motion
+auto_title	Name the automatic layout and shared geometry demonstration
+auto_hint	Explain that clicking the card expands it and can interrupt its motion
+expand	Name the action to expand the card
+collapse	Name the action to return the card to compact geometry
+spring_title	Name the demonstration of velocity-preserving spring retargeting
+spring_hint	Explain that moving the slider changes the spring target
+morph_title	Name the contour morph demonstration
+morph_hint	Explain the continuous morph between equal arc-length sampled contours
+morph	Name the action that changes the contour shape
+timeline_title	Name the keyframe timeline demonstration
+timeline_hint	Explain keyframe seeking, pausing and alternating playback
+pause	Name the action that pauses the timeline
+play	Name the action that resumes the timeline
+replay	Name the action that restarts the demonstration
+auto_play	Name the option for automatic demonstration playback
+reduced_motion	Name the option that immediately applies motion targets
+frame_time	Name the measurement of how long rendering takes
+refresh	Name the measurement of the refresh rate predicted by the compositor
+variable	Explain that no constant compositor refresh prediction is available
+title	Name the sample in its window title and its heading

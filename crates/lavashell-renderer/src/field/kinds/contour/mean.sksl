@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The means of the lens sums with their weight, and the exact signed distance
+// in red.
+uniform shader means;
+uniform shader field;
+
+half4 main(float2 p) {
+    float4 joined = float4(means.eval(p));
+    return half4(lensMean(float4(joined.xyz * joined.w, joined.w), field.eval(p).r));
+}

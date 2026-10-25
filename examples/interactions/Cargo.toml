@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-interactions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+clap.workspace = true
+lavashell.workspace = true
+lavashell-example-support.workspace = true
+rustix = { workspace = true, features = ["process"] }
+tempfile.workspace = true
+thiserror.workspace = true
+url.workspace = true
+xdg.workspace = true
+
+[build-dependencies]
+lavashell-example-copy-keys.workspace = true

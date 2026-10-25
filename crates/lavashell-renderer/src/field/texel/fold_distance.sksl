@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float k;
+
+half4 main(half4 src, half4 dst) {
+    return half4(smoothMin(src.r, dst.r, k), 0.0, 0.0, 1.0);
+}

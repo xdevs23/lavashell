@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The exact signed distance in red.
+uniform shader field;
+uniform float chunks;
+
+half4 main(float2 p) {
+    float exact = field.eval(p).r;
+    float4 sum = lensSums(p, float2(abs(exact), exact));
+    return half4(sum.w > 0.0 ? sum.xyz / sum.w : float3(0.0), sum.w / chunks);
+}

@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The nearer distance, and the parity of the crossings of both.
+half4 main(half4 src, half4 dst) {
+    return half4(min(src.r, dst.r), abs(src.g - dst.g), 0.0, 1.0);
+}

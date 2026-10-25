@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-keyboard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+icu_locale_core.workspace = true
+lavashell-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lavashell-test-platform.workspace = true

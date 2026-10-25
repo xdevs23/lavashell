@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float count;
+uniform float lens_radius;
+
+float2 nearestPoint(float2 p, float4 segment) {
+    float2 edge = segment.zw - segment.xy;
+    float squared = dot(edge, edge);
+    float t = squared > 0.0 ? clamp(dot(p - segment.xy, edge) / squared, 0.0, 1.0) : 0.0;
+    return segment.xy + edge * t;
+}
+
+float4 nearestSegment(float4 found, float2 p, float4 segment, float index) {
+    if (index < count) {
+        float2 to = p - nearestPoint(p, segment);
+        float distance = length(to);
+        if (distance < found.z) {
+            found.xyz = float3(to, distance);
+        }
+        float2 from = p - segment.xy;
+        float2 edge = segment.zw - segment.xy;
+        if ((segment.y > p.y) != (segment.w > p.y)
+            && p.x < segment.x + from.y * edge.x / edge.y) {
+            found.w = 1.0 - found.w;
+        }
+    }
+    return found;
+}
+
+// Segments whose distance lies within a lens length of the nearest one share
+// the lens: their outward normals and their line distances, which never exceed
+// the exact distance, blend by weights that reach zero with zero slope. Normals
+// of straight edges do not fan out around an inner corner as radial normals do.
+// Line distances are summed as offsets from the exact distance.
+float4 weighSegment(float4 sum, float2 p, float4 segment, float index, float2 exact) {
+    if (index < count) {
+        float2 edge = segment.zw - segment.xy;
+        float2 outward = normalize(float2(edge.y, -edge.x));
+        float distance = length(p - nearestPoint(p, segment));
+        float weight = max(1.0 - (distance - exact.x) / lensLength(lens_radius), 0.0);
+        float line = dot(p - segment.xy, outward);
+        sum += float4(outward, min(line, exact.y) - exact.y, 1.0) * weight * weight;
+    }
+    return sum;
+}
+
+// The lens field from the sums over every segment at a point whose exact
+// signed distance is `exact`. Without segments the lens is flat.
+float4 lensMean(float4 sum, float exact) {
+    if (sum.w <= 0.0) {
+        return float4(0.0, 0.0, exact, lensLength(lens_radius));
+    }
+    return float4(sum.xy / sum.w, sum.z / sum.w + exact, lensLength(lens_radius));
+}

@@ -1,0 +1,25 @@
+key	intent
+search	Invite a search across songs, artists and albums, and name the search field
+back	Name the action that leaves the search
+clear	Name the action that empties the search field
+keyboard_panel	Name the on-screen keyboard panel
+keyboard_layouts	Head the list of keyboard layouts to switch to
+more_letters	Name the further letters that a long press on a key offers
+action_search	Name the action key of a field that starts a search
+action_done	Name the action key of a field that ends the input
+action_next	Name the action key of a field that moves to the next field
+action_go	Name the action key of a field that opens what was typed
+action_send	Name the action key of a field that sends what was typed
+action_enter	Name the action key of a field without an action
+symbols_label	Label the key that switches to the page of symbols
+letters_label	Label the key that switches back to the page of letters
+more_symbols_label	Label the key that switches to the page of further symbols
+symbols	Name the key that switches to the page of symbols
+letters	Name the key that switches back to the page of letters
+more_symbols	Name the key that switches to the page of further symbols
+shift	Name the key that capitalizes the next letter or every letter
+delete	Name the key that deletes the character before the caret
+globe	Name the key that switches to the next keyboard layout
+hide	Name the key that hides the keyboard
+space	Name the key that types a space
+title	Name the sample in its window title

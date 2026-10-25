@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader backdrop;
+uniform float refraction;
+uniform float dispersion;
+uniform float rim;
+
+half4 main(float2 p) {
+    float exact;
+    float4 field = lensField(p, exact);
+    float2 direction = field.xy;
+    // Inside the outline the smooth distance can lie a little above zero, where
+    // the lens has its full strength.
+    float lens = exp(min(field.z, 0.0) / field.w);
+    float2 displacement = direction * refraction * lens;
+    half4 c = backdrop.eval(p - displacement);
+    float2 split = direction * dispersion * lens;
+    half4 red = backdrop.eval(p - displacement + split);
+    half4 blue = backdrop.eval(p - displacement - split);
+    // Split samples have an alpha each. Re-premultiply their intensities by the center coverage, so transparency
+    // cannot become a colored fringe.
+    c.r = red.a > 0.0 ? red.r * c.a / red.a : 0;
+    c.b = blue.a > 0.0 ? blue.b * c.a / blue.a : 0;
+    // Design tokens of the glass look: light from the upper left, a cubic highlight and a 3 dp rim falloff.
+    float highlight = pow(max(dot(direction, normalize(float2(-0.6, -0.8))), 0.0), 3.0);
+    c.rgb += half3(highlight * rim * exp(-abs(exact) / 3.0)) * c.a;
+    return c;
+}

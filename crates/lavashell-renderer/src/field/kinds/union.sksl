@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Rounded boxes in pairs of columns: the bounds of a member, then its radii.
+uniform float members;
+uniform float blend_width;
+// Bounds of all members. Limiting the fused field by this box leaves aligned straight edges straight.
+uniform float4 extent;
+
+// Two members in each matrix of columns, and the first member is the field that the others join. A step of a fold
+// names its parameters as the fold declares it.
+float3 exactStep(float3 value, float2 p, float2 exact, float4x4 columns, float first) {
+    for (int k = 0; k < 2; k++) {
+        float index = first / 2.0 + float(k);
+        if (index > 0.0 && index < members) {
+            value = smoothUnion(value, roundedExact(p, columns[2 * k], columns[2 * k + 1]), blend_width);
+        }
+    }
+    return value;
+}
+
+float4 lensStep(float4 value, float2 p, float2 exact, float4x4 columns, float first) {
+    for (int k = 0; k < 2; k++) {
+        float index = first / 2.0 + float(k);
+        if (index > 0.0 && index < members) {
+            value = smoothUnionLens(value, roundedLens(p, columns[2 * k], columns[2 * k + 1]), blend_width);
+        }
+    }
+    return value;
+}
+
+float3 exactField(float2 p) {
+    float3 field = foldExact(roundedExact(p, data0[0], data0[1]), p, float2(0.0));
+    float3 box = roundedExact(p, extent, float4(0.0));
+    return field.z > box.z ? field : box;
+}

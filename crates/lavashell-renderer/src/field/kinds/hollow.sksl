@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float4 outer_bounds;
+uniform float4 outer_radii;
+uniform float4 hole_bounds;
+uniform float4 hole_radii;
+
+float3 exactField(float2 p) {
+    float3 outer = roundedExact(p, outer_bounds, outer_radii);
+    float3 hole = -roundedExact(p, hole_bounds, hole_radii);
+    return outer.z > hole.z ? outer : hole;
+}

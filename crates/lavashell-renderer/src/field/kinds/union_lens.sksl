@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+float4 lensField(float2 p, out float exact) {
+    exact = exactField(p).z;
+    float4 field = foldLens(roundedLens(p, data0[0], data0[1]), p, float2(0.0));
+    // A smooth maximum with the box avoids a crease in the optics where the box limits the neck.
+    return limitLens(field, roundedLens(p, extent, float4(0.0)));
+}

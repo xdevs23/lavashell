@@ -1,0 +1,31 @@
+--- a/src/gpu/ganesh/image/GrImageUtils.cpp
++++ b/src/gpu/ganesh/image/GrImageUtils.cpp
+@@ -732,6 +732,10 @@
+ 
+ namespace {
+ 
++// Bilinear taps at zero weight read the texel past the drawn area, which an approximate fit leaves
++// uninitialized, so a NaN left there would spread through the filter.
++constexpr auto kFilterDeviceContents = skgpu::ganesh::Device::InitContents::kClear;
++
+ class GaneshBackend :
+         public Backend,
+         private SkShaderBlurAlgorithm,
+@@ -764,7 +768,7 @@
+                                              GrProtected::kNo,
+                                              fOrigin,
+                                              props ? *props : this->surfaceProps(),
+-                                             skgpu::ganesh::Device::InitContents::kUninit);
++                                             kFilterDeviceContents);
+     }
+ 
+     sk_sp<SkSpecialImage> makeImage(const SkIRect& subset, sk_sp<SkImage> image) const override {
+@@ -816,7 +820,7 @@
+                                              GrProtected::kNo,
+                                              fOrigin,
+                                              this->surfaceProps(),
+-                                             skgpu::ganesh::Device::InitContents::kUninit);
++                                             kFilterDeviceContents);
+     }
+ 
+ private:

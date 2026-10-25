@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float4 segments[COLUMNS];
+
+// The offset of p from the nearest point of the outline, its distance, and 1
+// inside or 0 outside.
+float4 closest(float2 p) {
+    float4 found = float4(0.0, 0.0, FAR, 0.0);
+    for (int i = 0; i < COLUMNS; i++) { found = nearestSegment(found, p, segments[i], float(i)); }
+    return found;
+}
+
+// The weighted sums of outward normals, line distances and weights at p, whose
+// distance to the outline is exact.x and signed distance exact.y.
+float4 lensSums(float2 p, float2 exact) {
+    float4 sum = float4(0.0);
+    for (int i = 0; i < COLUMNS; i++) { sum = weighSegment(sum, p, segments[i], float(i), exact); }
+    return sum;
+}

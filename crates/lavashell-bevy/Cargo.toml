@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-bevy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = [
+    "std", "bevy_render", "bevy_core_pipeline", "bevy_camera", "raw_vulkan_init",
+] }
+wgpu = { workspace = true, features = ["vulkan"] }
+ash.workspace = true
+lavashell-core.workspace = true
+lavashell-renderer.workspace = true
+lavashell-vulkan.workspace = true
+log.workspace = true
+thiserror.workspace = true

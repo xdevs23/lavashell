@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The field of the segments in the columns of data.
+
+// A step of a fold names its parameters as the fold declares it.
+float4 closestStep(float4 value, float2 p, float2 exact, float4x4 columns, float first) {
+    for (int c = 0; c < 4; c++) { value = nearestSegment(value, p, columns[c], first + float(c)); }
+    return value;
+}
+
+float4 lensSumsStep(float4 value, float2 p, float2 exact, float4x4 columns, float first) {
+    for (int c = 0; c < 4; c++) { value = weighSegment(value, p, columns[c], first + float(c), exact); }
+    return value;
+}
+
+float3 exactField(float2 p) {
+    float4 found = foldClosest(float4(0.0, 0.0, FAR, 0.0), p, float2(0.0));
+    float side = found.w > 0.5 ? -1.0 : 1.0;
+    return float3(found.z > 0.0 ? side * found.xy / found.z : float2(0.0), side * found.z);
+}

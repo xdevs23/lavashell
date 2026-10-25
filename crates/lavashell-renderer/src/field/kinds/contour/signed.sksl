@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// The nearest distance in red and whether p lies inside in green.
+uniform shader segments;
+
+half4 main(float2 p) {
+    half4 found = segments.eval(p);
+    return half4(found.g > 0.5 ? -found.r : found.r, 0.0, 0.0, 1.0);
+}

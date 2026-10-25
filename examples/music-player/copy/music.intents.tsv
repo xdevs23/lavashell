@@ -1,0 +1,33 @@
+key	intent
+nav_collection	Label the complete local music collection
+nav_favorites	Label music saved by the listener
+nav_recent	Label recently selected music
+section_library	Label the sidebar group containing music saved by the listener
+section_playlists	Label the playlist group
+search	Describe the search field's scope
+collection_title	Name the screen showing the collection
+collection_description	Explain that the collection contains sample albums and tracks
+featured	Label the highlighted album section
+albums	Label the album collection
+tracks	Label the track collection
+play	Activate playback
+pause	Pause playback
+play_album	Start playback of the selected album
+save	Save music to favorites
+saved	Indicate that music is saved to favorites
+previous	Select the preceding track
+next	Select the following track
+shuffle	Toggle randomized playback order
+repeat	Change repetition mode
+volume	Identify the output level control
+track_header	Label the track title column
+artist_header	Label the artist column
+album_header	Label the album column
+duration_header	Label track length
+search_empty	Explain that the current query matches no tracks
+search_hint	Invite a different query
+local_badge	Identify the collection as sample data
+collection_empty	Explain that this section currently contains no tracks without implying a search
+collection_empty_hint	Direct the listener to All music to choose tracks
+title	Name the music app and the framework it is built with in the window title
+brand	Show the name of the music app at the top of the sidebar

@@ -1,0 +1,32 @@
+nav_collection	All music
+nav_favorites	Favorites
+nav_recent	Recent
+section_library	Library
+section_playlists	Your playlists
+search	Search your music
+collection_title	Your music
+collection_description	You can explore the music controls with these sample albums and tracks.
+featured	Featured
+albums	Albums
+tracks	Tracks
+play	Play
+pause	Pause
+play_album	Play album
+save	Save track
+saved	Saved
+previous	Previous track
+next	Next track
+shuffle	Shuffle
+repeat	Repeat
+volume	Volume
+track_header	Title
+artist_header	Artist
+album_header	Album
+duration_header	Duration
+search_empty	Your search did not match any tracks here.
+search_hint	You can try a different query to find the music you want.
+local_badge	Sample collection
+collection_empty	This section has no tracks to show right now.
+collection_empty_hint	You can open All music to choose a track and save it to Favorites.
+title	Undertow · Lavashell
+brand	undertow

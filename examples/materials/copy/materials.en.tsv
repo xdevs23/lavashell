@@ -1,0 +1,35 @@
+intro	You can change material parameters and inspect the rendered surface.
+materials	Surface treatments
+liquid	Liquid glass
+frosted	Frosted glass
+translucent	Translucent tint
+paper	Paper
+ceramic	Ceramic
+metal	Brushed metal
+parameters	Material controls
+blur	Blur sigma
+opacity	Tint opacity
+radius	Corner radius
+refraction	Refraction strength
+reset	Reset controls
+palette	OKLCH tonal ramp
+hue	Hue
+chroma	Chroma
+blending	Blend comparison
+blend_multiply	Multiply
+blend_screen	Screen
+blend_difference	Difference
+animate	Start motion
+pause	Pause motion
+drag	You can drag the panel across the colored shapes and grid.
+output	Output color profile
+requested	Requested profile
+active	Negotiated profile
+profile_srgb	sRGB
+profile_p3	Display P3
+profile_rec2020	Rec. 2020
+profile_hdr10	HDR10
+profile_scrgb	scRGB
+fallback	Unavailable profile or precision requests fall back to SDR sRGB output.
+precision	Output bits per channel
+title	Lavashell / Materials

@@ -1,0 +1,40 @@
+key	intent	beat
+intro	Invite inspection of the four interaction exercises	Introduction
+text	Name the text interaction exercise	Section navigation
+states	Name the control-state interaction exercise	Section navigation
+transfers	Name the transfer interaction exercise	Section navigation
+shapes	Name the window-contour interaction exercise	Section navigation
+selectable_label	Identify the read-only text sample	Text exercise
+singleline_label	Identify the editable single-line sample	Text exercise
+multiline_label	Identify the editable multiline sample	Text exercise
+selectable_sample	Supply meaningful ordinary prose for selecting and copying	Read-only sample
+editable_sample	Supply meaningful ordinary prose with words to select and move	Single-line sample
+multiline_sample	Supply meaningful ordinary prose for multiline editing	Multiline sample
+selection_drag	Instruct the user to select words and move them within the field	Text exercise hint
+copy	Name the action that copies selected text	Text button
+cut	Name the action that cuts selected text	Text button
+paste	Name the action that pastes clipboard text	Text button
+reset	Name the action that restores initial sample text	Text button
+clear	Name the action that clears displayed received data	Transfer button
+state_button	Invite activation of the demonstration control	State exercise button
+state_hint	Instruct inspection of pointer and focus changes on the demonstration control	State exercise hint
+idle	Name the state before hover, focus or activation	State readout
+hover	Name the pointer-over-control state	State readout
+focus	Name the keyboard-focus state	State readout
+pressed	Name the active press state	State readout
+keyboard_hint	Explain keyboard focus and activation with the system motion preference	Keyboard hint
+copy_image	Name the action that offers the sample image to the clipboard	Transfer button
+copy_document	Name the action that offers the sample document to the clipboard	Transfer button
+copy_file_uri	Name the action that offers the sample file URI to the clipboard	Transfer button
+receive_preferred	Name the action that requests the receiver's preferred clipboard representation	Transfer button
+source_hint	Instruct a transfer from the source to another window or application	Transfer source hint
+target_hint	Instruct receipt by pasting or dropping into the target	Transfer target hint
+transfer_empty	Explain that the target has no received data and suggest a receipt action	Empty target status
+transfer_success	Confirm receipt and point to the external type and size readout	Accepted target status
+transfer_rejected	Explain rejection without asserting support for unspecified data types	Rejected target status
+clipboard_offered	Report that clipboard data has been offered without claiming external receipt	Clipboard status
+clipboard_failed	Report that offering data to the clipboard failed and invite another attempt	Clipboard status
+shape_open	Name the action that opens the secondary shaped window	Shape button
+shape_close	Name the action that closes the secondary shaped window	Shape button
+shape_hint	Instruct window motion and clicks through transparent edges and holes	Shape exercise hint
+title	Name the sample in its window title and its heading	Title

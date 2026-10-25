@@ -1,0 +1,36 @@
+key	intent	beat
+intro	Explain that the reader can change material parameters and see the rendered result	Introduction
+materials	Label the set of available surface treatments	Navigation
+liquid	Name the liquid glass rendering treatment	Preset selection
+frosted	Name the frosted glass rendering treatment	Preset selection
+translucent	Name the translucent tint treatment	Preset selection
+paper	Name the paper rendering treatment	Preset selection
+ceramic	Name the ceramic rendering treatment	Preset selection
+metal	Name the brushed metal rendering treatment	Preset selection
+parameters	Label the controls that adjust the selected material	Controls
+blur	Label Gaussian blur sigma measured in logical pixels	Controls
+opacity	Label the opacity of the tint	Controls
+radius	Label the roundness of the material panel's corners	Controls
+refraction	Label the strength of the liquid glass displacement	Controls
+reset	Describe the action that restores initial values	Button
+palette	Label the tonal color ramp derived from OKLCH	Palette section
+hue	Label the hue parameter of OKLCH colors	Controls
+chroma	Label the chroma parameter of OKLCH colors	Controls
+blending	Label the overlap demonstration of blend modes	Blend section
+blend_multiply	Name the multiply blend mode in the comparison	Blend section
+blend_screen	Name the screen blend mode in the comparison	Blend section
+blend_difference	Name the difference blend mode in the comparison	Blend section
+animate	Describe the action that starts background motion	Button
+pause	Describe the action that pauses background motion	Button
+drag	Explain how to move the material panel	Preview hint
+output	Label output color profile information	Output section
+requested	Identify the requested output profile	Output information
+active	Identify the actual negotiated output profile	Output information
+profile_srgb	Name the sRGB output profile	Output information
+profile_p3	Name the Display P3 output profile	Output information
+profile_rec2020	Name the Rec. 2020 output profile	Output information
+profile_hdr10	Name the HDR10 output profile	Output information
+profile_scrgb	Name the scRGB output profile	Output information
+fallback	Explain that unavailable output requests use SDR sRGB	Output information
+precision	Label actual output precision per color channel	Output information
+title	Name the sample in its window title and its heading	Title
