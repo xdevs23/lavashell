@@ -77,14 +77,15 @@ pub enum ContrastPreference {
     More,
 }
 
-pub static TEXT_SCALING: Local<TextScaling> = Local::new(TextScaling::default);
+pub static TEXT_SCALING: Local<TextScaling> = Local::named("text-scaling", TextScaling::default);
 
 /// Whether the user asked for reduced motion. The motion clock of a view uses the root value of this key. A value
 /// provided for a subtree changes only what code in that subtree reads.
-pub static REDUCED_MOTION: Local<bool> = Local::new(|| false);
+pub static REDUCED_MOTION: Local<bool> = Local::named("reduced-motion", || false);
 
-pub static REDUCED_TRANSPARENCY: Local<bool> = Local::new(|| false);
-pub static CONTRAST: Local<ContrastPreference> = Local::new(ContrastPreference::default);
+pub static REDUCED_TRANSPARENCY: Local<bool> = Local::named("reduced-transparency", || false);
+pub static CONTRAST: Local<ContrastPreference> =
+    Local::named("contrast", ContrastPreference::default);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PreferenceValues {

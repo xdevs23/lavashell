@@ -9,6 +9,8 @@ use std::rc::Rc;
 static NAME: Local<&str> = Local::new(|| "default");
 static OTHER_NAME: Local<&str> = Local::new(|| "other default");
 static INK: Local<Color> = Local::new(|| Color::WHITE);
+static LABEL: Local<&str> = Local::named("label", || "label default");
+static SAME_LABEL: Local<&str> = Local::named("label", || "same label default");
 
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(300.0), Dp::new(100.0)), Density::ONE);
 
@@ -44,6 +46,27 @@ fn the_nearest_wrapper_wins_and_a_key_without_one_reads_its_default() -> TestRes
     let expected =
         ["default", "outer", "inner", "outer", "default"].map(|name| (name, "other default"));
     assert_eq!(*seen.borrow(), expected);
+    Ok(())
+}
+
+#[test]
+fn keys_with_the_same_name_are_still_told_apart_by_address() -> TestResult {
+    assert_eq!(
+        (LABEL.name(), SAME_LABEL.name(), NAME.name()),
+        (Some("label"), Some("label"), None)
+    );
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let record = seen.clone();
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        ui.provide(&LABEL, "provided", |ui| {
+            record
+                .borrow_mut()
+                .push((ui.local(&LABEL), ui.local(&SAME_LABEL)));
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
+    assert_eq!(*seen.borrow(), [("provided", "same label default")]);
     Ok(())
 }
 

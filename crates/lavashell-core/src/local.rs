@@ -25,6 +25,7 @@ use std::sync::atomic::AtomicBool;
 /// }
 /// ```
 pub struct Local<T> {
+    name: Option<&'static str>,
     fallback: Fallback<T>,
     /// Makes `Local` interior mutable. The compiler then does not promote `&KEY` of a `const` key to a
     /// `'static` reference, so a `const` key fails to compile where it is read or provided.
@@ -42,6 +43,7 @@ impl<T> Local<T> {
     /// address of the static that declares them, so two keys can have the same value type.
     pub const fn new(default: fn() -> T) -> Self {
         Self {
+            name: None,
             fallback: Fallback::Declared(default),
             _not_const: AtomicBool::new(false),
         }
@@ -52,9 +54,24 @@ impl<T> Local<T> {
     /// view provides a value for the key.
     pub const fn platform(read: fn(&PlatformFacts) -> T) -> Self {
         Self {
+            name: None,
             fallback: Fallback::Platform(read),
             _not_const: AtomicBool::new(false),
         }
+    }
+
+    /// A key like one from `new` that also has a name, which identifies it outside the process, such as for a value
+    /// that a view in another process sets. Both processes use the same name for the same key.
+    pub const fn named(name: &'static str, default: fn() -> T) -> Self {
+        Self {
+            name: Some(name),
+            ..Self::new(default)
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&'static str> {
+        self.name
     }
 }
 
