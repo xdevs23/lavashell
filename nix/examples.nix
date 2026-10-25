@@ -158,7 +158,8 @@ in
             python3 tools/crate_rules.py
             lavashell-source-rules
             python3 tools/check-copy.py
-            ruff check --no-cache --config tools/ruff.toml tools nix
+            python3 tools/fuzz_workspace.py
+            ruff check --no-cache --config tools/ruff.toml tools nix crates/lavashell-protocol/fuzz
             touch "$out"
           '';
       python-tests =
@@ -173,6 +174,7 @@ in
               python3 "nix/$test.py"
             done
             python3 -m unittest discover -s tools -p 'test_*.py'
+            python3 -m unittest discover -s crates/lavashell-protocol/fuzz -p 'test_*.py'
             touch "$out"
           '';
     };

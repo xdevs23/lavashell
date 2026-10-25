@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-protocol-fuzz"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+lavashell-core.workspace = true
+lavashell-protocol.workspace = true
+libfuzzer-sys.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "apply"
+path = "fuzz_targets/apply.rs"
+test = false
+doc = false
+bench = false
+
+# In a separate workspace, libFuzzer and its C++ build are not part of the lock file and the Nix
+# builds of the crates. tools/fuzz_workspace.py compares the values copied from the root workspace.
+[workspace]
+
+[workspace.dependencies]
+lavashell-core = { path = "../../lavashell-core" }
+lavashell-protocol = { path = ".." }
+libfuzzer-sys = "=0.4.13"
+serde = { version = "=1.0.229", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+unused_results = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+let_underscore_must_use = "deny"
+let_underscore_untyped = "deny"
+map_err_ignore = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+allow_attributes = "deny"
+disallowed_methods = "deny"

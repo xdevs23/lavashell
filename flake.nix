@@ -53,11 +53,8 @@
           // assets.waylandEnvironment
           // {
             packages =
-              (with pkgs; [
-                cargo
-                rustc
-                rustfmt
-                clippy
+              import ./nix/rust-tools.nix pkgs
+              ++ (with pkgs; [
                 clang
                 pkg-config
                 fontconfig
@@ -106,6 +103,7 @@
         inherit pkgs;
         advisoryDatabase = advisory-db;
       };
+      fuzz = import ./nix/fuzz.nix { inherit pkgs; };
     in
     {
       lib.skia =
@@ -135,6 +133,12 @@
             meta.description = dependencies.yankedCrates.meta.description;
             meta.lavashellHost = "checkout";
           };
+          protocol-fuzz = {
+            type = "app";
+            program = lib.getExe fuzz.runner;
+            meta.description = fuzz.runner.meta.description;
+            meta.lavashellHost = "checkout";
+          };
         };
       checks.${system} = examples.checks // {
         dependencies = dependencies.check;
@@ -142,6 +146,7 @@
       devShells.${system} = {
         android = android.shell;
         default = shell { };
+        fuzz = fuzz.shell;
         native = shell { nativeTestTools = true; };
         validation = shell {
           nativeTestTools = true;
