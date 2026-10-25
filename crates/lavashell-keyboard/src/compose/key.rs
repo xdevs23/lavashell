@@ -3,8 +3,8 @@ use super::{Scene, centered};
 use crate::board::{CHARACTER, GAP, Key, KeyAt, Page};
 use crate::keyboard::Snapshot;
 use crate::look::{
-    self, ACTION_GAP, ACTION_ICON, ACTION_KEY, KEY_CORNERS, KEY_ICON, LETTER, PAGE_KEY, RING,
-    SPACE_BAR,
+    self, ACTION_GAP, ACTION_ICON, ACTION_KEY, FACE_MARGIN, KEY_CORNERS, KEY_ICON, LETTER,
+    PAGE_KEY, RING, SPACE_BAR,
 };
 use crate::shift::Shift;
 use lavashell_core::prelude::*;
@@ -22,6 +22,7 @@ pub(super) fn compose(ui: &mut Ui, scene: &Scene, at: KeyAt, key: Key) {
     if highlight.shown && snapshot.board.nearest(highlight.at) == Some(at) {
         modifier = modifier.outline(scene.look.accent, RING, KEY_CORNERS, RING);
     }
+    let modifier = modifier.padding_xy(FACE_MARGIN, Dp::ZERO);
     // Each side of a key grows by half a gap, so an enlarged key meets its neighbours.
     let enlarged = match ScaleFactor::try_new(1.0 + GAP / scene.grid.width(CHARACTER)) {
         Ok(enlarged) => enlarged,
