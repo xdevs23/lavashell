@@ -2,6 +2,7 @@
 [workspace]
 members = [
     "crates/lavashell-core",
+    "crates/lavashell-protocol",
     "crates/lavashell-effect-quality",
     "crates/lavashell-components",
     "crates/lavashell-materials",
@@ -61,6 +62,7 @@ lavashell-materials = { path = "crates/lavashell-materials" }
 lavashell-keyboard = { path = "crates/lavashell-keyboard" }
 lavashell-effect-quality = { path = "crates/lavashell-effect-quality" }
 lavashell-core = { path = "crates/lavashell-core" }
+lavashell-protocol = { path = "crates/lavashell-protocol" }
 lavashell-components = { path = "crates/lavashell-components" }
 lavashell-vulkan = { path = "crates/lavashell-vulkan" }
 lavashell-renderer = { path = "crates/lavashell-renderer" }
@@ -89,6 +91,7 @@ bevy = { version = "=0.17.3", default-features = false }
 calloop = "=0.14.4"
 clap = { version = "=4.6.7", features = ["derive"] }
 csv = "=1.4.0"
+dhat = "=0.3.3"
 ash = { version = "=0.38.0", default-features = false, features = ["linked", "std"] }
 futures-lite = "=2.6.1"
 i_overlay = "=9.1.0"

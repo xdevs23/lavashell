@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+lavashell-core = { workspace = true, features = ["serde"] }
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+dhat.workspace = true
