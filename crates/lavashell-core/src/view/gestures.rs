@@ -59,6 +59,17 @@ pub(super) trait Recognizer: Any {
     fn cancel(&mut self) -> Vec<Effect> {
         Vec::new()
     }
+
+    /// Whether the recognizer waits as a challenger once a recognizer on its node or inside it wins the pointer. A
+    /// challenger takes the pointer from the winner once it accepts the pointer.
+    fn challenge(&mut self) -> bool {
+        false
+    }
+
+    /// Whether the node of the recognizer still declares it after the node was composed again.
+    fn declared(&self, _view: &View) -> bool {
+        true
+    }
 }
 
 /// A kind of recognizer. `declare` creates a recognizer of this kind for a press on a node that declares one.

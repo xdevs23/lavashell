@@ -13,7 +13,8 @@ pub(super) const REGISTRATION: Registration = Registration {
     declare: declared,
 };
 
-/// A pinch by two pointers pressed on one node, such as two fingers.
+/// A pinch by two pointers pressed on one node, such as two fingers. `slop` is the touch slop, also when the pinch
+/// waits to take a point from a winner.
 struct Pinch {
     node: NodeId,
     slop: Dp,
@@ -127,6 +128,15 @@ impl Recognizer for PinchPoint {
         self.pinch
             .borrow_mut()
             .leave(self.pointer, DragPhase::Cancelled)
+    }
+
+    fn challenge(&mut self) -> bool {
+        true
+    }
+
+    fn declared(&self, view: &View) -> bool {
+        let node = self.pinch.borrow().node;
+        view.hits_of(node).any(|hit| hit.transform.is_some())
     }
 }
 

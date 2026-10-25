@@ -168,6 +168,7 @@ impl View {
         }
         self.normalize_focus();
         self.sanitize_interactions();
+        self.withdraw_challengers();
         self.refresh_text_session();
         self.paint_tooltip(text);
         self.redraw = self.focus != painted_focus;

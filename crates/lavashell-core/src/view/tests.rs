@@ -248,6 +248,9 @@ mod touch_slop;
 #[path = "tests/pinch.rs"]
 mod pinch;
 
+#[path = "tests/transform_over_keys.rs"]
+mod transform_over_keys;
+
 #[path = "tests/sideways.rs"]
 mod sideways;
 
