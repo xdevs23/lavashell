@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::program::Scheduled;
 use super::*;
 use crate::float_asserts::{assert_f64_eq, same_f64};
-use crate::geometry::Point;
+use crate::geometry::{Point, Viewport};
 use crate::reactive::{Phase, Scope};
 use crate::scene::Affine;
 use crate::test_error::{Required, TestResult};
@@ -176,5 +177,109 @@ fn a_motion_mapped_into_a_translation_moves_with_the_animation() -> TestResult {
     ])?;
     animation.play(frames, Playback::default());
     check(&motion, &animation)?;
+    Ok(())
+}
+
+const FROM_ZERO: Timing = Timing {
+    start: Duration::ZERO,
+    paused: None,
+    offset: Duration::ZERO,
+    rate: 1.0,
+};
+
+fn pixel_step() -> f64 {
+    f64::visible_step(Viewport::default().pixel())
+}
+
+#[test]
+fn a_target_needs_finite_vectors_and_a_step_greater_than_zero() {
+    let target = |from: f64, step: f64| {
+        Program::<f64>::target(
+            Vector([from]),
+            Vector([1.0]),
+            Vector([0.0]),
+            MotionSpec::Instant,
+            step,
+        )
+        .err()
+    };
+    for from in [f64::NAN, f64::INFINITY] {
+        assert_eq!(target(from, pixel_step()), Some(MotionError::Vectors));
+    }
+    for step in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(target(0.0, step), Some(MotionError::Step));
+    }
+    assert_eq!(target(0.0, pixel_step()), None);
+}
+
+#[test]
+fn a_motion_needs_a_finite_end() -> TestResult {
+    let program = Program::target(
+        Vector([0.0]),
+        Vector([1.0]),
+        Vector([0.0]),
+        MotionSpec::Instant,
+        pixel_step(),
+    )?;
+    let playing = Playing::new(f64::NAN, program, FROM_ZERO);
+    assert_eq!(playing.err(), Some(MotionError::End));
+    Ok(())
+}
+
+/// A motion from `-f64::MAX` toward `f64::MAX`, the whole range of f64.
+fn across_the_range(spec: MotionSpec) -> Result<Scheduled<f64>, MotionError> {
+    let program = Program::target(
+        Vector([-f64::MAX]),
+        Vector([f64::MAX]),
+        Vector([0.0]),
+        spec,
+        pixel_step(),
+    )?;
+    Ok(Scheduled::new(program))
+}
+
+#[test]
+fn a_tween_across_the_whole_range_passes_zero_halfway() -> TestResult {
+    let tween = across_the_range(Tween::new(Duration::from_millis(100)).into())?;
+    let at = |millis| tween.sample(Duration::from_millis(millis)).trajectory;
+    let [early, halfway, late] = [25, 50, 75].map(|millis| at(millis).position.0[0]);
+    assert!(halfway.abs() <= f64::MAX * f64::EPSILON, "{halfway}");
+    assert!(-f64::MAX < early && early < halfway, "{early}");
+    assert!(halfway < late && late < f64::MAX, "{late}");
+    assert_eq!(at(50).velocity, Vector([f64::MAX]));
+    Ok(())
+}
+
+#[test]
+fn a_spring_across_the_whole_range_keeps_moving_toward_its_end() -> TestResult {
+    let spring = across_the_range(Spring::new(Duration::from_millis(400), 1.0)?.into())?;
+    let at = |millis| {
+        spring
+            .sample(Duration::from_millis(millis))
+            .trajectory
+            .position
+            .0[0]
+    };
+    let (early, late) = (at(50), at(100));
+    assert!(
+        -f64::MAX < early && early < late && late < f64::MAX,
+        "{early} {late}"
+    );
+    let rest = spring.rest().required("rest time")?;
+    assert!(rest > Duration::from_millis(100));
+    Ok(())
+}
+
+#[test]
+fn a_keyframe_segment_across_the_whole_range_passes_zero_halfway() -> TestResult {
+    let frames = Keyframes::new([
+        Keyframe::new(Duration::ZERO, -f64::MAX),
+        Keyframe::new(Duration::from_millis(100), f64::MAX),
+    ])?;
+    let (frame, trajectory) = frames.sample(Duration::from_millis(50));
+    assert_f64_eq(frame, f64::MAX);
+    let position = trajectory.position.0[0];
+    assert!(position.abs() <= f64::MAX * f64::EPSILON, "{position}");
+    assert_eq!(trajectory.velocity, Vector([f64::MAX]));
     Ok(())
 }

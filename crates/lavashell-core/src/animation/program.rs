@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Animatable, Direction, Keyframes, MotionSpec, Playback, Trajectory, VectorSpace};
+use super::motion_scale::MotionScale;
+use super::{
+    Animatable, Direction, Keyframes, MotionSpec, Playback, Trajectory, Tween, VectorSpace,
+};
 use crate::numbers::duration_from_nanos;
 use std::time::Duration;
+
+/// The error returned by `Program::target` and `Playing::new` for values from which no motion can be shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MotionError {
+    #[error("the vectors of a motion toward a target must be finite")]
+    Vectors,
+    #[error("the visible step of a motion toward a target must be finite and greater than zero")]
+    Step,
+    #[error("the end value of a motion must be finite")]
+    End,
+}
 
 #[derive(Clone, PartialEq)]
 pub enum Program<T: Animatable> {
@@ -106,8 +120,14 @@ pub struct Playing<T: Animatable> {
 }
 
 impl<T: Animatable> Playing<T> {
-    pub fn new(end: T, program: Program<T>, timing: Timing) -> Self {
-        Self::scheduled(end, Scheduled::new(program), timing)
+    /// # Errors
+    ///
+    /// Fails when the vector of `end` is not finite.
+    pub fn new(end: T, program: Program<T>, timing: Timing) -> Result<Self, MotionError> {
+        if !end.vector().finite() {
+            return Err(MotionError::End);
+        }
+        Ok(Self::scheduled(end, Scheduled::new(program), timing))
     }
 
     pub(crate) fn scheduled(end: T, scheduled: Scheduled<T>, timing: Timing) -> Self {
@@ -188,6 +208,34 @@ pub(crate) struct Sample<T: Animatable> {
 }
 
 impl<T: Animatable> Program<T> {
+    /// A motion from `from` toward `to` that starts at the velocity `velocity`. `step` is the smallest visible
+    /// change of a vector component, as returned by `Animatable::visible_step`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a vector is not finite, or when `step` is not a finite number greater than zero.
+    pub fn target(
+        from: T::Vector,
+        to: T::Vector,
+        velocity: T::Vector,
+        spec: MotionSpec,
+        step: f64,
+    ) -> Result<Self, MotionError> {
+        if !(from.finite() && to.finite() && velocity.finite()) {
+            return Err(MotionError::Vectors);
+        }
+        if !(step.is_finite() && step > 0.0) {
+            return Err(MotionError::Step);
+        }
+        Ok(Self::Target {
+            from,
+            to,
+            velocity,
+            spec,
+            step,
+        })
+    }
+
     /// The sample of the program at the elapsed time `elapsed`. A motion toward a target ends at the elapsed
     /// time `rest`.
     fn sample(&self, elapsed: Duration, rest: Option<Duration>) -> Sample<T> {
@@ -231,7 +279,7 @@ impl<T: Animatable> Program<T> {
             } => match spec {
                 MotionSpec::Instant => Some(Duration::ZERO),
                 MotionSpec::Tween(tween) => Some(tween.duration.saturating_add(tween.delay)),
-                MotionSpec::Spring(spring) => spring.rest(&from.sub(to), velocity, *step),
+                MotionSpec::Spring(spring) => spring.rest(from, to, velocity, *step),
             },
             Self::Frames { frames, playback } => {
                 (playback.repeat.cycles()).map(|cycles| frames.duration().saturating_mul(cycles))
@@ -281,49 +329,62 @@ fn target<V: VectorSpace>(
     match spec {
         MotionSpec::Instant => (to.clone(), V::zero()),
         MotionSpec::Spring(spring) => {
-            let (offset, speed) = spring.sample(&from.sub(to), velocity, elapsed.as_secs_f64());
-            (to.add(&offset), speed)
+            MotionScale::sampled([from, to, velocity], |[from, to, velocity]| {
+                let (offset, speed) = spring.sample(&from.sub(to), velocity, elapsed.as_secs_f64());
+                (to.add(&offset), speed)
+            })
         }
-        MotionSpec::Tween(tween) => {
-            let time = elapsed.saturating_sub(tween.delay);
-            if elapsed < tween.delay {
-                return (from.clone(), V::zero());
-            }
-            if time >= tween.duration {
-                return (to.clone(), V::zero());
-            }
-            let seconds = tween.duration.as_secs_f64();
-            let u = time.as_secs_f64() / seconds;
-            let (progress, slope) = tween.easing.sample(u);
-            let delta = to.sub(from);
-            // The quintic corrections at the ends of the curve start at the velocity that the value had when
-            // the target changed. They end at rest with zero acceleration.
-            let (v0, v1) = if tween.preserve_velocity {
-                (
-                    velocity
-                        .scale(seconds)
-                        .sub(&delta.scale(tween.easing.sample(0.0).1)),
-                    delta.scale(-tween.easing.sample(1.0).1),
-                )
-            } else {
-                (V::zero(), V::zero())
-            };
-            let h0 = u - 6.0 * u.powi(3) + 8.0 * u.powi(4) - 3.0 * u.powi(5);
-            let h1 = -4.0 * u.powi(3) + 7.0 * u.powi(4) - 3.0 * u.powi(5);
-            let d0 = 1.0 - 18.0 * u * u + 32.0 * u.powi(3) - 15.0 * u.powi(4);
-            let d1 = -12.0 * u * u + 28.0 * u.powi(3) - 15.0 * u.powi(4);
-            let p = from
-                .add(&delta.scale(progress))
-                .add(&v0.scale(h0))
-                .add(&v1.scale(h1));
-            let v = delta
-                .scale(slope)
-                .add(&v0.scale(d0))
-                .add(&v1.scale(d1))
-                .scale(1.0 / seconds);
-            (p, v)
-        }
+        MotionSpec::Tween(tween) => tweened(from, to, velocity, tween, elapsed),
     }
+}
+
+/// The position and the velocity of a tween from `from` toward `to` at the elapsed time `elapsed`.
+fn tweened<V: VectorSpace>(
+    from: &V,
+    to: &V,
+    velocity: &V,
+    tween: Tween,
+    elapsed: Duration,
+) -> (V, V) {
+    let time = elapsed.saturating_sub(tween.delay);
+    if elapsed < tween.delay {
+        return (from.clone(), V::zero());
+    }
+    if time >= tween.duration {
+        return (to.clone(), V::zero());
+    }
+    let seconds = tween.duration.as_secs_f64();
+    let u = time.as_secs_f64() / seconds;
+    let (progress, slope) = tween.easing.sample(u);
+    MotionScale::sampled([from, to, velocity], |[from, to, velocity]| {
+        let delta = to.sub(from);
+        // The quintic corrections at the ends of the curve start at the velocity that the value had when
+        // the target changed. They end at rest with zero acceleration.
+        let (v0, v1) = if tween.preserve_velocity {
+            (
+                velocity
+                    .scale(seconds)
+                    .sub(&delta.scale(tween.easing.sample(0.0).1)),
+                delta.scale(-tween.easing.sample(1.0).1),
+            )
+        } else {
+            (V::zero(), V::zero())
+        };
+        let h0 = u - 6.0 * u.powi(3) + 8.0 * u.powi(4) - 3.0 * u.powi(5);
+        let h1 = -4.0 * u.powi(3) + 7.0 * u.powi(4) - 3.0 * u.powi(5);
+        let d0 = 1.0 - 18.0 * u * u + 32.0 * u.powi(3) - 15.0 * u.powi(4);
+        let d1 = -12.0 * u * u + 28.0 * u.powi(3) - 15.0 * u.powi(4);
+        let p = from
+            .add(&delta.scale(progress))
+            .add(&v0.scale(h0))
+            .add(&v1.scale(h1));
+        let v = delta
+            .scale(slope)
+            .add(&v0.scale(d0))
+            .add(&v1.scale(d1))
+            .scale(1.0 / seconds);
+        (p, v)
+    })
 }
 
 fn keyframes<T: Animatable>(

@@ -7,6 +7,7 @@ mod color_tests;
 mod easing;
 mod keyframes;
 mod morph;
+mod motion_scale;
 mod motion_spec;
 mod parts;
 #[cfg(test)]
@@ -31,7 +32,7 @@ pub use keyframes::{Direction, Keyframe, Keyframes, KeyframesError, Playback, Re
 pub use morph::{Contour, ContourError};
 pub use motion_spec::{MotionSpec, Tween};
 pub(crate) use parts::{Fading, entry};
-pub use program::{Playing, Program, Timing};
+pub use program::{MotionError, Playing, Program, Timing};
 pub use spring::{Spring, SpringError};
 pub(crate) use track::finite;
 pub use track::{Animation, AnimationError, BindError, Bindable, Motion, PlaybackRateError, Timer};

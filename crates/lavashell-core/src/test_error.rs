@@ -3,8 +3,8 @@
 //! with `?`.
 
 use crate::animation::{
-    AnimationError, BindError, ContourError, EasingError, KeyframesError, PlaybackRateError,
-    SpringError,
+    AnimationError, BindError, ContourError, EasingError, KeyframesError, MotionError,
+    PlaybackRateError, SpringError,
 };
 use crate::scene::tree::ApplyError;
 use crate::scroll::ScrollError;
@@ -25,6 +25,8 @@ pub(crate) enum TestError {
     Easing(#[from] EasingError),
     #[error("keyframes could not be made")]
     Keyframes(#[from] KeyframesError),
+    #[error("a motion could not be made")]
+    Motion(#[from] MotionError),
     #[error("a contour could not be sampled")]
     Contour(#[from] ContourError),
     #[error("an animation could not take a value")]
