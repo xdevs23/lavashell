@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::motion_scale::MotionScale;
 use super::{Animatable, Easing, Trajectory, VectorSpace};
 use std::time::Duration;
 
@@ -141,32 +142,34 @@ impl<T: Animatable> Keyframes<T> {
             velocity: tangent,
             end,
         } = frame.retarget(&before.value, start);
-        let delta = end.sub(&from);
-        let (position, velocity) = if before.tangent.is_some() || after.tangent.is_some() {
-            let v0 = tangent.scale(seconds);
-            let v1 = after
-                .tangent
-                .clone()
-                .unwrap_or_else(T::Vector::zero)
-                .scale(seconds);
-            let smooth = along * along * (3.0 - 2.0 * along);
-            let p = from
-                .add(&delta.scale(smooth))
-                .add(&v0.scale(along * (1.0 - along).powi(2)))
-                .add(&v1.scale(along * along * (along - 1.0)));
-            let v = delta
-                .scale(6.0 * along * (1.0 - along))
-                .add(&v0.scale(1.0 - 4.0 * along + 3.0 * along * along))
-                .add(&v1.scale(3.0 * along * along - 2.0 * along))
-                .scale(1.0 / seconds);
-            (p, v)
-        } else {
-            let (progress, slope) = before.easing.sample(along);
-            (
-                from.add(&delta.scale(progress)),
-                delta.scale(slope / seconds),
-            )
-        };
+        let hermite = before.tangent.is_some() || after.tangent.is_some();
+        let end_tangent = after.tangent.clone().unwrap_or_else(T::Vector::zero);
+        let vectors = [&from, &end, &tangent, &end_tangent];
+        let (position, velocity) =
+            MotionScale::sampled(vectors, |[from, end, tangent, end_tangent]| {
+                let delta = end.sub(from);
+                if hermite {
+                    let v0 = tangent.scale(seconds);
+                    let v1 = end_tangent.scale(seconds);
+                    let smooth = along * along * (3.0 - 2.0 * along);
+                    let p = from
+                        .add(&delta.scale(smooth))
+                        .add(&v0.scale(along * (1.0 - along).powi(2)))
+                        .add(&v1.scale(along * along * (along - 1.0)));
+                    let v = delta
+                        .scale(6.0 * along * (1.0 - along))
+                        .add(&v0.scale(1.0 - 4.0 * along + 3.0 * along * along))
+                        .add(&v1.scale(3.0 * along * along - 2.0 * along))
+                        .scale(1.0 / seconds);
+                    (p, v)
+                } else {
+                    let (progress, slope) = before.easing.sample(along);
+                    (
+                        from.add(&delta.scale(progress)),
+                        delta.scale(slope / seconds),
+                    )
+                }
+            });
         let trajectory = Trajectory {
             position,
             velocity,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::VectorSpace;
+use super::motion_scale::MotionScale;
 use std::time::Duration;
 
 /// One nanosecond, the smallest step of `Duration`.
@@ -80,9 +81,16 @@ impl Spring {
     }
 
     /// The position relative to the end and the velocity after `seconds` of a motion that starts at
-    /// `displacement` from its end with the velocity `velocity`.
+    /// `displacement` from its end with the velocity `velocity`. A component beyond the range of f64
+    /// saturates at `±f64::MAX`.
     #[must_use]
     pub fn sample<V: VectorSpace>(&self, displacement: &V, velocity: &V, seconds: f64) -> (V, V) {
+        MotionScale::sampled([displacement, velocity], |[displacement, velocity]| {
+            self.motion(displacement, velocity, seconds)
+        })
+    }
+
+    fn motion<V: VectorSpace>(&self, displacement: &V, velocity: &V, seconds: f64) -> (V, V) {
         let t = seconds.max(0.0);
         if self.damping < 1.0 {
             self.underdamped(displacement, velocity, t)
@@ -92,8 +100,8 @@ impl Spring {
     }
 
     /// Whether a motion at `position` from its end with the velocity `speed` has ended: its extent is at most
-    /// `step`, the smallest visible change. The extent combines position and velocity, so a motion that passes
-    /// its end at speed does not end there. The extent never grows, because the damping only removes energy.
+    /// `step`, the smallest visible change. The extent combines position and velocity, so a motion that passes its
+    /// end at speed does not end there. The extent never grows, because the damping only removes energy.
     fn settled<V: VectorSpace>(&self, position: &V, speed: &V, step: f64) -> bool {
         self.extent(position, speed) <= step
     }
@@ -139,17 +147,21 @@ impl Spring {
         (position, speed)
     }
 
-    /// The first elapsed time, to the nanosecond, at which the motion from `displacement` with the velocity
+    /// The first elapsed time, to the nanosecond, at which the motion from `from` toward `to` with the velocity
     /// `velocity` has ended within `step`. Returns `None` when that time is past the range of `Duration`.
     pub(crate) fn rest<V: VectorSpace>(
         &self,
-        displacement: &V,
+        from: &V,
+        to: &V,
         velocity: &V,
         step: f64,
     ) -> Option<Duration> {
+        let scale = MotionScale::of(&[from, to, velocity]);
+        let displacement = scale.reduced(from).sub(&scale.reduced(to));
+        let velocity = scale.reduced(velocity);
         self.first_time(|time| {
-            let (position, speed) = self.sample(displacement, velocity, time.as_secs_f64());
-            self.settled(&position, &speed, step)
+            let (position, speed) = self.motion(&displacement, &velocity, time.as_secs_f64());
+            self.settled(&scale.restored(&position), &scale.restored(&speed), step)
         })
     }
 
@@ -241,12 +253,16 @@ mod tests {
             spring.settled(&position, &speed, 1.0)
         };
         let near = Vector([100.0]);
-        let rest = spring.rest(&near, &still, 1.0).required("rest time")?;
+        let rest = spring
+            .rest(&near, &still, &still, 1.0)
+            .required("rest time")?;
         assert!(settled(&near, rest));
         let before = rest.checked_sub(TICK).required("time before the rest")?;
         assert!(!settled(&near, before));
         let far = Vector([10_000.0]);
-        let far_rest = spring.rest(&far, &still, 1.0).required("rest time")?;
+        let far_rest = spring
+            .rest(&far, &still, &still, 1.0)
+            .required("rest time")?;
         assert!(far_rest > rest);
         Ok(())
     }
@@ -268,7 +284,24 @@ mod tests {
         let (position, speed) = spring.sample(&still, &still, 0.0);
         assert_eq!((position, speed), (still, still));
         assert!(spring.settled(&position, &speed, 0.0));
-        assert_eq!(spring.rest(&still, &still, 0.0), Some(Duration::ZERO));
+        assert_eq!(
+            spring.rest(&still, &still, &still, 0.0),
+            Some(Duration::ZERO)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_motion_from_the_largest_distance_moves_before_it_rests() -> TestResult {
+        let spring = Spring::new(Duration::from_millis(400), 0.5)?;
+        let (far, still) = (Vector([f64::MAX]), Vector([0.0]));
+        let rest = spring
+            .rest(&far, &still, &still, 1.0)
+            .required("rest time")?;
+        assert!(rest > Duration::ZERO);
+        let (position, speed) = spring.sample(&far, &still, 0.1);
+        assert!(position.0[0].abs() < f64::MAX, "{position:?}");
+        assert!(speed.0[0] < 0.0 && speed.0[0].is_finite(), "{speed:?}");
         Ok(())
     }
 
@@ -276,7 +309,9 @@ mod tests {
     fn a_motion_started_by_velocity_alone_settles() -> TestResult {
         let spring = Spring::new(Duration::from_millis(400), 1.0)?;
         let (still, pushed) = (Vector([0.0]), Vector([300.0]));
-        let rest = spring.rest(&still, &pushed, 1.0).required("rest time")?;
+        let rest = spring
+            .rest(&still, &still, &pushed, 1.0)
+            .required("rest time")?;
         assert!(rest > Duration::ZERO);
         let (position, speed) = spring.sample(&still, &pushed, rest.as_secs_f64());
         assert!(spring.settled(&position, &speed, 1.0));

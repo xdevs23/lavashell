@@ -19,6 +19,10 @@ pub trait VectorSpace: Clone + PartialEq + 'static {
     #[must_use]
     fn scale(&self, factor: f64) -> Self;
 
+    /// This vector scaled by `factor`, with each component beyond the range of f64 at `±f64::MAX`.
+    #[must_use]
+    fn saturating_scale(&self, factor: f64) -> Self;
+
     fn max_abs(&self) -> f64;
 
     fn finite(&self) -> bool;
@@ -42,6 +46,10 @@ impl<const N: usize> VectorSpace for Vector<N> {
 
     fn scale(&self, factor: f64) -> Self {
         Self(self.0.map(|v| v * factor))
+    }
+
+    fn saturating_scale(&self, factor: f64) -> Self {
+        Self(self.0.map(|v| (v * factor).clamp(-f64::MAX, f64::MAX)))
     }
 
     fn max_abs(&self) -> f64 {
@@ -68,6 +76,10 @@ impl<V: VectorSpace, const N: usize> VectorSpace for [V; N] {
 
     fn scale(&self, factor: f64) -> Self {
         std::array::from_fn(|i| self[i].scale(factor))
+    }
+
+    fn saturating_scale(&self, factor: f64) -> Self {
+        std::array::from_fn(|i| self[i].saturating_scale(factor))
     }
 
     fn max_abs(&self) -> f64 {
@@ -430,6 +442,13 @@ impl<A: VectorSpace, B: VectorSpace> VectorSpace for (A, B) {
 
     fn scale(&self, factor: f64) -> Self {
         (self.0.scale(factor), self.1.scale(factor))
+    }
+
+    fn saturating_scale(&self, factor: f64) -> Self {
+        (
+            self.0.saturating_scale(factor),
+            self.1.saturating_scale(factor),
+        )
     }
 
     fn max_abs(&self) -> f64 {

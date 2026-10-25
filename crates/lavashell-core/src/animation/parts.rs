@@ -27,6 +27,10 @@ impl<V: VectorSpace> VectorSpace for Vec<V> {
         self.iter().map(|v| v.scale(factor)).collect()
     }
 
+    fn saturating_scale(&self, factor: f64) -> Self {
+        self.iter().map(|v| v.saturating_scale(factor)).collect()
+    }
+
     fn max_abs(&self) -> f64 {
         self.iter().fold(0.0_f64, |a, v| a.max(v.max_abs()))
     }

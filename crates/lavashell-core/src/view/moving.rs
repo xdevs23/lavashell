@@ -185,11 +185,12 @@ mod tests {
     use crate::animation::{Animatable, MotionSpec, Playing, Program, Timing, Tween, Vector};
     use crate::geometry::Viewport;
     use crate::scene::tree::TransformMotion;
+    use crate::test_error::TestResult;
     use crate::ui::NodeId;
     use crate::units::Dp;
 
     #[test]
-    fn input_maps_to_where_a_group_was_painted_while_its_slot_rotates() {
+    fn input_maps_to_where_a_group_was_painted_while_its_slot_rotates() -> TestResult {
         let turn = Affine::rotate(std::f64::consts::FRAC_PI_2);
         let program = Program::Target {
             from: Affine::IDENTITY.vector(),
@@ -204,7 +205,7 @@ mod tests {
             offset: Duration::ZERO,
             rate: 1.0,
         };
-        let playing = Playing::new(turn, program, timing);
+        let playing = Playing::new(turn, program, timing)?;
         let slot = Slot::Motion(Box::new(TransformMotion::Affine(playing)));
         let group = GroupId::Content(NodeId(1));
         let mut moving = Moving::default();
@@ -213,5 +214,6 @@ mod tests {
         moving.present(Duration::from_millis(50));
         let at = Point::new(Dp::new(10.0), Dp::new(20.0));
         assert_eq!(moving.painted(Some(group), at), at);
+        Ok(())
     }
 }

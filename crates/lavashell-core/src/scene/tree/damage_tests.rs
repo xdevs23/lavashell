@@ -128,7 +128,7 @@ fn a_slot_motion_damages_its_subtree_while_it_moves() -> TestResult {
                 offset: Duration::ZERO,
                 rate: 1.0,
             },
-        ))),
+        )?)),
         ..Group::default()
     });
     let rect = Rect::new(0.dp(), 0.dp(), 20.dp(), 20.dp());
