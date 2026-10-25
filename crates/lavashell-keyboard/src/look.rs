@@ -30,6 +30,9 @@ pub(crate) const NAME_GAP: Dp = Dp::new(12.0);
 /// The space between the icon and the word on the action key.
 pub(crate) const ACTION_GAP: Dp = Dp::new(10.0);
 
+/// The room between the face of a key and each side of the key, as wide as `ACTION_GAP`.
+pub(crate) const FACE_MARGIN: Dp = ACTION_GAP;
+
 /// The width of the focus ring and its distance from the key.
 pub(crate) const RING: Dp = Dp::new(3.0);
 
