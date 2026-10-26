@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Scene, centered};
-use crate::board::{CHARACTER, GAP, Key, KeyAt, Page};
+use crate::board::{CHARACTER, GAP, Key, KeyAt, Page, at_both_ends};
 use crate::keyboard::Snapshot;
 use crate::look::{
     self, ACTION_GAP, ACTION_ICON, ACTION_KEY, FACE_MARGIN, KEY_CORNERS, KEY_ICON, LETTER,
@@ -45,7 +45,10 @@ pub(super) fn compose(ui: &mut Ui, scene: &Scene, at: KeyAt, key: Key) {
                 .reflow()
                 .enter(Presence::default().scale(enlarged)),
         );
-    centered(ui, modifier, |ui| face(ui, scene, key, label.as_deref()));
+    let room = rect.width - at_both_ends(FACE_MARGIN);
+    centered(ui, modifier, |ui| {
+        face(ui, scene, key, label.as_deref(), room);
+    });
 }
 
 /// The icon, the word and the style of the action key. `tonal` is true where typing goes on after
@@ -85,7 +88,8 @@ fn styles(scene: &Scene, key: Key) -> StateStyles {
     }
 }
 
-fn face(ui: &mut Ui, scene: &Scene, key: Key, label: Option<&str>) {
+/// Composes the face of `key`. `room` is the width available inside the key.
+fn face(ui: &mut Ui, scene: &Scene, key: Key, label: Option<&str>, room: Dp) {
     let (snapshot, look) = (scene.snapshot, scene.look);
     let (text, icons) = (&snapshot.settings.text, &snapshot.settings.icons);
     let outlined = |ui: &mut Ui, icon: &'static Icon| {
@@ -138,24 +142,34 @@ fn face(ui: &mut Ui, scene: &Scene, key: Key, label: Option<&str>) {
         }
         Key::Action => {
             let face = action(snapshot);
+            let icon = |ui: &mut Ui, modifier: Modifier| {
+                ui.icon(
+                    face.icon,
+                    IconOptions {
+                        size: Some(ACTION_ICON),
+                        ..IconOptions::default()
+                    },
+                    modifier.color(look.ink),
+                );
+            };
+            let wide = NodeRef::new();
+            let fits = wide.natural_width().map(move |natural| natural <= room);
             ui.layout(
                 Axis::Horizontal,
-                Modifier::new().gap(ACTION_GAP).align_items(Align::Center),
+                Modifier::new()
+                    .node_ref(&wide)
+                    .shown_when(fits.clone())
+                    .gap(ACTION_GAP)
+                    .align_items(Align::Center),
                 |ui| {
-                    ui.icon(
-                        face.icon,
-                        IconOptions {
-                            size: Some(ACTION_ICON),
-                            ..IconOptions::default()
-                        },
-                        Modifier::new().color(look.ink),
-                    );
+                    icon(ui, Modifier::new());
                     ui.text(
                         face.word,
                         Modifier::new().text_style(scene.text(&ACTION_KEY, look.ink)),
                     );
                 },
             );
+            icon(ui, Modifier::new().shown_when(fits.map(|fits| !fits)));
         }
     }
 }

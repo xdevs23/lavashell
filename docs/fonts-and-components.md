@@ -63,7 +63,15 @@ ui.multiline_field(draft.get(), TextFieldOptions::default(), theme::field(), edi
 ## On-screen keyboard
 
 ```rust,ignore
-let keyboard = Keyboard::new(Target::View, &settings, layout)?;
+let placement = State::new(Placement::FullWidth);
+let keyboard = Keyboard::new(Target::View, &settings, layout, placement.clone())?;
+keyboard.set_on_transform(move |input| {
+    if input.phase == DragPhase::Ended
+        && let Some(after) = placement_after(input.scale)
+    {
+        placement.set(after);
+    }
+});
 let shown = keyboard.clone();
 let view = View::new(platform, move |ui| {
     ui.column(Modifier::new(), |ui| {
@@ -74,8 +82,11 @@ let view = View::new(platform, move |ui| {
 ```
 
 `ui.keyboard_from(&keyboard, origin, closed, modifier)` expands the panel from the node composed with
-`ui.shared(origin, ..)`. `Target::Host { session, sink }` types into a field in another view or process. See the
-[keyboard example](../examples/keyboard/README.md).
+`ui.shared(origin, ..)`. `Target::Host { session, sink }` types into a field in another view or process.
+`Placement::Docked(Dock { side, width, margin })` puts the panel in a bottom corner. `set_on_transform` passes each
+transform of two fingers on the panel to the host. In the
+[keyboard example](../examples/keyboard/README.md), `placement_after(scale: f64) -> Option<Placement>` docks the
+panel on a pinch in, gives it the full width on a pinch out and returns `None` for a small drift.
 
 A host reads the state of the keyboard from the keyboard itself. `Keyboard::covered` returns the height that the panel
 covers above the bottom of the view as it moves. `Keyboard::rests_hidden` is true once the keyboard is hidden and its

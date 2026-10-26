@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
 use lavashell_example_support::Recording;
 use lavashell_on_screen_keyboard::{
     CopyKey, Error, copy,
-    model::{Appearance, Demo},
+    model::{Appearance, Demo, docked},
     scene::{self, FIELD},
     stage::{QUERY, Stage, touch},
 };
@@ -71,6 +72,7 @@ pub fn record(recording: &Recording) -> Result<(), Error> {
     stage.focus_field()?;
     stage.settle()?;
     previews(&mut stage, recording)?;
+    dock(&mut stage, recording)?;
 
     stage.tap(copy(CopyKey::Back))?;
     stage.offscreen.view.provide(&REDUCED_MOTION, true);
@@ -114,4 +116,16 @@ fn previews(stage: &mut Stage, recording: &Recording) -> Result<(), Error> {
         stage.input(InputEvent::TouchUp(finger(touch(2), u)))
     })?;
     stage.settle()
+}
+
+/// The open panel moving into the dock on the left and back to the full width.
+fn dock(stage: &mut Stage, recording: &Recording) -> Result<(), Error> {
+    let mut dock = Sequence::new("dock", recording);
+    for placement in [docked(Side::Left), Placement::FullWidth] {
+        dock.record(stage, |stage| {
+            stage.demo.placement.set(placement);
+            Ok(stage.offscreen.frame()?)
+        })?;
+    }
+    Ok(())
 }

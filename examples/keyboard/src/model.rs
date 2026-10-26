@@ -5,8 +5,8 @@ use crate::{
     look::{self, Palette},
 };
 use lavashell::keyboard::{
-    ENGLISH, GERMAN, Keyboard, KeyboardIcons, KeyboardSettings, KeyboardStyle, KeyboardText,
-    Layout, PORTUGUESE, Target,
+    Dock, ENGLISH, GERMAN, Keyboard, KeyboardIcons, KeyboardSettings, KeyboardStyle, KeyboardText,
+    Layout, PORTUGUESE, Placement, Side, Target,
 };
 use lavashell::prelude::*;
 use lavashell_example_support::{icon, lucide};
@@ -37,6 +37,34 @@ impl Appearance {
 
 /// The height of the keyboard on the car screen of the sample.
 pub const PANEL_HEIGHT: NonNegativeDp = constant!(NonNegativeDp::try_new(Dp::new(350.0)));
+
+/// The dock of the keyboard at `side` of the car screen of the sample.
+#[must_use]
+pub fn docked(side: Side) -> Placement {
+    Placement::Docked(Dock {
+        side,
+        width: constant!(NonNegativeDp::try_new(Dp::new(640.0))),
+        margin: constant!(NonNegativeDp::try_new(Dp::new(12.0))),
+    })
+}
+
+/// The scale at or below which two fingers that come together on the keyboard dock it.
+const DOCK_SCALE: f64 = 0.8;
+/// The scale at or above which two fingers that spread on the keyboard give it the full width.
+const UNDOCK_SCALE: f64 = 1.25;
+
+/// The placement after two fingers on the keyboard end a gesture at `scale`, or `None` when the
+/// fingers only drifted. At or below `DOCK_SCALE`, the keyboard docks in the left corner. At or
+/// above `UNDOCK_SCALE`, it gets the full width again.
+fn placement_after(scale: f64) -> Option<Placement> {
+    if scale <= DOCK_SCALE {
+        Some(docked(Side::Left))
+    } else if scale >= UNDOCK_SCALE {
+        Some(Placement::FullWidth)
+    } else {
+        None
+    }
+}
 
 /// The words on the keys, from the copy catalog of the sample.
 fn words() -> KeyboardText {
@@ -151,6 +179,7 @@ pub struct Demo {
     pub appearance: State<Appearance>,
     pub settings: State<KeyboardSettings>,
     pub layout: State<&'static Layout>,
+    pub placement: State<Placement>,
     pub keyboard: Keyboard,
     pub icons: SceneIcons,
 }
@@ -166,15 +195,25 @@ impl Demo {
             icons: keyboard_icons()?,
             panel_height: PANEL_HEIGHT,
         });
-        let layout = State::new(&ENGLISH);
+        let (layout, placement) = (State::new(&ENGLISH), State::new(Placement::FullWidth));
+        let keyboard = Keyboard::new(Target::View, &settings, layout.clone(), placement.clone())
+            .map_err(Error::Keyboard)?;
+        let docking = placement.clone();
+        keyboard.set_on_transform(move |input| {
+            if input.phase == DragPhase::Ended
+                && let Some(after) = placement_after(input.scale)
+            {
+                docking.set(after);
+            }
+        });
         Ok(Self {
             query: State::new(String::new()),
             action: State::new(TextAction::Search),
             appearance: State::new(appearance),
-            keyboard: Keyboard::new(Target::View, &settings, layout.clone())
-                .map_err(Error::Keyboard)?,
             settings,
             layout,
+            placement,
+            keyboard,
             icons: SceneIcons::decode()?,
         })
     }

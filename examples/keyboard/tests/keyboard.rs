@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 use icu_locale_core::langid;
-use lavashell::keyboard::{ENGLISH, FRENCH, GERMAN, Layout, PORTUGUESE};
+use lavashell::keyboard::{ENGLISH, FRENCH, GERMAN, Layout, PORTUGUESE, Placement, Side};
 use lavashell::prelude::*;
 use lavashell_on_screen_keyboard::{
     CopyKey, Error, copy,
-    model::{Appearance, Demo},
+    model::{Appearance, Demo, docked},
     scene::{self, FIELD},
     stage::{QUERY, Stage, touch},
 };
@@ -38,6 +38,8 @@ fn the_keyboard_docks_types_switches_layouts_and_follows_the_arrow_keys() -> Res
     further_letters(&mut stage)?;
     actions(&mut stage)?;
     arrow_keys(&mut stage)?;
+    dock(&mut stage)?;
+    pinch(&mut stage)?;
     appearances(&mut stage)?;
     Ok(())
 }
@@ -354,6 +356,87 @@ fn arrow_keys(stage: &mut Stage) -> Result<(), Error> {
     stage.input(InputEvent::TouchCancel(touch(1)))?;
     stage.settle()?;
     assert_eq!(stage.demo.query.get(), QUERY);
+    Ok(())
+}
+
+/// Whether `panel` is docked at `side`. A docked panel is narrower than the screen, ends above the
+/// bottom edge of the screen and is nearer the edge at `side` than the other edge.
+fn docked_at(panel: Rect, side: Side) -> bool {
+    let screen = scene::screen();
+    let (left, right) = (panel.x, screen.width - panel.x - panel.width);
+    let nearer = match side {
+        Side::Left => left < right,
+        Side::Right => right < left,
+    };
+    nearer && panel.width < screen.width && panel.y + panel.height < screen.height
+}
+
+/// Whether `panel` lies across the whole bottom of the screen.
+fn full_width(panel: Rect) -> bool {
+    let screen = scene::screen();
+    near(panel.x, Dp::ZERO)
+        && near(panel.width, screen.width)
+        && near(panel.y + panel.height, screen.height)
+}
+
+fn dock(stage: &mut Stage) -> Result<(), Error> {
+    for (side, name) in [(Side::Left, "left"), (Side::Right, "right")] {
+        stage.demo.placement.set(docked(side));
+        stage.settle()?;
+        let panel = stage.panel()?.bounds;
+        assert!(docked_at(panel, side), "{panel:?} at {side:?}");
+        let field = (stage.offscreen.view.bounds_of(FIELD)).ok_or(Error::MissingField)?;
+        assert!(
+            field.y + field.height <= panel.y,
+            "the field is in view above the dock"
+        );
+        shot(stage, &format!("dock-{name}"))?;
+    }
+    stage.demo.placement.set(Placement::FullWidth);
+    stage.settle()
+}
+
+/// Puts one finger on the key named `first` and one on the key named `second`, moves the second
+/// finger `by` sideways in two steps, lifts both and frames the view until it comes to rest. The
+/// first step starts the transform. The second step changes the scale.
+fn pinch_keys(stage: &mut Stage, first: &str, second: &str, by: Dp) -> Result<(), Error> {
+    let (start, end) = (stage.key(first)?, stage.key(second)?);
+    let halfway = Point::new(end.x + by / 2.0, end.y);
+    let moved = Point::new(end.x + by, end.y);
+    let finger = |point, at| TouchSample {
+        id: touch(point),
+        at,
+        kind: PointerKind::Finger,
+    };
+    stage.input(InputEvent::TouchDown(finger(1, start)))?;
+    stage.input(InputEvent::TouchDown(finger(2, end)))?;
+    stage.input(InputEvent::TouchMove(finger(2, halfway)))?;
+    stage.input(InputEvent::TouchMove(finger(2, moved)))?;
+    stage.input(InputEvent::TouchUp(finger(2, moved)))?;
+    stage.input(InputEvent::TouchUp(finger(1, start)))?;
+    stage.settle()
+}
+
+fn pinch(stage: &mut Stage) -> Result<(), Error> {
+    pinch_keys(stage, "d", "k", -250.dp())?;
+    assert_eq!(stage.demo.placement.get(), docked(Side::Left));
+    let panel = stage.panel()?.bounds;
+    assert!(docked_at(panel, Side::Left), "{panel:?}");
+    pinch_keys(stage, "s", "k", 350.dp())?;
+    assert_eq!(stage.demo.placement.get(), Placement::FullWidth);
+    let panel = stage.panel()?.bounds;
+    assert!(full_width(panel), "{panel:?}");
+    pinch_keys(stage, "d", "k", -50.dp())?;
+    assert_eq!(
+        stage.demo.placement.get(),
+        Placement::FullWidth,
+        "fingers that drift a little leave the placement as it is"
+    );
+    assert_eq!(
+        stage.demo.query.get(),
+        QUERY,
+        "a pinch leaves the query unchanged"
+    );
     Ok(())
 }
 

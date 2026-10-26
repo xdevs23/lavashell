@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 
-/// A view with only a keyboard tagged `keyboard`, which types into a field that the host edits.
+/// A view with only a keyboard tagged `keyboard`, which types into a field that the host edits. The
+/// host collects the commands sent by the keyboard, and the transforms passed on by it once
+/// `Host::pass_transforms` has set the transform action of the keyboard.
 pub(super) struct Host {
     pub(super) view: View,
     pub(super) scene: Scene,
     pub(super) session: State<Option<TextSession>>,
     pub(super) sent: Rc<RefCell<Vec<TextCommand>>>,
+    pub(super) transforms: Rc<RefCell<Vec<TransformInput>>>,
     pub(super) settings: State<KeyboardSettings>,
     pub(super) layout: State<&'static Layout>,
+    pub(super) placement: State<Placement>,
     pub(super) keyboard: Keyboard,
     pub(super) time: u64,
 }
@@ -33,13 +37,14 @@ impl Host {
         facts: PlatformFacts,
     ) -> Result<Self, TestError> {
         let (session, sent) = (State::new(None), Rc::new(RefCell::new(Vec::new())));
-        let receiver = sent.clone();
+        let (receiver, transforms) = (sent.clone(), Rc::new(RefCell::new(Vec::new())));
         let target = Target::Host {
             session: session.clone(),
             sink: Rc::new(move |command| receiver.borrow_mut().push(command)),
         };
         let (settings, layout) = (State::new(settings), State::new(&ENGLISH));
-        let keyboard = Keyboard::new(target, &settings, layout.clone())?;
+        let placement = State::new(Placement::FullWidth);
+        let keyboard = Keyboard::new(target, &settings, layout.clone(), placement.clone())?;
         let composed = keyboard.clone();
         let view = View::new(facts, move |ui| {
             let compose = |ui: &mut Ui| {
@@ -61,8 +66,10 @@ impl Host {
             scene: Scene::default(),
             session,
             sent,
+            transforms,
             settings,
             layout,
+            placement,
             keyboard,
             time: 0,
         };
@@ -95,6 +102,12 @@ impl Host {
             ..session
         }));
         self.frame()
+    }
+
+    /// Sets the transform action of the keyboard, which collects each transform in `transforms`.
+    pub(super) fn pass_transforms(&self) {
+        let reported = self.transforms.clone();
+        (self.keyboard).set_on_transform(move |input| reported.borrow_mut().push(input));
     }
 
     pub(super) fn sent(&self) -> Vec<TextCommand> {

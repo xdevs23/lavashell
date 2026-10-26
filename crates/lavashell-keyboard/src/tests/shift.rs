@@ -173,24 +173,49 @@ fn the_preview_of_a_key_pressed_while_another_is_held_shows_the_letter_it_types(
     let mut host = Host::new(settings())?;
     host.start(capitals(Capitalization::Sentences), "")?;
     let (h, i) = (key(&host.view, "H")?, key(&host.view, "I")?);
-    host.view.input(InputEvent::TouchDown(TouchSample {
-        id: touch(1),
-        at: h,
-        kind: PointerKind::Finger,
-    }));
-    host.view.input(InputEvent::TouchDown(TouchSample {
-        id: touch(2),
-        at: i,
-        kind: PointerKind::Finger,
-    }));
+    host.view.input(InputEvent::TouchDown(finger(1, h)));
+    host.view.input(InputEvent::TouchDown(finger(2, i)));
     host.frame()?;
-    assert!(!texts(&host.scene).contains(&"I".to_string()));
-    host.view.input(InputEvent::TouchUp(TouchSample {
-        id: touch(2),
-        at: i,
-        kind: PointerKind::Finger,
-    }));
+    assert!(texts(&host.scene).contains(&"i".to_string()));
+    host.view.input(InputEvent::TouchUp(finger(2, i)));
     assert_eq!(host.sent(), [Host::commit("H"), Host::commit("i")]);
+    Ok(())
+}
+
+#[test]
+fn the_preview_of_a_letter_pressed_while_shift_is_held_shows_its_capital() -> Result<(), TestError>
+{
+    let mut host = Host::new(settings())?;
+    host.start(TextHints::default(), "")?;
+    let (shift, q) = (key(&host.view, "Shift")?, key(&host.view, "q")?);
+    host.view.input(InputEvent::TouchDown(finger(1, shift)));
+    host.view.input(InputEvent::TouchDown(finger(2, q)));
+    host.frame()?;
+    assert!(texts(&host.scene).contains(&"Q".to_string()));
+    host.view.input(InputEvent::TouchUp(finger(2, q)));
+    assert_eq!(host.sent(), [Host::commit("Q")]);
+    Ok(())
+}
+
+#[test]
+fn the_preview_of_a_letter_pressed_while_a_second_tap_on_shift_is_held_shows_caps_lock()
+-> Result<(), TestError> {
+    let mut host = Host::new(settings())?;
+    host.start(TextHints::default(), "x")?;
+    tap(&mut host.view, "Shift")?;
+    host.frame()?;
+    let (shift, q) = (key(&host.view, "Shift")?, key(&host.view, "Q")?);
+    host.view.input(InputEvent::TouchDown(finger(1, shift)));
+    host.view.input(InputEvent::TouchDown(finger(2, q)));
+    host.frame()?;
+    assert!(texts(&host.scene).contains(&"Q".to_string()));
+    host.view.input(InputEvent::TouchUp(finger(2, q)));
+    host.view.input(InputEvent::TouchUp(finger(1, shift)));
+    host.frame()?;
+    assert_eq!(host.sent(), [Host::commit("Q")]);
+    assert!(has(&host.view, &Role::Button, "Q"), "caps lock is on");
+    tap(&mut host.view, "Q")?;
+    assert_eq!(host.sent(), [Host::commit("Q"), Host::commit("Q")]);
     Ok(())
 }
 
