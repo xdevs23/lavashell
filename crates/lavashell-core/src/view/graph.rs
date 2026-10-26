@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::frame_error::{LayoutError, LayoutRead, LayoutReads, NodeName, NodeValue};
-use super::layout::weight;
+use super::layout::{fill_decided_by, fills_through_children, weight};
 use super::parents::{Parent, Parents};
+use crate::geometry::Axis;
 use crate::ui::{ModifierElement, Node, NodeRef, NodeRefKey, Part, Read, Used};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
@@ -14,20 +15,19 @@ pub(super) struct Graph {
     /// For each container whose children read the sizes of each other, the positions of its children in the order in
     /// which the container measures them.
     orders: BTreeMap<usize, Vec<usize>>,
-    sizes: Vec<SizeRead>,
+    sizes: Vec<Edge>,
     /// The nodes on the way from a node that reads the size of another node up to the container of
     /// both, and from that container down to the other node.
     crossed: BTreeSet<usize>,
-}
-
-#[derive(Clone, Copy)]
-struct SizeRead {
-    source: usize,
-    reader: usize,
+    /// For each node whose natural width a size or a condition reads, the reads that the probe of that width makes
+    /// from inside the node to the nodes outside it.
+    probes: BTreeMap<usize, Vec<Edge>>,
+    /// The nodes whose natural width is read by an offset or a position after measuring.
+    nodes_with_natural_width_read_by_placement: BTreeSet<usize>,
 }
 
 /// One read during layout: the value that the node `reader` uses as `used` reads the `part` of the node `source`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Edge {
     reader: usize,
     used: Used,
@@ -46,9 +46,15 @@ struct Lifted {
 
 impl Graph {
     /// Builds the graph for the composed `nodes`. Fails on a weight that is not a finite number above zero, on a
-    /// value of a modifier that is not valid, on a reference set on two nodes, on a read of a reference set on no
-    /// node, on a size that reads its node, a node around it or a node inside it, on a child without a weight that
-    /// reads the size of a child with a weight, and on reads in a cycle.
+    /// value of a modifier that is not valid, on a reference set on two nodes, and on a read of a reference set on no
+    /// node.
+    ///
+    /// A read of a natural width counts as the reads that the probe of that width makes from inside its node to the
+    /// nodes outside it. Fails on a probe that reads the natural width that it measures. Fails on a size or a
+    /// condition that reads the size of the node carrying it, of a node around that node or of a node inside it.
+    /// Fails on a read of the size of a child with a weight by a child without a weight, by the condition of a child
+    /// with a weight or by a node inside a child that fills only through the children of an overlay. Fails on a
+    /// condition that decides whether such a child fills and reads a node inside that child. Fails on a cycle of reads.
     pub fn new(nodes: &[Node], parents: &Parents) -> Result<Self, LayoutError> {
         let invalid_weight = nodes
             .iter()
@@ -65,7 +71,11 @@ impl Graph {
             ..Self::default()
         };
         let (sizes, moves): (Vec<_>, Vec<_>) = (graph.edges(nodes)?.into_iter())
-            .partition(|edge| matches!(edge.used, Used::Length(_)));
+            .partition(|edge| matches!(edge.used, Used::Length(_) | Used::Condition));
+        graph.nodes_with_natural_width_read_by_placement = (moves.iter())
+            .filter(|edge| edge.part == Part::NaturalWidth)
+            .map(|edge| edge.source)
+            .collect();
         graph.order_children(nodes, parents, &sizes)?;
         Positions::new(parents, &moves).check(nodes)?;
         Ok(graph)
@@ -86,14 +96,25 @@ impl Graph {
         self.crossed.contains(&node)
     }
 
-    /// The nodes outside `subtree` whose sizes are read by nodes inside `subtree`.
+    /// The nodes outside `subtree` whose values are read by nodes inside `subtree`, each with the part read.
     pub fn read_into<'a>(
         &'a self,
         subtree: &'a BTreeSet<usize>,
-    ) -> impl Iterator<Item = usize> + 'a {
+    ) -> impl Iterator<Item = (usize, Part)> + 'a {
         (self.sizes.iter())
             .filter(|read| subtree.contains(&read.reader) && !subtree.contains(&read.source))
-            .map(|read| read.source)
+            .map(|read| (read.source, read.part))
+    }
+
+    /// The nodes outside `node` whose sizes the probe of the natural width of `node` reads, where a size or a condition
+    /// reads that natural width.
+    pub fn read_by_probe(&self, node: usize) -> impl Iterator<Item = usize> + '_ {
+        (self.probes.get(&node).into_iter().flatten()).map(|read| read.source)
+    }
+
+    /// The nodes whose natural width is read by an offset or a position after measuring.
+    pub fn nodes_with_natural_width_read_by_placement(&self) -> &BTreeSet<usize> {
+        &self.nodes_with_natural_width_read_by_placement
     }
 
     fn edges(&self, nodes: &[Node]) -> Result<Vec<Edge>, LayoutError> {
@@ -127,15 +148,36 @@ impl Graph {
     }
 
     /// Moves each read of a size in `reads` up to the nearest container of both nodes, and orders the children of
-    /// each such container so that the source of each read is measured before its reader.
+    /// each such container so that the source of each read is measured before its reader. A read of a natural width
+    /// moves up as the reads that the probe of that width makes from inside its node to the nodes outside it, because
+    /// the probe measures the node itself.
     fn order_children(
         &mut self,
         nodes: &[Node],
         parents: &Parents,
         reads: &[Edge],
     ) -> Result<(), LayoutError> {
+        let mut probes = Probes {
+            parents,
+            reads,
+            known: BTreeMap::new(),
+            open: Vec::new(),
+        };
+        let mut through_probes = Vec::new();
+        for &read in reads.iter().filter(|read| read.part == Part::NaturalWidth) {
+            self.sizes.push(read);
+            for inner in probes.reads_outside(nodes, read)? {
+                through_probes.push(Edge {
+                    source: inner.source,
+                    part: inner.part,
+                    ..read
+                });
+            }
+        }
+        self.probes = probes.known;
+        let direct = (reads.iter().copied()).filter(|read| read.part != Part::NaturalWidth);
         let mut lifted: BTreeMap<usize, Vec<Lifted>> = BTreeMap::new();
-        for &edge in reads {
+        for edge in direct.chain(through_probes) {
             let (container, read) = self.lift(nodes, parents, edge)?;
             lifted.entry(container).or_default().push(read);
         }
@@ -163,11 +205,20 @@ impl Graph {
             (Some(&from), Some(&to)) if from.position != to.position => (from, to),
             _ => return Err(LayoutError::RelativeSizeRead(layout_read(nodes, &edge))),
         };
-        let weighted = |child: Parent| {
-            let node = nodes[child.node].children[child.position];
-            weight(nodes, child.node, node, true).is_some()
-        };
-        if weighted(from) && !weighted(to) {
+        let child_at = |parent: Parent| nodes[parent.node].children[parent.position];
+        let weighted = |child: Parent| weight(nodes, child.node, child_at(child), true).is_some();
+        // The container resolves the conditions of its children with a weight before it measures any of them, and the
+        // conditions that decide whether a child fills before it measures that child. It measures a child that fills
+        // only through hidden children as a child without a weight.
+        let condition = edge.used == Used::Condition;
+        let condition_of_weighted = condition && child_at(to) == edge.reader;
+        let may_lose_weight = fills_through_children(nodes, to.node, child_at(to));
+        let decided_fill = fill_decided_by(nodes, parents, edge.reader).filter(|_| condition);
+        let reads_inside_decided = decided_fill
+            .is_some_and(|child| parents.ancestry(edge.source).any(|above| above == child));
+        let measured_later =
+            weighted(from) && (!weighted(to) || condition_of_weighted || may_lose_weight);
+        if measured_later || reads_inside_decided {
             return Err(LayoutError::WeightedReadOrder(layout_read(nodes, &edge)));
         }
         let path = |node: usize, chain: &[Parent]| {
@@ -176,10 +227,7 @@ impl Graph {
         };
         self.crossed.extend(path(edge.source, &source));
         self.crossed.extend(path(edge.reader, &reader));
-        self.sizes.push(SizeRead {
-            source: edge.source,
-            reader: edge.reader,
-        });
+        self.sizes.push(edge);
         let lifted = Lifted {
             from: from.position,
             to: to.position,
@@ -187,6 +235,58 @@ impl Graph {
         };
         Ok((from.node, lifted))
     }
+}
+
+/// The reads that the probes of natural widths make from inside the measured node to the nodes outside it. A natural
+/// width read inside the measured node counts as the reads of its own probe.
+struct Probes<'a> {
+    parents: &'a Parents,
+    reads: &'a [Edge],
+    known: BTreeMap<usize, Vec<Edge>>,
+    /// The reads of the natural widths whose probes are being followed, the outermost first.
+    open: Vec<Edge>,
+}
+
+impl Probes<'_> {
+    /// The reads that the probe of the natural width read by `read` makes to the nodes outside the source of `read`.
+    /// Fails with the reads of a cycle where that probe reads the same natural width again.
+    fn reads_outside(&mut self, nodes: &[Node], read: Edge) -> Result<Vec<Edge>, LayoutError> {
+        let node = read.source;
+        if let Some(known) = self.known.get(&node) {
+            return Ok(known.clone());
+        }
+        if let Some(start) = self.open.iter().position(|open| open.source == node) {
+            let mut cycle = self.open.split_off(start + 1);
+            cycle.push(read);
+            return Err(LayoutError::SizeCycle(layout_reads(nodes, &cycle)));
+        }
+        self.open.push(read);
+        let (parents, reads) = (self.parents, self.reads);
+        let inside = |other: usize| parents.ancestry(other).any(|above| above == node);
+        let mut outside = Vec::new();
+        for &inner in (reads.iter()).filter(|read| made_by_probe(parents, node, **read)) {
+            let made = if inner.part == Part::NaturalWidth {
+                self.reads_outside(nodes, inner)?
+            } else {
+                vec![inner]
+            };
+            for found in made.into_iter().filter(|found| !inside(found.source)) {
+                if !outside.contains(&found) {
+                    outside.push(found);
+                }
+            }
+        }
+        let _followed = self.open.pop();
+        let _none_for_a_new_node = self.known.insert(node, outside.clone());
+        Ok(outside)
+    }
+}
+
+/// Whether the probe of the natural width of `node` makes `read`. The probe makes the reads from inside the node, apart
+/// from the width set on `node` and the condition of `node`, which the parent of `node` resolves.
+fn made_by_probe(parents: &Parents, node: usize, read: Edge) -> bool {
+    let inside = parents.ancestry(read.reader).any(|above| above == node);
+    inside && (read.reader != node || read.used == Used::Length(Axis::Vertical))
 }
 
 /// The error of the first value in the modifier of `node` that is not valid.

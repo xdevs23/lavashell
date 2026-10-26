@@ -68,6 +68,7 @@ pub enum ModifierElement {
     Opacity(Fraction),
     Offset(Deferred<Point, Bounds>),
     Position(Deferred<Point, Bounds>),
+    ShownWhen(Deferred<bool>),
     AnimatedOffset(Animation<Point>),
     AnimatedOpacity(Animation<f64>),
     AnimatedBackground(Rc<dyn AnimatedColor>),
@@ -346,6 +347,12 @@ impl Modifier {
         self.push(ModifierElement::Position(at.into()))
     }
 
+    /// Lays out the node while `condition` is true. Otherwise the node takes no room, is not
+    /// painted, gets no input and is not in the accessibility tree.
+    pub fn shown_when(self, condition: impl Into<Deferred<bool>>) -> Self {
+        self.push(ModifierElement::ShownWhen(condition.into()))
+    }
+
     pub fn animated_offset(self, value: Animation<Point>) -> Self {
         self.push(ModifierElement::AnimatedOffset(value))
     }
@@ -393,12 +400,13 @@ fn finite(size: Size) -> Result<Size, NumberError> {
     Ok(Size::new(width?.get(), height?.get()))
 }
 
-/// A deferred layout value in a modifier element: a length, an offset or a position.
+/// A deferred layout value in a modifier element: a length, an offset, a position or a condition.
 #[derive(Clone, Copy)]
 pub(crate) enum LayoutValue<'a> {
     Length(Axis, &'a Deferred<Dp>),
     Offset(&'a Deferred<Point, Bounds>),
     Position(&'a Deferred<Point, Bounds>),
+    Condition(&'a Deferred<bool>),
 }
 
 impl<'a> LayoutValue<'a> {
@@ -407,6 +415,7 @@ impl<'a> LayoutValue<'a> {
             Self::Length(axis, _) => Used::Length(axis),
             Self::Offset(_) => Used::Offset,
             Self::Position(_) => Used::Position,
+            Self::Condition(_) => Used::Condition,
         }
     }
 
@@ -414,6 +423,7 @@ impl<'a> LayoutValue<'a> {
         match self {
             Self::Length(_, length) => length.reads(),
             Self::Offset(point) | Self::Position(point) => point.reads(),
+            Self::Condition(condition) => condition.reads(),
         }
     }
 
@@ -445,6 +455,7 @@ impl ModifierElement {
             Self::Height(height) => Some(LayoutValue::Length(Axis::Vertical, height)),
             Self::Offset(by) => Some(LayoutValue::Offset(by)),
             Self::Position(at) => Some(LayoutValue::Position(at)),
+            Self::ShownWhen(condition) => Some(LayoutValue::Condition(condition)),
             _ => None,
         }
     }

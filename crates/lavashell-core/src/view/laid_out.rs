@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::parents::Parents;
-use super::{BTreeMap, Layout, Node, NodeId, Point, View};
+use super::{BTreeMap, Layout, Node, NodeId, Point, View, shown_children};
 
 /// A tree of composed nodes, with the layout and the parent of each node at the index of that node.
 #[derive(Clone, Default)]
@@ -70,18 +70,20 @@ impl LaidOutTree {
     }
 }
 
-/// For each node with a parent, where the last of several trees that contain the node laid it out: that tree, the
-/// index of the node in that tree, and the offset of the node inside the content area of its parent.
+/// For each shown node with a parent, where the last of several trees that contain the node laid it out: that tree,
+/// the index of the node in that tree, and the offset of the node inside the content area of its parent.
 pub(super) struct NodeLocations<'a>(BTreeMap<NodeId, (&'a LaidOutTree, usize, Point)>);
 
 impl<'a> NodeLocations<'a> {
     pub fn new(trees: impl IntoIterator<Item = &'a LaidOutTree>) -> Self {
         let mut locations = BTreeMap::new();
         for tree in trees {
-            for (node, layout) in tree.nodes.iter().zip(&tree.layout) {
-                for (&child, &offset) in node.children.iter().zip(&layout.children) {
-                    let _location_in_an_earlier_tree =
-                        locations.insert(tree.nodes[child].id, (tree, child, offset));
+            for (index, layout) in tree.layout.iter().enumerate() {
+                for (position, child) in shown_children(&tree.nodes, &tree.layout, index) {
+                    if let Some(&offset) = layout.children.get(position) {
+                        let _location_in_an_earlier_tree =
+                            locations.insert(tree.nodes[child].id, (tree, child, offset));
+                    }
                 }
             }
         }

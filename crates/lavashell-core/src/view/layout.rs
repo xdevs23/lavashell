@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod children;
 mod content_sizes;
 mod placement;
 mod weights;
@@ -6,16 +7,14 @@ mod weights;
 use super::frame_error::{LayoutError, NodeName};
 use super::graph::Graph;
 use super::{
-    Arrangement, Axis, Constraints, Deferred, Dp, IconSize, ModifierElement, Node, NodeKind,
-    NodeRef, Phase, Point, Rect, Size, Span, TextMeasurer, View, Weight, retained,
+    BTreeMap, Constraints, Deferred, Dp, IconSize, ModifierElement, Node, NodeKind, NodeRef, Phase,
+    Point, Rect, Size, Span, TextMeasurer, View, retained,
 };
 use crate::protected_text::ProtectedInput;
 use crate::scene::TextStyle;
-use crate::ui::{ContentSizes, FieldContent, Flow, Measured};
+use crate::ui::{ContentSizes, FieldContent, Measured};
 use crate::units::{NonNegativeDp, NumberError};
-use placement::place_in_flow;
-use weights::WeightedChildren;
-pub(super) use weights::weight;
+pub(super) use weights::{fill_decided_by, fills_through_children, weight};
 
 /// The layout of a node, in the coordinates of the content of its parent.
 #[derive(Default, Clone, PartialEq)]
@@ -32,6 +31,17 @@ pub(super) struct Layout {
     pub rect: Rect,
     /// One step of the arrow keys in a scrolling node: the height of one line of its text.
     pub line_step: Dp,
+    pub visibility: Visibility,
+    /// The width of the node at an unbounded proposal, before the width set on it, once a layout value reads it.
+    pub natural_width: Option<Dp>,
+}
+
+/// Whether a node is shown, or hidden by a condition of the node or of a node around it.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum Visibility {
+    #[default]
+    Shown,
+    Hidden,
 }
 
 impl Layout {
@@ -45,6 +55,16 @@ impl Layout {
     pub fn content_start(&self) -> Point {
         self.starts.last().copied().unwrap_or_default()
     }
+}
+
+/// The position and the index of each shown child of the node at `index`.
+pub(super) fn shown_children<'a>(
+    nodes: &'a [Node],
+    layout: &'a [Layout],
+    index: usize,
+) -> impl Iterator<Item = (usize, usize)> + Clone + 'a {
+    (nodes[index].children.iter().copied().enumerate())
+        .filter(move |&(_, child)| layout[child].visibility == Visibility::Shown)
 }
 
 /// A size proposed to a view when measuring it, per axis.
@@ -92,7 +112,7 @@ impl View {
         if self.nodes.is_empty() {
             self.compose_root()?;
         }
-        let probe = Pass::Probe(MeasuredSizes(vec![Vec::new(); self.nodes.len()]));
+        let probe = Pass::Probe(MeasuredSizes::default());
         let mut measuring = Measuring::new(&self.nodes, &self.graph, probe, text);
         Ok(measuring.measure(0, 0, constraints))
     }
@@ -109,6 +129,7 @@ impl View {
         let frame = Pass::Frame(&self.retained);
         let mut measuring = Measuring::new(&self.nodes, &self.graph, frame, text);
         self.size = measuring.measure(0, 0, c);
+        measuring.measure_natural_widths_read_by_placement();
         let Measuring {
             layout,
             measured,
@@ -121,6 +142,7 @@ impl View {
         self.place();
         self.stats.reused_layouts += reused;
         self.record_layouts(components);
+        self.release_hidden_components();
         let mut scrolled = Ok(());
         for (index, owner) in measured {
             let (node, layout) = (&self.nodes[index], &self.layout[index]);
@@ -171,15 +193,16 @@ impl Pass<'_> {
 
 /// The sizes measured for each node during one probe, with the constraints they were measured
 /// under.
-struct MeasuredSizes(Vec<Vec<(Constraints, Size)>>);
+#[derive(Default)]
+struct MeasuredSizes(BTreeMap<usize, Vec<(Constraints, Size)>>);
 
 impl MeasuredSizes {
     fn get(&self, index: usize, c: Constraints) -> Option<Size> {
-        (self.0[index].iter()).find_map(|(measured, size)| (*measured == c).then_some(*size))
+        (self.0.get(&index)?.iter()).find_map(|(measured, size)| (*measured == c).then_some(*size))
     }
 
     fn insert(&mut self, index: usize, c: Constraints, size: Size) {
-        self.0[index].push((c, size));
+        self.0.entry(index).or_default().push((c, size));
     }
 }
 
@@ -201,6 +224,8 @@ pub(super) struct Measuring<'a, T> {
     components: Vec<(usize, Constraints)>,
     /// For each node with an `on_content_sizes` action, the size of the node without bounds and its smallest size.
     content_sizes: Vec<Option<ContentSizes>>,
+    /// The node for which this measurement finds the natural width, so that the width set on that node is left out.
+    natural_width_of: Option<usize>,
     pub(super) reused: u64,
 }
 
@@ -217,6 +242,7 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
             owner: None,
             components: Vec::new(),
             content_sizes: vec![None; nodes.len()],
+            natural_width_of: None,
             reused: 0,
         }
     }
@@ -264,7 +290,7 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
                     let s = self.measure(index, step + 1, c.shrink(i));
                     c.constrain(Size::new(s.width + i.horizontal(), s.height + i.vertical()))
                 }
-                ModifierElement::Width(w) => {
+                ModifierElement::Width(w) if self.natural_width_of != Some(index) => {
                     let width = c.width.at(self.length(&w));
                     self.measure(index, step + 1, Constraints { width, ..c })
                 }
@@ -378,109 +404,6 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
     fn length(&mut self, value: &Deferred<Dp>) -> Dp {
         value.resolve(self).max(Dp::ZERO)
     }
-
-    fn measure_children(&mut self, index: usize, arrangement: Arrangement, c: Constraints) -> Size {
-        let children = self.nodes[index].children.clone();
-        let gap = self.nodes[index].gap;
-        let vertical = arrangement == Arrangement::Along(Axis::Vertical);
-        let overlay = arrangement == Arrangement::Overlay;
-        let scroll_axis = self.nodes[index].scroll_axis();
-        let mut sizes = vec![Size::ZERO; children.len()];
-        let in_flow: Vec<_> = children
-            .iter()
-            .map(|child| matches!(self.nodes[*child].flow, Flow::In(_)))
-            .collect();
-        let flow_count = in_flow.iter().filter(|flow| **flow).count();
-        let gaps: Dp = std::iter::repeat_n(gap, flow_count.saturating_sub(1)).sum();
-        let main = if vertical { c.height } else { c.width };
-        let bounded = main.bound().is_some();
-        let order = self.graph.order(index, children.len());
-        let members: Vec<_> = (order.iter())
-            .filter_map(|&p| {
-                Some((
-                    p,
-                    children[p],
-                    weight(self.nodes, index, children[p], bounded)?,
-                ))
-            })
-            .collect();
-        let total = members.iter().map(|(.., w)| w.factor()).sum();
-        let weighted = WeightedChildren { members, total };
-        let mut loose = Constraints {
-            width: c.width.loosened(),
-            height: c.height.loosened(),
-        };
-        if let Some(axis) = scroll_axis {
-            loose = axis.with_span(loose, axis.span(loose).unbounded());
-        }
-        let length = |size: Size| if vertical { size.height } else { size.width };
-        let mut fixed = gaps;
-        for &p in &order {
-            if weighted.members.iter().any(|(position, ..)| *position == p) {
-                continue;
-            }
-            sizes[p] = self.measure(children[p], 0, loose);
-            if !overlay && in_flow[p] {
-                fixed += length(sizes[p]);
-            }
-        }
-        let weighted_constraints = |span: Span| {
-            if vertical {
-                Constraints {
-                    width: c.width.loosened(),
-                    height: span,
-                }
-            } else {
-                Constraints {
-                    width: span,
-                    height: c.height.loosened(),
-                }
-            }
-        };
-        let mut available = (main.proposed() - fixed).max(Dp::ZERO);
-        if main.allows_more() {
-            let at_smallest = self.measure_weighted(&weighted, &mut sizes, length, |_| {
-                weighted_constraints(Span::offering(Dp::ZERO))
-            });
-            let bounded = main.clamp(fixed + at_smallest.unwrap_or_default()) - fixed;
-            available = available.max(bounded);
-        }
-        let needed = self.measure_weighted(&weighted, &mut sizes, length, |weight| {
-            let share = weighted.share(available, weight);
-            weighted_constraints(match weight {
-                Weight::Fill(_) => Span::exact(share),
-                Weight::UpTo(_) => Span::up_to(share),
-            })
-        });
-        let flowing = || {
-            sizes
-                .iter()
-                .zip(&in_flow)
-                .filter_map(|(size, flow)| flow.then_some(*size))
-        };
-        let stacked = match needed {
-            Some(needed) if main.allows_more() => fixed + needed,
-            _ => flowing().map(length).sum::<Dp>() + gaps,
-        };
-        let widest = flowing().map(|s| s.width).fold(Dp::ZERO, Dp::max);
-        let tallest = flowing().map(|s| s.height).fold(Dp::ZERO, Dp::max);
-        let content = if overlay {
-            Size::new(widest, tallest)
-        } else if vertical {
-            Size::new(widest, stacked)
-        } else {
-            Size::new(stacked, tallest)
-        };
-        self.layout[index].content = content;
-        let extent = scroll_axis.map_or(content, |axis| {
-            axis.with_length(content, axis.length(content).min(axis.span(c).proposed()))
-        });
-        let actual = c.constrain(extent);
-        let align = self.nodes[index].align;
-        let placements = place_in_flow(&sizes, &in_flow, actual, align, gap, arrangement);
-        self.layout[index].children = placements;
-        actual
-    }
 }
 
 impl<T: TextMeasurer> Measured for Measuring<'_, T> {
@@ -492,5 +415,10 @@ impl<T: TextMeasurer> Measured for Measuring<'_, T> {
             NodeName::of(&self.nodes[index])
         );
         self.layout[index].size
+    }
+
+    fn natural_width(&mut self, node: &NodeRef) -> Dp {
+        let index = self.graph.node(node);
+        self.natural_width_at(index)
     }
 }

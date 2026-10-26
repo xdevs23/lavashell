@@ -131,9 +131,12 @@ impl<T, R: Reach> Deferred<T, R> {
 pub(crate) mod laid_out {
     use super::NodeRef;
     use crate::geometry::{Rect, Size};
+    use crate::units::Dp;
 
     pub trait Measured {
         fn size(&mut self, node: &NodeRef) -> Size;
+
+        fn natural_width(&mut self, node: &NodeRef) -> Dp;
     }
 
     /// The bounds of the nodes placed so far, with the sizes of every node.
@@ -153,6 +156,7 @@ pub(crate) enum Read {
 pub(crate) enum Part {
     Length(Axis),
     Size,
+    NaturalWidth,
     Bounds,
 }
 
@@ -162,6 +166,7 @@ pub(crate) enum Used {
     Length(Axis),
     Offset,
     Position,
+    Condition,
 }
 
 impl Part {
@@ -169,8 +174,12 @@ impl Part {
     pub fn changes_with(self, used: Used) -> bool {
         match (self, used) {
             (Self::Length(read), Used::Length(set)) => read == set,
-            (Self::Size, Used::Length(_)) | (Self::Bounds, _) => true,
-            (Self::Length(_) | Self::Size, Used::Offset | Used::Position) => false,
+            (Self::NaturalWidth, Used::Length(set)) => set == Axis::Vertical,
+            (Self::Size, Used::Length(_))
+            | (Self::Length(_) | Self::Size, Used::Condition)
+            | (Self::Bounds, _) => true,
+            (Self::Length(_) | Self::Size | Self::NaturalWidth, Used::Offset | Used::Position)
+            | (Self::NaturalWidth, Used::Condition) => false,
         }
     }
 }
@@ -187,6 +196,7 @@ impl fmt::Display for Part {
         f.write_str(match self {
             Self::Length(axis) => length(*axis),
             Self::Size => "size",
+            Self::NaturalWidth => "natural width",
             Self::Bounds => "bounds",
         })
     }
@@ -198,6 +208,7 @@ impl fmt::Display for Used {
             Self::Length(axis) => length(*axis),
             Self::Offset => "offset",
             Self::Position => "position",
+            Self::Condition => "condition",
         })
     }
 }
@@ -240,6 +251,14 @@ impl NodeRef {
     #[must_use]
     pub fn size(&self) -> Deferred<Size> {
         self.read(Part::Size, |layout, node| layout.size(node))
+    }
+
+    /// The width of the node at an unbounded proposal, before the width set on it.
+    #[must_use]
+    pub fn natural_width(&self) -> Deferred<Dp> {
+        self.read(Part::NaturalWidth, |layout, node| {
+            layout.natural_width(node)
+        })
     }
 
     /// The bounds of the node in the view after layout, with scrolling and offsets applied.

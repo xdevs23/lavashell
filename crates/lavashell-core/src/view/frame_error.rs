@@ -28,11 +28,14 @@ pub enum LayoutError {
     #[error("one NodeRef is set on {first} and on {second}")]
     DuplicateNodeRef { first: NodeName, second: NodeName },
     #[error(
-        "{0}: a size cannot read the size of the same node, of a node around that node or of a node \
-         inside it"
+        "{0}: a size or a condition cannot read the size of the same node, of a node around that \
+         node or of a node inside it"
     )]
     RelativeSizeRead(LayoutRead),
-    #[error("{0}: a child with a weight is measured after the children without one")]
+    #[error(
+        "{0}: a child with a weight is measured after the children without a weight and after the \
+         conditions of the children with a weight"
+    )]
     WeightedReadOrder(LayoutRead),
     #[error("layout cycle: {0}")]
     SizeCycle(LayoutReads),
@@ -105,7 +108,7 @@ impl fmt::Display for NodeName {
 }
 
 /// A layout value of a node, named in an error message by what the node uses the value for: a length along an
-/// axis, an offset or a position.
+/// axis, an offset, a position or a condition.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeValue {
     pub(super) node: NodeName,

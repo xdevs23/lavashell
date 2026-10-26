@@ -3,9 +3,9 @@ use super::component::Refresh;
 use super::frame_error::{FrameError, LayoutError, NodeName};
 use super::scroll_followers::Presentation;
 use super::{
-    ApplyError, Constraints, FrameTime, Layout, LocalReader, LocalScope, Moving, NodeId, Phase,
-    Point, SceneTree, SceneUpdate, TextMeasurer, Transform, Ui, VIEWPORT, View, ViewHandles,
-    Viewport, output, paint,
+    Action, ApplyError, BTreeSet, Constraints, FrameTime, Layout, LocalReader, LocalScope, Moving,
+    NodeId, Phase, Point, SceneTree, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT,
+    View, ViewHandles, Viewport, Visibility, output, paint,
 };
 use crate::animation::AnimationError;
 
@@ -131,17 +131,11 @@ impl View {
         let incoming_focus = self.focus;
         self.compose_and_lay_out(text)?;
         let previous_modal = self.modal_root;
-        let modal = self.nodes.iter().rev().find(|n| n.modal).map(|n| n.id);
+        let modal = self.topmost_modal().map(|index| self.nodes[index].id);
         self.modal_root = modal;
         self.sanitize_interactions();
         let painted_focus = self.focus;
-        self.shortcuts = self.root_shortcuts.clone();
-        for node in &self.nodes {
-            if let Some(component) = &node.component {
-                self.shortcuts
-                    .extend(component.shortcuts.borrow().iter().cloned());
-            }
-        }
+        self.shortcuts = self.shown_shortcuts();
         self.canvas = output::Canvas::default();
         self.hits.clear();
         self.moving = Moving::default();
@@ -310,5 +304,20 @@ impl View {
         self.reconcile(ui.nodes)?;
         self.root_shortcuts = ui.shortcuts;
         Ok(())
+    }
+
+    /// The shortcuts of the root composition and of each component, apart from those composed in a hidden node.
+    fn shown_shortcuts(&self) -> Vec<(Shortcut, Action)> {
+        let hidden: BTreeSet<NodeId> = (self.nodes.iter().zip(&self.layout))
+            .filter(|(_, layout)| layout.visibility == Visibility::Hidden)
+            .map(|(node, _)| node.id)
+            .collect();
+        let components = (self.nodes.iter()).filter_map(|node| node.component.as_ref());
+        let composed = components.flat_map(|component| component.shortcuts.borrow().clone());
+        (self.root_shortcuts.iter().cloned())
+            .chain(composed)
+            .filter(|shortcut| !hidden.contains(&shortcut.node))
+            .map(|shortcut| (shortcut.shortcut, shortcut.action))
+            .collect()
     }
 }

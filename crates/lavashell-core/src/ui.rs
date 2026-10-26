@@ -65,13 +65,21 @@ impl Default for ViewHandles {
     }
 }
 
+/// A shortcut with its action, and the node in which it was composed. The shortcut works while that node is shown.
+#[derive(Clone)]
+pub(crate) struct ComposedShortcut {
+    pub node: NodeId,
+    pub shortcut: Shortcut,
+    pub action: Action,
+}
+
 pub struct Ui {
     pub(crate) nodes: Vec<Node>,
     /// The index in `nodes` of the current parent node, to which the next added nodes go as children.
     parent: usize,
     pub(crate) memory: Memory,
     locals: LocalReader,
-    pub(crate) shortcuts: Vec<(Shortcut, Action)>,
+    pub(crate) shortcuts: Vec<ComposedShortcut>,
     pub(crate) motion: Motion,
     pub(crate) text_sender: TextSender,
     /// The first error passed to `fail`. The frame of the composition fails with this error.
@@ -130,8 +138,11 @@ impl Ui {
     }
 
     pub fn on_shortcut(&mut self, shortcut: Shortcut, action: impl FnMut() + 'static) {
-        self.shortcuts
-            .push((shortcut, Rc::new(RefCell::new(action))));
+        self.shortcuts.push(ComposedShortcut {
+            node: self.nodes[self.parent].id,
+            shortcut,
+            action: Rc::new(RefCell::new(action)),
+        });
     }
 
     /// Composes `children` with `value` provided for the local `key`. Inside `children`, scoped

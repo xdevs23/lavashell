@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::laid_out::LaidOutTree;
-use super::{Axis, BTreeSet, Dp, Hit, Key, NodeId, Shortcut, View, collect_descendants, index_of};
+use super::{
+    Axis, BTreeSet, Dp, Hit, Key, NodeId, Shortcut, View, Visibility, collect_descendants, index_of,
+};
 use crate::scroll::page_length;
 
 impl View {
@@ -76,8 +78,7 @@ impl View {
 
     fn collect_disabled(&self, index: usize, inherited: bool, disabled: &mut BTreeSet<NodeId>) {
         let node = &self.nodes[index];
-        let inherited =
-            inherited || !node.enabled || self.accessibility_semantics(index).state.disabled;
+        let inherited = inherited || self.blocks_input(index);
         if inherited {
             let _always_new_as_each_node_is_visited_once = disabled.insert(node.id);
         }
@@ -89,9 +90,8 @@ impl View {
     pub(super) fn input_disabled(&self, mut index: usize) -> bool {
         let mut in_modal = self.modal_root.is_none();
         loop {
-            let node = &self.nodes[index];
-            in_modal |= Some(node.id) == self.modal_root;
-            if !node.enabled || self.accessibility_semantics(index).state.disabled {
+            in_modal |= Some(self.nodes[index].id) == self.modal_root;
+            if self.blocks_input(index) {
                 return true;
             }
             let Some(parent) = self.parents.node_of(index) else {
@@ -101,8 +101,26 @@ impl View {
         }
     }
 
+    /// Whether the node at `index` keeps input from itself and from the nodes inside it, apart from the modal node.
+    fn blocks_input(&self, index: usize) -> bool {
+        !self.nodes[index].enabled
+            || self.layout[index].visibility == Visibility::Hidden
+            || self.accessibility_semantics(index).state.disabled
+    }
+
+    pub(super) fn is_modal(&self, index: usize) -> bool {
+        self.nodes[index].modal && self.layout[index].visibility == Visibility::Shown
+    }
+
+    /// The index of the last modal node, which takes the input of the view.
+    pub(super) fn topmost_modal(&self) -> Option<usize> {
+        (0..self.nodes.len())
+            .rev()
+            .find(|&index| self.is_modal(index))
+    }
+
     pub(super) fn modal_nodes(&self) -> Option<BTreeSet<NodeId>> {
-        let index = self.nodes.iter().rposition(|node| node.modal)?;
+        let index = self.topmost_modal()?;
         let mut descendants = BTreeSet::new();
         collect_descendants(&self.nodes, index, &mut descendants);
         Some(
