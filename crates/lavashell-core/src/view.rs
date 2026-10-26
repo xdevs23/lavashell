@@ -81,6 +81,7 @@ use crate::units::{Density, Dp};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Cursor {
     #[default]
     Default,
@@ -88,6 +89,7 @@ pub enum Cursor {
     Text,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum InputEvent {
     Leave,
     CancelPointer,
@@ -119,6 +121,7 @@ pub enum InputEvent {
 /// One position of a touch point, reported by the host with the id of the touch and the kind of pointer that
 /// made it.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TouchSample {
     pub id: TouchId,
     pub at: Point,

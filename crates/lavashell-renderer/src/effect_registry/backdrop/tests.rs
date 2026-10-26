@@ -348,7 +348,13 @@ fn cached_pixels_and_retirement_respect_the_window_surface() -> Result<(), TestE
 const PAST_REQUIRED_COLUMNS: u16 = 16384 / 16 + 1;
 
 fn shapes() -> Result<[Shape; 5], TestError> {
-    let pill = |x| Shape::rounded(Rect::new(x, 8.dp(), 40.dp(), 32.dp()), 16.dp());
+    let pill = |x| {
+        RoundedRect::new(
+            Rect::new(x, 8.dp(), 40.dp(), 32.dp()),
+            Corners::all(16.dp()),
+        )
+        .into()
+    };
     Ok([
         RoundedRect::new(
             Rect::new(10.dp(), 6.dp(), 76.dp(), 36.dp()),
@@ -363,15 +369,16 @@ fn shapes() -> Result<[Shape; 5], TestError> {
         )?,
         union(
             (0..=PAST_REQUIRED_COLUMNS / 2).map(|i| {
-                Shape::rounded(
+                RoundedRect::new(
                     Rect::new(
                         6.dp() + 9.5.dp() * f64::from(i % 9),
                         10.dp(),
                         8.dp(),
                         28.dp(),
                     ),
-                    4.dp(),
+                    Corners::all(4.dp()),
                 )
+                .into()
             }),
             6.dp(),
         )?,

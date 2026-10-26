@@ -10,15 +10,53 @@ use crate::units::{Dp, Positive, Sp};
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Scaling {
     Linear(f64),
     /// Font sizes in increasing order, each with the size it becomes.
-    Table(Arc<[(Sp, Dp)]>),
+    Table(
+        #[cfg_attr(feature = "serde", serde(with = "crate::encoding::shared_slice"))]
+        Arc<[(Sp, Dp)]>,
+    ),
 }
 
 /// Converts font sizes from sp to dp before layout, shaping and drawing.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "Scaling", into = "Scaling")
+)]
 pub struct TextScaling(Scaling);
+
+/// The reason why a read text scaling is not one that `TextScaling::linear` or `TextScaling::table` makes.
+#[cfg(feature = "serde")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum TextScalingError {
+    #[error("a linear text scaling needs a finite factor above zero")]
+    Factor,
+    #[error("a text scaling table needs finite sizes above zero, with increasing font sizes")]
+    Table,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<Scaling> for TextScaling {
+    type Error = TextScalingError;
+
+    fn try_from(scaling: Scaling) -> Result<Self, TextScalingError> {
+        match scaling {
+            Scaling::Linear(factor) => Self::linear(factor).ok_or(TextScalingError::Factor),
+            Scaling::Table(points) => Self::checked_table(points).ok_or(TextScalingError::Table),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl From<TextScaling> for Scaling {
+    fn from(scaling: TextScaling) -> Self {
+        scaling.0
+    }
+}
 
 impl Default for TextScaling {
     fn default() -> Self {
@@ -37,7 +75,10 @@ impl TextScaling {
     /// without points, for a size that is not finite and above zero, or when the font sizes do not increase.
     #[must_use]
     pub fn table(points: impl IntoIterator<Item = (Sp, Dp)>) -> Option<Self> {
-        let points: Arc<[(Sp, Dp)]> = points.into_iter().collect();
+        Self::checked_table(points.into_iter().collect())
+    }
+
+    fn checked_table(points: Arc<[(Sp, Dp)]>) -> Option<Self> {
         let valid = !points.is_empty()
             && points
                 .iter()
@@ -86,6 +127,7 @@ fn interpolated(points: &[(Sp, Dp)], size: Sp) -> Dp {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum ContrastPreference {
     #[default]
@@ -103,6 +145,7 @@ pub static REDUCED_TRANSPARENCY: Local<bool> = Local::new(|| false);
 pub static CONTRAST: Local<ContrastPreference> = Local::new(ContrastPreference::default);
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreferenceValues {
     pub text_scaling: TextScaling,
     pub reduced_motion: bool,

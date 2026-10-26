@@ -124,7 +124,7 @@ fn role(role: &Role) -> NativeRole {
         Role::TabList => NativeRole::TabList,
         Role::ScrollView => NativeRole::ScrollView,
         Role::ScrollBar => NativeRole::ScrollBar,
-        _ => NativeRole::Group,
+        Role::Group | Role::Custom(_) => NativeRole::Group,
     }
 }
 
@@ -148,7 +148,7 @@ pub(super) fn actions(source: &AccessibleNode, node: &mut Node) {
                 node.add_action(Native::ScrollUp);
                 Native::ScrollDown
             }
-            _ => continue,
+            ActionKind::RevealCollectionItem => continue,
         };
         node.add_action(native);
     }

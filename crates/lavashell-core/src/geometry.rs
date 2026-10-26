@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point {
     pub x: Dp,
     pub y: Dp,
@@ -86,6 +87,7 @@ impl ContourPoint for PlainPoint {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FinitePoint {
     pub x: FiniteDp,
     pub y: FiniteDp,
@@ -109,6 +111,7 @@ impl FinitePoint {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Size {
     pub width: Dp,
     pub height: Dp,
@@ -145,6 +148,7 @@ impl Size {
 
 /// A width and a height in whole physical pixels, such as the size of a buffer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PixelSize {
     pub width: u32,
     pub height: u32,
@@ -199,6 +203,7 @@ impl Default for Viewport {
 pub static VIEWPORT: Local<Viewport> = Local::new(Viewport::default);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rect {
     pub x: Dp,
     pub y: Dp,
@@ -297,6 +302,7 @@ impl Rect {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Insets {
     pub top: Dp,
     pub right: Dp,

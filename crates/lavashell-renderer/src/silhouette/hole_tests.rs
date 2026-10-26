@@ -132,9 +132,15 @@ fn strokes_and_shadows_follow_the_outline_of_the_hole() -> Result<(), TestError>
 
 #[test]
 fn a_union_keeps_the_hole_of_a_member_open() -> Result<(), TestError> {
-    let hollow = card().minus(lens(Rect::new(30.dp(), 14.dp(), 36.dp(), 20.dp())));
-    let pill = Shape::rounded(Rect::new(90.dp(), 10.dp(), 5.dp(), 28.dp()), 2.5.dp());
-    let fused = union([hollow, pill], 4.dp())?;
+    let hole = lens(Rect::new(30.dp(), 14.dp(), 36.dp(), 20.dp()));
+    let Shape::Hollow(hollow) = card().minus(hole) else {
+        return Err(TestError::Unexpected("a card with a hole"));
+    };
+    let pill = RoundedRect::new(
+        Rect::new(90.dp(), 10.dp(), 5.dp(), 28.dp()),
+        Corners::all(2.5.dp()),
+    );
+    let fused = union([UnionMember::Hollow(hollow), pill.into()], 4.dp())?;
     let mut s = surface()?;
     draw(&mut s, |d| d.fill(fused, Color::WHITE))?;
     assert!(

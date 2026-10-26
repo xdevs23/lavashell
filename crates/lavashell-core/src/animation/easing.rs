@@ -2,6 +2,7 @@
 /// An easing curve, which maps the progress of an animation from 0 to 1 to the eased progress. `sample` returns the
 /// value of the curve and its derivative.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Easing {
     Linear,
     /// The quartic ease-out curve `1 - (1 - x)^4`. `sample` returns its derivative exactly, also at the endpoints.
@@ -16,11 +17,35 @@ pub enum Easing {
 /// The two inner control points of a cubic Bezier easing curve, checked by `Easing::cubic_bezier`. The outer control
 /// points are (0, 0) and (1, 1).
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(try_from = "Controls")
+)]
 pub struct CubicBezier {
     x1: f64,
     y1: f64,
     x2: f64,
     y2: f64,
+}
+
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "CubicBezier")]
+struct Controls {
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<Controls> for CubicBezier {
+    type Error = EasingError;
+
+    fn try_from(Controls { x1, y1, x2, y2 }: Controls) -> Result<Self, EasingError> {
+        Self::checked(x1, y1, x2, y2)
+    }
 }
 
 /// The reason why the control points given to `Easing::cubic_bezier` do not form an easing curve.
@@ -44,17 +69,10 @@ impl Easing {
     /// Fails when a control is not finite, an x control is not within 0 and 1, or the curve has a vertical
     /// tangent.
     pub const fn cubic_bezier(x1: f64, y1: f64, x2: f64, y2: f64) -> Result<Self, EasingError> {
-        if !(x1.is_finite() && y1.is_finite() && x2.is_finite() && y2.is_finite()) {
-            return Err(EasingError::NotFinite);
+        match CubicBezier::checked(x1, y1, x2, y2) {
+            Ok(curve) => Ok(Self::CubicBezier(curve)),
+            Err(error) => Err(error),
         }
-        if x1 < 0.0 || x1 > 1.0 || x2 < 0.0 || x2 > 1.0 {
-            return Err(EasingError::ControlOutOfRange);
-        }
-        let curve = CubicBezier { x1, y1, x2, y2 };
-        if curve.vertical() {
-            return Err(EasingError::VerticalTangent);
-        }
-        Ok(Self::CubicBezier(curve))
     }
 
     #[must_use]
@@ -77,6 +95,20 @@ impl Easing {
 }
 
 impl CubicBezier {
+    const fn checked(x1: f64, y1: f64, x2: f64, y2: f64) -> Result<Self, EasingError> {
+        if !(x1.is_finite() && y1.is_finite() && x2.is_finite() && y2.is_finite()) {
+            return Err(EasingError::NotFinite);
+        }
+        if x1 < 0.0 || x1 > 1.0 || x2 < 0.0 || x2 > 1.0 {
+            return Err(EasingError::ControlOutOfRange);
+        }
+        let curve = Self { x1, y1, x2, y2 };
+        if curve.vertical() {
+            return Err(EasingError::VerticalTangent);
+        }
+        Ok(curve)
+    }
+
     /// Whether the curve has a vertical tangent: a parameter at which the derivative of x is zero and the
     /// derivative of y is not. With the x controls within 0 and 1, the derivative of x is zero only at the start
     /// when `x1` is 0, at the end when `x2` is 1, and halfway when `x1` is 1 and `x2` is 0. Where the derivatives of
@@ -223,5 +255,16 @@ mod tests {
                 Err(EasingError::VerticalTangent)
             );
         }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn controls_that_fail_the_checks_are_not_read() -> crate::test_error::TestResult {
+        let controls = (2.0_f64, 0.0_f64, 0.5_f64, 1.0_f64);
+        let bytes = postcard::to_allocvec(&controls)?;
+        assert!(postcard::from_bytes::<CubicBezier>(&bytes).is_err());
+        let bytes = postcard::to_allocvec(&Easing::EASE)?;
+        assert_eq!(postcard::from_bytes::<Easing>(&bytes)?, Easing::EASE);
+        Ok(())
     }
 }

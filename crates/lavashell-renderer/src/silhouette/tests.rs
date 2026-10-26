@@ -114,8 +114,13 @@ fn unions_fill_every_member() -> Result<(), TestError> {
     let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
-            Shape::rounded(Rect::new(4.dp(), 4.dp(), 30.dp(), 40.dp()), 8.dp()),
-            square()?.translated(Point::new(40.dp(), 0.dp())),
+            rounded(Rect::new(4.dp(), 4.dp(), 30.dp(), 40.dp()), 8.dp()),
+            UnionMember::Contour(Polygon::new([
+                Point::new(60.dp(), 10.dp()),
+                Point::new(90.dp(), 10.dp()),
+                Point::new(90.dp(), 40.dp()),
+                Point::new(60.dp(), 40.dp()),
+            ])?),
         ],
         0.dp(),
     )?;
@@ -155,8 +160,12 @@ fn backdrops_on_other_shapes_blur_inside_the_shape() -> Result<(), TestError> {
     Ok(())
 }
 
+fn rounded(rect: Rect, radius: Dp) -> UnionMember {
+    RoundedRect::new(rect, Corners::all(radius)).into()
+}
+
 fn pills(gap: f64, spacing: f64) -> Result<Shape, TestError> {
-    let pill = |x: f64| Shape::rounded(Rect::new(Dp::new(x), 14.dp(), 30.dp(), 20.dp()), 10.dp());
+    let pill = |x: f64| rounded(Rect::new(Dp::new(x), 14.dp(), 30.dp(), 20.dp()), 10.dp());
     union(
         [pill(48.0 - gap / 2.0 - 30.0), pill(48.0 + gap / 2.0)],
         Dp::new(spacing),
@@ -185,8 +194,8 @@ fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> 
     let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
-            Shape::rounded(Rect::new(10.dp(), 14.dp(), 34.dp(), 20.dp()), 0.dp()),
-            Shape::rounded(Rect::new(48.dp(), 14.dp(), 34.dp(), 20.dp()), 0.dp()),
+            rounded(Rect::new(10.dp(), 14.dp(), 34.dp(), 20.dp()), 0.dp()),
+            rounded(Rect::new(48.dp(), 14.dp(), 34.dp(), 20.dp()), 0.dp()),
         ],
         16.dp(),
     )?;
@@ -237,13 +246,13 @@ fn unions_with_contour_members_cover_through_a_field_texture() -> Result<(), Tes
     let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
-            Shape::rounded(Rect::new(4.dp(), 8.dp(), 26.dp(), 32.dp()), 8.dp()),
-            Shape::Contour(Polygon::new([
+            rounded(Rect::new(4.dp(), 8.dp(), 26.dp(), 32.dp()), 8.dp()),
+            UnionMember::Contour(Polygon::new([
                 Point::new(36.dp(), 40.dp()),
                 Point::new(48.dp(), 8.dp()),
                 Point::new(60.dp(), 40.dp()),
             ])?),
-            Shape::rounded(Rect::new(66.dp(), 8.dp(), 26.dp(), 32.dp()), 8.dp()),
+            rounded(Rect::new(66.dp(), 8.dp(), 26.dp(), 32.dp()), 8.dp()),
         ],
         0.dp(),
     )?;

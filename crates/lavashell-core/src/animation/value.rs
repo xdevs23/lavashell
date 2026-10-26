@@ -5,6 +5,9 @@ use crate::scene::Affine;
 use crate::shape::{Corners, RoundedRect};
 use crate::units::{Dp, ScaleFactor};
 
+#[cfg(feature = "serde")]
+mod encoding;
+
 /// The numbers of an animated value as a vector that springs and keyframes add, subtract and scale. A vector of
 /// fixed size, such as [`Vector`], allocates nothing each time a motion is sampled.
 pub trait VectorSpace: Clone + PartialEq + 'static {

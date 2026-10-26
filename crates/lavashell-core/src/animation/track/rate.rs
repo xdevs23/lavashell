@@ -19,12 +19,7 @@ impl<T: Animatable> Animation<T> {
     ///
     /// Fails when `rate` is not finite or not greater than zero.
     pub fn playback_rate(&self, rate: f64) -> Result<(), PlaybackRateError> {
-        if !rate.is_finite() {
-            return Err(PlaybackRateError::NotFinite);
-        }
-        if rate <= 0.0 {
-            return Err(PlaybackRateError::NotPositive);
-        }
+        let rate = checked_rate(rate)?;
         self.0.synchronize();
         let mut t = self.0.track.borrow_mut();
         t.timing.offset = t.elapsed();
@@ -33,6 +28,17 @@ impl<T: Animatable> Animation<T> {
         drop(t);
         self.0.revise();
         Ok(())
+    }
+}
+
+/// `rate` when it is finite and greater than zero.
+pub(crate) const fn checked_rate(rate: f64) -> Result<f64, PlaybackRateError> {
+    if !rate.is_finite() {
+        Err(PlaybackRateError::NotFinite)
+    } else if rate <= 0.0 {
+        Err(PlaybackRateError::NotPositive)
+    } else {
+        Ok(rate)
     }
 }
 

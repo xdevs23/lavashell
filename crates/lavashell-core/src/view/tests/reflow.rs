@@ -3,7 +3,7 @@ use super::material_group::inside_clip;
 use super::material_motion::{PaintedFill, close, linear, painted_fills};
 use super::*;
 use crate::preferences::REDUCED_MOTION;
-use crate::shape::RoundedRect;
+use crate::shape::{RoundedRect, UnionMember};
 use std::{cell::Cell, rc::Rc};
 
 #[path = "reflow/clips.rs"]
@@ -476,7 +476,7 @@ fn reflowing_islands_feed_their_live_bounds_into_the_material_group() -> TestRes
     let island = |x: Dp, width: Dp| {
         RoundedRect::new(Rect::new(x, 0.dp(), width, 40.dp()), Corners::all(20.dp()))
     };
-    let islands: [Shape; 2] = [
+    let islands: [UnionMember; 2] = [
         island(0.dp(), 200.dp()).into(),
         island(280.dp(), 100.dp()).into(),
     ];

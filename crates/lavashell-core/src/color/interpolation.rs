@@ -5,6 +5,7 @@ use crate::output::finest_step;
 use crate::units::Dp;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HuePath {
     #[default]
     Shorter,
@@ -53,6 +54,7 @@ impl HuePath {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorInterpolation {
     Oklab,
     Oklch(HuePath),

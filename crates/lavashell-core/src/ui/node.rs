@@ -21,6 +21,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NodeId(pub u64);
 
 pub type Action = Rc<RefCell<dyn FnMut()>>;
@@ -29,6 +30,7 @@ pub(crate) type DrawCallback = Rc<dyn Fn(&mut Drawing<'_>)>;
 pub type ScrollAction = Rc<RefCell<dyn FnMut(Dp)>>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct InputModifiers {
     pub control: bool,
     pub shift: bool,

@@ -74,6 +74,7 @@ pub(super) fn shown_children<'a>(
 /// `Some(0.dp())` measures the smallest size of the view. `None` measures the content at its content size. `Some` of
 /// an infinite length measures like `None`. Measuring fails on a negative length and on NaN.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Proposal {
     pub width: Option<Dp>,
     pub height: Option<Dp>,

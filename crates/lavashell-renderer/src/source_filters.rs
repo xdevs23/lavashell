@@ -4,13 +4,13 @@
 
 use crate::failure::DrawFailure;
 use crate::scalar::scalar;
-use lavashell_core::prelude::{Rect, SourceFilter};
+use lavashell_core::prelude::{Rect, SourceFilter, SourceFilterId};
 use skia_safe::ImageFilter;
 
 pub use inventory;
 
 pub struct Registration {
-    pub id: u64,
+    pub id: SourceFilterId,
     pub build: fn(&[f32], Rect) -> Option<ImageFilter>,
 }
 
@@ -46,7 +46,7 @@ mod tests {
     use lavashell_core::retained::{Extent, Footprint};
     use lavashell_core::scene::tree::Packet;
 
-    const OFFSET: u64 = 0x7465_7374_6f66_6673;
+    const OFFSET: SourceFilterId = SourceFilterId(0x7465_7374_6f66_6673);
 
     inventory::submit! { Registration {
         id: OFFSET,

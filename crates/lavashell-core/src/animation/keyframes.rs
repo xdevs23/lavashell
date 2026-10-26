@@ -4,6 +4,14 @@ use super::{Animatable, Easing, Trajectory, VectorSpace};
 use std::time::Duration;
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(
+        serialize = "T: serde::Serialize, T::Vector: serde::Serialize",
+        deserialize = "T: serde::Deserialize<'de>, T::Vector: serde::Deserialize<'de>"
+    ))
+)]
 pub struct Keyframe<T: Animatable> {
     pub at: Duration,
     pub value: T,
@@ -180,6 +188,7 @@ impl<T: Animatable> Keyframes<T> {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Repeat {
     #[default]
     Once,
@@ -201,6 +210,7 @@ impl Repeat {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Direction {
     #[default]
     Forward,
@@ -208,7 +218,29 @@ pub enum Direction {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Playback {
     pub repeat: Repeat,
     pub direction: Direction,
+}
+
+#[cfg(feature = "serde")]
+impl<T: Animatable + serde::Serialize> serde::Serialize for Keyframes<T>
+where
+    T::Vector: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.frames())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: Animatable + serde::Deserialize<'de>> serde::Deserialize<'de> for Keyframes<T>
+where
+    T::Vector: serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let frames: Vec<Keyframe<T>> = crate::encoding::sequence(deserializer)?;
+        Self::new(frames).map_err(serde::de::Error::custom)
+    }
 }

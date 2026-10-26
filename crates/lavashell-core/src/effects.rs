@@ -26,17 +26,33 @@ pub fn blur_reach(channel_step: f64) -> f64 {
     (-2.0 * (channel_step.max(finest_step()) / 2.0).ln()).sqrt()
 }
 
+/// The id of an effect registered in a renderer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct EffectId(pub u64);
+
+/// The id of a source filter registered in a renderer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SourceFilterId(pub u64);
+
 /// A filter that the renderer applies to a drawn subtree. `id` selects the filter registered by the renderer under
-/// that number, and `parameters` configure it. `outset` must be at least the distance by which the filter draws
+/// that id, and `parameters` configure it. `outset` must be at least the distance by which the filter draws
 /// outside the unfiltered subtree.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceFilter {
-    pub id: u64,
+    pub id: SourceFilterId,
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub parameters: Vec<f64>,
     pub outset: NonNegativeDp,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlendMode {
     Clear,
     Source,
@@ -71,6 +87,7 @@ pub enum BlendMode {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BorderPlacement {
     #[default]
     Inside,
@@ -79,6 +96,7 @@ pub enum BorderPlacement {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Stroke {
     pub color: Color,
     pub width: NonNegativeDp,
@@ -130,6 +148,7 @@ impl Stroke {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Shadow {
     pub color: Color,
     pub offset: FinitePoint,
@@ -193,6 +212,7 @@ impl Shadow {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Glass {
     /// The largest distance by which the lens shifts the backdrop seen through it.
     pub refraction: NonNegativeDp,
@@ -208,6 +228,7 @@ impl Glass {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Backdrop {
     pub blur: NonNegativeDp,
     pub glass: Option<Glass>,

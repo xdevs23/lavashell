@@ -3,7 +3,7 @@ use super::Coverage;
 use super::Solid;
 use super::coverage::Field;
 use super::family::Family;
-use super::kinds::{Kind, Kinds, Route, Visit};
+use super::kinds::{Kind, Kinds, Route, Visit, Visited};
 use super::program::Uniforms;
 use super::programs::Programs;
 use super::room::FieldRoom;
@@ -193,7 +193,7 @@ impl Fields {
         content: Content,
         grid: &Grid,
         target: &Canvas,
-        shape: &Shape,
+        shape: &impl Visited,
     ) -> Result<Shader, FailedDraw> {
         struct Texelled<'a> {
             fields: &'a Fields,

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    AccessibleNode, AccessibleState, AccessibleValue, ActionKind, BTreeMap, BTreeSet, NodeId,
-    NodeKind, RangeInfo, Rect, Role, Semantics, SemanticsMode, SemanticsState, TextSelection, View,
+    AccessibleNode, AccessibleState, AccessibleValue, ActionKind, BTreeMap, NodeId, NodeKind,
+    RangeInfo, Rect, Role, Semantics, SemanticsMode, SemanticsState, TextSelection, View,
 };
-use crate::accessibility::AccessibleText;
+use crate::accessibility::{AccessibleText, ActionKinds};
 use crate::ui::{FieldContent, Lines};
 use crate::view::Visibility;
 
@@ -117,7 +117,7 @@ impl View {
         &self,
         index: usize,
         suppress_passive: bool,
-        actions: &BTreeSet<ActionKind>,
+        actions: &ActionKinds,
     ) -> bool {
         let node = &self.nodes[index];
         let semantics = self.accessibility_semantics(index);
@@ -283,13 +283,9 @@ impl View {
         node.action.is_some() || node.activate.is_some()
     }
 
-    pub(super) fn accessibility_capabilities(
-        &self,
-        index: usize,
-        disabled: bool,
-    ) -> BTreeSet<ActionKind> {
+    pub(super) fn accessibility_capabilities(&self, index: usize, disabled: bool) -> ActionKinds {
         if disabled {
-            return BTreeSet::new();
+            return ActionKinds::default();
         }
         let node = &self.nodes[index];
         let semantics = self.accessibility_semantics(index);
@@ -312,7 +308,7 @@ impl View {
                 ActionKind::ScrollIntoView,
             ),
         ];
-        let mut actions: BTreeSet<_> = (node.accessibility_actions.keys().copied())
+        let mut actions: ActionKinds = (node.accessibility_actions.keys().copied())
             .chain(
                 offered
                     .into_iter()

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::shape::PointsError;
+use crate::shape::{PointsError, UnionMember};
 use crate::{
     geometry::*,
     shape::{Corners, RoundedRect, Shape},
@@ -117,7 +117,8 @@ fn any_outline_samples_into_a_contour_and_a_union_or_a_shape_with_a_hole_has_non
         assert!(on_outline(p), "{p:?}");
     }
     let spacing = NonNegativeDp::try_new(4.dp())?;
-    let joined = Shape::union([shape], spacing).required("union of shapes")?;
+    let members = [UnionMember::from(card)];
+    let joined = Shape::union(members, spacing).required("union of shapes")?;
     assert_eq!(Contour::of(&joined, pixel, 8), Err(ContourError::Compound));
     let lens = RoundedRect::new(
         Rect::new(20.dp(), 10.dp(), 20.dp(), 20.dp()),

@@ -32,6 +32,7 @@ mod transform;
 pub(crate) use transform::Transform;
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Brush {
     Solid(Color),
     Gradient(Gradient),
@@ -60,6 +61,7 @@ impl From<Color> for Brush {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TextAlignment {
     #[default]
     Start,
@@ -68,6 +70,7 @@ pub enum TextAlignment {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParagraphDirection {
     #[default]
     LeftToRight,
@@ -98,6 +101,7 @@ impl FontSize for Dp {}
 /// let heading = TextStyle::new("Inter", 28.0, Color::WHITE);
 /// ```
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextStyle<S: FontSize = Sp> {
     pub size: S,
     pub color: Color,
@@ -108,10 +112,15 @@ pub struct TextStyle<S: FontSize = Sp> {
     pub alignment: TextAlignment,
     pub direction: ParagraphDirection,
     /// Non-overlapping UTF-8 byte ranges for inline styling. Invalid ranges are ignored.
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::encoding::sequence")
+    )]
     pub spans: Vec<TextSpan>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextSpan {
     pub range: std::ops::Range<usize>,
     pub weight: Option<FontWeight>,
@@ -194,6 +203,7 @@ pub const ELLIPSIS: &str = "…";
 /// A linear map without unit, followed by a translation in dp. With `linear` as
 /// `[a, b, c, d]`, the point (x, y) moves to (a x + b y, c x + d y) + `translation`.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Affine {
     pub linear: [f64; 4],
     pub translation: Point,
@@ -276,6 +286,7 @@ impl Affine {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DrawCommand {
     Save,
     Restore,
@@ -312,6 +323,7 @@ pub enum DrawCommand {
         brush: Brush,
     },
     Image {
+        #[cfg_attr(feature = "serde", serde(with = "crate::encoding::process_local"))]
         image: Image,
         destination: Rect,
         /// Where the whole image is placed, measured from the top left corner of `destination`.
@@ -319,6 +331,7 @@ pub enum DrawCommand {
     },
     /// A frame of a stream. Its pixels exist only while the frame is painted, so a renderer must not cache them.
     StreamImage {
+        #[cfg_attr(feature = "serde", serde(with = "crate::encoding::process_local"))]
         image: StreamImage,
         destination: Rect,
         /// Where the whole frame is placed, measured from the top left corner of `destination`.
@@ -331,6 +344,10 @@ pub enum DrawCommand {
     },
     Path {
         start: Point,
+        #[cfg_attr(
+            feature = "serde",
+            serde(deserialize_with = "crate::encoding::sequence")
+        )]
         segments: Vec<Segment>,
         closed: bool,
         brush: Brush,

@@ -5,9 +5,13 @@ use crate::geometry::{FinitePoint, Point, Rect, Scale};
 use crate::scene::Transform;
 use crate::units::{Fraction, ScaleFactor};
 
+#[cfg(feature = "serde")]
+mod encoding;
+
 /// The point of a node about which its presence scales, as fractions of the width and the height of the node from its
 /// top left corner.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScaleOrigin {
     pub x: Fraction,
     pub y: Fraction,
@@ -32,6 +36,11 @@ impl ScaleOrigin {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "encoding::PresenceFields")
+)]
 pub struct Presence {
     opacity: f64,
     offset: Point,
@@ -119,6 +128,14 @@ impl Composite for Presence {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(
+        into = "encoding::PresenceMapParts",
+        try_from = "encoding::PresenceMapParts"
+    )
+)]
 pub struct PresenceMap {
     /// Maps the coordinates in which the transition animates the bounds of the node into the coordinates of the
     /// parent of the group opened for the node.

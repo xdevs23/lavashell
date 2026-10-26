@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::outline::ContourPath;
 use super::program::{LENS_SHARE, SHORTEST_LENS};
-use super::test_shapes::{Distance, ellipse, star, union};
+use super::test_shapes::{Distance, ellipse, star, star_polygon, union};
 use super::*;
 use crate::color::HALF_EPSILON;
 use crate::test_error::TestError;
@@ -63,7 +63,7 @@ fn exact(shape: &Shape) -> Result<Vec<f64>, TestError> {
     Ok(pixels.into_iter().map(|pixel| pixel[0]).collect())
 }
 
-fn pill(x: f64, width: f64) -> Shape {
+fn pill(x: f64, width: f64) -> UnionMember {
     RoundedRect::new(
         Rect::new(Dp::new(x), 30.dp(), Dp::new(width), 60.dp()),
         Corners::all(30.dp()),
@@ -276,7 +276,7 @@ fn steepest_turn(shape: &Shape, lens: &[[f64; 4]]) -> f64 {
 
 fn crease_cases() -> Result<Vec<Shape>, TestError> {
     let boxed = |x, y, width, height| {
-        Shape::from(RoundedRect::new(
+        UnionMember::from(RoundedRect::new(
             Rect::new(x, y, width, height),
             Corners::all(12.dp()),
         ))
@@ -319,10 +319,11 @@ fn texture_lens(shape: &Shape) -> Result<Vec<[f64; 4]>, TestError> {
 /// times as fast as their mean rate, like smoothstep in its middle.
 #[test]
 fn lens_normals_turn_no_faster_than_their_lens_length() -> Result<(), TestError> {
-    let nested = union(
+    let fused = union(
         [
-            star(12, 30.0)?,
-            union([pill(130.0, 60.0), pill(150.0, 40.0)], 8.dp())?,
+            UnionMember::Contour(star_polygon(12, 30.0)?),
+            pill(130.0, 60.0),
+            pill(150.0, 40.0),
         ],
         2.dp(),
     )?;
@@ -330,7 +331,7 @@ fn lens_normals_turn_no_faster_than_their_lens_length() -> Result<(), TestError>
     for shape in crease_cases()? {
         turns.push(steepest_turn(&shape, &analytic_lens(&shape)?));
     }
-    for shape in [star(12, 26.0)?, star(40, 30.0)?, nested] {
+    for shape in [star(12, 26.0)?, star(40, 30.0)?, fused] {
         turns.push(steepest_turn(&shape, &texture_lens(&shape)?));
     }
     let steepest = 2.0 * 1.5;

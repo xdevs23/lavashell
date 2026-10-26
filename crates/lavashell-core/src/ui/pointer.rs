@@ -20,6 +20,7 @@ impl PointerId {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PointerKind {
     Mouse,
     Finger,
@@ -37,6 +38,7 @@ impl PointerKind {
 /// A touch point. `seat` is the number given by the host to the input seat that reports the point.
 /// `point` is the ID given to the point by that seat while the point is down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TouchId {
     pub seat: u32,
     pub point: i32,

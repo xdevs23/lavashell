@@ -262,7 +262,9 @@ struct PillPainter(Shape);
 
 impl PillPainter {
     fn new() -> Result<Self, TestError> {
-        let pill = |x| Shape::rounded(Rect::new(x, 0.dp(), 10.dp(), 10.dp()), 5.dp());
+        let pill = |x| {
+            RoundedRect::new(Rect::new(x, 0.dp(), 10.dp(), 10.dp()), Corners::all(5.dp())).into()
+        };
         let pills = union([pill(0.dp()), pill(30.dp())], 0.dp())?;
         Ok(Self(pills))
     }

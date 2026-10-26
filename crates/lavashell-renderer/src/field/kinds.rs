@@ -3,7 +3,7 @@
 //! kind evaluates the field of a shape at every pixel when the geometry of the shape fits into the uniforms of the
 //! program. For a shape that does not fit, the kind draws the field into a texture. The kind also selects whether
 //! Skia draws the outline of a shape as a rounded rectangle, as a path or through the field. Adding a kind means
-//! adding one arm in `Kinds::visit` and one family of programs in `Analytic`.
+//! adding one arm in each implementation of `Visited` and one family of programs in `Analytic`.
 
 mod contour;
 mod hollow;
@@ -165,6 +165,32 @@ pub(super) trait Visit {
     fn visit<K: Kind>(self, kinds: &Kinds, kind: &K, shape: &K::Shape) -> Self::Output;
 }
 
+/// A shape or a member of a union, which `Kinds::visit` passes to its kind.
+pub(super) trait Visited {
+    fn visit_kind<V: Visit>(&self, kinds: &Kinds, visit: V) -> V::Output;
+}
+
+impl Visited for Shape {
+    fn visit_kind<V: Visit>(&self, kinds: &Kinds, visit: V) -> V::Output {
+        match self {
+            Self::Rounded(shape) => visit.visit(kinds, &Rounded, shape),
+            Self::Union(shape) => visit.visit(kinds, &Union, shape),
+            Self::Contour(shape) => visit.visit(kinds, &kinds.contour, shape),
+            Self::Hollow(shape) => visit.visit(kinds, &kinds.hollow, shape),
+        }
+    }
+}
+
+impl Visited for UnionMember {
+    fn visit_kind<V: Visit>(&self, kinds: &Kinds, visit: V) -> V::Output {
+        match self {
+            Self::Rounded(shape) => visit.visit(kinds, &Rounded, shape),
+            Self::Contour(shape) => visit.visit(kinds, &kinds.contour, shape),
+            Self::Hollow(shape) => visit.visit(kinds, &kinds.hollow, shape),
+        }
+    }
+}
+
 pub(super) struct Kinds {
     frames: Frames,
     contour: Contour,
@@ -194,13 +220,8 @@ impl Kinds {
         &self.frames
     }
 
-    pub fn visit<V: Visit>(&self, shape: &Shape, visit: V) -> V::Output {
-        match shape {
-            Shape::Rounded(shape) => visit.visit(self, &Rounded, shape),
-            Shape::Union(shape) => visit.visit(self, &Union, shape),
-            Shape::Contour(shape) => visit.visit(self, &self.contour, shape),
-            Shape::Hollow(shape) => visit.visit(self, &self.hollow, shape),
-        }
+    pub fn visit<V: Visit>(&self, shape: &impl Visited, visit: V) -> V::Output {
+        shape.visit_kind(self, visit)
     }
 
     pub fn route(&self, shape: &Shape) -> Result<Route, DrawFailure> {
@@ -214,7 +235,7 @@ impl Kinds {
         self.visit(shape, Routed)
     }
 
-    pub fn hash(&self, shape: &Shape, hasher: &mut DefaultHasher) {
+    pub fn hash(&self, shape: &impl Visited, hasher: &mut DefaultHasher) {
         struct Hashed<'h>(&'h mut DefaultHasher);
         impl Visit for Hashed<'_> {
             type Output = ();
