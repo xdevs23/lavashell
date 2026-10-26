@@ -23,9 +23,9 @@ struct Press {
     /// The view in which the key was pressed. The timer that closes the preview of the key runs on
     /// the clock of that view.
     view: ComposingView,
-    /// The timer that opens a popup after a long press or repeats a held delete key. Dropping the
-    /// press cancels it.
-    _timer: Option<Timer>,
+    /// The timer that opens a popup after a long press or repeats a held delete key, until another
+    /// key is pressed. Dropping the press cancels it.
+    timer: Option<Timer>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,10 +84,10 @@ impl Keyboard {
         }
     }
 
-    /// Types the keys held so far and closes a list of layouts that is still open after its press
-    /// ended. Every press outside a popup starts with this.
+    /// Closes a list of layouts that is still open after its press ended. Every press outside a
+    /// popup starts with this. The keys held so far remain pressed, so a transform of two fingers
+    /// can still take the fingers from them.
     pub(crate) fn begin_press(&self) {
-        self.type_held();
         if let Some(snapshot) = self.snapshot()
             && (snapshot.popup.as_ref()).is_some_and(|popup| popup.open == Open::LayoutsLeft)
         {
@@ -113,6 +113,7 @@ impl Keyboard {
         let serial = self.presses().next_serial();
         let (facts, session) = (&snapshot.facts, snapshot.session.id);
         if key.acts_on_press() {
+            self.type_held();
             self.act(key);
         }
         let long_press = |offer| {
@@ -133,7 +134,10 @@ impl Keyboard {
             Key::Globe => Some(long_press(Offer::Layouts)),
             _ => None,
         };
-        if let Some(label) = snapshot.character(key) {
+        let before: Vec<Key> = (self.presses().held.borrow().iter())
+            .map(|press| press.key)
+            .collect();
+        if let Some(label) = snapshot.character_after(&before, key) {
             let preview = Preview {
                 serial,
                 label,
@@ -143,13 +147,17 @@ impl Keyboard {
             };
             (self.presses().previews).update(|previews| previews.push(preview));
         }
-        self.presses().held.borrow_mut().push(Press {
+        let mut held = self.presses().held.borrow_mut();
+        for press in held.iter_mut() {
+            let _stopped_timer = press.timer.take();
+        }
+        held.push(Press {
             serial,
             pointer,
             key,
             session,
             view: snapshot.view.clone(),
-            _timer: timer,
+            timer,
         });
     }
 
@@ -212,8 +220,17 @@ impl Keyboard {
         Some(held.remove(index))
     }
 
+    /// Ends the press of `pointer` and every press started before it, oldest first, so the keys are
+    /// typed in the order they were pressed.
     fn release(&self, pointer: PointerId) {
-        if let Some(press) = self.take_press(pointer) {
+        let ended: Vec<Press> = {
+            let mut held = self.presses().held.borrow_mut();
+            let Some(index) = held.iter().position(|press| press.pointer == pointer) else {
+                return;
+            };
+            held.drain(..=index).collect()
+        };
+        for press in ended {
             self.finish(&press);
         }
     }
@@ -282,7 +299,7 @@ impl Keyboard {
         match Entries::of(popup, &snapshot) {
             Some(Entries::FurtherLetters(letters)) => {
                 if let Some(letter) = letters.get(index) {
-                    self.act(Key::Char(*letter));
+                    self.act(Key::Char(letter));
                 }
             }
             Some(Entries::Layouts(layouts)) => {

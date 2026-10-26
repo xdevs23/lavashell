@@ -8,10 +8,6 @@ fn previews(host: &mut Host, milliseconds: u64) -> Result<Vec<Dp>, TestError> {
     Ok(found.iter().map(|bounds| bounds.height).collect())
 }
 
-fn near(length: Dp, expected: Dp) -> bool {
-    (length - expected).abs() < 0.05.dp()
-}
-
 #[test]
 fn a_preview_opens_with_the_press_is_open_after_the_lift_then_shrinks_to_the_key()
 -> Result<(), TestError> {
@@ -26,7 +22,7 @@ fn a_preview_opens_with_the_press_is_open_after_the_lift_then_shrinks_to_the_key
         kind: PointerKind::Finger,
     }));
     assert!(
-        near(previews(&mut host, start)?[0], full * 0.9),
+        near_length(previews(&mut host, start)?[0], full * 0.9),
         "it opens from 90 %"
     );
     let opening = previews(&mut host, start + 30)?[0];
@@ -34,10 +30,10 @@ fn a_preview_opens_with_the_press_is_open_after_the_lift_then_shrinks_to_the_key
         opening > full * 0.95 && opening < full,
         "it decelerates: {opening:?}"
     );
-    assert!(near(previews(&mut host, start + 60)?[0], full));
+    assert!(near_length(previews(&mut host, start + 60)?[0], full));
     let bounds = unions(&host.scene, 2)[0];
     assert!(
-        near(bounds.y + bounds.height, key.y + key.height),
+        near_length(bounds.y + bounds.height, key.y + key.height),
         "it grows out of its key"
     );
     let lift = start + 100;
@@ -48,10 +44,10 @@ fn a_preview_opens_with_the_press_is_open_after_the_lift_then_shrinks_to_the_key
         kind: PointerKind::Finger,
     }));
     assert!(
-        near(previews(&mut host, lift + 79)?[0], full),
+        near_length(previews(&mut host, lift + 79)?[0], full),
         "it is still open after the lift"
     );
-    assert!(near(previews(&mut host, lift + 80)?[0], full));
+    assert!(near_length(previews(&mut host, lift + 80)?[0], full));
     let closing = previews(&mut host, lift + 130)?[0];
     assert!(
         closing > full * 0.95 && closing < full,
@@ -59,7 +55,7 @@ fn a_preview_opens_with_the_press_is_open_after_the_lift_then_shrinks_to_the_key
     );
     let bounds = unions(&host.scene, 2)[0];
     assert!(
-        near(bounds.y + bounds.height, key.y + key.height),
+        near_length(bounds.y + bounds.height, key.y + key.height),
         "it shrinks toward its key"
     );
     assert!(previews(&mut host, lift + 179)?[0] < full * 0.95);
@@ -107,7 +103,7 @@ fn each_preview_runs_independently_and_a_later_one_shows_on_top() -> Result<(), 
     );
     let left = previews(&mut host, start + 250)?;
     assert_eq!(left.len(), 1);
-    assert!(near(
+    assert!(near_length(
         left[0],
         node(&host.view, &Role::Button, "u")?.bounds.height + 100.dp()
     ));
@@ -127,13 +123,13 @@ fn under_reduced_motion_a_preview_opens_and_closes_without_scaling() -> Result<(
         at: key.center(),
         kind: PointerKind::Finger,
     }));
-    assert!(near(previews(&mut host, start)?[0], full));
+    assert!(near_length(previews(&mut host, start)?[0], full));
     host.view.input(InputEvent::TouchUp(TouchSample {
         id: touch(1),
         at: key.center(),
         kind: PointerKind::Finger,
     }));
-    assert!(near(previews(&mut host, start + 79)?[0], full));
+    assert!(near_length(previews(&mut host, start + 79)?[0], full));
     assert!(previews(&mut host, start + 80)?.is_empty());
     Ok(())
 }

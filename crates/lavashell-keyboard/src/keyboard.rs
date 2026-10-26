@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod root;
+mod snapshot;
+
 use crate::board::{Board, Key, KeyAt, Page};
 use crate::facts::Facts;
 use crate::layouts::{self, Layout};
+use crate::placement::Placement;
 use crate::popup::Popup;
-use crate::press::{Presses, Preview};
+use crate::press::Presses;
 use crate::settings::KeyboardSettings;
-use crate::shift::{self, Shift, ShiftChoice};
+use crate::shift::{self, ShiftChoice};
 use crate::stage::{Stage, Stages};
 use lavashell_core::prelude::{
     AnimationError, Dp, FieldPresses, Key as KeyCode, Motion, Selector, SessionId, State,
-    TextCommand, TextPurpose, TextSender, TextSession, Timer, Ui,
+    TextCommand, TextPurpose, TextSender, TextSession, Timer, TransformInput, Ui,
 };
-use std::cell::RefCell;
+use lavashell_core::ui::TransformHandler;
+pub(crate) use snapshot::Snapshot;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// A function called with each text command that the keyboard sends to a field edited by the host.
@@ -56,10 +62,17 @@ struct Inner {
     /// The platform facts read during the last composition, or `None` before the first composition.
     facts: State<Option<Rc<Facts>>>,
     layout: State<&'static Layout>,
+    placement: State<Placement>,
     choices: State<Choices>,
     highlight: State<Highlight>,
     presses: Presses,
     stages: Stages,
+    /// The height of the root node of the keyboard as the last layout measured it, or zero once
+    /// that node has left its view.
+    height: State<Dp>,
+    /// The number of root nodes made for the keyboard so far. The last one made is the current one.
+    roots: Cell<u64>,
+    transform: State<Option<TransformHandler>>,
     /// Runs while a second tap on shift counts as a double tap.
     double_tap: RefCell<Option<Timer>>,
 }
@@ -97,79 +110,13 @@ pub(crate) struct Highlight {
     pub shown: bool,
 }
 
-/// The state of a shown keyboard, read all at once so that one composition or one input uses
-/// consistent values.
-pub(crate) struct Snapshot {
-    pub view: ComposingView,
-    pub session: TextSession,
-    pub settings: Rc<KeyboardSettings>,
-    pub facts: Rc<Facts>,
-    /// The layouts that the globe key switches between, in order.
-    pub layouts: Vec<&'static Layout>,
-    pub layout: &'static Layout,
-    pub page: Page,
-    pub shift: Shift,
-    pub board: Board,
-    pub highlight: Highlight,
-    pub popup: Option<Popup>,
-    pub previews: Vec<Preview>,
-}
-
-impl Snapshot {
-    /// `letter` as a capital while shift is on, otherwise `letter` unchanged. Shift applies only on
-    /// the page of letters, and only to a letter whose capital is one character. A letter such as
-    /// ß, whose capital is SS, does not change.
-    pub fn cased(&self, letter: char) -> char {
-        if self.page != Page::Letters || self.shift == Shift::Off {
-            return letter;
-        }
-        let mut capital = letter.to_uppercase();
-        match (capital.next(), capital.next()) {
-            (Some(capital), None) => capital,
-            _ => letter,
-        }
-    }
-
-    pub fn character(&self, key: Key) -> Option<String> {
-        match key {
-            Key::Char(letter) => Some(self.cased(letter).to_string()),
-            Key::Currency => Some(self.layout.currency().to_string()),
-            _ => None,
-        }
-    }
-
-    pub fn popup_held_by(&self, serial: u64) -> Option<&Popup> {
-        (self.popup.as_ref()).filter(|popup| popup.held_by(serial))
-    }
-
-    /// The further letters listed for `letter` by the shown layout and then by each configured
-    /// layout, without the letters that have a key on the shown layout. The list is empty outside
-    /// the page of letters. A letter listed by several layouts comes once for each of them.
-    pub fn listed_letters(&self, letter: char) -> impl Iterator<Item = char> + '_ {
-        let layouts = std::iter::once(self.layout).chain(self.layouts.iter().copied());
-        layouts
-            .filter(|_| self.page == Page::Letters)
-            .filter_map(move |layout| layout.further_letters_of(letter))
-            .flat_map(str::chars)
-            .filter(|listed| !self.layout.has_key(*listed))
-    }
-
-    /// The letters offered by a long press on `letter`: the listed letters, each once.
-    pub fn further_letters(&self, letter: char) -> Vec<char> {
-        let mut letters = Vec::new();
-        for listed in self.listed_letters(letter) {
-            if !letters.contains(&listed) {
-                letters.push(listed);
-            }
-        }
-        letters
-    }
-}
-
 impl Keyboard {
     /// A keyboard that types into `target`, uses `settings` and shows `layout`. The globe key
-    /// changes `layout`. The timers of the keyboard run on the motion clock of the view in which
-    /// the keyboard is composed.
+    /// changes `layout`. The panel sits at `placement`. A change of the placement moves the open
+    /// panel to the new placement on the springs of the keyboard, together with the corners and the
+    /// keys of the panel and an open popup.
+    /// The timers of the keyboard run on the motion clock of the view in which the keyboard is
+    /// composed.
     ///
     /// # Errors
     ///
@@ -178,6 +125,7 @@ impl Keyboard {
         target: Target,
         settings: &State<KeyboardSettings>,
         layout: State<&'static Layout>,
+        placement: State<Placement>,
     ) -> Result<Self, AnimationError> {
         Ok(Self(Rc::new(Inner {
             target,
@@ -185,12 +133,32 @@ impl Keyboard {
             settings: settings.select(|settings| Rc::new(settings.clone())),
             facts: State::new(None),
             layout,
+            placement,
             choices: State::new(Choices::default()),
             highlight: State::new(Highlight::default()),
             presses: Presses::new(),
             stages: Stages::new()?,
+            height: State::new(Dp::ZERO),
+            roots: Cell::new(0),
+            transform: State::new(None),
             double_tap: RefCell::new(None),
         })))
+    }
+
+    /// Calls `action` with each transform of two fingers on the panel, unchanged, as
+    /// `Modifier::on_transform` reports it. The transform takes the fingers from the keys under
+    /// them, and a key that loses its finger types nothing. Until an action is set, and while a
+    /// popup is open under a finger, the fingers stay with the keys. Every clone of the keyboard
+    /// calls the `action` set last.
+    pub fn set_on_transform(&self, action: impl FnMut(TransformInput) + 'static) {
+        let action: TransformHandler = Rc::new(RefCell::new(action));
+        self.0.transform.set(Some(action));
+    }
+
+    /// The action set with `Keyboard::set_on_transform`. Reading it during composition makes the
+    /// composition run again when it changes.
+    pub(crate) fn transform_handler(&self) -> Option<TransformHandler> {
+        self.0.transform.get()
     }
 
     /// Whether the keyboard panel is on the screen. This is true from the first composition of the
@@ -202,25 +170,24 @@ impl Keyboard {
         self.stages().get() != Stage::Hidden
     }
 
-    /// The height of the keyboard at rest at the bottom of the view: the height of the panel set
-    /// in the settings while the keyboard is shown, or zero while it is hidden.
+    /// The height of the keyboard at the bottom of the view in which it is composed, with the space
+    /// below a docked panel, as the last layout of that view measured it while the panel moves. The
+    /// height is zero while no view composes the keyboard. Reading it during composition makes the
+    /// composition run again when it changes.
     #[must_use]
     pub fn height(&self) -> Dp {
-        if self.shown() {
-            self.settings().panel_height.get()
-        } else {
-            Dp::ZERO
-        }
+        self.0.height.get()
     }
 
-    /// The height covered by the panel above the bottom of the view, as the panel moves at the
-    /// moment of the read: zero before the panel rises and once it has sunk. Unlike
-    /// `Keyboard::height`, it follows the panel, so a host reads it to inset what lies under the
-    /// panel, also for a keyboard composed with `UiKeyboard::keyboard_from`. Reading it during
-    /// composition makes the composition run again when it changes.
+    /// The height that the panel covers above the bottom of the view, with the space below a docked
+    /// panel, as the panel moves at the moment of the read: zero before the panel rises and once it
+    /// has sunk. Unlike `Keyboard::height`, it leaves out the height of the hidden keyboard, so a
+    /// host reads it to inset what lies under the panel, also for a keyboard composed with
+    /// `UiKeyboard::keyboard_from`. Reading it during composition makes the composition run again
+    /// when it changes.
     #[must_use]
     pub fn covered(&self) -> Dp {
-        self.stages().open().get().height()
+        self.stages().height(Dp::ZERO)
     }
 
     /// Hides the keyboard until another field gains focus or the field is pressed again.
@@ -411,11 +378,13 @@ impl Keyboard {
             highlight: self.0.highlight.get(),
             popup: choices.popup,
             previews: self.0.presses.previews(),
+            double_tap: self.0.double_tap.borrow().is_some(),
         })
     }
 
     /// Types the keys held so far, then does what a release of `key` does.
     pub(crate) fn tap(&self, key: Key) {
+        self.type_held();
         self.begin_press();
         self.act(key);
     }
@@ -426,11 +395,14 @@ impl Keyboard {
             return;
         };
         let session = &snapshot.session;
-        let double = self.0.double_tap.take().is_some();
+        self.close_double_tap_window();
+        let (typed, before) = (snapshot.character(key), snapshot.typing());
+        let after = before.after_release(key, typed.as_deref());
+        let chosen = before.chosen_shift(key, typed.as_deref());
         match key {
             Key::Char(_) | Key::Currency => {
-                if let Some(text) = snapshot.character(key) {
-                    self.type_text(&snapshot, text);
+                if let Some(text) = typed {
+                    self.send(&snapshot.view, TextCommand::Commit(text));
                 }
             }
             Key::Space => self.send(&snapshot.view, TextCommand::Commit(" ".into())),
@@ -442,22 +414,25 @@ impl Keyboard {
                     None => TextCommand::Key(KeyCode::Enter),
                 },
             ),
-            Key::Shift => {
-                let shift = shift::tapped(snapshot.shift, double);
-                let choice = ShiftChoice::new(shift, session);
-                self.update_choices(session, |choices| choices.shift = Some(choice));
-                if shift != Shift::Locked {
-                    let window = self.timer(&snapshot.view, Keyboard::close_double_tap_window);
-                    window.start(snapshot.facts.double_tap);
-                    *self.0.double_tap.borrow_mut() = Some(window);
-                }
-            }
-            Key::Page(page) => self.update_choices(session, |choices| choices.page = Some(page)),
-            Key::Globe => {
-                let after = layout_after(&snapshot.layouts, snapshot.layout);
-                self.0.layout.set(after);
-            }
+            Key::Shift | Key::Page(_) => {}
+            Key::Globe => self
+                .0
+                .layout
+                .set(layout_after(&snapshot.layouts, snapshot.layout)),
             Key::Hide => self.hide(),
+        }
+        self.update_choices(session, |choices| {
+            if after.page != before.page {
+                choices.page = Some(after.page);
+            }
+            if let Some(shift) = chosen {
+                choices.shift = Some(ShiftChoice::new(shift, session));
+            }
+        });
+        if after.double_tap {
+            let window = self.timer(&snapshot.view, Keyboard::close_double_tap_window);
+            window.start(snapshot.facts.double_tap);
+            *self.0.double_tap.borrow_mut() = Some(window);
         }
     }
 
@@ -465,14 +440,10 @@ impl Keyboard {
         self.0.layout.set(layout);
     }
 
-    /// Commits `text`. On the page of letters, typing a letter ends shift for one letter.
-    fn type_text(&self, snapshot: &Snapshot, text: String) {
-        let letter = text.chars().any(char::is_alphabetic);
-        self.send(&snapshot.view, TextCommand::Commit(text));
-        if snapshot.page == Page::Letters && snapshot.shift != Shift::Locked && letter {
-            let typed = ShiftChoice::new(Shift::Off, &snapshot.session);
-            self.update_choices(&snapshot.session, |choices| choices.shift = Some(typed));
-        }
+    /// The placement set by the host. Reading it during composition makes the composition run
+    /// again when it changes.
+    pub(crate) fn placement(&self) -> Placement {
+        self.0.placement.get()
     }
 }
 

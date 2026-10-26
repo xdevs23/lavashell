@@ -81,7 +81,8 @@ fn compose(ui: &mut Ui, scene: &Scene, preview: &Preview) {
 }
 
 /// Composes the open popup above the keys. A press on the popup types the held keys and is not
-/// passed to the keys below the popup.
+/// passed to the keys below the popup. The popup moves with the panel to a new placement on the
+/// show spring.
 pub(super) fn popup(ui: &mut Ui, scene: &Scene) {
     let snapshot = scene.snapshot;
     let Some(popup) = &snapshot.popup else {
@@ -106,7 +107,8 @@ pub(super) fn popup(ui: &mut Ui, scene: &Scene) {
         })
         .offset(frame.x, frame.y)
         .size(frame.width, frame.height)
-        .material(scene.look.popup.clone(), corners);
+        .material(scene.look.popup.clone(), corners)
+        .transition(Transition::new(look::show_spring()).reflow());
     ui.key("popup", modifier, |ui| {
         if matches!(placed.entries, Entries::Layouts(_)) {
             let style = scene.text(&LIST_HEADING, scene.look.muted);
@@ -155,7 +157,7 @@ fn entry(ui: &mut Ui, scene: &Scene, placed: &Placed, chosen: bool, index: usize
             let Some(letter) = letters.get(index) else {
                 return;
             };
-            let letter = scene.snapshot.cased(*letter).to_string();
+            let letter = scene.snapshot.cased(letter).to_string();
             let style = scene.text(&LETTER, look.ink);
             semantics.name = Some(letter.clone());
             let modifier = modifier

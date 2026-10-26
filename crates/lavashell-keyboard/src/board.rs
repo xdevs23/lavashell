@@ -260,27 +260,43 @@ fn slot(key: Key, span: f64) -> Slot {
     }
 }
 
+/// Where the slots of a board lie in the panel, and the screen around the panel, in the coordinates
+/// of the keyboard.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Grid {
     column: Dp,
     key_height: Dp,
-    panel_width: Dp,
+    panel: Rect,
+    screen: Rect,
 }
 
 impl Grid {
-    pub fn new(panel_width: Dp, columns: f64, key_height: Dp) -> Self {
-        let inner = panel_width - PADDING.left - PADDING.right;
+    /// The grid of `columns` columns in `panel`. The columns have zero width when `panel` is narrower
+    /// than the padding and the gaps together.
+    pub fn new(panel: Rect, screen: Rect, columns: f64, key_height: Dp) -> Self {
+        let inner = panel.width - PADDING.left - PADDING.right;
         let gaps = GAP * (columns - 1.0);
         Self {
-            column: (inner - gaps) / columns,
+            column: ((inner - gaps) / columns).max(Dp::ZERO),
             key_height,
-            panel_width,
+            panel,
+            screen,
         }
     }
 
-    /// The left edge nearest to `x` of a box `width` wide that fits within the panel.
+    /// The left edge of a box `width` wide, as near to `x` as the box fits on the screen.
     pub fn fit_left(&self, x: Dp, width: Dp) -> Dp {
-        x.min(self.panel_width - width).max(Dp::ZERO)
+        let screen = self.screen;
+        x.min(screen.x + screen.width - width).max(screen.x)
+    }
+
+    /// The top edge for a box, as near to `y` as the screen allows.
+    pub fn fit_top(&self, y: Dp) -> Dp {
+        y.max(self.screen.y)
+    }
+
+    pub fn panel_width(&self) -> Dp {
+        self.panel.width
     }
 
     /// The height of the panel of keys that are `key_height` tall.
@@ -304,7 +320,7 @@ impl Grid {
     }
 
     pub fn rect(&self, board: &Board, at: KeyAt) -> Rect {
-        let origin = Point::new(PADDING.left, PADDING.top);
+        let origin = Point::new(self.panel.x + PADDING.left, self.panel.y + PADDING.top);
         let above: Dp = repeat_n(self.key_height + GAP, at.row).sum();
         Rect::new(
             origin.x + (self.column + GAP) * board.start(at),

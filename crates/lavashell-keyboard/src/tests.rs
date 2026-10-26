@@ -21,6 +21,8 @@ enum TestError {
     Animation(#[from] AnimationError),
     #[error("a layout of the test does not fit the keys")]
     Layout(#[from] LayoutError),
+    #[error("a length used by the test is not valid")]
+    Number(#[from] NumberError),
     #[error("a time of the test does not fit milliseconds")]
     Time(#[from] TryFromIntError),
     #[error("the view exports no {role:?} named {name}")]
@@ -34,15 +36,18 @@ enum TestError {
 }
 
 mod accessibility;
+mod dock;
 mod host;
 mod host_view;
 mod layouts;
 mod look;
 mod painted;
+mod popups;
 mod settings;
 mod shift;
 mod stages;
 mod timelines;
+mod transform;
 mod typing;
 
 use host_view::Host;
@@ -144,6 +149,26 @@ impl TextMeasurer for Metrics {
 
 fn touch(point: i32) -> TouchId {
     TouchId { seat: 0, point }
+}
+
+fn finger(point: i32, at: Point) -> TouchSample {
+    TouchSample {
+        id: touch(point),
+        at,
+        kind: PointerKind::Finger,
+    }
+}
+
+/// Whether the rectangles `a` and `b` are less than half a dp apart on every side.
+fn near(a: Rect, b: Rect) -> bool {
+    [a.x - b.x, a.y - b.y, a.width - b.width, a.height - b.height]
+        .iter()
+        .all(|difference| difference.abs() < 0.5.dp())
+}
+
+/// Whether `length` is less than a twentieth of a dp away from `expected`.
+fn near_length(length: Dp, expected: Dp) -> bool {
+    (length - expected).abs() < 0.05.dp()
 }
 
 /// The size of the screens of the tests.
@@ -334,7 +359,9 @@ impl Fixture {
 
     fn with(hints: TextHints, settings: KeyboardSettings) -> Result<Self, TestError> {
         let text = State::new(String::new());
-        let keyboard = Keyboard::new(Target::View, &State::new(settings), State::new(&ENGLISH))?;
+        let (settings, layout) = (State::new(settings), State::new(&ENGLISH));
+        let placement = State::new(Placement::FullWidth);
+        let keyboard = Keyboard::new(Target::View, &settings, layout, placement)?;
         let secret = ProtectedText::new();
         let (value, composed) = (text.clone(), keyboard.clone());
         let protected = secret.clone();
@@ -395,21 +422,13 @@ impl Fixture {
 
     fn touch_down(&mut self, point: i32, name: &str) -> Result<(), TestError> {
         let at = key(&self.view, name)?;
-        self.view.input(InputEvent::TouchDown(TouchSample {
-            id: touch(point),
-            at,
-            kind: PointerKind::Finger,
-        }));
+        self.view.input(InputEvent::TouchDown(finger(point, at)));
         Ok(())
     }
 
     fn touch_up(&mut self, point: i32, name: &str) -> Result<(), TestError> {
         let at = key(&self.view, name)?;
-        self.view.input(InputEvent::TouchUp(TouchSample {
-            id: touch(point),
-            at,
-            kind: PointerKind::Finger,
-        }));
+        self.view.input(InputEvent::TouchUp(finger(point, at)));
         Ok(())
     }
 }

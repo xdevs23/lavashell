@@ -1,6 +1,7 @@
 # On-screen keyboard
 
-A car screen with a music search field and the on-screen keyboard docked at the bottom.
+A car screen with a music search field and the on-screen keyboard docked at the bottom. A pinch in on the keyboard
+moves it to the left corner. A pinch out gives it the full width again.
 
 ```sh
 nix run .#keyboard

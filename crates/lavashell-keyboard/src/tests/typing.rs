@@ -17,7 +17,7 @@ fn keys_type_into_the_focused_field_of_the_view_and_never_take_its_focus() -> Re
     assert_eq!(fixture.text.get(), "hi to!");
     assert!(focused(&fixture.view, "field"));
     let panel = node(&fixture.view, &Role::Group, "Keyboard")?.bounds;
-    let between = Point::new(panel.x + 4.dp(), panel.y + 4.dp());
+    let between = Point::new(panel.x + 6.dp(), panel.y + panel.height / 2.0);
     fixture.view.input(InputEvent::Press(between));
     fixture.view.input(InputEvent::Release(between));
     fixture.frame()?;
@@ -72,6 +72,72 @@ fn a_key_pressed_while_another_is_held_types_after_the_held_one() -> Result<(), 
 }
 
 #[test]
+fn keys_held_together_type_at_the_release_of_one_of_them_in_the_order_of_their_presses()
+-> Result<(), TestError> {
+    let mut fixture = Fixture::new(TextHints::default())?;
+    fixture.focus("field")?;
+    fixture.touch_down(1, "a")?;
+    fixture.touch_down(2, "b")?;
+    fixture.touch_down(3, "c")?;
+    fixture.frame()?;
+    assert_eq!(fixture.text.get(), "");
+    fixture.touch_up(2, "b")?;
+    fixture.frame()?;
+    assert_eq!(fixture.text.get(), "ab");
+    fixture.touch_up(3, "c")?;
+    fixture.touch_up(1, "a")?;
+    fixture.frame()?;
+    assert_eq!(fixture.text.get(), "abc");
+    Ok(())
+}
+
+#[test]
+fn delete_pressed_while_another_key_is_held_deletes_after_the_held_key_types()
+-> Result<(), TestError> {
+    let mut fixture = Fixture::new(TextHints::default())?;
+    fixture.focus("field")?;
+    fixture.type_keys(&["x"])?;
+    fixture.touch_down(1, "a")?;
+    fixture.touch_down(2, "Delete")?;
+    fixture.frame()?;
+    assert_eq!(fixture.text.get(), "x");
+    Ok(())
+}
+
+#[test]
+fn a_held_delete_key_stops_repeating_once_another_key_is_pressed() -> Result<(), TestError> {
+    let mut fixture = Fixture::new(TextHints::default())?;
+    fixture.focus("field")?;
+    fixture.type_keys(&["x", "y", "z"])?;
+    fixture.touch_down(1, "Delete")?;
+    fixture.touch_down(2, "b")?;
+    fixture.at(fixture.time + REPEAT_DELAY + REPEAT_INTERVAL * 4)?;
+    assert_eq!(fixture.text.get(), "xy");
+    fixture.touch_up(2, "b")?;
+    fixture.frame()?;
+    assert_eq!(fixture.text.get(), "xyb");
+    Ok(())
+}
+
+#[test]
+fn a_key_held_past_the_long_press_after_another_key_was_pressed_types_itself()
+-> Result<(), TestError> {
+    let (config, facts) = offering(vec![&ENGLISH, &GERMAN]);
+    let mut host = Host::on(config, facts)?;
+    host.start(TextHints::default(), "")?;
+    let (a, r) = (key(&host.view, "a")?, key(&host.view, "r")?);
+    host.view.input(InputEvent::TouchDown(finger(1, a)));
+    host.view.input(InputEvent::TouchDown(finger(2, r)));
+    host.at(host.time + LONG_PRESS * 2)?;
+    assert!(!has(&host.view, &Role::Menu, "More letters"));
+    host.view.input(InputEvent::TouchUp(finger(2, r)));
+    host.view.input(InputEvent::TouchUp(finger(1, a)));
+    host.frame()?;
+    assert_eq!(host.sent(), [Host::commit("a"), Host::commit("r")]);
+    Ok(())
+}
+
+#[test]
 fn arrow_keys_show_and_move_a_focus_ring_and_enter_types_the_key_in_it() -> Result<(), TestError> {
     let mut fixture = Fixture::new(TextHints::default())?;
     assert!(
@@ -113,7 +179,9 @@ fn arrow_keys_show_and_move_a_focus_ring_and_enter_types_the_key_in_it() -> Resu
 
 #[test]
 fn a_keyboard_composed_in_a_new_view_types_into_the_field_of_that_view() -> Result<(), TestError> {
-    let keyboard = Keyboard::new(Target::View, &State::new(settings()), State::new(&ENGLISH))?;
+    let (settings, layout) = (State::new(settings()), State::new(&ENGLISH));
+    let placement = State::new(Placement::FullWidth);
+    let keyboard = Keyboard::new(Target::View, &settings, layout, placement)?;
     let view = |text: &State<String>| -> Result<(View, Scene), TestError> {
         let (value, shown) = (text.clone(), keyboard.clone());
         let mut view = View::new(lavashell_test_platform::facts(), move |ui| {

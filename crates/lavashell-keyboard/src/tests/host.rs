@@ -121,7 +121,8 @@ fn a_keyboard_shown_in_one_view_rises_from_below_when_it_is_composed_in_another(
         sink: Rc::new(|_| {}),
     };
     let settings = State::new(settings());
-    let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH))?;
+    let placement = State::new(Placement::FullWidth);
+    let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
     let docked = |keyboard: &Keyboard| {
         let keyboard = keyboard.clone();
         View::new(lavashell_test_platform::facts(), move |ui| {
@@ -143,12 +144,90 @@ fn a_keyboard_shown_in_one_view_rises_from_below_when_it_is_composed_in_another(
     settle(&mut first, &mut scene)?;
     let panel = node(&first, &Role::Group, "Keyboard")?.bounds.height;
     assert_eq!(height(&first)?, panel);
+    assert_eq!(keyboard.height(), panel);
     drop(first);
+    assert_eq!(keyboard.height(), Dp::ZERO, "no view composes the keyboard");
     let (mut second, mut scene) = (docked(&keyboard), Scene::default());
     frame(&mut second, &mut scene, 0)?;
     assert_eq!(height(&second)?, Dp::ZERO);
+    assert_eq!(keyboard.height(), Dp::ZERO);
     settle(&mut second, &mut scene)?;
     assert_eq!(height(&second)?, panel);
+    assert_eq!(keyboard.height(), panel);
+    Ok(())
+}
+
+#[test]
+fn the_height_of_the_keyboard_is_the_height_of_its_panel_as_it_moves() -> Result<(), TestError> {
+    let mut host = Host::new(settings())?;
+    let laid_out = |host: &Host| -> Result<Dp, TestError> {
+        Ok(composed_bounds(&host.view, "keyboard")?.height)
+    };
+    assert_eq!(host.keyboard.height(), Dp::ZERO);
+    let empty = FieldText::BeforeCursor("".into());
+    host.session
+        .set(Some(session(SessionId(1), TextHints::default(), empty)));
+    host.frame()?;
+    for time in [20, 60, 100] {
+        host.at(time)?;
+        let height = host.keyboard.height();
+        assert_eq!(
+            height,
+            laid_out(&host)?,
+            "{time} ms after the panel starts to rise"
+        );
+        assert!(
+            height > Dp::ZERO && height < PANEL.get(),
+            "{height:?} at {time} ms"
+        );
+    }
+    host.settle()?;
+    assert_eq!(host.keyboard.height(), PANEL.get());
+    let margin = 12.dp();
+    host.placement.set(Placement::Docked(Dock {
+        side: Side::Left,
+        width: NonNegativeDp::try_new(640.dp())?,
+        margin: NonNegativeDp::try_new(margin)?,
+    }));
+    assert_eq!(
+        host.keyboard.height(),
+        PANEL.get(),
+        "the panel has not moved yet"
+    );
+    host.settle()?;
+    assert_eq!(host.keyboard.height(), PANEL.get() + margin);
+    host.session.set(None);
+    host.settle()?;
+    assert_eq!(host.keyboard.height(), Dp::ZERO);
+    Ok(())
+}
+
+#[test]
+fn a_keyboard_that_is_no_longer_composed_takes_no_height() -> Result<(), TestError> {
+    let field = State::new(None);
+    let target = Target::Host {
+        session: field.clone(),
+        sink: Rc::new(|_| {}),
+    };
+    let settings = State::new(settings());
+    let placement = State::new(Placement::FullWidth);
+    let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
+    let (composed, shown) = (State::new(true), keyboard.clone());
+    let showing = composed.clone();
+    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        if showing.get() {
+            ui.keyboard(&shown, Modifier::new());
+        }
+    });
+    let mut scene = Scene::default();
+    let empty = FieldText::BeforeCursor("".into());
+    field.set(Some(session(SessionId(1), TextHints::default(), empty)));
+    frame(&mut view, &mut scene, 0)?;
+    settle(&mut view, &mut scene)?;
+    assert!(keyboard.height() > Dp::ZERO);
+    composed.set(false);
+    refresh(&mut view, &mut scene)?;
+    assert_eq!(keyboard.height(), Dp::ZERO);
     Ok(())
 }
 

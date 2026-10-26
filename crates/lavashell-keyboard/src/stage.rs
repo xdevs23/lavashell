@@ -22,6 +22,11 @@ pub(crate) fn fuse_tween() -> Tween {
     Tween::new(FUSING)
 }
 
+/// The height of a keyboard that is the share `open` of the way from `closed` to `rest`.
+pub(crate) fn between(closed: Dp, rest: Dp, open: f64) -> Dp {
+    closed + (rest - closed) * open
+}
+
 /// The animation with which the host shows an island again when the panel shrinks back into it.
 /// The island is the node out of which the glass of the panel grows when the keyboard is composed
 /// with `UiKeyboard::keyboard_from`.
@@ -108,6 +113,8 @@ impl Stage {
 struct PanelMotion {
     /// How far the panel is open, animated with the spring of the panel.
     open: Animation<Opening>,
+    /// The height of the open keyboard: the panel and the space below a docked panel.
+    rest: Animation<Dp>,
     /// The progress of the cross-fade between the separate keys and the rows drawn as one shape,
     /// from 0 to 1. It restarts at 0 with each cross-fade. The nodes of the rows fade with the same
     /// tween, so the stage ends when the rows finish fading.
@@ -120,13 +127,19 @@ impl PanelMotion {
     /// Starts the animations on `clock` with the panel hidden. `pixel` is the size of one device
     /// pixel as a share of the height of the panel.
     fn on(clock: &Motion, pixel: &State<f64>) -> Result<Self, AnimationError> {
-        let (open, fade) = (
+        let (open, rest, fade) = (
             clock.animation(Opening::new(0.0, Dp::ZERO))?,
+            clock.animation(Dp::ZERO)?,
             clock.animation(0.0)?,
         );
         let (rising, share) = (open.clone(), pixel.clone());
         let risen = Derived::new(move || 1.0 - rising.get().share() <= share.get());
-        Ok(Self { open, fade, risen })
+        Ok(Self {
+            open,
+            rest,
+            fade,
+            risen,
+        })
     }
 }
 
@@ -153,6 +166,27 @@ impl Stages {
 
     pub fn open(&self) -> Animation<Opening> {
         self.motion.borrow().open.clone()
+    }
+
+    /// The height of a keyboard that is `closed` tall while it is hidden, as the panel has moved at
+    /// the moment of the call.
+    /// Reading it during composition makes the composition run again when it changes.
+    pub fn height(&self, closed: Dp) -> Dp {
+        let motion = self.motion.borrow();
+        between(closed, motion.rest.get(), motion.open.get().share())
+    }
+
+    /// Moves the height of the open keyboard to `height` on the show spring while the panel is on the
+    /// screen, and sets it to `height` at once after the panel has gone. Returns the animation of that
+    /// height. Fails when `height` is not finite.
+    pub fn animate_rest_to(&self, height: Dp) -> Result<Animation<Dp>, AnimationError> {
+        let motion = self.motion.borrow().clone();
+        if self.stage.peek() == Stage::Hidden && motion.open.is_finished() {
+            motion.rest.snap(height)?;
+        } else {
+            motion.rest.animate_to(height, look::show_spring())?;
+        }
+        Ok(motion.rest)
     }
 
     /// Whether the event named by `wait` has happened. Calling this during composition makes the
