@@ -113,6 +113,13 @@ pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
 
 impl Scope {
     pub fn track<R>(&self, phase: Phase, f: impl FnOnce() -> R) -> R {
+        self.forget(phase);
+        self.track_further(phase, f)
+    }
+
+    /// Drops the dependencies recorded for `phase` and clears the dirty flag of `phase`. A change to a value read
+    /// before then marks nothing dirty.
+    pub fn forget(&self, phase: Phase) {
         let mut epochs = self.0.epochs.get();
         epochs[phase.index()] += 1;
         self.0.epochs.set(epochs);
@@ -123,7 +130,6 @@ impl Scope {
         self.0
             .dirty
             .set(Dirty(self.0.dirty.get().0 & !(1 << phase.index())));
-        self.track_further(phase, f)
     }
 
     /// Runs `f` and adds what it reads to the dependencies of `phase` recorded by the last

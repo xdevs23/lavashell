@@ -5,6 +5,7 @@ use super::{
 };
 use crate::accessibility::AccessibleText;
 use crate::ui::{FieldContent, Lines};
+use crate::view::Visibility;
 
 impl View {
     /// Adds the node at `index` and its descendants to `nodes`, except the ones left out of the accessibility tree.
@@ -20,7 +21,7 @@ impl View {
     ) {
         let node = &self.nodes[index];
         let semantics = self.accessibility_semantics(index);
-        if semantics.mode == SemanticsMode::Hidden {
+        if self.accessibility_hidden(index) {
             return;
         }
         let disabled = inherited_disabled || !node.enabled || semantics.state.disabled;
@@ -244,7 +245,7 @@ impl View {
             .filter_map(|id| {
                 let index = self.nodes.iter().position(|node| node.id == *id)?;
                 let semantics = self.accessibility_semantics(index);
-                if semantics.mode == SemanticsMode::Hidden {
+                if self.accessibility_hidden(index) {
                     return None;
                 }
                 semantics.name.clone().or_else(|| {
@@ -258,9 +259,7 @@ impl View {
 
     fn accessibility_name_parts(&self, index: usize, owner: bool, values: &mut Vec<String>) {
         let node = &self.nodes[index];
-        if self.accessibility_semantics(index).mode == SemanticsMode::Hidden
-            || !owner && self.has_activation(index)
-        {
+        if self.accessibility_hidden(index) || !owner && self.has_activation(index) {
             return;
         }
         if let NodeKind::Text(value, _) = &node.kind
@@ -271,6 +270,12 @@ impl View {
         for child in &node.children {
             self.accessibility_name_parts(*child, false, values);
         }
+    }
+
+    /// Whether the semantics of the node at `index` or a condition hides the node from assistive technology.
+    fn accessibility_hidden(&self, index: usize) -> bool {
+        self.accessibility_semantics(index).mode == SemanticsMode::Hidden
+            || self.layout[index].visibility == Visibility::Hidden
     }
 
     pub(super) fn has_activation(&self, index: usize) -> bool {

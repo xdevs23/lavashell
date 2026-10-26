@@ -4,6 +4,7 @@ use crate::effects::{Material, MaterialCommands, ShapedMaterial};
 use crate::shape::{RoundedRect, Shape};
 use crate::units::NonNegativeDp;
 use crate::view::output::Painted;
+use crate::view::shown_children;
 
 /// The drawing commands of `shaped` on the surface `rect`. For a node in a transition, the material is shaped at the
 /// animated bounds, to which `stretch` maps `rect`. The commands are then mapped back by the inverse of `stretch`,
@@ -34,8 +35,9 @@ pub(super) struct Group {
 }
 
 impl View {
-    /// Paints each material group of the node at `index` as one shape that joins the islands among its children, below
-    /// `content`. The children paint before this call, so that the islands have their bounds of this frame.
+    /// Paints each material group of the node at `index` as one shape that joins the islands among the shown children
+    /// of the node, below `content`. The children paint before this call, so that the bounds of the islands are up to
+    /// date for this frame.
     pub(super) fn paint_groups(
         &mut self,
         index: usize,
@@ -44,10 +46,8 @@ impl View {
         content: Vec<Painted>,
     ) {
         let local = transform.inverse();
-        let islands: Vec<_> = self.nodes[index]
-            .children
-            .iter()
-            .filter_map(|&child| {
+        let islands: Vec<_> = shown_children(&self.nodes, &self.layout, index)
+            .filter_map(|(_, child)| {
                 let corners = self.nodes[child].modifier.iter().find_map(|e| match e {
                     ModifierElement::Island(corners) => Some(*corners),
                     _ => None,

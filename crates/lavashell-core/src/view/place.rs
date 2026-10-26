@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::frame_error::NodeName;
 use super::graph::Graph;
-use super::layout::Layout;
+use super::layout::{Layout, Visibility};
 use super::parents::Parents;
 use super::{View, scroll};
 use crate::geometry::{Point, Rect, Size};
@@ -10,8 +11,8 @@ use crate::units::Dp;
 use std::collections::BTreeMap;
 
 impl View {
-    /// Places every node after measuring: resolves the offsets and the positions of each node after the bounds that
-    /// they read, and records where the layers of the node start.
+    /// Places every shown node after the measuring pass. Resolves the offsets and positions of each node after the
+    /// bounds read by them, and records where the layers of the node start.
     pub(super) fn place(&mut self) {
         let count = self.nodes.len();
         let mut placing = Placing {
@@ -25,7 +26,9 @@ impl View {
             resolved: vec![false; count],
         };
         for index in 0..count {
-            placing.resolve(index);
+            if placing.layout[index].visibility == Visibility::Shown {
+                placing.resolve(index);
+            }
         }
     }
 }
@@ -137,6 +140,16 @@ impl Placing<'_> {
 impl Measured for Placing<'_> {
     fn size(&mut self, node: &NodeRef) -> Size {
         self.layout[self.graph.node(node)].size
+    }
+
+    fn natural_width(&mut self, node: &NodeRef) -> Dp {
+        let index = self.graph.node(node);
+        debug_assert!(
+            self.layout[index].natural_width.is_some(),
+            "the natural width of {} is read before it is measured",
+            NodeName::of(&self.nodes[index])
+        );
+        self.layout[index].natural_width.unwrap_or_default()
     }
 }
 

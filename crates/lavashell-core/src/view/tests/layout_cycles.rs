@@ -224,6 +224,165 @@ fn a_child_without_a_weight_cannot_read_a_child_with_one() -> TestResult {
 }
 
 #[test]
+fn a_condition_cannot_read_the_size_of_its_own_node() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let card = NodeRef::new();
+        let fits = card.width().map(|width| width <= 100.dp());
+        let shown = Modifier::new().node_ref(&card).shown_when(fits);
+        ui.spacer(120.dp(), 10.dp(), shown);
+    })?;
+    assert!(matches!(
+        error,
+        FrameError::Layout(LayoutError::RelativeSizeRead(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn the_condition_of_a_child_with_a_weight_cannot_read_another_child_with_one() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let bar = NodeRef::new();
+        let fits = bar.width().map(|width| width >= 50.dp());
+        ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+            let shown = Modifier::new().weight(1.0).shown_when(fits);
+            ui.spacer(Dp::ZERO, 10.dp(), shown.tag("label"));
+            let weighted = Modifier::new().weight(1.0).node_ref(&bar);
+            ui.spacer(Dp::ZERO, 10.dp(), weighted.tag("bar"));
+        });
+    })?;
+    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(tags(&[read]), [(Some("label"), Some("bar"))]);
+    Ok(())
+}
+
+#[test]
+fn a_natural_width_read_by_a_condition_keeps_the_order_of_weights() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let (label, bar) = (NodeRef::new(), NodeRef::new());
+        let fits = label.natural_width().map(|width| width <= 200.dp());
+        ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+            let shown = Modifier::new().weight(1.0).shown_when(fits);
+            ui.layout(
+                Axis::Horizontal,
+                shown.node_ref(&label).tag("label"),
+                |ui| {
+                    ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(bar.width()));
+                },
+            );
+            let weighted = Modifier::new().weight(1.0).node_ref(&bar);
+            ui.spacer(Dp::ZERO, 10.dp(), weighted.tag("bar"));
+        });
+    })?;
+    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(tags(&[read]), [(Some("label"), Some("bar"))]);
+    Ok(())
+}
+
+#[test]
+fn a_condition_that_decides_whether_an_overlay_fills_cannot_read_inside_it() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let mark = NodeRef::new();
+        let fits = mark.width().map(|width| width > Dp::ZERO);
+        ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+            ui.layout(Arrangement::Overlay, Modifier::new(), |ui| {
+                let filling = Modifier::new().fill_max_width().shown_when(fits);
+                ui.spacer(Dp::ZERO, 10.dp(), filling.tag("filling"));
+                let marked = Modifier::new().node_ref(&mark);
+                ui.spacer(10.dp(), 10.dp(), marked.tag("mark"));
+            });
+        });
+    })?;
+    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(tags(&[read]), [(Some("filling"), Some("mark"))]);
+    Ok(())
+}
+
+#[test]
+fn a_condition_in_a_cycle_names_the_cycle() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let (a, b) = (NodeRef::new(), NodeRef::new());
+        ui.layout(Axis::Vertical, Modifier::new(), |ui| {
+            let shown = Modifier::new().shown_when(b.width().map(|width| width > Dp::ZERO));
+            ui.spacer(10.dp(), 10.dp(), shown.node_ref(&a).tag("a"));
+            let width = Modifier::new().width(a.width());
+            ui.spacer(Dp::ZERO, 10.dp(), width.node_ref(&b).tag("b"));
+        });
+    })?;
+    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(
+        tags(&reads),
+        [(Some("a"), Some("b")), (Some("b"), Some("a"))]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_node_shown_by_its_natural_width_still_takes_part_in_a_cycle() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let (x, y) = (NodeRef::new(), NodeRef::new());
+        let fits = x.natural_width().map(|width| width <= 200.dp());
+        ui.layout(Axis::Vertical, Modifier::new(), |ui| {
+            let shown = Modifier::new().node_ref(&x).shown_when(fits);
+            ui.layout(Axis::Horizontal, shown.tag("x"), |ui| {
+                let width = Modifier::new().width(y.width());
+                ui.spacer(Dp::ZERO, 10.dp(), width.tag("inside"));
+            });
+            let width = Modifier::new().width(x.width());
+            ui.spacer(Dp::ZERO, 10.dp(), width.node_ref(&y).tag("y"));
+        });
+    })?;
+    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(
+        tags(&reads),
+        [(Some("inside"), Some("y")), (Some("y"), Some("x"))]
+    );
+    Ok(())
+}
+
+#[test]
+fn natural_widths_whose_probes_read_each_other_name_the_cycle() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let (x, y) = (NodeRef::new(), NodeRef::new());
+        ui.layout(Axis::Vertical, Modifier::new(), |ui| {
+            ui.layout(
+                Axis::Horizontal,
+                Modifier::new().node_ref(&x).tag("x"),
+                |ui| {
+                    let width = Modifier::new().width(y.natural_width());
+                    ui.spacer(Dp::ZERO, 10.dp(), width.tag("x1"));
+                },
+            );
+            ui.layout(
+                Axis::Horizontal,
+                Modifier::new().node_ref(&y).tag("y"),
+                |ui| {
+                    let width = Modifier::new().width(x.natural_width());
+                    ui.spacer(Dp::ZERO, 10.dp(), width.tag("y1"));
+                },
+            );
+        });
+    })?;
+    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(
+        tags(&reads),
+        [(Some("y1"), Some("x")), (Some("x1"), Some("y"))]
+    );
+    Ok(())
+}
+
+#[test]
 fn reads_from_different_depths_that_order_one_container_both_ways_name_the_cycle() -> TestResult {
     let error = first_frame_error(|ui| {
         let (x1, y) = (NodeRef::new(), NodeRef::new());

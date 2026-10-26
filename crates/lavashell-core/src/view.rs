@@ -39,7 +39,7 @@ pub use frame_error::{
 };
 use interaction::FocusSource;
 pub use layout::Proposal;
-use layout::{Layout, Measuring};
+use layout::{Layout, Measuring, Visibility, shown_children};
 use moving::Moving;
 pub use selection::{TextDropTarget, TextPasteTarget, TextSelectionSource};
 pub use text_measurer::{TextMeasurer, TextWidths, min_text_width};
@@ -72,10 +72,10 @@ use crate::scene::{Affine, Brush, DrawCommand, Drawing, TextStyle, Transform};
 use crate::shape::{Corners, DrawnRoundedRect, Radius};
 use crate::text_edit::{FieldGeometry, TextEdit};
 use crate::ui::{
-    Action, ActivateAction, Activation, Arrangement, Deferred, DragInput, DragPhase, Draggable,
-    IconSize, InputModifiers, Memory, ModifierElement, Node, NodeId, NodeKind, NodeRef,
+    Action, ActivateAction, Activation, ComposedShortcut, Deferred, DragInput, DragPhase,
+    Draggable, IconSize, InputModifiers, Memory, ModifierElement, Node, NodeId, NodeKind, NodeRef,
     PointerAction, PointerId, PointerInput, PointerKind, PointerPhase, TouchId, TransformHandler,
-    TransformInput, Ui, ViewHandles, Weight,
+    TransformInput, Ui, ViewHandles,
 };
 use crate::units::{Density, Dp};
 use std::collections::{BTreeMap, BTreeSet};
@@ -241,7 +241,7 @@ pub struct View {
     size: Size,
     memory: Memory,
     shortcuts: Vec<(Shortcut, Action)>,
-    root_shortcuts: Vec<(Shortcut, Action)>,
+    root_shortcuts: Vec<ComposedShortcut>,
     edits: BTreeMap<NodeId, TextEdit>,
     text_positions: BTreeMap<NodeId, FieldGeometry>,
     sessions: input_method::Sessions,

@@ -5,7 +5,7 @@ use crate::input_method::{TextAction, TextHints};
 use crate::reactive::State;
 use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult};
-use crate::ui::{Modifier, TextFieldOptions};
+use crate::ui::{Arrangement, Modifier, TextFieldOptions};
 use crate::units::{Density, DpExt, NumberError, Positive, SpExt};
 use test_scene::{Scene, advance_with, advance_with_timing};
 use test_tags::Tagged;
@@ -197,6 +197,8 @@ mod probe_effects;
 mod reflow;
 #[path = "tests/shared_targets.rs"]
 mod shared_targets;
+#[path = "tests/shown_when.rs"]
+mod shown_when;
 #[path = "tests/size_range.rs"]
 mod size_range;
 #[path = "tests/slots.rs"]

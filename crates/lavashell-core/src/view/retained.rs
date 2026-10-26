@@ -4,11 +4,11 @@ use super::output::{GroupId, Painted, placed_at};
 use super::paint::Inherited;
 use super::{
     Affine, BTreeMap, BTreeSet, Constraints, Dp, FocusSource, Hit, HitClip, Key, Layout, Measuring,
-    NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer, Transform, View, accessibility,
-    collect_descendants, index_of, paint, scroll_followers,
+    NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer, Transform, View, Visibility,
+    accessibility, collect_descendants, index_of, paint, scroll_followers,
 };
 use crate::style::ContentColors;
-use crate::ui::Identity;
+use crate::ui::{Identity, Part};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -20,10 +20,17 @@ pub(super) struct Retained {
 #[derive(Clone)]
 struct Measured {
     constraints: Constraints,
-    /// The sizes of the nodes outside the component that are read by nodes inside the component, as measured then.
-    reads: Vec<(NodeId, Size)>,
+    /// The values of the nodes outside the component that are read by nodes inside the component, as measured then.
+    reads: Vec<OutsideRead>,
     result: Size,
     nodes: Vec<(NodeId, Layout)>,
+}
+
+/// A value of a node outside a component that a node inside the component reads.
+#[derive(Clone, Copy)]
+enum OutsideRead {
+    Size(NodeId, Size),
+    NaturalWidth(NodeId, Dp),
 }
 
 /// The painting of a component, reused in later frames while `key` matches. The items, hits and geometry are in the
@@ -67,6 +74,8 @@ struct PaintKey {
     /// node animates in the coordinates of the host.
     placed: Option<(Affine, Point)>,
     sizes: Vec<(NodeId, Size)>,
+    /// The hidden nodes. A node that becomes hidden moves the nodes next to it even when every size stays the same.
+    hidden: Vec<NodeId>,
     interaction: InteractionKey,
     /// Where the layers of each node start. Offsets and positions move these starts also when no size changes.
     starts: Vec<(NodeId, Point)>,
@@ -101,12 +110,19 @@ impl Retained {
         self.paintings.clear();
         self.layouts.clear();
     }
+
+    /// Drops the layout and the painting cached for the component `id`.
+    fn remove_component(&mut self, id: NodeId) {
+        let _painting_of_the_component = self.paintings.remove(&id);
+        let _layout_of_the_component = self.layouts.remove(&id);
+    }
 }
 
 impl<T: TextMeasurer> Measuring<'_, T> {
     /// Copies the layout cached for the component at `index` under `constraints`, and returns the size of the
-    /// component. Returns `None` when a component in the subtree is dirty, or when a size read from outside the
-    /// component changed.
+    /// component. Returns `None` when a component in the subtree is dirty, when a value read from outside the
+    /// component changed, or when the probe of a natural width read from outside the component reads a node that this
+    /// pass has not measured yet.
     pub(super) fn reuse_layout(
         &mut self,
         cache: &Retained,
@@ -125,11 +141,11 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         if layout_dirty {
             return None;
         }
-        let read = |(id, size): &(NodeId, Size)| {
-            index_of(nodes, *id).is_some_and(|i| self.layout[i].size == *size)
-        };
-        let cached = (cache.layouts.get(&nodes[index].id))
-            .filter(|c| c.constraints == constraints && c.reads.iter().all(read))?;
+        let id = nodes[index].id;
+        let cached = (cache.layouts.get(&id)).filter(|c| c.constraints == constraints)?;
+        if !cached.reads.iter().all(|&read| self.reads_the_same(read)) {
+            return None;
+        }
         for (id, layout) in &cached.nodes {
             if let Some(i) = nodes.iter().position(|n| n.id == *id) {
                 self.layout[i] = layout.clone();
@@ -138,6 +154,21 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         }
         self.reused += 1;
         Some(cached.result)
+    }
+
+    fn reads_the_same(&mut self, read: OutsideRead) -> bool {
+        match read {
+            OutsideRead::Size(id, size) => {
+                index_of(self.nodes, id).is_some_and(|i| self.layout[i].size == size)
+            }
+            OutsideRead::NaturalWidth(id, width) => {
+                let graph = self.graph;
+                index_of(self.nodes, id).is_some_and(|i| {
+                    graph.read_by_probe(i).all(|read| self.filled[read])
+                        && self.natural_width_at(i) == width
+                })
+            }
+        }
     }
 }
 
@@ -151,7 +182,7 @@ impl View {
                 .map(|i| (self.nodes[*i].id, self.layout[*i].clone()))
                 .collect();
             let reads = (self.graph.read_into(&indices))
-                .map(|source| (self.nodes[source].id, self.layout[source].size))
+                .filter_map(|(source, part)| self.outside_read(source, part))
                 .collect();
             let _layout_of_the_previous_frame = self.retained.layouts.insert(
                 self.nodes[index].id,
@@ -163,6 +194,33 @@ impl View {
                 },
             );
             self.stats.measured_components += 1;
+        }
+    }
+
+    /// The value of the node at `source` that a node inside a component reads as `part`. A natural width that no node
+    /// read in this layout was not read by the component either.
+    fn outside_read(&self, source: usize, part: Part) -> Option<OutsideRead> {
+        let (id, layout) = (self.nodes[source].id, &self.layout[source]);
+        match part {
+            Part::NaturalWidth => {
+                (layout.natural_width).map(|width| OutsideRead::NaturalWidth(id, width))
+            }
+            _ => Some(OutsideRead::Size(id, layout.size)),
+        }
+    }
+
+    /// Stops the tracking of layout and paint values for each hidden component, and drops the layout and the painting
+    /// cached for the component. A hidden component lays out and paints nowhere, so a value that it read before would
+    /// otherwise keep its scope dirty and request a frame in each turn.
+    pub(super) fn release_hidden_components(&mut self) {
+        for (node, layout) in self.nodes.iter().zip(&self.layout) {
+            if layout.visibility == Visibility::Hidden
+                && let Some(component) = &node.component
+            {
+                component.scope.forget(Phase::Layout);
+                component.scope.forget(Phase::Paint);
+                self.retained.remove_component(node.id);
+            }
         }
     }
 
@@ -232,7 +290,7 @@ impl View {
                 })
                 .collect(),
             accessibility_geometry: collected.geometry.into_iter().collect(),
-            modal: indices.iter().any(|i| self.nodes[*i].modal),
+            modal: indices.iter().any(|&i| self.is_modal(i)),
         };
         let _painting_of_the_previous_frame = self.retained.paintings.insert(id, painting);
         self.stats.painted_components += 1;
@@ -265,6 +323,10 @@ impl View {
             sizes: indices
                 .iter()
                 .map(|i| (self.nodes[*i].id, self.layout[*i].size))
+                .collect(),
+            hidden: (indices.iter())
+                .filter(|i| self.layout[**i].visibility == Visibility::Hidden)
+                .map(|i| self.nodes[*i].id)
                 .collect(),
             starts: (indices.iter())
                 .flat_map(|i| {

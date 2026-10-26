@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Action, Modifier, NodeId, Ui, ViewHandles};
-use crate::keyboard::Shortcut;
+use super::{ComposedShortcut, Modifier, NodeId, Ui, ViewHandles};
 use crate::local::ReadLog;
 use crate::local::{LocalReader, LocalScope};
 use crate::reactive::{Phase, Scope};
@@ -16,7 +15,7 @@ pub(crate) struct Component {
     compose: RefCell<Compose>,
     locals: LocalScope,
     pub reads: RefCell<ReadLog>,
-    pub shortcuts: RefCell<Vec<(Shortcut, Action)>>,
+    pub shortcuts: RefCell<Vec<ComposedShortcut>>,
     composed: Cell<usize>,
 }
 
