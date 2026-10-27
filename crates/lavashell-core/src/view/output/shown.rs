@@ -2,8 +2,8 @@
 use super::{GroupId, Painted};
 use crate::scene::Affine;
 use crate::scene::tree::{
-    ApplyError, Change, Content, Group, Node, NodeKey, Packet, SceneNodeId, SceneTree, SceneUpdate,
-    Slot, SlotChange, TreeId,
+    ApplyError, Change, Content, Group, NamespaceId, Node, NodeKey, Packet, SceneNodeId, SceneTree,
+    SceneUpdate, Slot, SlotChange, TreeId,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -22,6 +22,8 @@ enum NodeIdentity {
         enclosing: Option<GroupId>,
         index: usize,
     },
+    /// A composition grafts a namespace at one leaf at most, so the graft of a namespace always uses the same node.
+    Graft(NamespaceId),
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -158,6 +160,14 @@ impl Shown {
                 if !same {
                     let content = Content::Packet(Packet::new(commands.clone()));
                     self.change(Change::SetContent { id, content }, changes)?;
+                }
+                self.position(id, parent, index, changes)
+            }
+            Painted::Graft(namespace) => {
+                let id = self.id(NodeIdentity::Graft(*namespace));
+                if self.tree.content(mirrored_key(id)).is_none() {
+                    let node = Node::Leaf(Content::Graft(*namespace));
+                    return self.insert(id, parent, index, node, changes);
                 }
                 self.position(id, parent, index, changes)
             }

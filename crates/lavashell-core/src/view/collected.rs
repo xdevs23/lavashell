@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{BTreeMap, Hit, Moving, NodeId, View, accessibility, scroll_followers};
+use super::{
+    BTreeMap, BTreeSet, FrameError, Hit, Moving, NamespaceId, NodeId, View, accessibility,
+    scroll_followers,
+};
 
 /// The lists recorded while the view paints, apart from the drawing commands in the canvas: the input hits, the
-/// moving groups, the accessibility geometry and the scroll followers.
+/// moving groups, the accessibility geometry, the scroll followers and the grafted namespaces.
 #[derive(Default)]
 pub(super) struct Collected {
     pub hits: Vec<Hit>,
     pub moving: Moving,
     pub geometry: BTreeMap<NodeId, accessibility::SemanticGeometry>,
     pub followers: Vec<scroll_followers::ScrollFollower>,
+    pub grafts: BTreeSet<NamespaceId>,
 }
 
 impl View {
@@ -28,6 +32,19 @@ impl View {
         outer.exchange(self);
         outer
     }
+
+    /// Records that the frame grafts `namespace`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the frame grafted `namespace` before.
+    pub(super) fn record_graft(&mut self, namespace: NamespaceId) -> Result<(), FrameError> {
+        if self.grafts.insert(namespace) {
+            Ok(())
+        } else {
+            Err(FrameError::GraftedTwice(namespace))
+        }
+    }
 }
 
 impl Collected {
@@ -37,5 +54,6 @@ impl Collected {
         std::mem::swap(&mut self.moving, &mut view.moving);
         std::mem::swap(&mut self.geometry, &mut view.accessibility_geometry);
         view.followers.exchange(&mut self.followers);
+        std::mem::swap(&mut self.grafts, &mut view.grafts);
     }
 }

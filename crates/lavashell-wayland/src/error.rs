@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::{Rect, Size};
+use lavashell_core::producer::ProducerError;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::{FrameError, LayoutError};
 use lavashell_renderer::Error as RendererError;
@@ -110,6 +111,8 @@ pub enum Error {
     ShapeScalar(f64),
     #[error("a surface could not show a frame of its view")]
     ShowScene(#[source] FrameError),
+    #[error("a producer could not write its namespaces for a frame of a surface")]
+    Produce(#[source] ProducerError),
     #[error("the content of a surface could not be measured")]
     MeasureView(#[source] LayoutError),
     #[error("a frame could not be drawn")]

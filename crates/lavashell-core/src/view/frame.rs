@@ -7,7 +7,6 @@ use super::{
     NodeId, Phase, Point, SceneTree, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT,
     View, ViewHandles, Viewport, Visibility, output, paint,
 };
-use crate::animation::AnimationError;
 
 impl View {
     /// Sets `viewport` as the root value of `VIEWPORT`, then composes, lays out and paints what changed. The returned
@@ -18,8 +17,9 @@ impl View {
     /// # Errors
     ///
     /// Fails when the composed tree cannot be laid out, when each layout makes a component compose again in a cycle,
-    /// when an animation painted by the frame has a value or velocity that is not finite, or when the update does not
-    /// fit the scene shown before.
+    /// when an animation painted by the frame has a value or velocity that is not finite, when a namespace is grafted
+    /// twice or inside a layer applied by the scene as commands, or when the update does not fit the scene shown
+    /// before.
     pub fn frame(
         &mut self,
         viewport: Viewport,
@@ -42,8 +42,9 @@ impl View {
         self.timed_frame(viewport, text, timing)
     }
 
-    /// Makes a frame as [`View::frame`] does and applies the update of the frame to `tree`. After an error, `tree` is
-    /// empty, and the next frame sends the whole scene to `tree`.
+    /// Makes a frame as [`View::frame`] does and applies the update of the frame to `tree`. After an error, the root
+    /// namespace of `tree` is empty, and the next frame sends the whole scene to `tree`. The namespaces created in
+    /// `tree` remain.
     ///
     /// # Errors
     ///
@@ -81,7 +82,7 @@ impl View {
             .and_then(|()| frame(self))
             .and_then(|update| tree.show(update).map_err(FrameError::Apply));
         if shown.is_err() {
-            *tree = SceneTree::default();
+            tree.reset_root();
             self.invalidate();
         }
         shown
@@ -141,6 +142,7 @@ impl View {
         self.moving = Moving::default();
         self.followers.clear();
         self.accessibility_geometry.clear();
+        self.grafts.clear();
         let scope = self.scope.clone();
         scope.track(Phase::Paint, || {
             self.paint(
@@ -168,7 +170,7 @@ impl View {
         self.redraw = self.focus != painted_focus;
         self.build_accessibility_tree();
         if let Some(error) = self.paint_failure.take() {
-            return Err(FrameError::Paint(error));
+            return Err(error);
         }
         let items = std::mem::take(&mut self.canvas).finish();
         (self.shown.update(&items, self.followers.slots())).map_err(FrameError::Apply)
@@ -176,8 +178,10 @@ impl View {
 
     /// Records `error` as the error of the frame being painted, unless the same paint already recorded an earlier
     /// error. The frame fails with the first error recorded.
-    pub(super) fn fail_paint(&mut self, error: AnimationError) {
-        self.paint_failure = self.paint_failure.or(Some(error));
+    pub(super) fn fail_paint(&mut self, error: FrameError) {
+        if self.paint_failure.is_none() {
+            self.paint_failure = Some(error);
+        }
     }
 
     /// Composes the dirty parts of the tree and lays the tree out, and repeats both steps while a layout makes a

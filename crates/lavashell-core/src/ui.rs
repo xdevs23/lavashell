@@ -20,7 +20,7 @@ pub use node::{
     AccessibilityHandler, Action, ActivateAction, Activation, Align, Arrangement, ContentSizes,
     ContentSizesAction, FieldContent, Flow, IconOptions, IconSize, IconStyle, Identity,
     InputModifiers, KeyAction, Lines, MeasureAction, Node, NodeId, NodeKind, ScrollAction,
-    SemanticsProvider, TextChange, TextFieldOptions, Tooltip, Weight,
+    SemanticsProvider, SizeThatFits, TextChange, TextFieldOptions, Tooltip, Weight,
 };
 pub use pointer::{
     DragHandler, DragInput, DragPhase, Draggable, PointerAction, PointerId, PointerInput,
@@ -37,10 +37,11 @@ use crate::platform::PASSWORD_MASK;
 use crate::preferences::TEXT_SCALING;
 use crate::protected_text::ProtectedInput;
 use crate::reactive::State;
+use crate::scene::tree::NamespaceId;
 use crate::scene::{DrawContext, Drawing, Icon, TEXT_STYLE, TextStyle};
 use crate::style::{INTERACTION_STYLE, InteractionStyle};
 use crate::units::Dp;
-use crate::view::CompositionError;
+use crate::view::{CompositionError, Proposal};
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -303,6 +304,23 @@ impl Ui {
 
     pub fn spacer(&mut self, width: Dp, height: Dp, modifier: Modifier) {
         self.leaf(NodeKind::Spacer(Size::new(width, height)), modifier);
+    }
+
+    /// Shows the root of `namespace`, a namespace of the scene tree that shows this view, at the content box of the
+    /// node and clipped to it. `size` gets the proposal for the content box, which the modifiers of the node narrow
+    /// from the proposal of the parent, and returns the size of the content. The frame fails when it grafts one
+    /// namespace twice, or grafts it inside a layer applied by the scene as commands, such as an effect layer.
+    pub fn graft(
+        &mut self,
+        namespace: NamespaceId,
+        modifier: Modifier,
+        size: impl Fn(Proposal) -> Size + 'static,
+    ) {
+        let kind = NodeKind::Graft {
+            namespace,
+            size: Rc::new(size),
+        };
+        self.leaf(kind, modifier);
     }
 
     pub fn text_input(

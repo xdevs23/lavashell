@@ -66,6 +66,10 @@ fn expected(items: &[Painted], shapes: &mut Vec<Shape>) {
                 shapes.push(Shape::Leaf(commands.to_vec()));
                 continue;
             }
+            Painted::Graft(namespace) => {
+                shapes.extend([Shape::Graft(*namespace), Shape::Exit]);
+                continue;
+            }
             Painted::Scope { values, items } => (*values, items),
             Painted::Group { group, items, .. } => (group.at(Duration::ZERO), items),
         };
@@ -291,6 +295,41 @@ fn items_painted_again_with_the_same_commands_change_nothing() -> TestResult {
         consumer
             .show(&[leaf(0.0), component(7, 0.0, &repainted)])?
             .is_empty()
+    );
+    Ok(())
+}
+
+/// A graft of `namespace` in a scope moved `x` along. The namespace is empty in each test.
+fn boxed(x: f64, namespace: NamespaceId) -> Painted {
+    Painted::Scope {
+        values: GroupValues {
+            transform: Affine::translate(Point::new(Dp::new(x), Dp::ZERO)),
+            ..GroupValues::default()
+        },
+        items: vec![Painted::Graft(namespace)],
+    }
+}
+
+#[test]
+fn a_graft_that_moves_into_a_group_placed_before_its_own_moves_its_node() -> TestResult {
+    let mut consumer = Consumer::default();
+    let grafted = consumer.tree.create_namespace().id();
+    let _first = consumer.show(&[faded(0.5, vec![leaf(1.0)]), boxed(4.0, grafted)])?;
+    let moved = consumer.show(&[boxed(8.0, grafted)])?;
+    assert!(moved.contains(&Kind::Move));
+    assert!(!moved.contains(&Kind::Insert));
+    Ok(())
+}
+
+#[test]
+fn a_graft_that_moves_into_a_group_placed_after_its_own_shows_once() -> TestResult {
+    let mut consumer = Consumer::default();
+    let grafted = consumer.tree.create_namespace().id();
+    let _first = consumer.show(&[boxed(4.0, grafted)])?;
+    let _second = consumer.show(&[faded(0.5, vec![leaf(1.0)]), boxed(8.0, grafted)])?;
+    assert_eq!(
+        consumer.show(&[faded(0.5, vec![leaf(1.0)]), boxed(8.0, grafted)])?,
+        []
     );
     Ok(())
 }

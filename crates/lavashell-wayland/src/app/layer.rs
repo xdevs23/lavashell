@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::SurfaceSpec;
+use super::namespaces::SurfaceScene;
 use super::{
     Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
     State, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, wl_output, wl_surface, zwlr_layer_shell_v1,
@@ -165,10 +166,12 @@ impl SurfaceSpec {
     pub(super) fn layer(
         options: &LayerSurface,
         view: View,
+        scene: SurfaceScene,
         context: LayerContext,
     ) -> Result<Self, Error> {
         Ok(Self {
             view,
+            scene,
             size: initial_size(options, context)?,
             transparent: true,
             output: options.output,

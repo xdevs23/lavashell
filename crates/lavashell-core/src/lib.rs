@@ -20,6 +20,7 @@ pub mod numbers;
 pub mod output;
 pub mod platform;
 pub mod preferences;
+pub mod producer;
 pub mod protected_text;
 pub mod reactive;
 pub mod retained;

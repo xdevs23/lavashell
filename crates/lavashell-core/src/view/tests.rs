@@ -170,6 +170,8 @@ mod color_motion;
 #[path = "tests/exits.rs"]
 mod exits;
 
+#[path = "tests/graft.rs"]
+mod graft;
 #[path = "tests/groups.rs"]
 mod groups;
 

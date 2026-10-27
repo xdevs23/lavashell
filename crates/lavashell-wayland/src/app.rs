@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
 use lavashell_core::prelude::*;
+use lavashell_core::producer::NamespaceProducer;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::FrameError;
@@ -56,6 +57,7 @@ mod input;
 mod key;
 mod layer;
 mod lifecycle;
+mod namespaces;
 pub(crate) mod output_layers;
 mod owned_wl_surface;
 mod preferences;
@@ -75,6 +77,7 @@ mod wake;
 mod window_input;
 
 pub use input::{HostKey, KeyboardFocus};
+pub use namespaces::SurfaceStart;
 pub use presentation::{FrameReport, FrameStage, PresentationFlags, Submission};
 pub use view_actions::ViewActions;
 
@@ -82,10 +85,14 @@ type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
 type InputFilter = Box<dyn FnMut(usize, InputEvent) -> Option<InputEvent>>;
 type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
 
+/// Makes the view of a requested surface with the scene of the surface, before its first frame.
+type ViewStart = Box<dyn FnOnce(&mut SurfaceStart<'_>) -> View>;
+
 enum Request {
-    Window(Window, View),
-    Layer(LayerSurface, View),
-    Lock(wl_output::WlOutput, View),
+    Window(Window, ViewStart),
+    Layer(LayerSurface, ViewStart),
+    /// A lock surface on the output, whose view the session lock starts.
+    Lock(wl_output::WlOutput),
 }
 
 pub struct App {
@@ -138,6 +145,7 @@ struct Surface {
     scene_generation: u64,
     target: Option<WaylandTarget>,
     tree: SceneTree,
+    producers: Vec<Box<dyn NamespaceProducer>>,
     damage: DamageTracker,
     lifecycle: lifecycle::Lifecycle,
     wl: wl_surface::WlSurface,
@@ -182,27 +190,22 @@ impl Surface {
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to apply the next frame of the view to the scene tree. When the tree fails to apply an update, the
-    /// view empties the tree and sends the whole scene with its next frame. If the tree showed a scene before, that
-    /// failure is logged and the frame ends without an error. If the tree was empty, the failure ends the frame with an
-    /// error, as every other failure does.
+    /// Runs `frame` to apply the next frame of the view to the scene tree, as `namespaces::apply_frame` does. A
+    /// failure to apply that the view recovers from is logged, and the frame ends without an error.
     fn show(
         &mut self,
         frame: impl FnOnce(&mut View, &mut SceneTree) -> Result<(), FrameError>,
     ) -> Result<(), crate::Error> {
-        let showed_nothing = self.tree.is_empty();
-        match frame(&mut self.view, &mut self.tree) {
-            Ok(()) => Ok(()),
-            Err(FrameError::Apply(error)) if !showed_nothing => {
-                self.restart_tree(error);
-                Ok(())
-            }
-            Err(error) => Err(crate::Error::ShowScene(error)),
+        let view = &mut self.view;
+        let restarted = namespaces::apply_frame(&mut self.tree, |tree| frame(view, tree));
+        if let Some(error) = restarted.map_err(crate::Error::ShowScene)? {
+            self.restart_tree(error);
         }
+        Ok(())
     }
 
-    /// Handles an update that the tree failed to apply. The view has emptied the tree, so the damage tracker is
-    /// invalidated and the next presentation paints the whole surface.
+    /// Handles an update that the tree failed to apply. The view has emptied the root namespace of the tree, so the
+    /// damage tracker is invalidated and the next presentation paints the whole surface.
     fn restart_tree(&mut self, error: ApplyError) {
         log::warn!(
             "a surface could not apply a scene update and shows the whole scene next: {error}"
@@ -261,6 +264,7 @@ impl Surface {
         // Replacing the view with an empty view drops the application view and every resource in it, because those
         // resources must not outlive the native surface.
         self.view = View::new(self.view.platform(), |_| {});
+        self.producers.clear();
         self.tree = SceneTree::default();
         self.damage.invalidate();
         self.shape = None;

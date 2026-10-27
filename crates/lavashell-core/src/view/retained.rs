@@ -3,9 +3,10 @@ use super::moving::MovingGroup;
 use super::output::{GroupId, Painted, placed_at};
 use super::paint::Inherited;
 use super::{
-    Affine, BTreeMap, BTreeSet, Constraints, Dp, FocusSource, Hit, HitClip, Key, Layout, Measuring,
-    NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer, Transform, View, Visibility,
-    accessibility, collect_descendants, index_of, paint, scroll_followers,
+    Affine, BTreeMap, BTreeSet, Constraints, Dp, FocusSource, FrameError, Hit, HitClip, Key,
+    Layout, Measuring, NamespaceId, NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer,
+    Transform, View, Visibility, accessibility, collect_descendants, index_of, paint,
+    scroll_followers,
 };
 use crate::style::ContentColors;
 use crate::ui::{Identity, Part};
@@ -51,6 +52,8 @@ struct Painting {
     /// component.
     accessibility_geometry: Vec<(NodeId, accessibility::SemanticGeometry)>,
     modal: bool,
+    /// The namespaces grafted inside the component.
+    grafts: BTreeSet<NamespaceId>,
 }
 
 #[derive(PartialEq)]
@@ -291,6 +294,7 @@ impl View {
                 .collect(),
             accessibility_geometry: collected.geometry.into_iter().collect(),
             modal: indices.iter().any(|&i| self.is_modal(i)),
+            grafts: collected.grafts,
         };
         let _painting_of_the_previous_frame = self.retained.paintings.insert(id, painting);
         self.stats.painted_components += 1;
@@ -418,11 +422,20 @@ impl View {
             let _geometry_of_the_previous_frame =
                 (self.accessibility_geometry).insert(*node, geometry.placed(moved, clips));
         }
+        let repeated = (painting.grafts.iter())
+            .find(|namespace| !self.grafts.insert(**namespace))
+            .copied();
         let items = painting.items.clone();
-        self.canvas.nest(Painted::Group {
+        let nested = self.canvas.nest(Painted::Group {
             id: GroupId::Component(id),
             group: placed_at(position),
             items,
         });
+        if let Some(namespace) = repeated {
+            self.fail_paint(FrameError::GraftedTwice(namespace));
+        }
+        if let Err(error) = nested {
+            self.fail_paint(error);
+        }
     }
 }

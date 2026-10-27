@@ -3,6 +3,9 @@ use super::{
     DrawCommand, Drawing, FieldGeometry, Hit, Inherited, NodeKind, Point, Rect, TextMeasurer,
     TextStyle, Transform, View, field,
 };
+use crate::scene::Affine;
+use crate::scene::tree::{GroupValues, NamespaceId};
+use crate::shape::{Corners, RoundedRect};
 use crate::ui::IconStyle;
 
 impl View {
@@ -106,7 +109,29 @@ impl View {
                 }
                 .paint(node, rect, transform.scale, focused, allow_move, text);
             }
+            NodeKind::Graft { namespace, .. } => {
+                let namespace = *namespace;
+                self.paint_graft(namespace, rect);
+            }
             _ => {}
+        }
+    }
+
+    /// Shows the root of `namespace` at `rect`, clipped to it. If the graft cannot be painted, the frame fails.
+    fn paint_graft(&mut self, namespace: NamespaceId, rect: Rect) {
+        let values = GroupValues {
+            transform: Affine::translate(Point::new(rect.x, rect.y)),
+            clip: Some(RoundedRect::new(
+                Rect::from_size(rect.size()),
+                Corners::default(),
+            )),
+            ..GroupValues::default()
+        };
+        let grafted = self
+            .record_graft(namespace)
+            .and_then(|()| self.canvas.graft(values, namespace));
+        if let Err(error) = grafted {
+            self.fail_paint(error);
         }
     }
 }

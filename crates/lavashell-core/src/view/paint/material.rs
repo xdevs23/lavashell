@@ -67,7 +67,10 @@ impl View {
             }
         }
         self.canvas.commands().append(&mut below);
-        self.canvas.append(content);
+        let appended = self.canvas.append(content);
         self.canvas.commands().extend(unwind.into_iter().rev());
+        if let Err(error) = appended {
+            self.fail_paint(error);
+        }
     }
 }

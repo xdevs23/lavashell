@@ -4,9 +4,12 @@ use super::scene::SceneRuntime;
 use super::{
     App, AppConfig, Clipboard, Connection, Dp, Duration, EventLoop, Fonts, FrameReport, FrameTime,
     HostKey, InputEvent, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform, PlatformFacts,
-    Request, Size, SurfaceId, Ui, View, Viewport, Window, registry_queue_init, session_lock,
+    Request, Size, SurfaceId, SurfaceStart, Ui, View, ViewStart, Viewport, Window,
+    registry_queue_init, session_lock,
 };
 use crate::Error;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before
@@ -33,14 +36,32 @@ impl App {
         handle: crate::SessionLock,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), Error> {
+        let compose = Rc::new(RefCell::new(compose));
+        self.session_lock_with(handle, move |_| {
+            let compose = compose.clone();
+            move |ui: &mut Ui| (compose.borrow_mut())(ui)
+        })
+    }
+
+    /// Locks the session as [`App::session_lock`] does. Each lock surface shows the composition returned by `start`,
+    /// which runs before the first frame of the surface, as the start function of [`App::window_with`] does.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the app has a session lock already.
+    pub fn session_lock_with<C: FnMut(&mut Ui) + 'static>(
+        &mut self,
+        handle: crate::SessionLock,
+        mut start: impl FnMut(&mut SurfaceStart<'_>) -> C + 'static,
+    ) -> Result<(), Error> {
         if self.session_lock.is_some() {
             return Err(Error::SessionLockConfigured);
         }
-        self.session_lock = Some(session_lock::Configuration::new(
-            handle,
-            self.platform.clone(),
-            compose,
-        ));
+        let platform = self.platform.clone();
+        let start: session_lock::LockStart = Box::new(move |surface: &mut SurfaceStart<'_>| {
+            View::new(platform.clone(), start(surface))
+        });
+        self.session_lock = Some(session_lock::Configuration::new(handle, start));
         Ok(())
     }
 
@@ -258,6 +279,21 @@ impl App {
         window: Window,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), Error> {
+        self.window_with(window, |_| compose)
+    }
+
+    /// Adds a window that shows the composition returned by `start`. `start` runs before the first frame of the
+    /// window. It can create namespaces in the scene of the window for the composition to graft, and add the
+    /// producers that write them.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the size or the minimum size of `window` does not fit the protocol.
+    pub fn window_with<C: FnMut(&mut Ui) + 'static>(
+        &mut self,
+        window: Window,
+        start: impl FnOnce(&mut SurfaceStart<'_>) -> C + 'static,
+    ) -> Result<(), Error> {
         let positive =
             |length: Dp| crate::logical::extent(length, 0).is_some_and(|whole| whole > 0);
         let valid = |size: Size| {
@@ -274,18 +310,28 @@ impl App {
         if let Some(minimum) = window.min_size.filter(|minimum| !valid(*minimum)) {
             return Err(Error::MinimumWindowSize(minimum));
         }
-        self.requests.push(Request::Window(
-            window,
-            View::new(self.platform.clone(), compose),
-        ));
+        let platform = self.platform.clone();
+        let start: ViewStart =
+            Box::new(move |surface: &mut SurfaceStart<'_>| View::new(platform, start(surface)));
+        self.requests.push(Request::Window(window, start));
         Ok(())
     }
 
     pub fn layer(&mut self, layer: LayerSurface, compose: impl FnMut(&mut Ui) + 'static) {
-        self.requests.push(Request::Layer(
-            layer,
-            View::new(self.platform.clone(), compose),
-        ));
+        self.layer_with(layer, |_| compose);
+    }
+
+    /// Adds a layer surface that shows the composition returned by `start`, which runs before the first frame of the
+    /// surface, as the start function of [`App::window_with`] does.
+    pub fn layer_with<C: FnMut(&mut Ui) + 'static>(
+        &mut self,
+        layer: LayerSurface,
+        start: impl FnOnce(&mut SurfaceStart<'_>) -> C + 'static,
+    ) {
+        let platform = self.platform.clone();
+        let start: ViewStart =
+            Box::new(move |surface: &mut SurfaceStart<'_>| View::new(platform, start(surface)));
+        self.requests.push(Request::Layer(layer, start));
     }
 
     /// Calls `startup` to add the surfaces, connects to the compositor and runs until the last

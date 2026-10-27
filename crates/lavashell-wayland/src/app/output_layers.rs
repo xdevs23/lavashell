@@ -3,6 +3,7 @@
 //! compositor removes the output. Each surface has the same index in the list of surfaces for its whole life.
 
 use super::creation::SurfaceSpec;
+use super::namespaces::SurfaceScene;
 use super::{App, LayerSurface, Platform, Size, State, View, ZwlrLayerShellV1, wl_output};
 use crate::Error;
 use std::{cell::RefCell, rc::Rc};
@@ -115,9 +116,10 @@ impl Platform {
         let info = State::new(info);
         let requests = (runtime.factory.clone().borrow_mut())(info.clone());
         let mut surfaces = Vec::new();
-        for (options, mut view) in requests {
+        for (options, view) in requests {
+            let (mut view, scene) = SurfaceScene::start(|_| view);
             let context = self.layer_context(&options, &mut view)?;
-            let spec = SurfaceSpec::layer(&options, view, context)?;
+            let spec = SurfaceSpec::layer(&options, view, scene, context)?;
             surfaces.push(self.surfaces.len());
             self.create_surface(spec, |platform, wl, id| {
                 platform.layer_role(wl, Some(&output), &options, context, id)

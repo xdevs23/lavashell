@@ -10,10 +10,11 @@ use crate::keyboard::Shortcut;
 use crate::preferences::TextScaling;
 use crate::protected_text::ProtectedInput;
 use crate::reactive::State;
+use crate::scene::tree::NamespaceId;
 use crate::scene::{DrawContext, Drawing, Icon, TextStyle};
 use crate::style::{BorderStyle, InteractionStyle};
 use crate::units::{Dp, NumberError, Positive};
-use crate::view::Transition;
+use crate::view::{Proposal, Transition};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -46,6 +47,8 @@ pub struct Activation {
 pub type ActivateAction = Rc<RefCell<dyn FnMut(Activation)>>;
 pub type KeyAction = Rc<RefCell<dyn FnMut(Shortcut) -> bool>>;
 pub type MeasureAction = Rc<RefCell<dyn FnMut(Size)>>;
+/// The size of content within a proposal, as [`crate::view::View::size_that_fits`] returns it for a view.
+pub type SizeThatFits = Rc<dyn Fn(Proposal) -> Size>;
 pub type ContentSizesAction = Rc<RefCell<dyn FnMut(ContentSizes)>>;
 
 /// `preferred` is the size of a node when no constraint limits it. `minimum` is the smallest size of
@@ -175,6 +178,11 @@ pub enum NodeKind {
         placeholder: String,
         style: TextStyle<Dp>,
         hints: TextHints,
+    },
+    /// The root of a namespace of the scene tree that shows the view, at the content box of the node.
+    Graft {
+        namespace: NamespaceId,
+        size: SizeThatFits,
     },
 }
 

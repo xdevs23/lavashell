@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::SurfaceSpec;
+use super::namespaces::SurfaceScene;
 use super::{
-    Connection, Dispatch, GlobalList, OutputRequest, Platform, PlatformFacts, QueueHandle, Request,
-    Role, Ui, View, delegate_noop, sctk, wl_output, wl_surface,
+    Connection, Dispatch, GlobalList, OutputRequest, Platform, QueueHandle, Request, Role,
+    SurfaceStart, View, delegate_noop, sctk, wl_output, wl_surface,
 };
 use crate::Error;
 use sctk::reexports::client::protocol::wl_callback;
@@ -11,11 +12,7 @@ use sctk::reexports::protocols::ext::session_lock::v1::client::{
     ext_session_lock_surface_v1::{self, ExtSessionLockSurfaceV1},
     ext_session_lock_v1::{self, ExtSessionLockV1},
 };
-use std::{
-    cell::{Cell, RefCell},
-    num::NonZeroU32,
-    rc::Rc,
-};
+use std::{cell::Cell, num::NonZeroU32, rc::Rc};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum Lifetime {
@@ -53,40 +50,17 @@ impl SessionLock {
     }
 }
 
-type Compose = Rc<RefCell<dyn FnMut(&mut Ui)>>;
-
-/// The views of the lock surfaces. Every lock surface shows a view built by the same compose function with the
-/// platform facts of the app.
-struct LockViews {
-    platform: PlatformFacts,
-    compose: Compose,
-}
-
-impl LockViews {
-    fn view(&self) -> View {
-        let compose = self.compose.clone();
-        View::new(self.platform.clone(), move |ui| (compose.borrow_mut())(ui))
-    }
-}
+/// Starts the view of each lock surface with the scene of that surface.
+pub(super) type LockStart = Box<dyn FnMut(&mut SurfaceStart<'_>) -> View>;
 
 pub(super) struct Configuration {
     handle: SessionLock,
-    views: LockViews,
+    start: LockStart,
 }
 
 impl Configuration {
-    pub fn new(
-        handle: SessionLock,
-        platform: PlatformFacts,
-        compose: impl FnMut(&mut Ui) + 'static,
-    ) -> Self {
-        Self {
-            handle,
-            views: LockViews {
-                platform,
-                compose: Rc::new(RefCell::new(compose)),
-            },
-        }
+    pub fn new(handle: SessionLock, start: LockStart) -> Self {
+        Self { handle, start }
     }
 }
 
@@ -109,7 +83,7 @@ pub(super) struct Runtime {
     proxy: ExtSessionLockV1,
     handle: SessionLock,
     phase: LockPhase,
-    views: LockViews,
+    start: LockStart,
     outputs: Vec<(wl_output::WlOutput, usize)>,
     failure: Option<Error>,
 }
@@ -139,14 +113,12 @@ impl Runtime {
         configuration.handle.attach()?;
         let proxy = manager.lock(qh, ());
         manager.destroy();
-        for output in outputs {
-            requests.push(Request::Lock(output, configuration.views.view()));
-        }
+        requests.extend(outputs.into_iter().map(Request::Lock));
         Ok(Self {
             proxy,
             handle: configuration.handle,
             phase: LockPhase::Requested,
-            views: configuration.views,
+            start: configuration.start,
             outputs: Vec::new(),
             failure: None,
         })
@@ -154,9 +126,10 @@ impl Runtime {
 }
 
 impl SurfaceSpec {
-    pub(super) fn lock(view: View) -> Self {
+    pub(super) fn lock(view: View, scene: SurfaceScene) -> Self {
         Self {
             view,
+            scene,
             size: (1, 1),
             transparent: false,
             output: OutputRequest::default(),
@@ -194,7 +167,7 @@ impl Platform {
         }
     }
 
-    fn add_lock_output(&mut self, output: &wl_output::WlOutput) -> Result<(), Error> {
+    pub(super) fn add_lock_output(&mut self, output: &wl_output::WlOutput) -> Result<(), Error> {
         let Some(lock) = &mut self.session_lock else {
             return Ok(());
         };
@@ -204,8 +177,8 @@ impl Platform {
         if lock.outputs.iter().any(|(existing, _)| existing == output) {
             return Ok(());
         }
-        let view = lock.views.view();
-        self.create_surface(SurfaceSpec::lock(view), |platform, wl, id| {
+        let (view, scene) = SurfaceScene::start(&mut lock.start);
+        self.create_surface(SurfaceSpec::lock(view, scene), |platform, wl, id| {
             platform.lock_role(wl, output, id)
         })?;
         Ok(())

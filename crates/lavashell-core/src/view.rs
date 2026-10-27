@@ -57,7 +57,7 @@ mod test_text;
 #[cfg(test)]
 mod tests;
 
-use crate::animation::{AnimationError, Motion};
+use crate::animation::Motion;
 use crate::frame::FrameTime;
 use crate::geometry::{
     Axis, Color, Constraints, Point, Rect, Scale, Size, Span, VIEWPORT, Viewport,
@@ -67,7 +67,7 @@ use crate::keyboard::{Key, Shortcut};
 use crate::local::{LocalReader, LocalScope, RootValues};
 use crate::platform::PlatformFacts;
 use crate::reactive::{Derived, Phase, Scope};
-use crate::scene::tree::{ApplyError, SceneTree, SceneUpdate};
+use crate::scene::tree::{ApplyError, NamespaceId, SceneTree, SceneUpdate};
 use crate::scene::{Affine, Brush, DrawCommand, Drawing, TextStyle, Transform};
 use crate::shape::{Corners, DrawnRoundedRect, Radius};
 use crate::text_edit::{FieldGeometry, TextEdit};
@@ -268,9 +268,11 @@ pub struct View {
     /// Records the read of the reduced motion preference, so that the view passes each change of the preference to
     /// `motion`.
     motion_scope: Scope,
-    /// The error of the first animation, started by a transition or a state style while the frame painted, whose
-    /// value or velocity was not finite. `frame_at` returns this error in place of the frame.
-    paint_failure: Option<AnimationError>,
+    /// The first error of the frame being painted, such as an animation started by a transition or a state style
+    /// whose value or velocity was not finite. `frame_at` returns this error in place of the frame.
+    paint_failure: Option<FrameError>,
+    /// The namespaces grafted by the frame being painted. A second graft of one of them fails the frame.
+    grafts: BTreeSet<NamespaceId>,
 }
 
 impl View {
@@ -335,6 +337,7 @@ impl View {
             density,
             motion_scope,
             paint_failure: None,
+            grafts: BTreeSet::new(),
         }
     }
 

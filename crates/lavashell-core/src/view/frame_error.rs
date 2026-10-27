@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::animation::{AnimationError, BindError};
-use crate::scene::tree::ApplyError;
+use crate::scene::tree::{ApplyError, NamespaceId};
 use crate::scroll::ScrollError;
 use crate::ui::{ModifierValue, Node, NodeId, Part, Used};
 use crate::units::NumberError;
@@ -17,6 +17,13 @@ pub enum FrameError {
     CompositionCycle { node: NodeName },
     #[error("an animation painted by the frame cannot take its value")]
     Paint(#[source] AnimationError),
+    #[error(
+        "namespace {0} is grafted inside a layer applied by the scene as commands, such as an \
+         effect layer"
+    )]
+    GraftInLayer(NamespaceId),
+    #[error("namespace {0} is grafted at more than one node of the composition")]
+    GraftedTwice(NamespaceId),
 }
 
 /// A mistake in the composed tree of nodes, or in the size proposed for the root node, that makes the layout of the

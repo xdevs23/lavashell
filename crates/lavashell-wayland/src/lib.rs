@@ -23,7 +23,7 @@ pub use app::output_layers::MonitorInfo;
 pub use app::session_lock::SessionLock;
 pub use app::{
     App, FrameReport, FrameStage, HostKey, KeyboardFocus, PresentationFlags, Submission,
-    ViewActions,
+    SurfaceStart, ViewActions,
 };
 pub use clipboard::{
     Clipboard, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId,

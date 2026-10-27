@@ -105,7 +105,7 @@ impl View {
         match self.styled_appearance(node.id, state, styles) {
             Ok(appearance) => Some(appearance),
             Err(error) => {
-                self.fail_paint(error);
+                self.fail_paint(super::FrameError::Paint(error));
                 None
             }
         }

@@ -100,7 +100,7 @@ fn a_graft_is_not_written() {
     let mut tree = SceneTree::default();
     let graft = Change::SetContent {
         id: SceneNodeId(1),
-        content: Content::Graft(tree.create_namespace()),
+        content: Content::Graft(tree.create_namespace().id()),
     };
     let update = SceneUpdate {
         changes: vec![graft],

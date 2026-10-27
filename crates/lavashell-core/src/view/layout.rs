@@ -81,6 +81,14 @@ pub struct Proposal {
 }
 
 impl Proposal {
+    /// The bounds of `constraints`, with an unbounded axis proposed as `None`.
+    fn of(constraints: Constraints) -> Self {
+        Self {
+            width: constraints.width.bound(),
+            height: constraints.height.bound(),
+        }
+    }
+
     fn constraints(self) -> Result<Constraints, NumberError> {
         let span = |length: Option<Dp>| match length {
             Some(length) if length != Dp::INFINITY => {
@@ -344,6 +352,7 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
                     ..
                 } => self.measure_field(content, placeholder, style, c.width),
                 NodeKind::Spacer(s) | NodeKind::Canvas { size: s, .. } => *s,
+                NodeKind::Graft { size, .. } => size(Proposal::of(c)),
                 NodeKind::Icon { size, .. } => {
                     let length = match size {
                         IconSize::Line(style) => self.text.line_height(style),

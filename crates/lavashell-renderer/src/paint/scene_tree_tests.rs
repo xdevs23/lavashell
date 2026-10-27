@@ -237,7 +237,7 @@ fn a_faded_group_around_glass_starts_from_the_pixels_below_it() -> Result<(), Te
 fn a_graft_paints_the_namespace_that_it_shows_in_place() -> Result<(), TestError> {
     let place = Affine::rotate(0.2).translated(Point::new(30.dp(), 20.dp()));
     let mut grafted = SceneTree::default();
-    let guest = grafted.create_namespace();
+    let guest = grafted.create_namespace().id();
     grafted.apply(
         guest,
         SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),
@@ -339,7 +339,7 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
     )?;
     painter.effect_quality(planned.clone());
     let mut scene = SceneTree::default();
-    let guest = scene.create_namespace();
+    let guest = scene.create_namespace().id();
     scene.apply(
         guest,
         SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),

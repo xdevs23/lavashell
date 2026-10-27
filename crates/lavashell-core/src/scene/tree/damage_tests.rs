@@ -186,7 +186,7 @@ fn reordering_siblings_damages_only_the_moved_node() -> TestResult {
 #[test]
 fn removing_a_graft_damages_what_the_grafted_namespace_showed() -> TestResult {
     let mut tree = presented([])?;
-    let grafted = tree.tree.create_namespace();
+    let grafted = tree.tree.create_namespace().id();
     let rect = Rect::new(0.dp(), 0.dp(), 20.dp(), 20.dp());
     tree.tree.apply(
         grafted,
@@ -197,6 +197,25 @@ fn removing_a_graft_damages_what_the_grafted_namespace_showed() -> TestResult {
     assert_eq!(tree.damage(Duration::ZERO), Some(shown));
     tree.apply([Change::Remove { id: SceneNodeId(1) }])?;
     assert_eq!(tree.damage(Duration::ZERO), Some(shown));
+    Ok(())
+}
+
+#[test]
+fn removing_a_grafted_namespace_damages_what_it_showed() -> TestResult {
+    let mut tree = presented([])?;
+    let created = tree.tree.create_namespace();
+    let grafted = created.id();
+    let rect = Rect::new(0.dp(), 0.dp(), 20.dp(), 20.dp());
+    tree.tree.apply(
+        grafted,
+        SceneUpdate::from_iter([insert(1, None, 0, fill(rect))]),
+    )?;
+    tree.apply([insert(1, None, 0, Node::Leaf(Content::Graft(grafted)))])?;
+    let shown = Rect::new(0.dp(), 0.dp(), 21.dp(), 21.dp());
+    assert_eq!(tree.damage(Duration::ZERO), Some(shown));
+    tree.tree.remove_namespace(created);
+    assert_eq!(tree.damage(Duration::ZERO), Some(shown));
+    assert_eq!(tree.damage(Duration::ZERO), None);
     Ok(())
 }
 
@@ -227,7 +246,7 @@ fn a_group_or_a_graft_in_place_of_a_leaf_damages_what_the_leaf_showed() -> TestR
     ])?;
     assert_eq!(tree.damage(Duration::ZERO), Some(shown));
     let mut tree = presented([insert(1, None, 0, fill(rect))])?;
-    let empty = tree.tree.create_namespace();
+    let empty = tree.tree.create_namespace().id();
     tree.apply([Change::SetContent {
         id: SceneNodeId(1),
         content: Content::Graft(empty),

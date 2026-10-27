@@ -346,7 +346,7 @@ impl View {
         let (animation, last) = match refreshed {
             Ok((animation, last)) => (animation.clone(), last),
             Err(error) => {
-                self.fail_paint(error);
+                self.fail_paint(super::FrameError::Paint(error));
                 return None;
             }
         };

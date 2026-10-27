@@ -138,7 +138,7 @@ impl SceneTree {
         check_index(index, target.children(parent)?.len())?;
         if let Node::Leaf(Content::Graft(grafted)) = &node {
             self.check_graft(key, *grafted)?;
-            self.namespace_mut(*grafted)?.grafted_at = Some(key);
+            self.mark_grafted(*grafted, key);
         }
         let kind = match node {
             Node::Group(group) => {
@@ -242,7 +242,7 @@ impl SceneTree {
             self.ungraft(key, shown);
         }
         if let Content::Graft(target) = content {
-            self.namespace_mut(target)?.grafted_at = Some(key);
+            self.mark_grafted(target, key);
         }
         if let Some(entry) = self.namespace_mut(namespace)?.nodes.get_mut(&id) {
             entry.kind = StoredKind::Leaf(content);
@@ -284,8 +284,16 @@ impl SceneTree {
         self.placements
     }
 
+    /// Checks that `leaf` can graft `target`. A namespace that some tree created and that this tree does not have,
+    /// such as one removed since, shows nothing at its graft and can be grafted anywhere.
     fn check_graft(&self, leaf: NodeKey, target: NamespaceId) -> Result<(), ApplyError> {
-        let grafted_at = self.namespace(target)?.grafted_at;
+        let Some(grafted) = self.namespaces.get(&target) else {
+            if target.was_created() {
+                return Ok(());
+            }
+            return Err(ApplyError::UnknownNamespace(target));
+        };
+        let grafted_at = grafted.grafted_at;
         if grafted_at.is_some_and(|at| at != leaf) {
             return Err(ApplyError::AlreadyGrafted(target));
         }
@@ -302,7 +310,13 @@ impl SceneTree {
         Ok(())
     }
 
-    fn ungraft(&mut self, leaf: NodeKey, target: NamespaceId) {
+    fn mark_grafted(&mut self, target: NamespaceId, leaf: NodeKey) {
+        if let Some(grafted) = self.namespaces.get_mut(&target) {
+            grafted.grafted_at = Some(leaf);
+        }
+    }
+
+    pub(super) fn ungraft(&mut self, leaf: NodeKey, target: NamespaceId) {
         let grafted = self.namespaces.get_mut(&target);
         if let Some(grafted) = grafted.filter(|grafted| grafted.grafted_at == Some(leaf)) {
             grafted.grafted_at = None;

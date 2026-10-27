@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::SurfaceSpec;
+use super::namespaces::SurfaceScene;
 use super::{
     App, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts, GlobalList,
     Instant, LoopHandle, OutputState, Painter, PainterSetup, Platform, QueueHandle, RegistryState,
@@ -149,7 +150,8 @@ impl Platform {
 
     fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
         match request {
-            Request::Window(options, mut view) => {
+            Request::Window(options, start) => {
+                let (mut view, scene) = SurfaceScene::start(start);
                 let unbounded = Proposal {
                     width: None,
                     height: None,
@@ -162,6 +164,7 @@ impl Platform {
                 let whole = window_extent(size).filter(|&(width, height)| width > 0 && height > 0);
                 let spec = SurfaceSpec {
                     view,
+                    scene,
                     size: whole.ok_or(Error::WindowSize(size))?,
                     transparent: options.transparent || options.shape.is_some(),
                     output: options.output,
@@ -173,17 +176,15 @@ impl Platform {
                 };
                 self.create_surface(spec, |platform, wl, _| platform.window_role(wl, &options))
             }
-            Request::Layer(options, mut view) => {
+            Request::Layer(options, start) => {
+                let (mut view, scene) = SurfaceScene::start(start);
                 let context = self.layer_context(&options, &mut view)?;
-                let spec = SurfaceSpec::layer(&options, view, context)?;
+                let spec = SurfaceSpec::layer(&options, view, scene, context)?;
                 self.create_surface(spec, |platform, wl, id| {
                     platform.layer_role(wl, None, &options, context, id)
                 })
             }
-            Request::Lock(output, view) => self
-                .create_surface(SurfaceSpec::lock(view), |platform, wl, id| {
-                    platform.lock_role(wl, &output, id)
-                }),
+            Request::Lock(output) => self.add_lock_output(&output),
         }
     }
 

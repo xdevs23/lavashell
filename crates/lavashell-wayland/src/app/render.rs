@@ -89,7 +89,7 @@ impl Platform {
             || actions.iter().any(|action| action.surface == surface.id)
         {
             Wanted::View
-        } else if surface.moving(self.start.elapsed()) {
+        } else if surface.moving(self.start.elapsed()) || surface.producers_need_frame() {
             Wanted::Scene
         } else {
             Wanted::Idle
@@ -191,6 +191,7 @@ impl Platform {
                 surface.show(&mut frame)?;
             }
         }
+        surface.produce(start.timing)?;
         // The composed view can change the size of a layer that fits its content, or the layer layout can
         // change its margins. The layer-shell requests for that are queued now, so that the compositor
         // applies them with the buffer of this frame.
@@ -390,7 +391,7 @@ impl Platform {
 #[derive(Clone, Copy, PartialEq)]
 enum Wanted {
     View,
-    /// The view is unchanged, but motions in the scene tree of the surface still play.
+    /// The view is unchanged, but motions in the scene tree of the surface still play or its producers have work.
     Scene,
     Idle,
 }

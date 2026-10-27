@@ -32,6 +32,7 @@ pub struct FrameClock {
     render_cost: Duration,
     presentation_delay: Duration,
     last_sample: Duration,
+    last_now: Duration,
     sequence: u64,
 }
 
@@ -65,6 +66,7 @@ impl FrameClock {
         let target = self.predict(now);
         let delta = target.saturating_sub(self.last_sample);
         self.last_sample = target;
+        self.last_now = now;
         self.sequence += 1;
         FrameTime {
             now,
@@ -73,6 +75,24 @@ impl FrameClock {
             refresh: self.refresh,
             sequence: self.sequence,
         }
+    }
+
+    /// The time at which the next frame starts. The next frame becomes visible one refresh interval after the last
+    /// sample and starts the render cost before that, or the presentation delay before it while no presentation is
+    /// recorded. Without a refresh interval, the next frame starts when the last sample becomes visible. The time is
+    /// never earlier than the start of the last sample.
+    #[must_use]
+    pub fn next_frame_start(&self) -> Duration {
+        let start = match (self.last_presented, self.refresh) {
+            (Some(_), Some(interval)) => {
+                (self.last_sample + interval).saturating_sub(self.render_cost)
+            }
+            (None, Some(interval)) => {
+                (self.last_sample + interval).saturating_sub(self.presentation_delay)
+            }
+            (_, None) => self.last_sample,
+        };
+        start.max(self.last_now)
     }
 
     /// The time at which a frame started at `now` becomes visible. With a fixed refresh interval and a recorded
@@ -98,6 +118,7 @@ impl FrameClock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_error::{Required, TestResult};
 
     #[test]
     fn fixed_refresh_samples_regular_deadlines_despite_callback_jitter() {
@@ -182,6 +203,43 @@ mod tests {
         let frame = clock.sample(now);
         assert_eq!(frame.presentation, predicted);
         assert_eq!(frame.sequence, 1);
+    }
+
+    #[test]
+    fn the_next_frame_starts_its_render_cost_before_the_refresh_after_the_last_sample() -> TestResult
+    {
+        let mut clock = FrameClock::default();
+        let period = Duration::from_nanos(8_333_333);
+        let cost = Duration::from_millis(3);
+        clock.presented(period, Some(period));
+        clock.render_cost(cost);
+        let frame = clock.sample(period + Duration::from_millis(1));
+        let start = clock.next_frame_start();
+        let refresh = frame.presentation + period;
+        assert_eq!(Some(start), refresh.checked_sub(cost));
+        let just_before = start
+            .checked_sub(Duration::from_nanos(1))
+            .required("a start after the clock origin")?;
+        assert_eq!(clock.predict(just_before), refresh);
+        Ok(())
+    }
+
+    #[test]
+    fn without_a_presentation_the_next_frame_starts_the_delay_before_the_next_refresh() {
+        let mut clock = FrameClock::default();
+        clock.output_refresh(Some(Duration::from_millis(10)));
+        clock.presentation_delay(Duration::from_millis(4));
+        let frame = clock.sample(Duration::from_secs(1));
+        assert_eq!(frame.presentation, Duration::from_millis(1004));
+        assert_eq!(clock.next_frame_start(), Duration::from_millis(1010));
+    }
+
+    #[test]
+    fn without_a_refresh_interval_the_next_frame_starts_when_the_last_one_becomes_visible() {
+        let mut clock = FrameClock::default();
+        clock.presentation_delay(Duration::from_millis(11));
+        let frame = clock.sample(Duration::from_secs(1));
+        assert_eq!(clock.next_frame_start(), frame.presentation);
     }
 
     #[test]

@@ -163,7 +163,7 @@ fn changes_that_would_break_the_structure_fail_and_leave_the_tree_as_it_was() ->
 #[test]
 fn a_parent_in_another_namespace_fails() -> TestResult {
     let mut tree = SceneTree::default();
-    let other = tree.create_namespace();
+    let other = tree.create_namespace().id();
     let group = insert(7, None, 0, Node::Group(Group::default()));
     tree.apply(other, SceneUpdate::from_iter([group]))?;
     let error = tree.apply(
@@ -177,7 +177,7 @@ fn a_parent_in_another_namespace_fails() -> TestResult {
 #[test]
 fn a_graft_paints_its_namespace_in_place_once_and_never_inside_itself() -> TestResult {
     let mut tree = SceneTree::default();
-    let grafted = tree.create_namespace();
+    let grafted = tree.create_namespace().id();
     tree.apply(
         grafted,
         SceneUpdate::from_iter([insert(1, None, 0, leaf())]),
@@ -192,7 +192,7 @@ fn a_graft_paints_its_namespace_in_place_once_and_never_inside_itself() -> TestR
     assert_eq!(error, Err(ApplyError::GraftCycle(SceneTree::ROOT)));
     // `inner` is grafted below `grafted`, so a graft of `grafted` inside `inner` fails. It fails first because node 9
     // already grafts `grafted`, and after node 9 is removed because the graft would paint `grafted` inside itself.
-    let inner = tree.create_namespace();
+    let inner = tree.create_namespace().id();
     let graft_inner = insert(3, None, 0, Node::Leaf(Content::Graft(inner)));
     tree.apply(grafted, SceneUpdate::from_iter([graft_inner]))?;
     let graft_outer =
@@ -258,4 +258,78 @@ fn every_packet_gets_a_generation_larger_than_those_made_before_it() {
     let first = packet();
     let second = packet();
     assert!(second.generation() > first.generation());
+}
+
+#[test]
+fn a_removed_namespace_shows_nothing_releases_its_grafts_and_keeps_its_id() -> TestResult {
+    let mut tree = SceneTree::default();
+    let created = tree.create_namespace();
+    let grafted = created.id();
+    let inner = tree.create_namespace().id();
+    let graft = |id, namespace| insert(id, None, 0, Node::Leaf(Content::Graft(namespace)));
+    let changes = [
+        insert(1, None, 0, leaf()),
+        insert(2, None, 1, Node::Leaf(Content::Graft(inner))),
+    ];
+    tree.apply(grafted, SceneUpdate::from_iter(changes))?;
+    tree.show(SceneUpdate::from_iter([
+        graft(9, grafted),
+        insert(10, None, 1, leaf()),
+    ]))?;
+    assert_eq!(seen(&tree), [G(9), L(1), G(2), Exit, Exit, L(10)]);
+    tree.remove_namespace(created);
+    assert_eq!(seen(&tree), [L(10)]);
+    let error = tree.apply(
+        grafted,
+        SceneUpdate::from_iter([insert(1, None, 0, leaf())]),
+    );
+    assert_eq!(error, Err(ApplyError::UnknownNamespace(grafted)));
+    assert!(![grafted, inner].contains(&tree.create_namespace().id()));
+    tree.show(SceneUpdate::from_iter([graft(11, inner)]))?;
+    tree.show(SceneUpdate::from_iter([Change::Remove {
+        id: SceneNodeId(9),
+    }]))?;
+    assert_eq!(seen(&tree), [G(11), Exit, L(10)]);
+    Ok(())
+}
+
+#[test]
+fn a_reset_root_keeps_the_created_namespaces_for_a_new_graft_under_a_new_tree_id() -> TestResult {
+    let mut tree = SceneTree::default();
+    let grafted = tree.create_namespace().id();
+    tree.apply(
+        grafted,
+        SceneUpdate::from_iter([insert(1, None, 0, leaf())]),
+    )?;
+    let graft = |id| insert(id, None, 0, Node::Leaf(Content::Graft(grafted)));
+    tree.show(SceneUpdate::from_iter([
+        graft(9),
+        insert(10, None, 1, leaf()),
+    ]))?;
+    let before = tree.id();
+    tree.reset_root();
+    assert_eq!(seen(&tree), []);
+    assert_ne!(tree.id(), before);
+    tree.show(SceneUpdate::from_iter([graft(11)]))?;
+    assert_eq!(seen(&tree), [G(11), L(1), Exit]);
+    Ok(())
+}
+
+#[test]
+fn a_removed_namespace_grafted_again_shows_nothing_and_an_unknown_id_fails() -> TestResult {
+    let mut tree = SceneTree::default();
+    let created = tree.create_namespace();
+    let removed = created.id();
+    tree.apply(
+        removed,
+        SceneUpdate::from_iter([insert(1, None, 0, leaf())]),
+    )?;
+    tree.remove_namespace(created);
+    let graft = |id, namespace| insert(id, None, 0, Node::Leaf(Content::Graft(namespace)));
+    tree.show(SceneUpdate::from_iter([graft(9, removed)]))?;
+    assert_eq!(seen(&tree), []);
+    let never_created = NamespaceId(u64::MAX);
+    let error = tree.show(SceneUpdate::from_iter([graft(10, never_created)]));
+    assert_eq!(error, Err(ApplyError::UnknownNamespace(never_created)));
+    Ok(())
 }

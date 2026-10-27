@@ -135,7 +135,10 @@ impl View {
             || suppress_passive && !interactive
             || matches!(
                 node.kind,
-                NodeKind::Spacer(_) | NodeKind::Icon { .. } | NodeKind::Canvas { .. }
+                NodeKind::Spacer(_)
+                    | NodeKind::Icon { .. }
+                    | NodeKind::Canvas { .. }
+                    | NodeKind::Graft { .. }
             ) && semantics == &Semantics::default()
                 && !node.exports_state()
                 && actions.is_empty()

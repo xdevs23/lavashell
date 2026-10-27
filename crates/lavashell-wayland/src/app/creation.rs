@@ -2,16 +2,17 @@
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{
     DamageTracker, Density, FrameClock, HdrMetadata, OutputRequest, Platform, PresentationTracker,
-    Role, SceneTree, Surface, View, lifecycle::Lifecycle, shape, wl_surface,
+    Role, Surface, View, lifecycle::Lifecycle, namespaces, shape, wl_surface,
 };
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::SurfaceAlpha;
 use std::sync::Arc;
 
-/// The view and the settings of a new native surface, apart from its role.
+/// The view, the scene and the settings of a new native surface, apart from its role.
 pub(super) struct SurfaceSpec {
     pub view: View,
+    pub scene: namespaces::SurfaceScene,
     pub size: (u32, u32),
     pub transparent: bool,
     pub output: OutputRequest,
@@ -62,6 +63,7 @@ impl Platform {
         }
         let role = role(self, &wl, id)?;
         let supplied_facts = self.view_configuration.apply(&spec.view, self.start);
+        let namespaces::SurfaceScene { tree, producers } = spec.scene;
         let accessibility = crate::accessibility::Bridge::new(
             id,
             spec.accessible_name,
@@ -72,7 +74,8 @@ impl Platform {
             accessibility: Some(accessibility),
             scene_generation: 0,
             target: Some(target),
-            tree: SceneTree::default(),
+            tree,
+            producers,
             damage: DamageTracker::default(),
             lifecycle: Lifecycle::Waiting(role),
             wl,
