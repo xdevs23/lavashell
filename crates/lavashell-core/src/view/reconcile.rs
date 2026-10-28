@@ -1,25 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::frame_error::{LayoutError, NodeName};
-use super::graph::Graph;
+use super::failure::{Failed, Repaired};
+use super::frame_error::ComponentError;
 use super::laid_out::{LaidOutTree, NodeLocations};
-use super::parents::Parents;
 use super::transition::Departure;
 use super::{BTreeSet, Node, NodeId, View};
-use crate::animation::AnimationError;
 use std::cell::OnceCell;
 
+/// A node whose children paint, with the index of the present node inside which the node paints.
+struct PaintedIn {
+    parent: NodeId,
+    inside: usize,
+}
+
 impl View {
-    /// Replaces the composed nodes with `nodes` and resets the layout. Starts the exits of the removed nodes and drops
-    /// the state of the nodes that no longer paint. Fails without a change when two nodes have the same id or when
-    /// `nodes` cannot be laid out. Fails after the replacement when the value or the velocity of an exit animation of a
-    /// removed node is not finite.
-    pub(super) fn reconcile(&mut self, nodes: Vec<Node>) -> Result<(), LayoutError> {
-        let mut present = BTreeSet::new();
-        if let Some(repeated) = nodes.iter().find(|node| !present.insert(node.id)) {
-            return Err(LayoutError::DuplicateKey(NodeName::of(repeated)));
-        }
-        let parents = Parents::new(&nodes);
-        let graph = Graph::new(&nodes, &parents)?;
+    /// Replaces the composed nodes with `nodes`. A composition fails, and loses its contents, where the tree cannot be
+    /// laid out or where a node removed by the composition cannot start its exit.
+    pub(super) fn replace_tree(&mut self, nodes: Vec<Node>) {
+        let repaired = self.repaired(nodes, BTreeSet::new());
+        let failed_exits = self.reconcile(repaired);
+        let _lost_nodes = self.fail(failed_exits);
+    }
+
+    /// Replaces the composed nodes with the nodes of `tree` and resets the layout. Starts the exits of the removed
+    /// nodes, apart from the nodes dropped with the contents of failed compositions, and drops the state of the nodes
+    /// that no longer paint. Returns a failure for each removed node whose exit cannot start.
+    pub(super) fn reconcile(&mut self, tree: Repaired) -> Vec<Failed> {
+        let Repaired {
+            nodes,
+            parents,
+            graph,
+            dropped,
+        } = tree;
+        let present: BTreeSet<_> = nodes.iter().map(|node| node.id).collect();
         let previous = LaidOutTree::replaced(self, nodes, parents);
         self.recover_focus(&previous);
         self.graph = graph;
@@ -32,54 +44,70 @@ impl View {
         let mut gone: BTreeSet<_> = (previous.ids())
             .chain(leaving.iter().flat_map(LaidOutTree::ids))
             .collect();
-        let painted = self
-            .start_exits(&present, &previous, &leaving)
-            .map_err(LayoutError::Exit)?;
+        let (painted, failed_exits) = self.start_exits(&present, &dropped, &previous, &leaving);
         gone.retain(|id| !painted.contains(id));
         self.forget(&gone);
         self.retire_exits();
-        Ok(())
+        failed_exits
     }
 
     /// Puts the leaving nodes that are in `present` back into the tree. Starts the exit of every other node with an
-    /// exit transition that was painted among the children of a node that paints now. The departure of such a node
-    /// copies its subtree from the tree where the node was laid out last: `previous`, a tree in `leaving` from before
-    /// this composition, or the tree of a node that came back. Returns the ids of the nodes that paint.
+    /// exit transition that was painted among the children of a node that paints now, unless the node is in
+    /// `dropped`. The departure of such a node copies its subtree from the tree where the node was laid out last:
+    /// `previous`, a tree in `leaving` from before this composition, or the tree of a node that came back. Returns the
+    /// ids of the nodes that paint, and a failure inside the present node among whose children each exit that cannot
+    /// start was painted.
     fn start_exits(
         &mut self,
         present: &BTreeSet<NodeId>,
+        dropped: &BTreeSet<NodeId>,
         previous: &LaidOutTree,
         leaving: &[LaidOutTree],
-    ) -> Result<BTreeSet<NodeId>, AnimationError> {
+    ) -> (BTreeSet<NodeId>, Vec<Failed>) {
         let returned: Vec<_> = (self.transitions.return_to_tree(present).into_iter())
             .map(Departure::into_tree)
             .collect();
         let locations = OnceCell::new();
-        let mut parents: Vec<NodeId> = present.iter().copied().collect();
+        let mut parents: Vec<_> = (self.nodes.iter().enumerate())
+            .map(|(inside, node)| PaintedIn {
+                parent: node.id,
+                inside,
+            })
+            .collect();
         let mut painted = present.clone();
-        while let Some(parent) = parents.pop() {
+        let mut failed = Vec::new();
+        while let Some(PaintedIn { parent, inside }) = parents.pop() {
             for &id in self.sibling_orders.children(parent) {
                 if painted.contains(&id) {
                     continue;
                 }
                 let trees = || std::iter::once(previous).chain(leaving).chain(&returned);
-                if self.transitions.exits_on_removal(id)
+                if !dropped.contains(&id)
+                    && self.transitions.exits_on_removal(id)
                     && let Some((tree, offset)) = locations
                         .get_or_init(|| NodeLocations::new(trees()))
                         .subtree(id)
                 {
                     let mut departure = Departure::new(tree, offset);
                     departure.detach(present);
-                    self.transitions.leave(id, departure)?;
+                    if let Err(error) = self.transitions.leave(id, departure) {
+                        failed.push(Failed {
+                            inside,
+                            cause: ComponentError::Exit(error),
+                        });
+                    }
                 } else if let Some(departure) = self.transitions.departure(id) {
                     departure.detach(present);
                 }
-                let inside = self.painted_inside(id);
-                parents.extend(&inside);
-                painted.extend(inside);
+                let painted_inside = self.painted_inside(id);
+                parents.extend(painted_inside.iter().map(|&node| PaintedIn {
+                    parent: node,
+                    inside,
+                }));
+                painted.extend(painted_inside);
             }
         }
-        Ok(painted)
+        (painted, failed)
     }
 
     /// The ids of the nodes that paint inside the leaving node `root`: the nodes in its departure, and the nodes in the

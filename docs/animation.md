@@ -110,7 +110,10 @@ timer.repeat(Duration::from_millis(500), Duration::from_millis(250));
 ## Embedded hosts
 
 ```rust
-view.show_frame_at(&mut tree, Viewport::new(size, density), measurer, frame_time)?;
+let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), measurer, frame_time)?;
+for failure in failures {
+    log::error!("{}", lavashell::core::error::message_chain(failure));
+}
 // Paint `tree.at(frame_time.presentation)`, then:
 view.record_presentation(shown_at);
 ```

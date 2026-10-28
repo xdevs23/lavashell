@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_core::view::{CompositionError, LayoutError};
+use lavashell_core::view::{ComponentError, CompositionError};
+use lavashell_test_platform::failure_causes;
 
 fn collection(view: &View) -> Result<NodeId, TestError> {
     view.accessibility()
@@ -219,7 +220,7 @@ fn measured_collection_realizes_offscreen_rows_without_building_the_history()
 }
 
 #[test]
-fn different_holder_types_cannot_disguise_duplicate_data_identity() {
+fn different_holder_types_cannot_disguise_duplicate_data_identity() -> Result<(), TestError> {
     let list = Recycler::<usize>::new();
     let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
         list.compose(
@@ -238,9 +239,10 @@ fn different_holder_types_cannot_disguise_duplicate_data_identity() {
     });
     let viewport = Viewport::new(Size::new(300.dp(), 200.dp()), Density::ONE);
     assert_eq!(
-        render(&mut view, viewport, &mut Metrics),
-        Err(FrameError::Layout(LayoutError::Composition(
+        failure_causes(render(&mut view, viewport, &mut Metrics))?,
+        [ComponentError::Composition(
             CompositionError::DuplicateItemKey
-        )))
+        )]
     );
+    Ok(())
 }

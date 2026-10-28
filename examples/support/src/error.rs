@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::core::scene::tree::ApplyError;
-use lavashell::core::view::{FrameError, LayoutError};
+use lavashell::core::view::{ComponentFailure, FrameError};
 use lavashell::prelude::{NumberError, Role};
 use lavashell::renderer::Error as RendererError;
 use std::{num::ParseFloatError, path::PathBuf, time::TryFromFloatSecsError};
@@ -38,8 +38,10 @@ pub enum Error {
     },
     #[error("cannot show the frame of the view")]
     Frame(#[source] FrameError),
+    #[error("a component of the view failed in a frame")]
+    ComponentsFailed(Vec<ComponentFailure>),
     #[error("cannot measure the content of the view")]
-    Measure(#[source] LayoutError),
+    Measure(#[source] NumberError),
     #[error("nothing is left that could move the view on")]
     NothingMoves,
     #[error("the view asks for another frame after a frame that changed nothing")]

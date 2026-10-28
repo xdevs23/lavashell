@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, FrameInterval, fonts};
+use crate::{Error, FrameInterval, fonts, report_failures};
 use lavashell::prelude::*;
 use std::{path::Path, time::Duration};
 
@@ -22,7 +22,7 @@ impl Capture {
     /// The size of the content of `view`, measured with a proposal that leaves both the width and the height open.
     ///
     /// # Errors
-    /// Returns an error when the content of the view cannot be laid out.
+    /// Returns an error when the view cannot be measured within that proposal.
     pub fn preferred_size(&mut self, view: &mut View) -> Result<Size, Error> {
         let unbounded = Proposal {
             width: None,
@@ -31,7 +31,8 @@ impl Capture {
         (view.size_that_fits(unbounded, &mut self.painter)).map_err(Error::Measure)
     }
 
-    /// Paints a frame of `view` in `viewport` into the PNG file at `path`.
+    /// Paints a frame of `view` in `viewport` into the PNG file at `path`, and reports each component that failed in
+    /// that frame.
     ///
     /// # Errors
     /// Returns an error when the frame cannot be shown, rendered or written.
@@ -42,7 +43,9 @@ impl Capture {
         path: impl AsRef<Path>,
     ) -> Result<(), Error> {
         let mut tree = SceneTree::default();
-        (view.show_frame(&mut tree, viewport, &mut self.painter)).map_err(Error::Frame)?;
+        (view.show_frame(&mut tree, viewport, &mut self.painter))
+            .map(report_failures)
+            .map_err(Error::Frame)?;
         self.paint(tree.at(view.motion().now()), viewport, path)
     }
 
@@ -143,9 +146,9 @@ impl OffscreenView {
         self.show(update)
     }
 
-    /// Frames the view at the time of the last frame and returns the changes to the scene. After a failed frame, the
-    /// next update from the view contains the whole scene. The tree is emptied here so that this whole scene
-    /// replaces the old one.
+    /// Frames the view at the time of the last frame, reports each component that failed in it and returns the
+    /// changes to the scene. After a failed frame, the next update from the view contains the whole scene. The tree is
+    /// emptied here so that this whole scene replaces the old one.
     fn frame_update(&mut self) -> Result<SceneUpdate, Error> {
         let timing = FrameTime {
             now: self.time,
@@ -153,11 +156,16 @@ impl OffscreenView {
             ..FrameTime::default()
         };
         let painter = &mut self.capture.painter;
-        let update = (self.view).frame_at(self.viewport, painter, timing);
-        if update.is_err() {
-            self.tree = SceneTree::default();
+        match (self.view).frame_at(self.viewport, painter, timing) {
+            Ok(frame) => {
+                report_failures(frame.failures);
+                Ok(frame.update)
+            }
+            Err(error) => {
+                self.tree = SceneTree::default();
+                Err(Error::Frame(error))
+            }
         }
-        update.map_err(Error::Frame)
     }
 
     fn show(&mut self, update: SceneUpdate) -> Result<(), Error> {

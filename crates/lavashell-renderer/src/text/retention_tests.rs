@@ -5,6 +5,7 @@ use crate::test_scenes::{commands, paint, paint_damage};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
+use lavashell_test_platform::WithoutFailures;
 
 fn bounds_of(view: &View, tag: &'static str) -> Result<Rect, TestError> {
     view.bounds_of(tag).ok_or(TestError::Missing(tag))
@@ -70,14 +71,14 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
     painter.set_text_rendering(unhinted, target);
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     let first = [
         snapshot(&view, "root text")?,
         snapshot(&view, "component text")?,
     ];
     let compositions = view.stats().root_compositions;
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     assert!(!view.needs_frame());
     assert!(view.stats().reused_components > 0);
@@ -86,7 +87,7 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
         view.needs_frame(),
         "renderer policy did not notify the existing Core scopes"
     );
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     let other = [
         snapshot(&view, "root text")?,
@@ -106,7 +107,7 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
     assert!(!view.needs_frame());
     painter.set_text_rendering(unhinted, target);
     assert!(view.needs_frame());
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     assert_eq!(
         [
@@ -149,7 +150,7 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     let first_bounds = bounds_of(&view, "static")?;
     let painted_before = view.stats().painted_components;
@@ -162,7 +163,7 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
         target,
     );
     assert!(view.needs_frame());
-    view.show_frame(&mut tree, viewport, &mut painter)?;
+    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
     view.update_accessibility();
     assert_eq!(bounds_of(&view, "static")?, first_bounds);
     assert!(
@@ -218,7 +219,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    tree.show(view.frame(viewport, &mut painter)?)?;
+    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
     let first_commands = commands(&tree);
     for (index, surface) in surfaces.iter_mut().enumerate() {
         painter.effect_planner.surface = Some(SurfaceId(index as u64 + 1));
@@ -238,7 +239,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
         },
         target,
     );
-    tree.show(view.frame(viewport, &mut painter)?)?;
+    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
     assert_eq!(
         commands(&tree),
         first_commands,

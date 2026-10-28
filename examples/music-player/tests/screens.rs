@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
 use lavashell_example_support::{
-    Capture, Error as ExampleError,
-    testing::{click, control, node, scene},
+    Capture,
+    testing::{click, control, node, scene, without_failures},
 };
 use lavashell_music_player::{
     Error,
@@ -21,8 +21,7 @@ fn show(
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    (view.show_frame(tree, viewport, &mut capture.painter))
-        .map_err(|error| Error::Example(ExampleError::Frame(error)))
+    without_failures(view.show_frame(tree, viewport, &mut capture.painter)).map_err(Error::Example)
 }
 
 #[test]

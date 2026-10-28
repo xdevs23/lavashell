@@ -8,7 +8,7 @@ use crate::scene::tree::{
     ApplyError, GroupValues, NamespaceId, NodeKey, PaintVisitor, PlacedLeaf, SceneTree, SceneUpdate,
 };
 use crate::scene::{Affine, DrawCommand};
-use crate::test_error::TestError;
+use crate::test_error::{TestError, WithoutFailures};
 use crate::view::{TextMeasurer, View};
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ pub(crate) fn advance_with(
     viewport: Viewport,
     text: &mut impl TextMeasurer,
 ) -> Result<(), TestError> {
-    scene.show(view.frame(viewport, text)?)?;
+    scene.show(view.frame(viewport, text).without_failures()?)?;
     Ok(())
 }
 
@@ -31,7 +31,8 @@ pub(crate) fn advance_with_timing(
     text: &mut impl TextMeasurer,
     timing: FrameTime,
 ) -> Result<(), TestError> {
-    scene.show(view.frame_at(viewport, text, timing)?)?;
+    let frame = view.frame_at(viewport, text, timing);
+    scene.show(frame.without_failures()?)?;
     Ok(())
 }
 

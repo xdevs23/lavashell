@@ -17,7 +17,10 @@ let window = NativeWindow::new(window_of_surface(env, &surface)?, timing);
 renderer.attach(window, SurfaceAlpha::Opaque)?;
 
 // In the frame callback of the host:
-view.show_frame_at(&mut tree, Viewport::new(size, density), renderer.painter(), frame)?;
+let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), renderer.painter(), frame)?;
+for failure in failures {
+    log::error!("{}", lavashell::core::error::message_chain(failure));
+}
 let result = renderer.render(tree.at(frame.presentation), density, skia::Color::BLACK)?;
 match result {
     FrameOutcome::Shown => view.record_presentation(frame.presentation),

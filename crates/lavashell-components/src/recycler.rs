@@ -215,8 +215,9 @@ impl<K: Clone + Eq + Hash + 'static> Recycler<K> {
     /// the item that replaces it. The semantics of the list contain the composed items and the
     /// item count of the whole list. A `RevealCollectionItem` action for a row that is not composed
     /// scrolls to that row, which is composed in the next frame.
-    /// `modifier` applies after the settings of the list node. The frame fails when the rows are
-    /// too many to count exactly or when two items in the window have the same key.
+    /// `modifier` applies after the settings of the list node. The component that composes the list
+    /// fails when the rows are too many to count exactly or when two items in the window have the
+    /// same key.
     pub fn compose(
         &self,
         ui: &mut Ui,

@@ -249,7 +249,7 @@ fn the_return_to_an_island_waits_for_one_pixel_of_the_view() -> Result<(), TestE
         let viewport = Viewport::new(SCREEN, density);
         let mut tree = SceneTree::default();
         let timing = FrameTime::default();
-        view.show_frame_at(&mut tree, viewport, &mut Metrics, timing)?;
+        (view.show_frame_at(&mut tree, viewport, &mut Metrics, timing)).without_failures()?;
         Ok(content_after.get())
     };
     assert_eq!(after(1.0)?, look::hide_time(300.dp(), 1.dp()));

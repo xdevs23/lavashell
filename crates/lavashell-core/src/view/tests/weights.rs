@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::units::NumberError;
 
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(400.0), Dp::new(400.0)), Density::ONE);
 
@@ -452,38 +451,6 @@ fn a_keyed_filling_child_has_the_minimum_length_on_the_scroll_axis() -> TestResu
     assert_eq!(view.tagged_bounds("filling")?.height, 10.dp());
     assert_eq!(view.tagged_bounds("fixed")?.y, 10.dp());
     Ok(())
-}
-
-#[test]
-fn a_negative_weight_fails_the_layout() {
-    let result = framed(|ui| {
-        ui.spacer(20.dp(), 10.dp(), Modifier::new().weight(-1.0));
-    });
-    assert!(matches!(
-        result,
-        Err(TestError::Frame(FrameError::Layout(LayoutError::Weight {
-            cause: NumberError::Negative,
-            ..
-        })))
-    ));
-}
-
-#[test]
-fn an_infinite_weight_fails_the_layout() {
-    let result = framed(|ui| {
-        ui.spacer(
-            20.dp(),
-            10.dp(),
-            Modifier::new().weight_up_to(f64::INFINITY),
-        );
-    });
-    assert!(matches!(
-        result,
-        Err(TestError::Frame(FrameError::Layout(LayoutError::Weight {
-            cause: NumberError::NotFinite,
-            ..
-        })))
-    ));
 }
 
 #[test]

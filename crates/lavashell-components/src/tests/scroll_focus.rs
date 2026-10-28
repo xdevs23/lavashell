@@ -90,7 +90,7 @@ fn animated_scroll_uses_presentation_time_and_recycling_remains_bounded() -> Res
     let size = Size::new(500.dp(), 400.dp());
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    view.show_frame_at(&mut tree, viewport, &mut Metrics, frame(0))?;
+    (view.show_frame_at(&mut tree, viewport, &mut Metrics, frame(0))).without_failures()?;
     view.input(InputEvent::Scroll {
         at: Point::new(20.dp(), 20.dp()),
         delta: Point::new(Dp::ZERO, 300.dp()),
@@ -98,7 +98,7 @@ fn animated_scroll_uses_presentation_time_and_recycling_remains_bounded() -> Res
     assert!(view.needs_frame());
     let mut previous = Dp::ZERO;
     for ms in [8, 16, 33, 80, 160, 400, 900] {
-        view.show_frame_at(&mut tree, viewport, &mut Metrics, frame(ms))?;
+        (view.show_frame_at(&mut tree, viewport, &mut Metrics, frame(ms))).without_failures()?;
         let offset = recycler.scroll.offset();
         assert!(offset >= previous && offset <= 300.dp());
         assert!(recycler.stats().holders <= 3 * 11);

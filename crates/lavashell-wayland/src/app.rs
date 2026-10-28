@@ -3,7 +3,7 @@ use crate::clipboard::{Clipboard, ClipboardState};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::FrameError;
+use lavashell_core::view::{Failures, FrameError};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, VulkanRenderer, WaylandTarget};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
@@ -182,17 +182,21 @@ impl Surface {
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to apply the next frame of the view to the scene tree. When the tree fails to apply an update, the
-    /// view empties the tree and sends the whole scene with its next frame. If the tree showed a scene before, that
-    /// failure is logged and the frame ends without an error. If the tree was empty, the failure ends the frame with an
-    /// error, as every other failure does.
+    /// Runs `frame` to apply the next frame of the view to the scene tree, and logs each component that failed in it
+    /// as an error. When the tree fails to apply an update, the view empties the tree and sends the whole scene with
+    /// the next frame of the view. If the tree showed a scene before, that failure is logged and the frame ends
+    /// without an error.
+    /// If the tree was empty, the failure ends the frame with an error.
     fn show(
         &mut self,
-        frame: impl FnOnce(&mut View, &mut SceneTree) -> Result<(), FrameError>,
+        frame: impl FnOnce(&mut View, &mut SceneTree) -> Result<Failures, FrameError>,
     ) -> Result<(), crate::Error> {
         let showed_nothing = self.tree.is_empty();
         match frame(&mut self.view, &mut self.tree) {
-            Ok(()) => Ok(()),
+            Ok(failures) => {
+                crate::failures::log_failures(failures);
+                Ok(())
+            }
             Err(FrameError::Apply(error)) if !showed_nothing => {
                 self.restart_tree(error);
                 Ok(())

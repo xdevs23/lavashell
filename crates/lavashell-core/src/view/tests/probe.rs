@@ -426,9 +426,7 @@ fn a_negative_proposed_length_fails_the_probe() {
     };
     assert!(matches!(
         probe(settings_row, negative),
-        Err(TestError::Layout(LayoutError::Proposal(
-            NumberError::Negative
-        )))
+        Err(TestError::Number(NumberError::Negative))
     ));
 }
 
@@ -440,9 +438,7 @@ fn a_proposed_length_that_is_not_a_number_fails_the_probe() {
     };
     assert!(matches!(
         probe(settings_row, not_a_number),
-        Err(TestError::Layout(LayoutError::Proposal(
-            NumberError::NotFinite
-        )))
+        Err(TestError::Number(NumberError::NotFinite))
     ));
 }
 
@@ -469,8 +465,8 @@ fn a_view_that_was_never_framed_is_composed_at_its_viewport() -> TestResult {
     );
     let mut plain = View::new(crate::platform::fixture::facts(), half_width);
     assert_eq!(
-        painted(view.frame(WINDOW, &mut Wrapping)?)?,
-        painted(plain.frame(WINDOW, &mut Wrapping)?)?
+        painted(view.frame(WINDOW, &mut Wrapping).without_failures()?)?,
+        painted(plain.frame(WINDOW, &mut Wrapping).without_failures()?)?
     );
     Ok(())
 }

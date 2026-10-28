@@ -2,6 +2,7 @@
 use crate::test_error::TestError;
 use crate::{Error, Fonts, Painter, decode_image, encoded_image, raster_png};
 use lavashell_core::prelude::*;
+use lavashell_test_platform::WithoutFailures;
 use skia_safe::{AlphaType, ColorSpace, ColorType, EncodedImageFormat, ImageInfo};
 use std::time::Duration;
 
@@ -37,10 +38,11 @@ fn scene(bytes: Vec<u8>) -> Result<Vec<DrawCommand>, TestError> {
         });
     });
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    crate::test_scenes::leaf_commands(view.frame(
+    let frame = view.frame(
         Viewport::new(Size::new(8.dp(), 8.dp()), Density::ONE),
         &mut painter,
-    )?)
+    );
+    crate::test_scenes::leaf_commands(frame.without_failures()?)
 }
 
 fn pixel(bytes: &[u8]) -> Result<[u8; 4], TestError> {

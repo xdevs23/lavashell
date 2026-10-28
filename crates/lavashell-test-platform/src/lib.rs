@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Fixed platform facts for the tests of the other crates, which run their views with these facts in place of the
-//! facts of a real platform.
+//! Two helpers for the tests of the other crates. The fixed platform facts let the tests run their views without a
+//! real platform. The frame checks turn a frame in which a component failed into a test failure.
 #![forbid(unsafe_code)]
+
+mod frames;
+
+pub use frames::{FrameFailure, WithoutFailures, failure_causes};
 
 use icu_locale_core::langid;
 use lavashell_core::geometry::Color;

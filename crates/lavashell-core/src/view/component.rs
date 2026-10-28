@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::frame_error::LayoutError;
+use super::parents::ROOT;
 use super::{BTreeMap, BTreeSet, Node, NodeId, Phase, View};
 use std::rc::Rc;
 
@@ -11,14 +11,15 @@ pub(super) enum Refresh {
 }
 
 impl View {
-    /// Composes again the components whose composition is dirty, and puts the nodes they build in place of their old
-    /// nodes.
-    pub(super) fn refresh_components(&mut self) -> Result<Refresh, LayoutError> {
+    /// Composes again the components whose composition is dirty and did not fail in this frame, and replaces the old
+    /// nodes of those components with the nodes they build.
+    pub(super) fn refresh_components(&mut self) -> Refresh {
         let mut replacements = BTreeMap::new();
         // `nodes` lists each ancestor before its descendants. Composing an ancestor again builds every component
         // inside it again. `covered` contains those descendants, which the loop skips.
         let mut covered = BTreeSet::new();
         let mut stale = BTreeSet::new();
+        let mut failures = Vec::new();
         for (index, node) in self.nodes.iter().enumerate() {
             if covered.contains(&index) {
                 continue;
@@ -26,13 +27,13 @@ impl View {
             let Some(component) = &node.component else {
                 continue;
             };
-            if !component.scope.dirty().contains(Phase::Composition) {
+            if !component.scope.dirty().contains(Phase::Composition)
+                || self.failures.failed_in_frame(node.id)
+            {
                 continue;
             }
-            let mut ui = component.build(node.id, self.handles());
-            if let Some(error) = ui.failure {
-                return Err(LayoutError::Composition(error));
-            }
+            let mut ui = component.build(node, self.handles());
+            failures.append(&mut ui.failures);
             let mut root = node.clone();
             root.take_contents(&mut ui.nodes[0]);
             ui.nodes[0] = root;
@@ -41,15 +42,17 @@ impl View {
             let _always_new_as_ids_are_unique = stale.insert(node.id);
             collect_descendants(&self.nodes, index, &mut covered);
         }
+        self.failures.extend(failures);
         if replacements.is_empty() {
-            return Ok(Refresh::Unchanged);
+            return Refresh::Unchanged;
         }
         let mut nodes = Vec::with_capacity(self.nodes.len());
-        append(&self.nodes, 0, &mut replacements, &mut nodes);
+        append(&self.nodes, ROOT, &mut replacements, &mut nodes);
+        self.drop_layout_retries(&stale);
         stale.extend(changed_readers(&nodes, &self.nodes));
         self.retained.remove(&stale);
-        self.reconcile(nodes)?;
-        Ok(Refresh::Recomposed)
+        self.replace_tree(nodes);
+        Refresh::Recomposed
     }
 }
 
@@ -84,7 +87,7 @@ pub(super) fn collect_descendants(nodes: &[Node], index: usize, result: &mut BTr
     }
 }
 
-fn append(
+pub(super) fn append(
     source: &[Node],
     index: usize,
     replacements: &mut BTreeMap<usize, Vec<Node>>,

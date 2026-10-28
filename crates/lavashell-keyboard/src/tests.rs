@@ -5,8 +5,9 @@ use icu_locale_core::subtags::language;
 use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::SceneTree;
-use lavashell_core::view::FrameError;
-use lavashell_test_platform::{DOUBLE_TAP, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL};
+use lavashell_test_platform::{
+    DOUBLE_TAP, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
+};
 use std::cell::{Cell, RefCell};
 use std::num::TryFromIntError;
 use std::rc::Rc;
@@ -15,8 +16,8 @@ use std::time::Duration;
 /// The errors with which a test of this crate fails before its assertions run.
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("a frame of the view cannot be made")]
-    Frame(#[from] FrameError),
+    #[error("a frame of the view failed")]
+    Failed(#[from] FrameFailure),
     #[error("an animation cannot take a value")]
     Animation(#[from] AnimationError),
     #[error("a layout of the test does not fit the keys")]
@@ -194,7 +195,7 @@ fn frame_at(view: &mut View, scene: &mut Scene, time: Duration) -> Result<(), Te
         ..FrameTime::default()
     };
     let viewport = Viewport::new(SCREEN, Density::ONE);
-    view.show_frame_at(&mut scene.tree, viewport, &mut Metrics, timing)?;
+    (view.show_frame_at(&mut scene.tree, viewport, &mut Metrics, timing)).without_failures()?;
     scene.now = time;
     Ok(())
 }

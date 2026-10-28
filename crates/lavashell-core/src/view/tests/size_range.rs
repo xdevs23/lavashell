@@ -91,20 +91,19 @@ fn a_maximum_below_the_minimum_of_a_size_range_wins() -> TestResult {
 }
 
 #[test]
-fn an_infinite_minimum_size_fails_the_layout() {
+fn an_infinite_minimum_size_fails_its_composition() -> TestResult {
     let compose = |ui: &mut Ui| {
         let modifier = Modifier::new().tag("sized").min_size(Dp::INFINITY, 0.dp());
         ui.spacer(10.dp(), 10.dp(), modifier);
     };
     let result = bounds(compose, Size::new(100.dp(), 100.dp()), "sized");
     assert!(matches!(
-        result,
-        Err(TestError::Frame(FrameError::Layout(
-            LayoutError::Modifier {
-                value: ModifierValue::MinimumSize,
-                cause: NumberError::NotFinite,
-                ..
-            }
-        )))
+        failure_causes(result)?.as_slice(),
+        [ComponentError::Layout(LayoutError::Modifier {
+            value: ModifierValue::MinimumSize,
+            cause: NumberError::NotFinite,
+            ..
+        })]
     ));
+    Ok(())
 }

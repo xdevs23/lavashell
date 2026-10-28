@@ -127,6 +127,12 @@ impl Scope {
             .dependencies
             .borrow_mut()
             .retain(|(p, _)| *p != phase);
+        self.clean(phase);
+    }
+
+    /// Clears the dirty flag of `phase` and leaves the dependencies in place. A later change to a value read before
+    /// marks `phase` dirty again.
+    pub(crate) fn clean(&self, phase: Phase) {
         self.0
             .dirty
             .set(Dirty(self.0.dirty.get().0 & !(1 << phase.index())));

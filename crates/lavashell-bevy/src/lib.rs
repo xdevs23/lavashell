@@ -15,6 +15,7 @@ pub use overlay_gpu::LavashellOverlayPlugin;
 pub use timings::{OverlayImageTrace, OverlayTiming};
 
 use bevy::{prelude::*, render::MainWorld, render::extract_component::ExtractComponent};
+use lavashell_core::error::message_chain;
 use lavashell_core::prelude::*;
 use lavashell_core::view::FrameError;
 use std::{
@@ -37,8 +38,9 @@ pub struct OverlayFrame {
 }
 
 impl OverlayFrame {
-    /// Shows a frame of `view` at the size of the overlay in dp and the density of the surface. After an error, the
-    /// tree is empty and the next frame shows the whole scene.
+    /// Shows a frame of `view` at the size of the overlay in dp and the density of the surface, and logs each
+    /// component that failed in it as an error. After an error, the tree is empty and the next frame shows the whole
+    /// scene.
     ///
     /// # Errors
     /// Fails as `View::show_frame_at` does.
@@ -49,7 +51,10 @@ impl OverlayFrame {
         text: &mut impl TextMeasurer,
         timing: FrameTime,
     ) -> Result<(), FrameError> {
-        view.show_frame_at(&mut lock(&self.tree), viewport, text, timing)?;
+        let failures = view.show_frame_at(&mut lock(&self.tree), viewport, text, timing)?;
+        for failure in failures {
+            log::error!("{}", message_chain(failure));
+        }
         self.shown = Some(OverlayShown {
             density: viewport.density,
             presentation: timing.presentation,

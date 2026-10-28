@@ -25,7 +25,7 @@ pub use error::Error;
 pub use frame_log::{run, run_observed};
 pub use lavashell_lucide as lucide;
 pub use platform::platform;
-pub use report::{exit_code, report, report_failure};
+pub use report::{exit_code, report, report_failure, report_failures};
 
 use lavashell::prelude::*;
 #[cfg(target_os = "linux")]

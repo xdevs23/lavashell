@@ -287,12 +287,14 @@ impl View {
     /// The animated visual of the node at `index` with `rect` as its target bounds, or `None` when
     /// the node has no transition. The view reads the current value of the transition while
     /// painting, unless the scene plays the motion in its slots. A modifier value that the
-    /// transition cannot animate fails the paint and returns `None`.
+    /// transition cannot animate fails the composition at or above the composed node at
+    /// `composed_parent`, among whose children the node paints, and returns `None`.
     pub(super) fn visual(
         &mut self,
         index: usize,
         rect: Rect,
         playback: paint::Playback,
+        composed_parent: usize,
     ) -> Option<AnimatedVisual> {
         let node = &self.nodes[index];
         let transition = node.transition?;
@@ -346,7 +348,7 @@ impl View {
         let (animation, last) = match refreshed {
             Ok((animation, last)) => (animation.clone(), last),
             Err(error) => {
-                self.fail_paint(error);
+                self.fail_paint(composed_parent, error);
                 return None;
             }
         };

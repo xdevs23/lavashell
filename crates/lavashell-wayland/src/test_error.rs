@@ -6,7 +6,8 @@ use accesskit::{NodeId as NativeId, Role as NativeRole};
 use lavashell_core::prelude::NodeId;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
-use lavashell_core::view::FrameError;
+use lavashell_test_platform::FrameFailure;
+use log::SetLoggerError;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
 use std::array::TryFromSliceError;
 use std::env::VarError;
@@ -102,8 +103,8 @@ pub(crate) enum TestError {
     OutOfRange(f64),
     #[error("the raster surface could not be created")]
     RasterSurface,
-    #[error("the frame of a view failed")]
-    Frame(#[from] FrameError),
+    #[error(transparent)]
+    Failed(#[from] FrameFailure),
     #[error("the scene could not be built")]
     Scene(#[from] ApplyError),
     #[error("the view has no field")]
@@ -122,6 +123,8 @@ pub(crate) enum TestError {
     NoStartCallback,
     #[error("the drag has no receipt callback")]
     NoReceiptCallback,
+    #[error("the test process has a logger that is not the recorder of the test")]
+    Logger(#[source] &'static SetLoggerError),
 }
 
 impl<T> From<InsertError<T>> for TestError {

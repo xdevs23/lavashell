@@ -58,14 +58,14 @@ fn section_content(ui: &mut Ui, list: Recycler<usize>, spring: Spring) {
     });
 }
 
-fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameError> {
+fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameFailure> {
     let time = Duration::from_millis(ms);
     let timing = FrameTime {
         now: time,
         presentation: time,
         ..FrameTime::default()
     };
-    view.frame_at(SECTION, &mut Metrics, timing)
+    (view.frame_at(SECTION, &mut Metrics, timing)).without_failures()
 }
 
 /// The jumps move the scroll in steps of 2 dp up to 18 dp. Up to 40 dp, rows 0 to 3 are in view, so

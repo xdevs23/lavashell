@@ -6,21 +6,40 @@ use crate::ui::{ModifierValue, Node, NodeId, Part, Used};
 use crate::units::NumberError;
 use std::fmt;
 
-/// The reason why `View::frame_at` could not make a frame.
+/// The error that stops `View::frame_at` from making a frame. A failure inside a component does not cause it.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FrameError {
     #[error("the update of the frame does not fit the scene shown before")]
     Apply(#[source] ApplyError),
-    #[error("the composed tree cannot be laid out")]
-    Layout(#[source] LayoutError),
-    #[error("the composition of {node} does not settle: each layout makes it compose again")]
-    CompositionCycle { node: NodeName },
-    #[error("an animation painted by the frame cannot take its value")]
-    Paint(#[source] AnimationError),
 }
 
-/// A mistake in the composed tree of nodes, or in the size proposed for the root node, that makes the layout of the
-/// tree impossible.
+/// A component that failed, with the error that failed it. The root composition fails as the root node.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("component {component} failed")]
+pub struct ComponentFailure {
+    pub component: NodeName,
+    #[source]
+    pub cause: ComponentError,
+}
+
+/// The reason why a component failed.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ComponentError {
+    #[error(transparent)]
+    Composition(CompositionError),
+    #[error("the composition never reaches a stable result: each layout makes it compose again")]
+    CompositionCycle,
+    #[error(transparent)]
+    Layout(LayoutError),
+    #[error("a transition or a state style of a node in the component cannot animate")]
+    Paint(#[source] AnimationError),
+    #[error("a node removed by the component cannot move to its exit")]
+    Exit(#[source] AnimationError),
+    #[error("a scroll state of a node in the component cannot scroll")]
+    Scroll(#[source] ScrollError),
+}
+
+/// A mistake in the composed tree of nodes that makes laying out the tree impossible.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LayoutError {
     #[error("{0} reads a NodeRef that is set on no node")]
@@ -59,14 +78,23 @@ pub enum LayoutError {
     },
     #[error("{0} has the key of a sibling: component keys must be unique within their parent")]
     DuplicateKey(NodeName),
-    #[error("a length of the proposed size is negative or not a number")]
-    Proposal(#[source] NumberError),
-    #[error("a component cannot compose")]
-    Composition(#[source] CompositionError),
-    #[error("a removed node cannot move to its exit")]
-    Exit(#[source] AnimationError),
-    #[error("a scroll state cannot take a scroll")]
-    Scroll(#[source] ScrollError),
+}
+
+impl LayoutError {
+    /// The ids of the nodes that this error names.
+    pub(super) fn nodes(&self) -> Vec<NodeId> {
+        match self {
+            Self::UnsetNodeRef(value) => vec![value.node.id],
+            Self::DuplicateNodeRef { first, second } => vec![first.id, second.id],
+            Self::RelativeSizeRead(read) | Self::WeightedReadOrder(read) => read.nodes().to_vec(),
+            Self::SizeCycle(reads) | Self::BoundsCycle(reads) => {
+                reads.0.iter().flat_map(LayoutRead::nodes).collect()
+            }
+            Self::Weight { node, .. } | Self::Modifier { node, .. } | Self::DuplicateKey(node) => {
+                vec![node.id]
+            }
+        }
+    }
 }
 
 /// The error that a component passes to `Ui::fail` when the component cannot compose.
@@ -90,7 +118,7 @@ pub struct NodeName {
 }
 
 impl NodeName {
-    pub(super) fn of(node: &Node) -> Self {
+    pub(crate) fn of(node: &Node) -> Self {
         Self {
             id: node.id,
             tag: node.tag.clone(),
@@ -127,6 +155,12 @@ pub struct LayoutRead {
     pub(super) reader: NodeValue,
     pub(super) source: NodeName,
     pub(super) part: Part,
+}
+
+impl LayoutRead {
+    fn nodes(&self) -> [NodeId; 2] {
+        [self.reader.node.id, self.source.id]
+    }
 }
 
 impl fmt::Display for LayoutRead {

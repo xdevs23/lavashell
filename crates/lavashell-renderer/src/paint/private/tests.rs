@@ -10,6 +10,7 @@ use lavashell_core::protected_text::ProtectedText;
 use lavashell_core::scene::tree::{
     Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
+use lavashell_test_platform::WithoutFailures;
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,14 +53,14 @@ fn field(
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    tree.show(view.frame(viewport, painter)?)?;
+    tree.show(view.frame(viewport, painter).without_failures()?)?;
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
     });
     view.input(InputEvent::Text(value.into()));
     secret.set_revealed(true);
-    tree.show(view.frame(viewport, painter)?)?;
+    tree.show(view.frame(viewport, painter).without_failures()?)?;
     let private = find(&tree).ok_or(TestError::Missing("private text draw"))?;
     Ok((view, tree, secret, private))
 }
@@ -250,7 +251,7 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
     let first = painter.private_geometry(&private, &style, 260.dp());
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
-    tree.show(view.frame(viewport, &mut painter)?)?;
+    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
     assert!(!view.needs_frame());
     painter.set_text_rendering(
         TextRendering {
@@ -260,14 +261,14 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
         TextDestination::default(),
     );
     assert!(view.needs_frame());
-    tree.show(view.frame(viewport, &mut painter)?)?;
+    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
     let second = painter.private_geometry(&private, &style, 260.dp());
     assert_ne!(carets(&first), carets(&second));
     assert!(!view.needs_frame());
     secret.set_revealed(false);
     secret.clear();
     assert!(view.needs_frame());
-    tree.show(view.frame(viewport, &mut painter)?)?;
+    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
     assert!(find(&tree).is_none());
     assert!(
         view.accessibility()
@@ -410,7 +411,7 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
         let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
         for revealed in [true, false, true] {
             secret.set_revealed(revealed);
-            view.show_frame(&mut tree, viewport, &mut painter)?;
+            (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
             let field = view
                 .bounds_of("field")
                 .ok_or(TestError::Missing("field node"))?;
@@ -440,7 +441,7 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
     let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
     for revealed in [true, false] {
         secret.set_revealed(revealed);
-        view.show_frame(&mut tree, viewport, &mut painter)?;
+        (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
         let field = view
             .bounds_of("field")
             .ok_or(TestError::Missing("field node"))?;

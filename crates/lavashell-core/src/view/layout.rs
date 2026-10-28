@@ -4,7 +4,8 @@ mod content_sizes;
 mod placement;
 mod weights;
 
-use super::frame_error::{LayoutError, NodeName};
+use super::failure::Failed;
+use super::frame_error::{ComponentError, NodeName};
 use super::graph::Graph;
 use super::{
     BTreeMap, Constraints, Deferred, Dp, IconSize, ModifierElement, Node, NodeKind, NodeRef, Phase,
@@ -97,21 +98,21 @@ impl Proposal {
 
 impl View {
     /// Measures the view as last composed within `proposal`, without painting it. A view that never made a frame is
-    /// composed first, at the root value of `VIEWPORT`. The measurement calls no `on_measure` action. Apart from that
-    /// first composition, the measurement changes nothing that a later frame reads.
+    /// composed first, at the root value of `VIEWPORT`. A component that fails in that composition has no nodes in the
+    /// tree, and the next frame returns the failure. The measurement does not call the `on_measure` actions. Apart from
+    /// that first composition, the measurement changes nothing that a later frame reads.
     ///
     /// # Errors
     ///
-    /// Fails when a length of `proposal` is negative or not a number, or when the first composition produces a tree
-    /// that cannot be laid out.
+    /// Fails when a length of `proposal` is negative or not a number.
     pub fn size_that_fits(
         &mut self,
         proposal: Proposal,
         text: &mut impl TextMeasurer,
-    ) -> Result<Size, LayoutError> {
-        let constraints = proposal.constraints().map_err(LayoutError::Proposal)?;
+    ) -> Result<Size, NumberError> {
+        let constraints = proposal.constraints()?;
         if self.nodes.is_empty() {
-            self.compose_root()?;
+            self.compose_root();
         }
         let probe = Pass::Probe(MeasuredSizes::default());
         let mut measuring = Measuring::new(&self.nodes, &self.graph, probe, text);
@@ -120,13 +121,9 @@ impl View {
 
     /// Measures the view within `c` for a frame, sets the size of the root node as the size of the view, stores the
     /// layout and places the nodes. Then this function records the layouts of the components measured again, and
-    /// reports the measured sizes to the `on_measure` and `on_content_sizes` actions and to the scroll states. Fails
-    /// when a scroll requested from a scroll state since the last layout failed.
-    pub(super) fn lay_out(
-        &mut self,
-        c: Constraints,
-        text: &mut impl TextMeasurer,
-    ) -> Result<(), LayoutError> {
+    /// reports the measured sizes to the `on_measure` and `on_content_sizes` actions and to the scroll states. Returns
+    /// a failure around each node whose scroll state failed a scroll requested since the last layout.
+    pub(super) fn lay_out(&mut self, c: Constraints, text: &mut impl TextMeasurer) -> Vec<Failed> {
         let frame = Pass::Frame(&self.retained);
         let mut measuring = Measuring::new(&self.nodes, &self.graph, frame, text);
         self.size = measuring.measure(0, 0, c);
@@ -144,7 +141,7 @@ impl View {
         self.stats.reused_layouts += reused;
         self.record_layouts(components);
         self.release_hidden_components();
-        let mut scrolled = Ok(());
+        let mut failed = Vec::new();
         for (index, owner) in measured {
             let (node, layout) = (&self.nodes[index], &self.layout[index]);
             let report = || {
@@ -163,9 +160,14 @@ impl View {
                 Some(component) => component.scope.track_further(Phase::Layout, report),
                 None => report(),
             };
-            scrolled = scrolled.and(published);
+            if let Err(error) = published {
+                failed.push(Failed {
+                    inside: self.parents.around(index),
+                    cause: ComponentError::Scroll(error),
+                });
+            }
         }
-        scrolled.map_err(LayoutError::Scroll)
+        failed
     }
 }
 

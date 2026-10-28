@@ -1,20 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use lavashell::core::accessibility::AccessibleNode;
+use lavashell::core::view::{Failures, FrameError};
 use lavashell::prelude::*;
 
 /// A new tree that shows the whole scene of a frame of `view`.
 ///
 /// # Errors
-/// Returns an error when the frame cannot be shown.
+/// Returns an error when the frame cannot be shown or a component failed in it.
 pub fn scene(
     view: &mut View,
     viewport: Viewport,
     text: &mut impl TextMeasurer,
 ) -> Result<SceneTree, Error> {
     let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, text)).map_err(Error::Frame)?;
+    without_failures(view.show_frame(&mut tree, viewport, text))?;
     Ok(tree)
+}
+
+/// Turns the result of showing a frame into an error where the frame or a component in it failed.
+///
+/// # Errors
+/// Returns [`Error::Frame`] when the frame cannot be shown, and [`Error::ComponentsFailed`] when a component failed in
+/// the frame.
+pub fn without_failures(shown: Result<Failures, FrameError>) -> Result<(), Error> {
+    let failures: Vec<_> = shown.map_err(Error::Frame)?.into_iter().collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::ComponentsFailed(failures))
+    }
 }
 
 /// # Errors
