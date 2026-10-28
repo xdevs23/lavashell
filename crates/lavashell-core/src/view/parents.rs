@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::ui::Node;
 
+/// The index of the root node of a composed tree. The root node stands for the root composition.
+pub(super) const ROOT: usize = 0;
+
 /// The parent of each node of a composed tree.
 #[derive(Clone, Default)]
 pub(super) struct Parents(Vec<Option<Parent>>);
@@ -36,6 +39,11 @@ impl Parents {
 
     pub fn node_of(&self, child: usize) -> Option<usize> {
         self.0[child].map(|parent| parent.node)
+    }
+
+    /// The parent of the node at `index`, or the root node for the root node itself.
+    pub fn around(&self, index: usize) -> usize {
+        self.node_of(index).unwrap_or(ROOT)
     }
 
     /// The node at `index` and its ancestors, up to the root.

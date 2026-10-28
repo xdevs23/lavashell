@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use lavashell_core::scene::tree::SceneTree;
-use lavashell_core::view::{CompositionError, LayoutError};
+use lavashell_core::view::{ComponentError, CompositionError};
+use lavashell_test_platform::failure_causes;
 
 #[test]
 fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> Result<(), TestError>
@@ -86,20 +87,18 @@ fn styled_slider_keeps_capture_and_clamps_after_leaving_the_control() -> Result<
 }
 
 #[test]
-fn a_slider_page_that_is_not_finite_fails_the_frame() {
+fn a_slider_page_that_is_not_finite_fails_its_composition() -> Result<(), TestError> {
     let mut view = View::new(lavashell_test_platform::facts(), |ui| {
         ui.slider(|| 0.5, Some(f64::NAN), Modifier::new(), |_| {}, |_, _| {});
     });
+    let viewport = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
     assert_eq!(
-        render(
-            &mut view,
-            Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE),
-            &mut Metrics,
-        ),
-        Err(FrameError::Layout(LayoutError::Composition(
-            CompositionError::Number(NumberError::NotFinite)
-        )))
+        failure_causes(render(&mut view, viewport, &mut Metrics))?,
+        [ComponentError::Composition(CompositionError::Number(
+            NumberError::NotFinite
+        ))]
     );
+    Ok(())
 }
 
 fn slider(value: &State<f64>) -> Result<(View, Viewport), TestError> {
@@ -203,7 +202,7 @@ fn controls_inherit_typography_without_inventing_decorations() -> Result<(), Tes
     });
     let mut tree = SceneTree::default();
     let viewport = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
-    view.show_frame(&mut tree, viewport, &mut Metrics)?;
+    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
     let commands: Vec<_> = tree.at(std::time::Duration::ZERO).leaf_commands().collect();
     let text: Vec<_> = (commands.iter())
         .filter_map(|command| match command {

@@ -3,7 +3,8 @@ use super::*;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::numbers::count_f64;
 use lavashell_core::scene::tree::Change;
-use lavashell_core::view::{CompositionError, LayoutError};
+use lavashell_core::view::{ComponentError, CompositionError};
+use lavashell_test_platform::failure_causes;
 use std::time::Duration;
 
 const LIST: Viewport = Viewport::new(Size::new(Dp::new(100.0), Dp::new(120.0)), Density::ONE);
@@ -49,14 +50,14 @@ fn scoped_rows(
     })
 }
 
-fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameError> {
+fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameFailure> {
     let time = Duration::from_millis(ms);
     let timing = FrameTime {
         now: time,
         presentation: time,
         ..FrameTime::default()
     };
-    view.frame_at(LIST, &mut Metrics, timing)
+    (view.frame_at(LIST, &mut Metrics, timing)).without_failures()
 }
 
 /// Makes frames of `view` at the time `ms` until the view needs no frame, and applies every update to `tree`.
@@ -360,10 +361,10 @@ fn selection_preserves_keys_and_ranges_follow_current_sort_order() {
     assert!(selection.current().is_none());
 }
 
-// On a target with 32-bit pointers every row count converts to `f64` exactly, so the frame cannot fail.
+// On a target with 32-bit pointers every row count converts to `f64` exactly, so the composition cannot fail.
 #[cfg(target_pointer_width = "64")]
 #[test]
-fn a_list_of_more_rows_than_a_number_holds_exactly_fails_the_frame() {
+fn a_list_with_too_many_rows_to_count_exactly_fails_its_composition() -> Result<(), TestError> {
     let recycler = Recycler::<usize>::new();
     let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
         recycler.compose(
@@ -379,9 +380,10 @@ fn a_list_of_more_rows_than_a_number_holds_exactly_fails_the_frame() {
         );
     });
     assert!(matches!(
-        render(&mut view, LIST, &mut Metrics),
-        Err(FrameError::Layout(LayoutError::Composition(
-            CompositionError::Number(NumberError::Count(_))
-        )))
+        failure_causes(render(&mut view, LIST, &mut Metrics))?.as_slice(),
+        [ComponentError::Composition(CompositionError::Number(
+            NumberError::Count(_)
+        ))]
     ));
+    Ok(())
 }

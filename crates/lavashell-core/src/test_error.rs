@@ -6,12 +6,12 @@ use crate::animation::{
     AnimationError, BindError, ContourError, EasingError, KeyframesError, MotionError,
     PlaybackRateError, SpringError,
 };
-use crate::scene::tree::ApplyError;
+use crate::scene::tree::{ApplyError, SceneUpdate};
 use crate::scroll::ScrollError;
 use crate::shape::PointsError;
 use crate::transfer::TransferError;
 use crate::units::NumberError;
-use crate::view::{FrameError, LayoutError};
+use crate::view::{ComponentError, ComponentFailure, Failures, Frame, FrameError};
 use std::num::TryFromIntError;
 
 pub(crate) type TestResult = Result<(), TestError>;
@@ -47,10 +47,10 @@ pub(crate) enum TestError {
     Transfer(#[from] TransferError),
     #[error("a frame of a view could not be made")]
     Frame(#[from] FrameError),
+    #[error("a component of a view failed")]
+    Failed(Vec<ComponentFailure>),
     #[error("a scroll could not take a distance")]
     Scroll(#[from] ScrollError),
-    #[error("a view could not be laid out")]
-    Layout(#[from] LayoutError),
     #[cfg(feature = "serde")]
     #[error("a value could not be written or read")]
     Encoding(#[from] postcard::Error),
@@ -66,8 +66,10 @@ pub(crate) enum TestError {
         expected: usize,
         found: usize,
     },
-    #[error("a frame was made where the test needs it to fail")]
-    FrameSucceeded,
+    #[error("no component failed in a frame where the test needs a failure")]
+    NothingFailed,
+    #[error("a component failed with another error than the test needs")]
+    Component(#[from] ComponentError),
 }
 
 /// Turns an optional value that a test needs into the value or a test failure.
@@ -96,5 +98,44 @@ impl<T> Exactly<T> for Vec<T> {
             expected: N,
             found: items.len(),
         })
+    }
+}
+
+/// Turns the result of a frame into what the frame shows, or into a test failure where the frame failed or a
+/// component failed in it.
+pub(crate) trait WithoutFailures {
+    type Shown;
+
+    fn without_failures(self) -> Result<Self::Shown, TestError>;
+}
+
+impl WithoutFailures for Result<Frame, FrameError> {
+    type Shown = SceneUpdate;
+
+    fn without_failures(self) -> Result<SceneUpdate, TestError> {
+        let Frame { update, failures } = self?;
+        failures.without_failures()?;
+        Ok(update)
+    }
+}
+
+impl WithoutFailures for Result<Failures, FrameError> {
+    type Shown = ();
+
+    fn without_failures(self) -> Result<(), TestError> {
+        self?.without_failures()
+    }
+}
+
+impl WithoutFailures for Failures {
+    type Shown = ();
+
+    fn without_failures(self) -> Result<(), TestError> {
+        let failures: Vec<_> = self.into_iter().collect();
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(TestError::Failed(failures))
+        }
     }
 }

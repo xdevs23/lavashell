@@ -5,6 +5,7 @@ use lavashell_core::prelude::{
     Density, Dp, DpExt, InputEvent, Key, Modifier, ProtectedText, Size, TextFieldOptions,
     TextMeasurer, TextStyle, View, Viewport,
 };
+use lavashell_test_platform::WithoutFailures;
 
 struct Metrics;
 
@@ -28,7 +29,8 @@ fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> R
         );
     });
     let viewport = Viewport::new(Size::new(220.dp(), 50.dp()), Density::ONE);
-    assert!(!view.frame(viewport, &mut Metrics)?.changes.is_empty());
+    let update = (view.frame(viewport, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
@@ -36,7 +38,8 @@ fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> R
     view.input(InputEvent::Text("synthetic".into()));
     for revealed in [false, true] {
         secret.set_revealed(revealed);
-        assert!(!view.frame(viewport, &mut Metrics)?.changes.is_empty());
+        let update = (view.frame(viewport, &mut Metrics)).without_failures()?;
+        assert!(!update.changes.is_empty());
         let native = mapping::tree(view.accessibility(), &mut ids::Ids::default(), "test");
         let field = native_node(&native, NativeRole::PasswordInput)?;
         assert_eq!(native.focus, field.0);

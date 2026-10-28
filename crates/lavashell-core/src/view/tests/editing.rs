@@ -43,7 +43,7 @@ fn composite_focus_encloses_padded_content_and_leaves_tab_order_to_controls() ->
     });
     let window = Viewport::new(Size::new(300.dp(), 180.dp()), Density::ONE);
     let mut scene = Scene::default();
-    scene.show(view.frame(window, &mut Metrics)?)?;
+    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     let editor = view.tagged_bounds("editor")?;
     let card = view.tagged_bounds("card")?;
     assert_eq!(editor.x - card.x, 20.dp());
@@ -56,7 +56,7 @@ fn composite_focus_encloses_padded_content_and_leaves_tab_order_to_controls() ->
         editor.x + 5.dp(),
         editor.y + 5.dp(),
     )));
-    scene.show(view.frame(window, &mut Metrics)?)?;
+    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     let commands = scene.commands();
     let outline = commands
         .iter()
@@ -78,7 +78,7 @@ fn composite_focus_encloses_padded_content_and_leaves_tab_order_to_controls() ->
         key: Key::Tab,
         shift: false,
     });
-    scene.show(view.frame(window, &mut Metrics)?)?;
+    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     let commands = scene.commands();
     assert!(
         !commands

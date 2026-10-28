@@ -2,9 +2,11 @@
 mod accessibility;
 mod collected;
 mod component;
+mod failure;
 mod field;
 mod frame;
 mod frame_error;
+mod frame_result;
 mod gestures;
 mod graph;
 mod input;
@@ -34,9 +36,12 @@ mod transition;
 pub use crate::scene::tree::{Presence, PresenceParts, ScaleOrigin};
 pub use crate::text_edit::{TextCaret, TextCluster, TextGeometry};
 use component::{collect_descendants, index_of};
+use failure::{Failed, FrameFailures, LayoutRetry};
 pub use frame_error::{
-    CompositionError, FrameError, LayoutError, LayoutRead, LayoutReads, NodeName, NodeValue,
+    ComponentError, ComponentFailure, CompositionError, FrameError, LayoutError, LayoutRead,
+    LayoutReads, NodeName, NodeValue,
 };
+pub use frame_result::{Failures, Frame};
 use interaction::FocusSource;
 pub use layout::Proposal;
 use layout::{Layout, Measuring, Visibility, shown_children};
@@ -57,7 +62,7 @@ mod test_text;
 #[cfg(test)]
 mod tests;
 
-use crate::animation::{AnimationError, Motion};
+use crate::animation::Motion;
 use crate::frame::FrameTime;
 use crate::geometry::{
     Axis, Color, Constraints, Point, Rect, Scale, Size, Span, VIEWPORT, Viewport,
@@ -268,9 +273,13 @@ pub struct View {
     /// Records the read of the reduced motion preference, so that the view passes each change of the preference to
     /// `motion`.
     motion_scope: Scope,
-    /// The error of the first animation, started by a transition or a state style while the frame painted, whose
-    /// value or velocity was not finite. `frame_at` returns this error in place of the frame.
-    paint_failure: Option<AnimationError>,
+    /// The animations, started by a transition or a state style while the frame painted, whose value or velocity was
+    /// not finite, each inside the composed node among whose children the animated node painted.
+    paint_failures: Vec<Failed>,
+    /// The components that failed since the last frame.
+    failures: FrameFailures,
+    /// The compositions emptied by a layout error, which compose again once that error can have gone.
+    layout_retries: Vec<LayoutRetry>,
 }
 
 impl View {
@@ -334,7 +343,9 @@ impl View {
             viewport_size,
             density,
             motion_scope,
-            paint_failure: None,
+            paint_failures: Vec::new(),
+            failures: FrameFailures::default(),
+            layout_retries: Vec::new(),
         }
     }
 
@@ -353,6 +364,7 @@ impl View {
                 .nodes
                 .iter()
                 .any(|n| n.component.as_ref().is_some_and(|c| c.scope.dirty().any()))
+            || self.layout_retries.iter().any(LayoutRetry::is_due)
             || self.motion.moves_read_values()
             || self.motion.timer_due()
             || self.motion.rest_due()

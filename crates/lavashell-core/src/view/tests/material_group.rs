@@ -9,7 +9,7 @@ use crate::units::ScaleFactor;
 
 fn paint(view: &mut View, scene: &mut Scene, time_ms: u64) -> TestResult {
     let time = std::time::Duration::from_millis(time_ms);
-    scene.at(time_ms).show(view.frame_at(
+    let frame = view.frame_at(
         Viewport::new(Size::new(500.dp(), 100.dp()), Density::ONE),
         &mut Metrics,
         crate::frame::FrameTime {
@@ -17,7 +17,8 @@ fn paint(view: &mut View, scene: &mut Scene, time_ms: u64) -> TestResult {
             presentation: time,
             ..Default::default()
         },
-    )?)?;
+    );
+    scene.at(time_ms).show(frame.without_failures()?)?;
     Ok(())
 }
 

@@ -3,6 +3,7 @@ mod accessibility;
 mod app;
 mod clipboard;
 mod error;
+mod failures;
 mod focus_grab;
 mod logical;
 #[cfg(test)]

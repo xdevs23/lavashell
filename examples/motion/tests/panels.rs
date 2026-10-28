@@ -4,7 +4,7 @@ use lavashell::core::accessibility::AccessibleNode;
 use lavashell::prelude::*;
 use lavashell_example_support::{
     Capture, Error as ExampleError,
-    testing::{click, control, drag, node},
+    testing::{click, control, drag, node, without_failures},
 };
 use lavashell_motion::{
     CopyKey, Error, copy,
@@ -46,10 +46,9 @@ impl Harness {
         };
         self.demo.step(timing).map_err(Error::Motion)?;
         let viewport = Viewport::new(WINDOW, Density::ONE);
-        (self
-            .view
-            .show_frame_at(&mut self.tree, viewport, &mut self.capture.painter, timing))
-        .map_err(|error| Error::Example(ExampleError::Frame(error)))
+        let painter = &mut self.capture.painter;
+        let shown = (self.view).show_frame_at(&mut self.tree, viewport, painter, timing);
+        without_failures(shown).map_err(Error::Example)
     }
 
     /// Frames the view `delay` after the last frame.

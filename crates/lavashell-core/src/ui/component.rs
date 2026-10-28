@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{ComposedShortcut, Modifier, NodeId, Ui, ViewHandles};
+use super::{ComposedShortcut, Modifier, Node, Ui, ViewHandles};
 use crate::local::ReadLog;
 use crate::local::{LocalReader, LocalScope};
 use crate::reactive::{Phase, Scope};
+use crate::view::NodeName;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::hash::Hash;
@@ -20,13 +21,17 @@ pub(crate) struct Component {
 }
 
 impl Component {
-    pub(crate) fn build(&self, id: NodeId, handles: ViewHandles) -> Ui {
+    /// Composes the component of `node`. The nodes and shortcuts of a failed composition are dropped, and its failure
+    /// is the last failure of the returned composition. In either case, the component composes again once a value read
+    /// by its composition changes.
+    pub(crate) fn build(&self, node: &Node, handles: ViewHandles) -> Ui {
         self.scope.track(Phase::Composition, || {
             let locals = LocalReader::for_component(self.locals.clone());
             let mut ui = Ui::composing(handles, locals);
             ui.nodes.reserve(self.composed.get());
-            ui.nodes[0].id = id;
+            ui.nodes[0].id = node.id;
             (self.compose.borrow_mut())(&mut ui);
+            ui.record_failure(NodeName::of(node));
             self.composed.set(ui.nodes.len());
             *self.shortcuts.borrow_mut() = std::mem::take(&mut ui.shortcuts);
             *self.reads.borrow_mut() = ui.locals.take_reads();
@@ -55,7 +60,7 @@ impl Ui {
             shortcuts: RefCell::default(),
             composed: Cell::new(0),
         });
-        let composed = component.build(node.id, self.handles());
+        let composed = component.build(&node, self.handles());
         node.component = Some(component);
         self.add(node, |ui| ui.attach(composed));
     }
@@ -75,6 +80,6 @@ impl Ui {
             self.nodes.push(node);
         }
         self.shortcuts.extend(ui.shortcuts);
-        self.failure = self.failure.or(ui.failure);
+        self.failures.extend(ui.failures);
     }
 }

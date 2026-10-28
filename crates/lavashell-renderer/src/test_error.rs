@@ -7,7 +7,7 @@ use crate::{DrawFailure, Error, SkslDiagnostic, StreamRejection};
 use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
-use lavashell_core::view::{FrameError, LayoutError};
+use lavashell_test_platform::FrameFailure;
 use log::SetLoggerError;
 use std::array::TryFromSliceError;
 use std::num::TryFromIntError;
@@ -25,9 +25,7 @@ pub(crate) enum TestError {
     #[error(transparent)]
     Scene(#[from] ApplyError),
     #[error(transparent)]
-    Frame(#[from] FrameError),
-    #[error(transparent)]
-    Layout(#[from] LayoutError),
+    Failed(#[from] FrameFailure),
     #[error(transparent)]
     Points(#[from] PointsError),
     #[error(transparent)]

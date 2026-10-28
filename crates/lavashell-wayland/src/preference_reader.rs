@@ -5,7 +5,7 @@ use lavashell_core::preferences::{
 use lavashell_core::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
-struct NoText;
+pub(crate) struct NoText;
 
 impl TextMeasurer for NoText {
     fn measure(&mut self, _: &str, _: &TextStyle<Dp>, _: Dp) -> Size {
@@ -36,8 +36,11 @@ impl PreferenceReader {
 
     /// Frames the view and returns the values read by its latest composition.
     pub fn values(&mut self) -> PreferenceValues {
-        if let Err(error) = self.view.frame(Viewport::default(), &mut NoText) {
-            log::warn!("the view that reads the preferences could not frame: {error}");
+        match self.view.frame(Viewport::default(), &mut NoText) {
+            Ok(frame) => crate::failures::log_failures(frame.failures),
+            Err(error) => {
+                log::warn!("the view that reads the preferences could not frame: {error}");
+            }
         }
         self.values.borrow().clone()
     }

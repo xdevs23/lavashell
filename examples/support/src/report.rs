@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::core::error::message_chain;
+use lavashell::core::view::Failures;
 use std::{error::Error, process::ExitCode};
 
 /// Writes `error` and each of its causes to standard error, after `operation`, which describes what the example
 /// was doing when the error occurred.
 pub fn report(operation: &str, error: impl Error) {
     eprintln!("{operation}: {}", message_chain(error));
+}
+
+/// Writes each component that failed in a frame of a view to standard error, the way `report` does.
+pub fn report_failures(failures: Failures) {
+    for failure in failures {
+        report("a frame of the view", failure);
+    }
 }
 
 /// Writes the error in `outcome`, if there is one, the way `report` does. A handler uses this function when it cannot

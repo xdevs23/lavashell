@@ -67,22 +67,28 @@ impl View {
         }
     }
 
-    /// The appearance for the interaction state of the node at `index`. A node painted while it leaves the tree has
-    /// no interaction state any more. Its appearance therefore continues the animation toward the appearance set last
-    /// while the node was in the tree.
+    /// The appearance for the interaction state of the node at `index`, painted with `inherited`. A node painted while
+    /// it leaves the tree has no interaction state any more. Its appearance therefore continues the animation toward
+    /// the appearance set last while the node was in the tree.
     pub(super) fn interaction_visual(
         &mut self,
         index: usize,
-        source: paint::Source,
+        inherited: paint::Inherited,
     ) -> Option<AnimatedAppearance> {
-        match source {
-            paint::Source::Composition => self.live_interaction_visual(index),
+        match inherited.source {
+            paint::Source::Composition => {
+                self.live_interaction_visual(index, inherited.composed_parent)
+            }
             paint::Source::Leaving => (self.interaction_visuals.get(&self.nodes[index].id))
                 .map(|styled| styled.animation.get()),
         }
     }
 
-    fn live_interaction_visual(&mut self, index: usize) -> Option<AnimatedAppearance> {
+    fn live_interaction_visual(
+        &mut self,
+        index: usize,
+        composed_parent: usize,
+    ) -> Option<AnimatedAppearance> {
         let node = &self.nodes[index];
         let state = self.interaction_state_at(index);
         if let Some(observer) = &node.interaction_observer
@@ -105,7 +111,7 @@ impl View {
         match self.styled_appearance(node.id, state, styles) {
             Ok(appearance) => Some(appearance),
             Err(error) => {
-                self.fail_paint(error);
+                self.fail_paint(composed_parent, error);
                 None
             }
         }

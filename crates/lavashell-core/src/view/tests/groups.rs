@@ -222,10 +222,10 @@ fn a_view_shows_the_whole_scene_to_a_tree_it_did_not_feed_last() -> TestResult {
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
     let leaves = |tree: &SceneTree| tree.at(Duration::ZERO).paint_order().leaves().count();
     let (mut first, mut second) = (SceneTree::default(), SceneTree::default());
-    view.show_frame(&mut first, viewport, &mut Metrics)?;
+    (view.show_frame(&mut first, viewport, &mut Metrics)).without_failures()?;
     advance_with(&mut scene, &mut view, viewport, &mut Metrics)?;
-    view.show_frame(&mut second, viewport, &mut Metrics)?;
-    view.show_frame(&mut first, viewport, &mut Metrics)?;
+    (view.show_frame(&mut second, viewport, &mut Metrics)).without_failures()?;
+    (view.show_frame(&mut first, viewport, &mut Metrics)).without_failures()?;
     assert_eq!((leaves(&first), leaves(&second)), (1, 1));
     Ok(())
 }
@@ -251,7 +251,7 @@ fn a_failed_update_empties_the_tree_and_the_next_frame_shows_the_whole_scene() -
     let count = State::new(1);
     let mut view = View::new(crate::platform::fixture::facts(), squares(count.clone()));
     let mut tree = SceneTree::default();
-    view.show_frame(&mut tree, viewport, &mut Metrics)?;
+    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
     // The view gives the group of the second square the id 3. Inserting a node with that id first
     // makes the next frame fail.
     let planted = Change::Insert {
@@ -268,10 +268,10 @@ fn a_failed_update_empties_the_tree_and_the_next_frame_shows_the_whole_scene() -
         Err(FrameError::Apply(ApplyError::DuplicateNode(SceneNodeId(3))))
     );
     assert!(commands(&tree).is_empty());
-    view.show_frame(&mut tree, viewport, &mut Metrics)?;
+    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
     let mut fresh = View::new(crate::platform::fixture::facts(), squares(count.clone()));
     let mut expected = SceneTree::default();
-    fresh.show_frame(&mut expected, viewport, &mut Metrics)?;
+    (fresh.show_frame(&mut expected, viewport, &mut Metrics)).without_failures()?;
     assert_eq!(commands(&tree), commands(&expected));
     Ok(())
 }

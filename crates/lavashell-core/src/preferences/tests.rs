@@ -2,7 +2,7 @@
 use super::*;
 use crate::float_asserts::assert_f64_eq;
 use crate::prelude::*;
-use crate::test_error::{Required, TestResult};
+use crate::test_error::{Required, TestResult, WithoutFailures};
 use crate::view::test_scene::{Scene, advance_with, advance_with_timing};
 use std::{cell::Cell, rc::Rc, time::Duration};
 
@@ -171,9 +171,9 @@ fn tooltips_and_canvas_text_follow_the_text_size_setting() -> TestResult {
     view.provide(&TEXT_SCALING, TextScaling::linear(1.5).required("scaling")?);
     let window = Viewport::new(Size::new(200.dp(), 200.dp()), Density::ONE);
     let mut scene = Scene::default();
-    scene.show(view.frame(window, &mut Measure)?)?;
+    scene.show(view.frame(window, &mut Measure).without_failures()?)?;
     view.input(InputEvent::Move(Point::new(10.dp(), 10.dp())));
-    scene.show(view.frame(window, &mut Measure)?)?;
+    scene.show(view.frame(window, &mut Measure).without_failures()?)?;
     let text_sizes: Vec<_> = (scene.commands().into_iter())
         .filter_map(|command| match command {
             DrawCommand::Text { text, style, .. } => Some((text, style.size)),

@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 use lavashell::{materials::SurfaceTreatment, prelude::*};
 use lavashell_example_support::{
-    Capture, Error as ExampleError,
-    testing::{click, control, drag, scene},
+    Capture,
+    testing::{click, control, drag, scene, without_failures},
 };
 use lavashell_materials_example::{Error, model::Demo, ui};
 use std::{path::Path, time::Duration};
@@ -14,8 +14,7 @@ fn show(
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    (view.show_frame(tree, viewport, &mut capture.painter))
-        .map_err(|error| Error::Example(ExampleError::Frame(error)))
+    without_failures(view.show_frame(tree, viewport, &mut capture.painter)).map_err(Error::Example)
 }
 
 #[test]

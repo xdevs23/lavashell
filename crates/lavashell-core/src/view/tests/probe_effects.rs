@@ -70,7 +70,8 @@ impl Traced {
     }
 
     fn frame(&mut self) -> TestResult {
-        self.scene.show(self.view.frame(WINDOW, &mut Wrapping)?)?;
+        let update = self.view.frame(WINDOW, &mut Wrapping).without_failures()?;
+        self.scene.show(update)?;
         Ok(())
     }
 

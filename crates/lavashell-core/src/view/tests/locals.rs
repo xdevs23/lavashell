@@ -65,11 +65,11 @@ fn a_root_value_composes_again_only_the_components_that_read_it() -> TestResult 
         });
     });
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     let before = view.stats();
     view.provide(&NAME, "changed");
     assert!(view.needs_frame());
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(texts(&scene), ["changed", "static"]);
     assert_eq!((reader.get(), bystander.get()), (2, 1));
     assert_eq!(view.stats().root_compositions, before.root_compositions);
@@ -97,13 +97,13 @@ fn a_platform_key_reads_the_facts_and_follows_them_when_they_are_replaced() -> T
         });
     });
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(texts(&scene), ["•", "static"]);
     view.provide_platform(PlatformFacts {
         password_mask: '*',
         ..crate::platform::fixture::facts()
     });
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(texts(&scene), ["*", "static"]);
     assert_eq!((reader.get(), bystander.get()), (2, 1));
     assert_eq!(view.platform().password_mask, '*');
@@ -119,13 +119,13 @@ fn a_root_value_provided_for_a_platform_key_outlasts_new_facts() -> TestResult {
     });
     view.provide(&PASSWORD_MASK, '#');
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     view.provide_platform(PlatformFacts {
         password_mask: '*',
         ..crate::platform::fixture::facts()
     });
     assert!(!view.needs_frame());
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(texts(&scene), ["#"]);
     Ok(())
 }
@@ -138,7 +138,7 @@ fn a_retained_field_paints_again_when_the_caret_width_of_the_platform_changes() 
         });
     });
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     view.provide_platform(PlatformFacts {
         caret_width: Some(3.dp()),
         ..crate::platform::fixture::facts()
@@ -202,10 +202,10 @@ fn a_component_created_again_with_a_changed_value_repaints_while_others_keep_the
             .collect::<Vec<_>>()
     };
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     let before = view.stats();
     ink.set(red);
-    scene.show(view.frame(WINDOW, &mut Metrics)?)?;
+    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(fills(&scene), [red.into(), Brush::from(Color::TRANSPARENT)]);
     assert_eq!(view.stats().reused_components, before.reused_components + 1);
     Ok(())

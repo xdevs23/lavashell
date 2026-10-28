@@ -4,7 +4,7 @@ use crate::effects::{Material, Shadow, Stroke};
 use crate::input_method::{TextAction, TextHints};
 use crate::reactive::State;
 use crate::shape::{Corners, Shape};
-use crate::test_error::{Exactly, Required, TestError, TestResult};
+use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};
 use crate::units::{Density, DpExt, NumberError, Positive, SpExt};
 use test_scene::{Scene, advance_with, advance_with_timing};
@@ -21,7 +21,13 @@ impl TextMeasurer for Metrics {
 
 const WINDOW_SIZE: Size = Size::new(Dp::new(500.0), Dp::new(300.0));
 
-fn frame(view: &mut View, size: Size, time_ms: u64) -> Result<SceneUpdate, FrameError> {
+/// Makes a frame of `view` at `time_ms`, and fails where a component fails.
+fn frame(view: &mut View, size: Size, time_ms: u64) -> Result<SceneUpdate, TestError> {
+    framed(view, size, time_ms).without_failures()
+}
+
+/// Makes a frame of `view` at `time_ms`.
+fn framed(view: &mut View, size: Size, time_ms: u64) -> Result<Frame, FrameError> {
     let time = std::time::Duration::from_millis(time_ms);
     view.frame_at(
         Viewport::new(size, Density::ONE),
@@ -32,6 +38,18 @@ fn frame(view: &mut View, size: Size, time_ms: u64) -> Result<SceneUpdate, Frame
             ..Default::default()
         },
     )
+}
+
+/// The causes of the component failures with which `result` failed, in the order of the failures. Passes on any other
+/// error of `result`.
+fn failure_causes<T>(result: Result<T, TestError>) -> Result<Vec<ComponentError>, TestError> {
+    match result {
+        Ok(_) => Ok(Vec::new()),
+        Err(TestError::Failed(failures)) => {
+            Ok(failures.into_iter().map(|failure| failure.cause).collect())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Paints a frame of `view` at `time_ms` and applies the resulting scene update to `scene`.
@@ -124,20 +142,8 @@ fn stroke_widths(commands: &[DrawCommand]) -> Vec<Dp> {
         .collect()
 }
 
-#[test]
-fn a_component_that_fails_its_composition_fails_the_frame() {
-    let mut view = View::new(crate::platform::fixture::facts(), |ui| {
-        ui.scoped("counted", Modifier::new(), |ui| {
-            ui.fail(NumberError::OutOfRange);
-        });
-    });
-    assert!(matches!(
-        frame(&mut view, WINDOW_SIZE, 0),
-        Err(FrameError::Layout(LayoutError::Composition(
-            CompositionError::Number(NumberError::OutOfRange)
-        )))
-    ));
-}
+#[path = "tests/failures.rs"]
+mod failures;
 
 #[path = "tests/bound_scroll.rs"]
 mod bound_scroll;

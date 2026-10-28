@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::{Rect, Size};
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
-use lavashell_core::view::{FrameError, LayoutError};
+use lavashell_core::view::FrameError;
 use lavashell_renderer::Error as RendererError;
 use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
@@ -111,7 +111,7 @@ pub enum Error {
     #[error("a surface could not show a frame of its view")]
     ShowScene(#[source] FrameError),
     #[error("the content of a surface could not be measured")]
-    MeasureView(#[source] LayoutError),
+    MeasureView(#[source] NumberError),
     #[error("a frame could not be drawn")]
     Draw(#[source] RendererError),
     #[error("the contents of a drawn surface could not be checked")]

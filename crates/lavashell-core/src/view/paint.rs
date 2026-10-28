@@ -11,6 +11,7 @@ mod siblings;
 mod surfaces;
 mod tooltip;
 
+use super::parents::ROOT;
 use super::{
     Affine, BTreeMap, BTreeSet, Brush, Dp, DrawCommand, Drawing, FieldGeometry, Hit, HitClip,
     ModifierElement, NodeId, NodeKind, Point, Rect, Scale, Size, TextMeasurer, TextStyle,
@@ -38,12 +39,15 @@ pub(super) enum Source {
 }
 
 /// The values passed from a parent to each child while the view paints: the clips, the content colors, the source
-/// tree and the laid-out origin.
+/// tree, the composed parent and the laid-out origin.
 #[derive(Clone, Copy)]
 pub(super) struct Inherited<'a> {
     pub clips: &'a [HitClip],
     pub content_colors: &'a ContentColors,
     pub source: Source,
+    /// The index in the composed tree of the node among whose children the node paints: its parent, the root node for
+    /// the root node, or for a node of a departure, the composed node among whose children the departure paints.
+    pub composed_parent: usize,
     /// The origin of the paint coordinates of the node in the view as laid out: without presence transitions and scale
     /// animations, and with every animated slot at its end value.
     pub laid_out: Point,
@@ -56,7 +60,22 @@ impl Default for Inherited<'_> {
             clips: &[],
             content_colors: &NONE,
             source: Source::default(),
+            composed_parent: ROOT,
             laid_out: Point::default(),
+        }
+    }
+}
+
+impl Inherited<'_> {
+    /// The values passed on to the children of the node at `index`, whose content scrolls by `shift`.
+    fn for_children(self, index: usize, shift: Point) -> Self {
+        Self {
+            laid_out: self.laid_out.offset(shift.x, shift.y),
+            composed_parent: match self.source {
+                Source::Composition => index,
+                Source::Leaving => self.composed_parent,
+            },
+            ..self
         }
     }
 }
@@ -73,7 +92,7 @@ impl View {
     ) {
         let mut unwind = self.unwinding();
         let id = self.nodes[index].id;
-        let interaction = self.interaction_visual(index, inherited.source);
+        let interaction = self.interaction_visual(index, inherited);
         let plan = self.plan_paint(
             index,
             pos,
@@ -90,7 +109,7 @@ impl View {
             surface,
             decorated_surface,
             mut radius_scale,
-        } = self.open_visual(index, &plan, parent_transform);
+        } = self.open_visual(index, &plan, parent_transform, inherited.composed_parent);
         scale::apply(
             &mut self.canvas,
             self.nodes[index].visual_scale.get(),
@@ -138,6 +157,7 @@ impl View {
             clips: &clips,
             content_colors: pushed.as_ref().unwrap_or(inherited.content_colors),
             source: inherited.source,
+            composed_parent: inherited.composed_parent,
             laid_out: (inherited.laid_out)
                 .offset(painted.offset_at_rest.x, painted.offset_at_rest.y),
         };
@@ -149,11 +169,7 @@ impl View {
         let content = scroll.map(|scroll| self.open_content(index, scroll, transform));
         let inner = content.as_ref().map_or(transform, |(_, inner)| *inner);
         let start = Point::new(rect.x, rect.y);
-        let children = Inherited {
-            laid_out: inside.laid_out.offset(shift.x, shift.y),
-            ..inside
-        };
-        self.paint_children(index, start, inner, children, text);
+        self.paint_children(index, start, inner, inside.for_children(index, shift), text);
         if let Some((open, _)) = content {
             self.close_group(open);
         }
@@ -171,19 +187,22 @@ impl View {
         }
     }
 
-    /// Opens the presence group for the animated visual of the node at `index`, if the node has one. Returns that
-    /// visual with the group and the places where the node and its decorations paint inside the group.
+    /// Opens the presence group for the animated visual of the node at `index`, which paints among the children of the
+    /// composed node at `composed_parent`, if the node has such a visual. Returns that visual with the group and the
+    /// places where the node and its decorations paint inside the group.
     fn open_visual(
         &mut self,
         index: usize,
         plan: &PaintPlan,
         parent_transform: Transform,
+        composed_parent: usize,
     ) -> OpenVisual {
         let id = self.nodes[index].id;
         let visual = self.visual(
             index,
             plan.space.relative(plan.target_rect),
             plan.visual_playback,
+            composed_parent,
         );
         let (opened, presence) = match &visual {
             Some(animated) => {

@@ -66,7 +66,8 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
             },
         );
     });
-    assert!(!view.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -99,7 +100,8 @@ fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
     for device in [1, 2] {
         let (mut view, text, _) = editor()?;
         text.set("abc abc xyz".to_string());
-        assert!(!view.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+        let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
+        assert!(!update.changes.is_empty());
         let mut adapter = TextTransfers::default();
         let mut request = native_source(&adapter, &mut view)?;
         start_drag(&mut request, &mut view)?;
@@ -144,7 +146,8 @@ fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
 -> Result<(), TestError> {
     let (mut view, text, _) = editor()?;
     text.set("abc abc xyz".to_string());
-    assert!(!view.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -171,7 +174,8 @@ fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> R
 {
     let (mut view, text, _) = editor()?;
     text.set("abc abc xyz".to_string());
-    assert!(!view.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -197,7 +201,8 @@ fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> R
 fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Result<(), TestError> {
     let (mut origin, text, _) = editor()?;
     text.set("abc abc xyz".to_string());
-    assert!(!origin.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+    let update = (origin.frame(WINDOW, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     let (mut destination, target, _) = editor()?;
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut origin)?;

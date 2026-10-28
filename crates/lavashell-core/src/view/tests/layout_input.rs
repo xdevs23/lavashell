@@ -15,7 +15,7 @@ fn outlines_draw_after_content_without_expanding_layout_or_input() -> TestResult
                 .background(Color::rgb(0)),
         );
     });
-    let commands = painted(view.frame(WINDOW, &mut Metrics)?)?;
+    let commands = painted(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     let fill = commands
         .iter()
         .position(|c| matches!(c, DrawCommand::Fill { .. }))
@@ -51,7 +51,7 @@ fn material_border_and_inset_shadow_enclose_the_finished_subtree() -> TestResult
             },
         );
     });
-    let commands = painted(view.frame(WINDOW, &mut Metrics)?)?;
+    let commands = painted(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert!(matches!(commands.last(), Some(DrawCommand::Stroke { .. })));
     assert!(
         matches!(commands.get(commands.len() - 2), Some(DrawCommand::Shadow { shadow, .. }) if shadow.inset)
@@ -79,11 +79,11 @@ fn modifier_order_changes_background_bounds() -> TestResult {
         })
     };
     assert_eq!(
-        rect(painted(a.frame(WINDOW, &mut Metrics)?)?),
+        rect(painted(a.frame(WINDOW, &mut Metrics).without_failures()?)?),
         Some(Rect::new(0.dp(), 0.dp(), 30.dp(), 20.dp()))
     );
     assert_eq!(
-        rect(painted(b.frame(WINDOW, &mut Metrics)?)?),
+        rect(painted(b.frame(WINDOW, &mut Metrics).without_failures()?)?),
         Some(Rect::new(5.dp(), 5.dp(), 20.dp(), 10.dp()))
     );
     Ok(())
@@ -274,10 +274,11 @@ fn local_clip_viewport_preserves_natural_measurement_and_updates_paint_and_input
         });
     });
     let mut scene = Scene::default();
-    scene.show(view.frame(
+    let frame = view.frame(
         Viewport::new(Size::new(200.dp(), 200.dp()), Density::ONE),
         &mut Metrics,
-    )?)?;
+    );
+    scene.show(frame.without_failures()?)?;
     assert_eq!(measured.get(), Size::new(100.dp(), 100.dp()));
     let click = |view: &mut View, point| {
         view.input(InputEvent::Press(point));
@@ -288,10 +289,11 @@ fn local_clip_viewport_preserves_natural_measurement_and_updates_paint_and_input
     click(&mut view, Point::new(30.dp(), 20.dp()));
     assert_eq!(count.get(), 1);
     extent.set(80.dp());
-    scene.show(view.frame(
+    let frame = view.frame(
         Viewport::new(Size::new(200.dp(), 200.dp()), Density::ONE),
         &mut Metrics,
-    )?)?;
+    );
+    scene.show(frame.without_failures()?)?;
     let commands = scene.commands();
     assert!(commands.iter().any(|command| matches!(command,
         DrawCommand::Clip { rect, corners } if *rect == Rect::new(20.dp(), 10.dp(), 100.dp(), 80.dp())

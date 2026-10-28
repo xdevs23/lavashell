@@ -8,6 +8,7 @@ use lavashell_core::scene::tree::{
     Change, Content, DamageTracker, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
 use lavashell_core::surface::SurfaceId;
+use lavashell_test_platform::WithoutFailures;
 use skia_safe::{AlphaType, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -416,7 +417,7 @@ fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(),
             });
         });
         let mut tree = SceneTree::default();
-        tree.show(view.frame(viewport, &mut painter)?)?;
+        tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
         for _ in 0..3 {
             paint(&mut painter, &mut target, &tree);
         }

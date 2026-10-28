@@ -90,15 +90,14 @@ fn a_scoped_component_paints_an_offset_that_reads_bounds_moved_by_a_scroll_outsi
     Ok(())
 }
 
-/// The error returned by the first frame of a view built with `compose`, or
-/// `TestError::FrameSucceeded` when that frame succeeds.
-fn first_frame_error(compose: impl FnMut(&mut Ui) + 'static) -> Result<FrameError, TestError> {
+/// The cause of the first failure in the first frame of a view built with `compose`, or
+/// `TestError::NothingFailed` when no component fails in that frame.
+fn first_frame_error(compose: impl FnMut(&mut Ui) + 'static) -> Result<ComponentError, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), compose);
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let Err(error) = view.frame(viewport, &mut Metrics) else {
-        return Err(TestError::FrameSucceeded);
-    };
-    Ok(error)
+    let failures = view.frame(viewport, &mut Metrics)?.failures;
+    let failure = failures.into_iter().next();
+    Ok(failure.ok_or(TestError::NothingFailed)?.cause)
 }
 
 fn tag(name: &NodeName) -> Option<&str> {
@@ -124,7 +123,7 @@ fn sizes_that_read_each_other_name_the_cycle() -> TestResult {
             ui.spacer(Dp::ZERO, 10.dp(), width.node_ref(&b).tag("b"));
         });
     })?;
-    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(
@@ -145,7 +144,7 @@ fn a_size_cannot_read_the_node_around_it() -> TestResult {
     })?;
     assert!(matches!(
         error,
-        FrameError::Layout(LayoutError::RelativeSizeRead(_))
+        ComponentError::Layout(LayoutError::RelativeSizeRead(_))
     ));
     Ok(())
 }
@@ -157,7 +156,7 @@ fn a_reference_is_set_on_one_node() -> TestResult {
         ui.spacer(10.dp(), 10.dp(), Modifier::new().node_ref(&shared).tag("a"));
         ui.spacer(10.dp(), 10.dp(), Modifier::new().node_ref(&shared).tag("b"));
     })?;
-    let FrameError::Layout(LayoutError::DuplicateNodeRef { first, second }) = error else {
+    let ComponentError::Layout(LayoutError::DuplicateNodeRef { first, second }) = error else {
         return Err(error.into());
     };
     assert_eq!((tag(&first), tag(&second)), (Some("a"), Some("b")));
@@ -171,7 +170,7 @@ fn a_reference_read_is_set_on_a_node() -> TestResult {
         let width = Modifier::new().width(missing.width());
         ui.spacer(Dp::ZERO, 10.dp(), width.tag("card"));
     })?;
-    let FrameError::Layout(LayoutError::UnsetNodeRef(value)) = error else {
+    let ComponentError::Layout(LayoutError::UnsetNodeRef(value)) = error else {
         return Err(error.into());
     };
     assert_eq!(tag(&value.node), Some("card"));
@@ -195,7 +194,7 @@ fn an_offset_cannot_read_bounds_that_it_moves() -> TestResult {
             },
         );
     })?;
-    let FrameError::Layout(LayoutError::BoundsCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::BoundsCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(tags(&reads), [(Some("card"), Some("title"))]);
@@ -216,7 +215,7 @@ fn a_child_without_a_weight_cannot_read_a_child_with_one() -> TestResult {
             );
         });
     })?;
-    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+    let ComponentError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
         return Err(error.into());
     };
     assert_eq!(tags(&[read]), [(Some("label"), Some("bar"))]);
@@ -233,7 +232,7 @@ fn a_condition_cannot_read_the_size_of_its_own_node() -> TestResult {
     })?;
     assert!(matches!(
         error,
-        FrameError::Layout(LayoutError::RelativeSizeRead(_))
+        ComponentError::Layout(LayoutError::RelativeSizeRead(_))
     ));
     Ok(())
 }
@@ -250,7 +249,7 @@ fn the_condition_of_a_child_with_a_weight_cannot_read_another_child_with_one() -
             ui.spacer(Dp::ZERO, 10.dp(), weighted.tag("bar"));
         });
     })?;
-    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+    let ComponentError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
         return Err(error.into());
     };
     assert_eq!(tags(&[read]), [(Some("label"), Some("bar"))]);
@@ -275,7 +274,7 @@ fn a_natural_width_read_by_a_condition_keeps_the_order_of_weights() -> TestResul
             ui.spacer(Dp::ZERO, 10.dp(), weighted.tag("bar"));
         });
     })?;
-    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+    let ComponentError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
         return Err(error.into());
     };
     assert_eq!(tags(&[read]), [(Some("label"), Some("bar"))]);
@@ -296,7 +295,7 @@ fn a_condition_that_decides_whether_an_overlay_fills_cannot_read_inside_it() -> 
             });
         });
     })?;
-    let FrameError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
+    let ComponentError::Layout(LayoutError::WeightedReadOrder(read)) = error else {
         return Err(error.into());
     };
     assert_eq!(tags(&[read]), [(Some("filling"), Some("mark"))]);
@@ -314,7 +313,7 @@ fn a_condition_in_a_cycle_names_the_cycle() -> TestResult {
             ui.spacer(Dp::ZERO, 10.dp(), width.node_ref(&b).tag("b"));
         });
     })?;
-    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(
@@ -339,7 +338,7 @@ fn a_node_shown_by_its_natural_width_still_takes_part_in_a_cycle() -> TestResult
             ui.spacer(Dp::ZERO, 10.dp(), width.node_ref(&y).tag("y"));
         });
     })?;
-    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(
@@ -372,7 +371,7 @@ fn natural_widths_whose_probes_read_each_other_name_the_cycle() -> TestResult {
             );
         });
     })?;
-    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(
@@ -400,7 +399,7 @@ fn reads_from_different_depths_that_order_one_container_both_ways_name_the_cycle
             });
         });
     })?;
-    let FrameError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
+    let ComponentError::Layout(LayoutError::SizeCycle(LayoutReads(reads))) = error else {
         return Err(error.into());
     };
     assert_eq!(
@@ -411,27 +410,30 @@ fn reads_from_different_depths_that_order_one_container_both_ways_name_the_cycle
 }
 
 #[test]
-fn a_composition_that_changes_what_it_reads_fails_the_frame() -> TestResult {
+fn a_composition_that_changes_what_it_reads_fails() -> TestResult {
     let count = State::new(0);
     let error = first_frame_error(move |ui| {
         count.set(count.get() + 1);
         ui.text("restless", Modifier::new());
     })?;
-    assert!(matches!(error, FrameError::CompositionCycle { .. }));
+    assert_eq!(error, ComponentError::CompositionCycle);
     Ok(())
 }
 
 #[test]
-fn a_frame_after_a_layout_error_reports_it_again() {
+fn a_frame_after_a_layout_error_does_not_compose_again() -> TestResult {
     let mut view = View::new(crate::platform::fixture::facts(), |ui| {
         let missing = NodeRef::new();
         ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(missing.width()));
     });
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    for _ in 0..2 {
-        assert!(matches!(
-            view.frame(viewport, &mut Metrics),
-            Err(FrameError::Layout(LayoutError::UnsetNodeRef(_)))
-        ));
-    }
+    let first = failure_causes(view.frame(viewport, &mut Metrics).without_failures())?;
+    assert!(matches!(
+        first.as_slice(),
+        [ComponentError::Layout(LayoutError::UnsetNodeRef(_))]
+    ));
+    let compositions = view.stats().root_compositions;
+    let _shown = view.frame(viewport, &mut Metrics).without_failures()?;
+    assert_eq!(view.stats().root_compositions, compositions);
+    Ok(())
 }

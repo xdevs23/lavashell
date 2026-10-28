@@ -5,6 +5,7 @@ use crate::text_transfer::*;
 use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
 use lavashell_core::prelude::*;
 use lavashell_core::transfer::ReceivedData;
+use lavashell_test_platform::WithoutFailures;
 
 #[path = "native_source_tests.rs"]
 mod native_source_tests;
@@ -34,7 +35,8 @@ fn editor() -> Result<(View, State<String>, NodeId), TestError> {
             move |text| value.set(text),
         );
     });
-    assert!(!view.frame(WINDOW, &mut Metrics)?.changes.is_empty());
+    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
+    assert!(!update.changes.is_empty());
     let id = field_id(&view)?;
     Ok((view, text, id))
 }

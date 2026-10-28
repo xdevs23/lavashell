@@ -373,4 +373,10 @@ impl Node {
         self.children = std::mem::take(&mut root.children);
         self.on_exit = std::mem::take(&mut root.on_exit);
     }
+
+    /// Removes the children and the exit actions of this node.
+    pub(crate) fn clear_contents(&mut self) {
+        self.children.clear();
+        self.on_exit.clear();
+    }
 }

@@ -88,12 +88,12 @@ fn paint_state_updates_without_recomposition_or_measurement() -> TestResult {
     });
     let window = Viewport::new(Size::new(100.dp(), 100.dp()), Density::ONE);
     let mut scene = Scene::default();
-    scene.show(view.frame(window, &mut Metrics)?)?;
+    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     assert!(!view.needs_frame());
     value.set(40.dp());
     assert!(view.needs_frame());
     assert!(!view.scope.dirty().contains(Phase::Layout));
-    scene.show(view.frame(window, &mut Metrics)?)?;
+    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     assert!(
         scene.commands().iter().any(
             |c| matches!(c, DrawCommand::Fill { shape, .. } if shape.bounds().width == 40.dp())

@@ -40,7 +40,7 @@ use crate::reactive::State;
 use crate::scene::{DrawContext, Drawing, Icon, TEXT_STYLE, TextStyle};
 use crate::style::{INTERACTION_STYLE, InteractionStyle};
 use crate::units::Dp;
-use crate::view::CompositionError;
+use crate::view::{ComponentError, ComponentFailure, CompositionError, NodeName};
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -82,8 +82,11 @@ pub struct Ui {
     pub(crate) shortcuts: Vec<ComposedShortcut>,
     pub(crate) motion: Motion,
     pub(crate) text_sender: TextSender,
-    /// The first error passed to `fail`. The frame of the composition fails with this error.
-    pub(crate) failure: Option<CompositionError>,
+    /// The first error passed to `fail`. The composition fails with this error.
+    failure: Option<CompositionError>,
+    /// The failures of the components composed inside this composition, followed by the failure of this
+    /// composition.
+    pub(crate) failures: Vec<ComponentFailure>,
 }
 
 impl Ui {
@@ -108,13 +111,30 @@ impl Ui {
             motion,
             text_sender,
             failure: None,
+            failures: Vec::new(),
         }
     }
 
-    /// Fails the frame of this composition with `error`, for a component that cannot compose. The
-    /// frame reports the first error of its composition.
+    /// Fails the component that composes here with `error`, for a component that cannot compose. The
+    /// component then contributes no node to the tree, and the next frame returns the first error of
+    /// its composition. The parent and the other components are unchanged.
     pub fn fail(&mut self, error: impl Into<CompositionError>) {
         self.failure = self.failure.or(Some(error.into()));
+    }
+
+    /// Drops every node and shortcut built by this composition when it failed, and records the first
+    /// error of the composition as the failure of `component`. The failures of the components
+    /// composed inside remain in the composition.
+    pub(crate) fn record_failure(&mut self, component: NodeName) {
+        if let Some(error) = self.failure.take() {
+            self.nodes.truncate(1);
+            self.nodes[0].clear_contents();
+            self.shortcuts.clear();
+            self.failures.push(ComponentFailure {
+                component,
+                cause: ComponentError::Composition(error),
+            });
+        }
     }
 
     pub(crate) fn handles(&self) -> ViewHandles {
@@ -203,7 +223,7 @@ impl Ui {
     }
 
     /// A node of `kind` with `id`, configured by `modifier` with the interaction style in effect here.
-    /// A modifier that reads an animation of another view fails the frame of this composition.
+    /// A modifier that reads an animation of another view fails the component that composes here.
     fn node(&mut self, id: NodeId, kind: NodeKind, modifier: Modifier) -> Node {
         let mut node = Node::new(id, kind, self.local(&INTERACTION_STYLE));
         if let Err(error) = modifier.apply(&mut node, self) {

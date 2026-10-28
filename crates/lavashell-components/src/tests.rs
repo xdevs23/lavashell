@@ -2,15 +2,15 @@
 use super::*;
 use lavashell_core::animation::SpringError;
 use lavashell_core::scene::tree::ApplyError;
-use lavashell_core::view::FrameError;
+use lavashell_test_platform::{FrameFailure, WithoutFailures};
 use std::iter::repeat_n;
 use std::{cell::RefCell, rc::Rc};
 
 /// The errors that end a test of this crate before its assertions run.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TestError {
-    #[error("a frame of the view cannot be made")]
-    Frame(#[from] FrameError),
+    #[error("a frame of the view failed")]
+    Failed(#[from] FrameFailure),
     #[error("an update of the frame does not fit the scene tree")]
     Apply(#[from] ApplyError),
     #[error("the spring of the test cannot be built")]
@@ -46,13 +46,13 @@ static BLANK: Icon = Icon {
 };
 
 /// Makes one frame of `view` and applies the scene update to a new scene tree, which is dropped
-/// afterwards.
+/// afterwards. Fails where a component fails.
 pub(crate) fn render(
     view: &mut View,
     viewport: Viewport,
     text: &mut impl TextMeasurer,
-) -> Result<(), FrameError> {
-    view.show_frame(&mut SceneTree::default(), viewport, text)
+) -> Result<(), FrameFailure> {
+    (view.show_frame(&mut SceneTree::default(), viewport, text)).without_failures()
 }
 
 fn composed_bounds(view: &View, tag: &str) -> Result<Rect, TestError> {

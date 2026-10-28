@@ -19,7 +19,7 @@ impl TextMeasurer for Words {
 
 fn probe(compose: impl FnMut(&mut Ui) + 'static, proposal: Proposal) -> Result<Size, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), compose);
-    view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)).without_failures()?;
     Ok(view.size_that_fits(proposal, &mut Words)?)
 }
 
@@ -169,7 +169,7 @@ fn weighted_children_take_the_length_at_which_each_has_its_smallest_size() -> Te
     );
     let mut view = View::new(crate::platform::fixture::facts(), weighted_row);
     let viewport = Viewport::new(Size::new(260.dp(), 20.dp()), Density::ONE);
-    view.show_frame(&mut SceneTree::default(), viewport, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), viewport, &mut Words)).without_failures()?;
     assert_eq!(
         view.tagged_bounds("slider")?,
         Rect::new(100.dp(), 0.dp(), 40.dp(), 10.dp())
@@ -227,7 +227,7 @@ fn a_stack_is_as_long_as_its_weighted_children_need_to_get_their_size_from_their
         Ok(Size::new(120.dp(), 20.dp()))
     );
     let viewport = Viewport::new(Size::new(120.dp(), 20.dp()), Density::ONE);
-    view.show_frame(&mut SceneTree::default(), viewport, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), viewport, &mut Words)).without_failures()?;
     assert_eq!(
         view.tagged_bounds("text")?,
         Rect::new(0.dp(), 0.dp(), 60.dp(), 20.dp())
@@ -301,7 +301,7 @@ fn measurements(depth: usize) -> Result<usize, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         nested(ui, depth);
     });
-    view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)).without_failures()?;
     let mut counting = Counting(0);
     let _probed_for_the_count = view.size_that_fits(
         Proposal {
@@ -350,7 +350,7 @@ fn narrow(ui: &mut Ui) {
 #[test]
 fn a_frame_wraps_text_at_its_width_below_the_smallest_width_of_the_text() -> TestResult {
     let mut view = View::new(crate::platform::fixture::facts(), narrow);
-    view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)).without_failures()?;
     assert_eq!(
         view.tagged_bounds("title")?,
         Rect::new(0.dp(), 0.dp(), 50.dp(), 80.dp())
@@ -373,7 +373,7 @@ fn a_weighted_row_inside_a_maximum_width_keeps_the_frame_result() -> TestResult 
         });
     };
     let mut view = View::new(crate::platform::fixture::facts(), bounded);
-    view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)?;
+    (view.show_frame(&mut SceneTree::default(), WINDOW, &mut Words)).without_failures()?;
     assert_eq!(
         view.tagged_bounds("row")?.size(),
         Size::new(100.dp(), 80.dp())
@@ -408,7 +408,7 @@ fn a_share_of_a_length_measured_back_from_a_child_is_at_least_its_size() -> Test
         )?;
         let mut view = View::new(crate::platform::fixture::facts(), row);
         let viewport = Viewport::new(probed, Density::ONE);
-        view.show_frame(&mut SceneTree::default(), viewport, &mut Words)?;
+        (view.show_frame(&mut SceneTree::default(), viewport, &mut Words)).without_failures()?;
         let measured = view.tagged_bounds("measured")?.width;
         assert!(measured >= width, "{width:?} became {measured:?}");
     }
