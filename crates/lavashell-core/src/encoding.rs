@@ -2,10 +2,12 @@
 //! The serde forms of the values of core. A value that a constructor checks is read through that check. A value
 //! that is valid only in the process that made it fails to be written and to be read.
 
-mod allocation;
+mod sequence;
+mod shared;
 
-pub use allocation::{Allocation, sequence};
-pub(crate) use allocation::{boxed, optional_sequence, shared_bytes, shared_slice, shared_str};
+pub(crate) use sequence::optional_sequence;
+pub use sequence::sequence;
+pub(crate) use shared::{shared_slice, shared_str};
 
 /// Writes each checked number as its value and reads it through its `try_new`.
 macro_rules! checked_serde {

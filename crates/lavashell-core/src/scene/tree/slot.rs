@@ -18,7 +18,7 @@ use std::time::Duration;
 )]
 pub enum Slot<T: SlotValue> {
     Value(T),
-    Motion(#[cfg_attr(feature = "serde", serde(with = "crate::encoding::boxed"))] Box<T::Motion>),
+    Motion(Box<T::Motion>),
 }
 
 impl<T: SlotValue> Slot<T> {
