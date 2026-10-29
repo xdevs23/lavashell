@@ -96,6 +96,31 @@ fn an_update_reads_back_as_the_same_changes() -> TestResult {
 }
 
 #[test]
+fn a_boxed_motion_is_written_as_its_variant_and_motion() -> TestResult {
+    let program = Program::target(
+        Vector([0.0]),
+        Vector([1.0]),
+        Vector([0.0]),
+        MotionSpec::Instant,
+        0.01,
+    )?;
+    let timing = Timing {
+        start: Duration::from_millis(100),
+        paused: None,
+        offset: Duration::ZERO,
+        rate: 1.0,
+    };
+    let motion = Playing::new(1.0, program, timing)?;
+    let slot = Slot::Motion(Box::new(motion.clone()));
+    let mut plain = vec![1];
+    plain.extend(postcard::to_allocvec(&motion)?);
+    let bytes = postcard::to_allocvec(&slot)?;
+    assert_eq!(bytes, plain);
+    assert!(postcard::from_bytes::<Slot<f64>>(&bytes)? == slot);
+    Ok(())
+}
+
+#[test]
 fn a_graft_is_not_written() {
     let mut tree = SceneTree::default();
     let graft = Change::SetContent {
