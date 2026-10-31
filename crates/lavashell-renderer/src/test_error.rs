@@ -17,6 +17,10 @@ pub(crate) enum TestError {
     #[error(transparent)]
     Renderer(#[from] Error),
     #[error(transparent)]
+    State(#[from] crate::StateError),
+    #[error(transparent)]
+    StateDraw(#[from] crate::DrawError<std::convert::Infallible>),
+    #[error(transparent)]
     Draw(#[from] FailedDraw),
     #[error(transparent)]
     DrawFailure(#[from] DrawFailure),

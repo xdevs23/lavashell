@@ -19,6 +19,8 @@ use std::{io, sync::mpsc};
 pub(crate) enum TestError {
     #[error("the host failed")]
     Host(#[from] Error),
+    #[error("the renderer failed")]
+    Renderer(#[from] lavashell_renderer::Error),
     #[error("the event loop failed")]
     EventLoop(#[from] calloop::Error),
     #[error("the bus failed")]

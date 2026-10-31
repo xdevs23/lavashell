@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Namespaces, NodeKey, Presented, SceneTree};
+use super::{Namespaces, NodeKey, Presented, SceneTree, TreeId};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,6 +8,7 @@ use std::time::Duration;
 /// the tree changes that node. Creating a snapshot copies zero nodes.
 #[derive(Clone)]
 pub struct SceneSnapshot {
+    lineage: TreeId,
     namespaces: Namespaces,
     moving: Arc<BTreeSet<NodeKey>>,
 }
@@ -24,6 +25,7 @@ impl SceneTree {
     #[must_use]
     pub fn snapshot(&self) -> SceneSnapshot {
         SceneSnapshot {
+            lineage: self.id,
             namespaces: self.namespaces.clone(),
             moving: Arc::clone(&self.moving),
         }
@@ -36,6 +38,13 @@ impl SceneSnapshot {
     #[must_use]
     pub fn at(&self, now: Duration) -> Presented<'_> {
         self.namespaces.at(now)
+    }
+
+    /// The id of the tree that produced the snapshot. After a builder restarts, new snapshots come from a tree with a
+    /// new id.
+    #[must_use]
+    pub fn lineage(&self) -> TreeId {
+        self.lineage
     }
 
     #[must_use]

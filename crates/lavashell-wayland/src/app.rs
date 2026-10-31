@@ -5,7 +5,7 @@ use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
+use lavashell_renderer::{Fonts, FrameOutcome, Painter, PainterSetup, RendererState};
 use lavashell_runtime::{
     ActionQueue, Choreographers, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd,
     SceneSink, SurfaceRecords, Window,
@@ -13,7 +13,6 @@ use lavashell_runtime::{
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
-use sctk::reexports::client::protocol::wl_callback::WlCallback;
 use sctk::reexports::client::protocol::{
     wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface, wl_touch,
 };
@@ -25,7 +24,6 @@ use sctk::reexports::protocols::ext::background_effect::v1::client::{
     ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
-use sctk::reexports::protocols::wp::presentation_time::client::wp_presentation_feedback::WpPresentationFeedback;
 use sctk::reexports::protocols::wp::{
     fractional_scale::v1::client::{
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -57,6 +55,7 @@ use std::time::{Duration, Instant};
 use crate::surface::{LayerLevel, LayerSurface};
 
 mod accessibility;
+mod control;
 mod creation;
 mod device;
 mod focus_grab;
@@ -71,7 +70,6 @@ mod presentation;
 mod protocols;
 mod public;
 mod render;
-mod scene;
 pub(crate) mod session_lock;
 mod shape;
 mod standard_error;
@@ -84,7 +82,6 @@ mod window_input;
 
 pub use input::{HostKey, KeyboardFocus};
 
-type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
 type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
 
 enum Request {
@@ -137,23 +134,14 @@ enum Role {
 
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
-    scene_generation: u64,
-    target: Option<SurfaceTarget>,
     builder: SceneBuilder,
-    damage: DamageTracker,
     role: Role,
     wl: wl_surface::WlSurface,
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
     _window: std::sync::Arc<owned_wl_surface::OwnedWlSurface>,
-    wp_viewport: Option<WpViewport>,
     fractional: Option<WpFractionalScaleV1>,
-    /// The frame callback requested for the next commit, until a shown frame commits it.
-    frame_request: Option<WlCallback>,
-    /// The frame callback committed with the last shown frame, until the compositor sends its `done` event.
-    frame_callback: Option<WlCallback>,
-    /// The presentation feedback of each submitted frame, until the compositor reports whether the frame was presented
-    /// or discarded.
-    feedback: Vec<WpPresentationFeedback>,
+    /// Whether the compositor has not sent the `done` event of the frame callback committed with the last shown frame.
+    frame_callback_pending: bool,
     clock: FrameClock,
     telemetry: PresentationTracker,
     output: Option<OutputInfo>,
@@ -206,18 +194,11 @@ impl Surface {
         if showed_nothing {
             return Err(error);
         }
-        self.repaint_after_builder_restart(&error);
-        Ok(())
-    }
-
-    /// Invalidates the damage tracker after a change did not fit the scene, so the next presentation paints the whole
-    /// surface. The builder restarts with the next frame.
-    fn repaint_after_builder_restart(&mut self, error: &crate::Error) {
         log::warn!(
             "the surface shows the whole scene next: {}",
-            lavashell_core::error::message_chain(error)
+            lavashell_core::error::message_chain(&error)
         );
-        self.damage.invalidate();
+        Ok(())
     }
 
     fn wakes(&self, view: &View, now: Duration) -> Option<Duration> {
@@ -231,25 +212,14 @@ impl Surface {
     }
 }
 
-/// The size in buffer pixels of a surface in `viewport`.
-fn physical_size(viewport: Viewport) -> Result<(u32, u32), crate::Error> {
-    (viewport.size.buffer_size(viewport.density)).map_err(crate::Error::BufferSize)
-}
-
 impl Drop for Surface {
     fn drop(&mut self) {
-        // The Vulkan target drops before the wl_surface is destroyed, because its swapchain presents to that
-        // wl_surface. Dropping the swapchain waits until its queue is idle.
-        self.target = None;
         self.accessibility = None;
         if let Some(background) = self.background.take() {
             background.destroy();
         }
         if let Some(fractional) = self.fractional.take() {
             fractional.destroy();
-        }
-        if let Some(wp_viewport) = self.wp_viewport.take() {
-            wp_viewport.destroy();
         }
         match &self.role {
             Role::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
@@ -295,17 +265,14 @@ pub(super) struct Platform {
     sources: Vec<RegistrationToken>,
     /// The event loop source of each watched file descriptor.
     watches: BTreeMap<WatchId, RegistrationToken>,
-    // `drop` releases the native surfaces first. `surface_records` is declared before `paint` and `paint` before `gpu`,
-    // so the views drop after the native surfaces and before the painter, and the GPU images and query pools cached by
-    // the painter drop before the Vulkan device.
+    // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
+    // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
-    paint: Painter,
     surfaces: BTreeMap<SurfaceId, Surface>,
-    scene: Option<scene::SceneRuntime>,
-    gpu: VulkanRenderer,
+    renderer: RendererState<control::Control>,
     connection: Connection,
     pub(super) qh: QueueHandle<Self>,
     registry: RegistryState,
@@ -330,9 +297,10 @@ impl Drop for Platform {
     fn drop(&mut self) {
         self.config.action_queue.close();
         self.shutdown_transfers();
-        self.paint.retire_gpu_resources();
+        for &id in self.surfaces.keys() {
+            detach(&mut self.renderer, id);
+        }
         self.surfaces.clear();
-        self.scene = None;
         for source in self.sources.drain(..) {
             self.loop_handle.remove(source);
         }
@@ -359,9 +327,9 @@ impl Platform {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
-                    self.paint.forget_effect_surface(id);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
+                    detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     self.choreographers.retire(id);
                     self.surface_records.retire(id);
@@ -393,5 +361,14 @@ fn configure_event(width: Option<u32>, height: Option<u32>) -> SurfaceEvent {
     SurfaceEvent::Configured {
         width: width.map(length),
         height: height.map(length),
+    }
+}
+
+/// Drops the target of `surface` in `renderer` and destroys the objects of its control. The target drops before the
+/// role objects of the surface are destroyed, because its swapchain presents to the surface. Dropping the swapchain
+/// blocks until the queue used by it is idle.
+fn detach(renderer: &mut RendererState<control::Control>, surface: SurfaceId) {
+    if let Some(control) = renderer.retire(surface) {
+        control.destroy();
     }
 }

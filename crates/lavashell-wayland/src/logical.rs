@@ -24,6 +24,12 @@ pub(crate) fn whole(length: Dp) -> Option<i32> {
     length.round().get().to_i32()
 }
 
+/// The nearest whole logical pixels of the width and the height of `size`, for protocol requests
+/// that take integers, or `None` when a length is not finite or does not fit an `i32`.
+pub(crate) fn protocol_size(size: Size) -> Option<(i32, i32)> {
+    Some((whole(size.width)?, whole(size.height)?))
+}
+
 /// The nearest whole logical pixel of a size, at least `minimum`, or `None` when the length is
 /// negative, not finite or does not fit an `i32`.
 pub(crate) fn extent(length: Dp, minimum: u32) -> Option<u32> {
