@@ -5,10 +5,10 @@ use crate::test_scenes::{insert, leaves, paint_damage};
 use crate::{Error, Fonts, Painter, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{
-    Change, Content, DamageTracker, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
+    Change, Content, DamageTracker, Node, Packet, SceneNodeId, SceneTree,
 };
 use lavashell_core::surface::SurfaceId;
-use lavashell_test_fixtures::WithoutFailures;
+use lavashell_test_fixtures::{WithoutFailures, show_all};
 use skia_safe::{AlphaType, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -188,7 +188,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
                 content: Content::Packet(moved),
             }],
         };
-        tree.show(SceneUpdate::from_iter(changes))?;
+        show_all(&mut tree, changes)?;
         let damage = presented.damage(
             tree.at(Duration::ZERO),
             Viewport::new(viewport.size(), Density::ONE),
@@ -382,7 +382,7 @@ fn transient_packets_paint_correctly_without_allocating_cached_images() -> Resul
                 content: Content::Packet(filled),
             }
         };
-        tree.show(SceneUpdate::from_iter([change]))?;
+        tree.show_change(change)?;
         let scene = tree.snapshot();
         paint(&mut painter, &mut target, &scene);
         paint(&mut reference, &mut full, &scene);

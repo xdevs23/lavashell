@@ -261,8 +261,8 @@ impl TargetReader {
 
 fn build_scene(changes: Vec<Change>) -> Result<SceneTree, NativeMethodError> {
     let mut scene = SceneTree::default();
-    scene
-        .show(SceneUpdate { changes })
+    (changes.into_iter())
+        .try_for_each(|change| scene.show_change(change))
         .map_err(NativeMethodError::BuildScene)?;
     Ok(scene)
 }
