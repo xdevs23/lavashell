@@ -3714,7 +3714,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "87c07979b8d8ac4f294e501f7a1d53e77ec2481eb08a7d9010680c36971db89b"
+        "seedHash": "8f952cbb2d4a338f407619fd019e05ec01dd976633f8eaea6ff09845d16fab38"
       }
     }
   },
@@ -4780,6 +4780,8 @@
           "icu_locale_core",
           "num-traits",
           "palette",
+          "postcard",
+          "serde",
           "thiserror 2.0.21",
           "zeroize"
         ],
@@ -4868,7 +4870,8 @@
       {
         "dependencies": [
           "icu_locale_core",
-          "lavashell-core"
+          "lavashell-core",
+          "thiserror 2.0.21"
         ],
         "name": "lavashell-test-platform",
         "version": "0.1.0"

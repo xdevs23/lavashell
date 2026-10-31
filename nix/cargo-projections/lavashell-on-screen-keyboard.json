@@ -2010,6 +2010,8 @@
           "icu_locale_core",
           "num-traits",
           "palette",
+          "postcard",
+          "serde",
           "thiserror 2.0.21",
           "zeroize"
         ],
@@ -2112,7 +2114,8 @@
       {
         "dependencies": [
           "icu_locale_core",
-          "lavashell-core"
+          "lavashell-core",
+          "thiserror 2.0.21"
         ],
         "name": "lavashell-test-platform",
         "version": "0.1.0"
