@@ -12,6 +12,7 @@ mod graph;
 mod input;
 mod input_method;
 mod interaction;
+mod key_input;
 mod laid_out;
 mod layout;
 mod local;
@@ -94,6 +95,7 @@ pub enum Cursor {
     Text,
 }
 
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum InputEvent {
     Leave,

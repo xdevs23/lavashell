@@ -84,7 +84,6 @@ impl Platform {
             wp_viewport,
             fractional,
             supplied_facts,
-            pointer_owner: None,
             frame_request: None,
             frame_callback: None,
             feedback: Vec::new(),

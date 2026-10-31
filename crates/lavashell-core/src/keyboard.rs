@@ -55,3 +55,11 @@ impl Shortcut {
         self
     }
 }
+
+/// A key resolved by the keymap from the host, with the text typed by a press of it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyStroke {
+    /// A named key, or else a key with the character given to it by the keymap.
+    pub key: Option<Key>,
+    pub text: Option<String>,
+}

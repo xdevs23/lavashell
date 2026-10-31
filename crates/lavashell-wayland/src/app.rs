@@ -7,7 +7,9 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
-use lavashell_runtime::{DragRegion, OutputRecords, RunEnd, SurfaceRecords, Window};
+use lavashell_runtime::{
+    DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd, SurfaceRecords, Window,
+};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
@@ -55,6 +57,7 @@ use crate::surface::{LayerLevel, LayerSurface};
 
 mod accessibility;
 mod creation;
+mod device;
 mod focus_grab;
 mod input;
 mod key;
@@ -82,7 +85,6 @@ pub use input::{HostKey, KeyboardFocus};
 pub use view_actions::ViewActions;
 
 type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
-type InputFilter = Box<dyn FnMut(SurfaceId, InputEvent) -> Option<InputEvent>>;
 type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
 
 enum Request {
@@ -102,6 +104,7 @@ pub struct App {
     scene: Option<Box<dyn lavashell_renderer::vulkan::SceneSource>>,
     gpu_timing: bool,
     preference_overrides: lavashell_core::preferences::PreferenceOverrides,
+    input_filter: Option<InputFilter>,
     pub(crate) config: AppConfig,
     platform: PlatformFacts,
 }
@@ -110,7 +113,6 @@ pub struct App {
 /// app runs.
 #[derive(Default)]
 pub(crate) struct AppConfig {
-    input_filter: Option<InputFilter>,
     tick: Option<Box<dyn FnMut(Duration)>>,
     on_frame: Option<Box<dyn FnMut(FrameTime)>>,
     observer: Option<Box<dyn FnMut(FrameReport)>>,
@@ -145,7 +147,6 @@ struct Surface {
     _window: std::sync::Arc<owned_wl_surface::OwnedWlSurface>,
     wp_viewport: Option<WpViewport>,
     fractional: Option<WpFractionalScaleV1>,
-    pointer_owner: Option<wl_pointer::WlPointer>,
     /// The frame callback requested for the next commit, until a shown frame commits it.
     frame_request: Option<WlCallback>,
     /// The frame callback committed with the last shown frame, until the compositor sends its `done` event.
@@ -257,8 +258,6 @@ struct SeatDevices {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     touch: Option<wl_touch::WlTouch>,
     touches: touch::TouchPoints,
-    focus: Option<SurfaceId>,
-    modifiers: Modifiers,
 }
 
 impl SeatDevices {
@@ -269,8 +268,6 @@ impl SeatDevices {
             pointer: None,
             keyboard: None,
             touch: None,
-            focus: None,
-            modifiers: Modifiers::default(),
         }
     }
 }
@@ -311,6 +308,7 @@ pub(super) struct Platform {
     compositor: CompositorState,
     protocols: SurfaceProtocols,
     devices: Vec<SeatDevices>,
+    input: InputRouter,
     pub(super) loop_handle: LoopHandle<'static, Self>,
     pub(super) clipboard: ClipboardState,
     pub(super) config: AppConfig,
@@ -355,6 +353,7 @@ impl Platform {
                 SurfaceRequest::Destroy(id) => {
                     self.paint.forget_effect_surface(id);
                     self.output_records.forget(id);
+                    self.input.forget_surface(id);
                     drop(self.surfaces.remove(&id));
                     self.surface_records.retire(id);
                 }

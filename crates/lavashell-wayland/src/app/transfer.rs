@@ -145,10 +145,8 @@ impl Platform {
         &self,
         surface: SurfaceId,
     ) -> Result<wl_seat::WlSeat, Error> {
-        let mut devices = self
-            .devices
-            .iter()
-            .filter(|device| device.focus == Some(surface));
+        let mut devices =
+            (self.devices.iter()).filter(|device| device.keyboard_focuses(&self.input, surface));
         let first = devices.next().ok_or(Error::NoFocusedInputDevice)?;
         if devices.next().is_some() {
             return Err(Error::SeveralFocusedInputDevices);
