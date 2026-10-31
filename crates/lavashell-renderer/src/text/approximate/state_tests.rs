@@ -6,13 +6,13 @@ use crate::test_error::TestError;
 use crate::test_scenes::{paint, paint_damage};
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 
 #[test]
 fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_changing_metrics()
 -> Result<(), TestError> {
     let mut painter = new_painter(PixelGeometry::None)?;
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("retained", Modifier::new(), |ui| {
             ui.text(
                 "Headphones p e\u{301} office",

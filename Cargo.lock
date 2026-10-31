@@ -2589,7 +2589,7 @@ name = "lavashell-components"
 version = "0.1.0"
 dependencies = [
  "lavashell-core",
- "lavashell-test-platform",
+ "lavashell-test-fixtures",
  "thiserror 2.0.21",
 ]
 
@@ -2666,7 +2666,7 @@ version = "0.1.0"
 dependencies = [
  "icu_locale_core",
  "lavashell-core",
- "lavashell-test-platform",
+ "lavashell-test-fixtures",
  "thiserror 2.0.21",
 ]
 
@@ -2746,7 +2746,7 @@ dependencies = [
  "inventory",
  "lavashell-core",
  "lavashell-effect-quality",
- "lavashell-test-platform",
+ "lavashell-test-fixtures",
  "lavashell-vulkan",
  "log",
  "lru",
@@ -2782,7 +2782,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lavashell-test-platform"
+name = "lavashell-test-fixtures"
 version = "0.1.0"
 dependencies = [
  "icu_locale_core",
@@ -2816,7 +2816,7 @@ dependencies = [
  "lavashell-core",
  "lavashell-effect-quality",
  "lavashell-renderer",
- "lavashell-test-platform",
+ "lavashell-test-fixtures",
  "log",
  "num-traits",
  "quote",

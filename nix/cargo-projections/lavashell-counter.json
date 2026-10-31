@@ -3714,7 +3714,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "8f952cbb2d4a338f407619fd019e05ec01dd976633f8eaea6ff09845d16fab38"
+        "seedHash": "2f53ad7a9dc105178d45f3756367ab7d9ac12fb7279922d548cbbafe5653e010"
       }
     }
   },
@@ -4769,7 +4769,7 @@
       {
         "dependencies": [
           "lavashell-core",
-          "lavashell-test-platform",
+          "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-components",
@@ -4820,7 +4820,7 @@
         "dependencies": [
           "icu_locale_core",
           "lavashell-core",
-          "lavashell-test-platform",
+          "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-keyboard",
@@ -4854,7 +4854,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
-          "lavashell-test-platform",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "lru",
@@ -4873,7 +4873,7 @@
           "lavashell-core",
           "thiserror 2.0.21"
         ],
-        "name": "lavashell-test-platform",
+        "name": "lavashell-test-fixtures",
         "version": "0.1.0"
       },
       {
@@ -4900,7 +4900,7 @@
           "lavashell-core",
           "lavashell-effect-quality",
           "lavashell-renderer",
-          "lavashell-test-platform",
+          "lavashell-test-fixtures",
           "log",
           "num-traits",
           "quote",

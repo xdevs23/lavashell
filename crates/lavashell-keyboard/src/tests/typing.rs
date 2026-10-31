@@ -184,7 +184,7 @@ fn a_keyboard_composed_in_a_new_view_types_into_the_field_of_that_view() -> Resu
     let keyboard = Keyboard::new(Target::View, &settings, layout, placement)?;
     let view = |text: &State<String>| -> Result<(View, Scene), TestError> {
         let (value, shown) = (text.clone(), keyboard.clone());
-        let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
             let value = value.clone();
             let field = |ui: &mut Ui| {
                 ui.text_input(

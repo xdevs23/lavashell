@@ -10,7 +10,7 @@ use lavashell_core::protected_text::ProtectedText;
 use lavashell_core::scene::tree::{
     Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,7 +36,7 @@ fn field(
 ) -> Result<(View, SceneTree, ProtectedText, PrivateText), TestError> {
     let secret = ProtectedText::new();
     let state = secret.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let state = state.clone();
         ui.scoped("private field", Modifier::new(), move |ui| {
             ui.protected_input(
@@ -360,7 +360,7 @@ fn the_smallest_private_width_is_shaped_from_the_value_outside_the_shared_caches
 
 fn field_beside_text(secret: &ProtectedText) -> View {
     let state = secret.clone();
-    View::new(lavashell_test_platform::facts(), move |ui| {
+    View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
             ui.protected_input(
                 state.clone(),

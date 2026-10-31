@@ -149,7 +149,7 @@ mod tests {
         queue.dispatch(SurfaceId(3), move |_| again.dispatch(SurfaceId(4), |_| {}));
         let pending = queue.drain();
         assert!(!queue.pending());
-        let mut view = View::new(lavashell_test_platform::facts(), |_| {});
+        let mut view = View::new(lavashell_test_fixtures::facts(), |_| {});
         assert_eq!(pending[0].surface, SurfaceId(3));
         for action in pending {
             (action.apply)(&mut view);

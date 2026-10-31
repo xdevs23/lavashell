@@ -23,7 +23,7 @@ fn key(view: &mut View, key: Key) {
 }
 
 fn stock_controls() -> Result<View, TestError> {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.column(Modifier::new(), |ui| {
             ui.button(
                 Modifier::new(),
@@ -152,7 +152,7 @@ fn stock_value_controls_supply_roles_and_values() -> Result<(), TestError> {
 fn merged_control_preserves_an_independently_operable_child() -> Result<(), TestError> {
     let count = State::new(0);
     let inner = count.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.button(
             Modifier::new(),
             || {},
@@ -185,7 +185,7 @@ fn toggle_assistive_and_keyboard_activation_use_the_application_callback() -> Re
 {
     let enabled = State::new(false);
     let controlled = enabled.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.toggle(
             controlled.get(),
             Modifier::new(),
@@ -219,7 +219,7 @@ fn slider_keyboard_pointer_and_assistive_actions_share_one_bounded_value() -> Re
     let changed = Rc::new(RefCell::new(Vec::new()));
     let log = changed.clone();
     let controlled = value.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let (read, controlled) = (controlled.clone(), controlled.clone());
         let log = log.clone();
         ui.slider(
@@ -317,7 +317,7 @@ fn slider_keyboard_pointer_and_assistive_actions_share_one_bounded_value() -> Re
 fn disabled_ancestry_disables_ranges_without_hiding_their_state() -> Result<(), TestError> {
     let calls = State::new(0);
     let changes = calls.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(Modifier::new().enabled(false), |ui| {
             ui.slider(
                 || 0.5,
@@ -353,7 +353,7 @@ fn scrollbar_semantics_keyboard_and_assistive_requests_update_the_same_scroll_st
 -> Result<(), TestError> {
     let scroll = ScrollState::new(Axis::Vertical);
     let scroller = scroll.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.row(Modifier::new(), |ui| {
             ui.scroll(
                 scroller.clone(),
@@ -420,7 +420,7 @@ fn scrollbar_semantics_keyboard_and_assistive_requests_update_the_same_scroll_st
 
 #[test]
 fn a_dialog_exposes_its_scope_and_rejects_background_actions() -> Result<(), TestError> {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.button(
             Modifier::new(),
             || {},
@@ -462,7 +462,7 @@ fn a_dialog_exposes_its_scope_and_rejects_background_actions() -> Result<(), Tes
 fn a_scroll_container_keyboard_targets_the_author_supplied_scroll_state() -> Result<(), TestError> {
     let scroll = ScrollState::new(Axis::Vertical);
     let controlled = scroll.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.scroll(
             controlled.clone(),
             Modifier::new()

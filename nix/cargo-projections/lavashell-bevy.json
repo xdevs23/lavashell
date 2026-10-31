@@ -9248,7 +9248,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
-          "lavashell-test-platform",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "lru",
@@ -9267,7 +9267,7 @@
           "lavashell-core",
           "thiserror 2.0.21"
         ],
-        "name": "lavashell-test-platform",
+        "name": "lavashell-test-fixtures",
         "version": "0.1.0"
       },
       {

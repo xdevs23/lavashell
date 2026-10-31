@@ -2,7 +2,7 @@
 use super::*;
 use lavashell_core::animation::SpringError;
 use lavashell_core::scene::tree::ApplyError;
-use lavashell_test_platform::{FrameFailure, WithoutFailures};
+use lavashell_test_fixtures::{FrameFailure, WithoutFailures};
 use std::iter::repeat_n;
 use std::{cell::RefCell, rc::Rc};
 
