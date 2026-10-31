@@ -2552,6 +2552,7 @@ dependencies = [
 name = "lavashell-android"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "jni",
  "lavashell-core",
  "lavashell-renderer",

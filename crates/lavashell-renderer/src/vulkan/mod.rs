@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #[cfg(target_os = "android")]
 mod android;
-#[cfg(any(target_os = "android", test))]
 mod buffer_format;
 mod cache_budget;
 mod completion;
 mod driver;
 mod embedded;
 mod external;
-#[cfg(target_os = "android")]
-mod hardware_buffer;
+mod foreign;
 mod mask_coverage;
 mod offscreen;
 mod presentation;
@@ -22,13 +20,13 @@ mod timestamps;
 mod wayland;
 mod wsi;
 
+pub use buffer_format::ForeignFormat;
 pub use completion::Completion;
 pub use embedded::{BorrowedImage, EmbeddedVulkanRenderer, ReadySignal};
 pub use external::{CompletedRelease, ExternalImage, PendingRelease, ReleaseProgress};
-#[cfg(target_os = "android")]
-pub use hardware_buffer::{
-    FormatProperties, HardwareBufferImport, HardwareBufferImporter, HardwareBufferProperties,
-    Sampling,
+pub use foreign::{
+    FOREIGN_IMPORT_EXTENSIONS, ForeignAlpha, ForeignImport, ForeignImporter, ForeignMemory,
+    SampledMemory, Sampling,
 };
 pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status};
 pub use offscreen::OffscreenSurface;

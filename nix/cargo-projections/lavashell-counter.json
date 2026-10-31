@@ -3714,7 +3714,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "8f952cbb2d4a338f407619fd019e05ec01dd976633f8eaea6ff09845d16fab38"
+        "seedHash": "d9aabd837cc095c58d1974a6b74b1a159a90f5843ab98a47f866c702659b3c5f"
       }
     }
   },
@@ -4746,6 +4746,7 @@
       },
       {
         "dependencies": [
+          "ash",
           "jni",
           "lavashell-core",
           "lavashell-renderer",

@@ -10,15 +10,14 @@ publish = false
 workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
+ash.workspace = true
 jni.workspace = true
 lavashell-core.workspace = true
 lavashell-renderer.workspace = true
+lavashell-vulkan.workspace = true
 ndk.workspace = true
 rustix = { workspace = true, features = ["event"] }
 thiserror.workspace = true
-
-[target.'cfg(target_os = "android")'.dev-dependencies]
-lavashell-vulkan.workspace = true
 
 # The tests run the adapter on the host against a simulated platform.
 [target.'cfg(not(target_os = "android"))'.dev-dependencies]

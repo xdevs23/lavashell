@@ -194,6 +194,20 @@ fn a_frame_drawn_when_no_fence_can_be_submitted_returns_at_teardown() -> Result<
 }
 
 #[test]
+fn a_device_with_a_ycbcr_conversion_samples_a_half_float_frame() -> Result<(), TestError> {
+    GPU.with(|gpu| gpu.sampler_ycbcr_conversion.set(true));
+    let (mut renderer, surface) = attached()?;
+    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Private)?;
+    let mut half_float = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
+    half_float.format = HardwareBufferFormat::R16G16B16A16_FLOAT;
+    producer(&stream)?.queue(half_float);
+    let image = latched(&mut renderer, &mut stream)?;
+    assert_eq!(render(&mut renderer, image)?, FrameOutcome::Shown);
+    assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, RED);
+    Ok(())
+}
+
+#[test]
 fn a_render_on_a_lost_device_reports_every_step_that_failed() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
     let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
