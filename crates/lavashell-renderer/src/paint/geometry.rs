@@ -335,7 +335,7 @@ mod tests {
             width: Some(0.dp()),
             height: None,
         };
-        let mut wrapping = View::new(lavashell_test_platform::facts(), |ui| {
+        let mut wrapping = View::new(lavashell_test_fixtures::facts(), |ui| {
             ui.text("Display brightness", Modifier::new().max_lines(2));
         });
         let two_lines = TextStyle {
@@ -346,7 +346,7 @@ mod tests {
         let probed = wrapping.size_that_fits(zero, &mut painter)?;
         assert_eq!(probed.width, longest.width);
         assert!(probed.height > longest.height);
-        let mut one_line = View::new(lavashell_test_platform::facts(), |ui| {
+        let mut one_line = View::new(lavashell_test_fixtures::facts(), |ui| {
             ui.text("Display brightness", Modifier::new().max_lines(1));
         });
         assert_eq!(

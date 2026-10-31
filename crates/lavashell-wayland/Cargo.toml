@@ -39,5 +39,5 @@ thiserror.workspace = true
 
 [dev-dependencies]
 accesskit_consumer.workspace = true
-lavashell-test-platform.workspace = true
+lavashell-test-fixtures.workspace = true
 zbus = { workspace = true, features = ["async-io", "blocking-api"] }

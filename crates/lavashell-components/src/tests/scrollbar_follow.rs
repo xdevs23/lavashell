@@ -11,7 +11,7 @@ const SECTION: Viewport = Viewport::new(Size::new(Dp::new(120.0), Dp::new(120.0)
 fn section(recycler: &Recycler<usize>, style: InteractionStyle) -> Result<View, TestError> {
     let list = recycler.clone();
     let spring = Spring::new(Duration::from_millis(170), 1.0)?;
-    Ok(View::new(lavashell_test_platform::facts(), move |ui| {
+    Ok(View::new(lavashell_test_fixtures::facts(), move |ui| {
         let list = list.clone();
         let style = style.clone();
         ui.provide(&INTERACTION_STYLE, style, |ui| {

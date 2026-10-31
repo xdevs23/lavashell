@@ -5,7 +5,7 @@ use crate::text_transfer::*;
 use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
 use lavashell_core::prelude::*;
 use lavashell_core::transfer::ReceivedData;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 
 #[path = "native_source_tests.rs"]
 mod native_source_tests;
@@ -24,7 +24,7 @@ const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0))
 fn editor() -> Result<(View, State<String>, NodeId), TestError> {
     let text = State::new("abc def".to_string());
     let value = text.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let value = value.clone();
         ui.text_area(
             value.get(),

@@ -125,7 +125,7 @@ fn a_keyboard_shown_in_one_view_rises_from_below_when_it_is_composed_in_another(
     let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
     let docked = |keyboard: &Keyboard| {
         let keyboard = keyboard.clone();
-        View::new(lavashell_test_platform::facts(), move |ui| {
+        View::new(lavashell_test_fixtures::facts(), move |ui| {
             above_keyboard(
                 ui,
                 |_| {},
@@ -214,7 +214,7 @@ fn a_keyboard_that_is_no_longer_composed_takes_no_height() -> Result<(), TestErr
     let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
     let (composed, shown) = (State::new(true), keyboard.clone());
     let showing = composed.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         if showing.get() {
             ui.keyboard(&shown, Modifier::new());
         }

@@ -19,7 +19,7 @@ fn ten_thousand_variable_rows_recycle_and_measure_without_building_the_history()
     let list = MeasuredRecycler::new();
     list.set_keys((0..10_000).collect())?;
     let state = list.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         state.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -57,7 +57,7 @@ fn only_the_first_row_is_composed_until_a_row_is_measured_and_the_others_take_th
     list.set_keys((0..10).collect())?;
     let compositions = Rc::new(RefCell::new(Vec::new()));
     let (state, log) = (list.clone(), compositions.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let composed = Rc::new(RefCell::new(Vec::new()));
         log.borrow_mut().push(composed.clone());
         state.compose(
@@ -88,7 +88,7 @@ fn a_single_row_can_grow_beyond_its_estimated_extent() -> Result<(), TestError> 
     let list = MeasuredRecycler::new();
     list.set_keys(vec![1])?;
     let state = list.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         state.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -117,7 +117,7 @@ fn growing_rows_follow_the_bottom_and_preserve_a_reader_above_it() -> Result<(),
     let heights = State::new([100.dp(), 100.dp()]);
     let values = heights.clone();
     let state = list.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         state.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -159,7 +159,7 @@ fn a_row_above_the_reader_that_grew_while_it_was_away_keeps_the_reader_in_place(
     let heights = State::new([100.dp(); 4]);
     let values = heights.clone();
     let state = list.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         state.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -199,7 +199,7 @@ fn measurements_keep_the_visible_anchor_and_survive_key_reordering() -> Result<(
     let state = list.clone();
     let first_height = State::new(100.dp());
     let measured_height = first_height.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         state.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -245,7 +245,7 @@ fn the_end_of_the_list_follows_growth_and_recomposes_its_reader_only_when_it_cha
     let last_height = State::new(100.dp());
     let latest = Rc::new(Cell::new(0));
     let (state, height, composed) = (list.clone(), last_height.clone(), latest.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let (rows, height, ends, composed) = (
             state.clone(),
             height.clone(),

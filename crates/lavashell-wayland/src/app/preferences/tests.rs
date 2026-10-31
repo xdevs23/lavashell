@@ -31,10 +31,10 @@ fn newly_created_views_inherit_explicit_overrides_and_current_system_preferences
             contrast: Some(ContrastPreference::More),
         },
     );
-    let mut reader = PreferenceReader::new(lavashell_test_platform::facts());
+    let mut reader = PreferenceReader::new(lavashell_test_fixtures::facts());
     assert_eq!(
         configuration.apply(&reader.view, Instant::now()),
-        lavashell_test_platform::facts()
+        lavashell_test_fixtures::facts()
     );
     let actual = reader.values();
     assert_eq!(actual.text_scaling.to_dp(12.sp()), 18.dp());
@@ -53,8 +53,8 @@ fn a_system_update_reaches_every_view_and_leaves_the_overrides_in_place() {
         },
     );
     let mut readers = [
-        PreferenceReader::new(lavashell_test_platform::facts()),
-        PreferenceReader::new(lavashell_test_platform::facts()),
+        PreferenceReader::new(lavashell_test_fixtures::facts()),
+        PreferenceReader::new(lavashell_test_fixtures::facts()),
     ];
     let supplied: Vec<_> = (readers.iter())
         .map(|reader| configuration.apply(&reader.view, Instant::now()))
@@ -77,7 +77,7 @@ fn a_system_update_reaches_every_view_and_leaves_the_overrides_in_place() {
 fn host_facts_replace_the_supplied_ones_while_the_host_knows_them() {
     let mut configuration =
         configuration(PreferenceValues::default(), PreferenceOverrides::default());
-    let reader = PreferenceReader::new(lavashell_test_platform::facts());
+    let reader = PreferenceReader::new(lavashell_test_fixtures::facts());
     let supplied = configuration.apply(&reader.view, Instant::now());
     let scheme = |color_scheme| Appearance {
         color_scheme,
@@ -96,10 +96,10 @@ fn host_facts_replace_the_supplied_ones_while_the_host_knows_them() {
     assert_eq!(reader.view.platform().key_repeat, None);
     configuration.update(scheme(None), [(&reader.view, &supplied)].into_iter());
     assert_eq!(reader.view.platform().color_scheme, supplied.color_scheme);
-    let new = PreferenceReader::new(lavashell_test_platform::facts());
+    let new = PreferenceReader::new(lavashell_test_fixtures::facts());
     assert_eq!(
         configuration.apply(&new.view, Instant::now()),
-        lavashell_test_platform::facts()
+        lavashell_test_fixtures::facts()
     );
     assert_eq!(new.view.platform().key_repeat, None);
 }
@@ -108,11 +108,11 @@ fn host_facts_replace_the_supplied_ones_while_the_host_knows_them() {
 fn the_languages_of_the_environment_replace_the_supplied_ones() {
     let mut configuration =
         configuration(PreferenceValues::default(), PreferenceOverrides::default());
-    let reader = PreferenceReader::new(lavashell_test_platform::facts());
+    let reader = PreferenceReader::new(lavashell_test_fixtures::facts());
     configuration.facts.locales = Some(vec![langid!("pt-BR"), langid!("de")]);
     assert_eq!(
         configuration.apply(&reader.view, Instant::now()).locales,
-        lavashell_test_platform::facts().locales
+        lavashell_test_fixtures::facts().locales
     );
     assert_eq!(
         reader.view.platform().locales,
