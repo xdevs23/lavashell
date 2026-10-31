@@ -5,9 +5,8 @@ use lavashell_android::{
 };
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{Change, Content, Group, Node, Packet, SceneNodeId, Slot};
-use lavashell_renderer::vulkan::FormatProperties;
 use lavashell_renderer::{
-    Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming, skia,
+    Fonts, ForeignFormat, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming, skia,
 };
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferUsage};
 use ndk::media::image_reader::{AcquireResult, Image, ImageFormat, ImageReader};
@@ -68,11 +67,11 @@ impl StreamRoundTrip {
         self.stream.resize(sizes).map_err(NativeMethodError::Resize)
     }
 
-    /// Reads the format properties that the Vulkan device of the renderer returns for `buffer`.
+    /// Reads the format that the Vulkan device of the renderer reports for `buffer`.
     pub fn read_buffer_format(
         &self,
         buffer: &HardwareBuffer,
-    ) -> Result<FormatProperties, NativeMethodError> {
+    ) -> Result<ForeignFormat, NativeMethodError> {
         (self.renderer.buffer_format(buffer)).map_err(NativeMethodError::BufferFormat)
     }
 

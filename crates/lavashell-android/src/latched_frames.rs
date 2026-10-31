@@ -2,9 +2,10 @@
 //! The frames latched from streams and their import into Vulkan. A latched frame is imported only when a paint first
 //! draws it. Each frame returns to its producer once the GPU has finished every render that could read it.
 
+use crate::buffer_sampling;
 use crate::error::{Error, Failures};
 use crate::platform::{
-    Completion, HardwareBufferImport, HardwareBufferImporter, HardwareBufferProperties, Sampling,
+    Completion, ForeignImport, ForeignImporter, HardwareBufferMemory, SampledMemory, Sampling,
     VulkanRenderer,
 };
 use crate::surface_stream::{Acquired, BufferId, QueuedFrame, ReaderToken, SurfaceStream};
@@ -31,15 +32,15 @@ pub enum Latch {
 struct Latched {
     image: StreamImage,
     frame: QueuedFrame,
-    properties: HardwareBufferProperties,
-    import: Option<Rc<HardwareBufferImport>>,
+    memory: SampledMemory<HardwareBufferMemory>,
+    import: Option<Rc<ForeignImport>>,
 }
 
 /// The Vulkan import of a buffer. Later frames in the same buffer reuse the import while the reader that delivered
 /// the buffer exists.
 struct CachedImport {
     reader: ReaderToken,
-    import: Rc<HardwareBufferImport>,
+    import: Rc<ForeignImport>,
 }
 
 #[derive(Clone)]
@@ -69,7 +70,7 @@ pub(crate) struct LatchedFrames {
     frames: StreamFrames,
     latched: BTreeMap<StreamId, Latched>,
     imports: BTreeMap<BufferId, CachedImport>,
-    importer: HardwareBufferImporter,
+    importer: ForeignImporter,
     release: ReleaseAfter,
     held: Vec<Held>,
 }
@@ -80,7 +81,7 @@ impl LatchedFrames {
             frames: StreamFrames::default(),
             latched: BTreeMap::new(),
             imports: BTreeMap::new(),
-            importer: gpu.hardware_buffer_importer().map_err(Error::Importer)?,
+            importer: HardwareBufferMemory::importer(gpu).map_err(Error::Importer)?,
             release: ReleaseAfter::Fence(None),
             held: Vec::new(),
         })
@@ -91,11 +92,11 @@ impl LatchedFrames {
     }
 
     #[cfg(target_os = "android")]
-    pub fn format_properties(
+    pub fn buffer_format(
         &self,
         buffer: &crate::platform::ndk::hardware_buffer::HardwareBuffer,
-    ) -> Result<lavashell_renderer::vulkan::FormatProperties, Error> {
-        (self.importer.format_properties(buffer)).map_err(Error::BufferFormat)
+    ) -> Result<lavashell_renderer::ForeignFormat, Error> {
+        (crate::hardware_buffer::read_format(&self.importer, buffer)).map_err(Error::BufferFormat)
     }
 
     pub fn latch(&mut self, painter: &Painter, stream: &mut SurfaceStream) -> Result<Latch, Error> {
@@ -120,9 +121,9 @@ impl LatchedFrames {
             }
             Acquired::Frame(frame) => frame,
         };
-        let sampling = self.importer.properties(&frame.buffer);
-        let properties = match sampling.map_err(Error::BufferProperties)? {
-            Sampling::Sampled(properties) => properties,
+        let sampling = buffer_sampling::sampling(&self.importer, &frame.buffer);
+        let memory = match sampling.map_err(Error::BufferProperties)? {
+            Sampling::Sampled(memory) => memory,
             Sampling::Rejected(rejection) => {
                 frame.release(None);
                 painter.reject_stream_frame(rejection);
@@ -138,7 +139,7 @@ impl LatchedFrames {
         let latched = slot.insert(Latched {
             image: stream.record_latch(&frame),
             frame,
-            properties,
+            memory,
             import: None,
         });
         Ok(Latch::Frame(latched.image))
@@ -195,7 +196,7 @@ impl LatchedFrames {
             Entry::Occupied(cached) => cached.get().import.clone(),
             Entry::Vacant(slot) => {
                 let import = importer
-                    .import(&latched.properties)
+                    .import(&latched.memory)
                     .map_err(Error::ImportBuffer)?;
                 let cached = CachedImport {
                     reader: frame.reader.clone(),

@@ -11,8 +11,7 @@ use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
 use lavashell_android::{BufferSizes, StreamFormat, surface_of_window};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::skia;
-use lavashell_renderer::vulkan::FormatProperties;
+use lavashell_renderer::{ForeignFormat, skia};
 use lavashell_vulkan::ycbcr::Conversion;
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferRef};
 use std::cell::RefCell;
@@ -169,8 +168,8 @@ pub fn encode_ycbcr<'local>(
         let buffer = acquire_hardware_buffer(env, &buffer)?;
         let format = with_round_trip(handle, |round_trip| round_trip.read_buffer_format(&buffer))?;
         // The renderer samples `buffer` with the suggested model and range, so the color is encoded with the same ones.
-        let model = format.suggested_ycbcr_model.try_into();
-        let range = format.suggested_ycbcr_range.try_into();
+        let model = format.model.try_into();
+        let range = format.range.try_into();
         let conversion = Conversion::new(
             model.map_err(NativeMethodError::YcbcrConversion)?,
             range.map_err(NativeMethodError::YcbcrConversion)?,
@@ -277,15 +276,16 @@ fn to_jvm_long_array<'local>(
 }
 
 /// A new JVM object org.lavashell.surfacestream.YcbcrConversion with the Y, Cb and Cr codes of the test color, the
-/// tolerance for the drawn color and the format properties returned by Vulkan for the buffer.
+/// tolerance for the drawn color and the format that Vulkan reports for the buffer.
 fn new_jvm_conversion<'local>(
     env: &mut Env<'local>,
     [y, cb, cr]: [u8; 3],
     tolerance: u8,
-    format: &FormatProperties,
+    format: &ForeignFormat,
 ) -> Result<JObject<'local>, NativeMethodError> {
     // The JVM has no unsigned 64-bit type. The activity reads these bits back as a ULong.
     let external_format = jlong::from_ne_bytes(format.external_format.to_ne_bytes());
+    let [x_chroma_offset, y_chroma_offset] = format.chroma_offsets;
     let arguments = [
         JValue::Int(y.into()),
         JValue::Int(cb.into()),
@@ -293,11 +293,11 @@ fn new_jvm_conversion<'local>(
         JValue::Int(tolerance.into()),
         JValue::Int(format.format.as_raw()),
         JValue::Long(external_format),
-        JValue::Long(format.format_features.as_raw().into()),
-        JValue::Int(format.suggested_ycbcr_model.as_raw()),
-        JValue::Int(format.suggested_ycbcr_range.as_raw()),
-        JValue::Int(format.suggested_x_chroma_offset.as_raw()),
-        JValue::Int(format.suggested_y_chroma_offset.as_raw()),
+        JValue::Long(format.features.as_raw().into()),
+        JValue::Int(format.model.as_raw()),
+        JValue::Int(format.range.as_raw()),
+        JValue::Int(x_chroma_offset.as_raw()),
+        JValue::Int(y_chroma_offset.as_raw()),
     ];
     let class = jni_str!("org/lavashell/surfacestream/YcbcrConversion");
     (env.new_object(class, jni_sig!("(IIIIIJJIIII)V"), &arguments))

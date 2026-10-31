@@ -26,7 +26,7 @@ pub struct HardwareBufferFormat(u32);
 impl HardwareBufferFormat {
     pub const R8G8B8A8_UNORM: Self = Self(1);
     pub const R8G8B8X8_UNORM: Self = Self(2);
-    /// Sampled only through a YCbCr conversion, which the simulated device does not support.
+    /// Sampled only through a YCbCr conversion.
     pub const R16G16B16A16_FLOAT: Self = Self(0x16);
 }
 
@@ -147,6 +147,9 @@ impl Drop for Image {
 pub struct HardwareBufferDesc {
     pub width: u32,
     pub height: u32,
+    pub layers: u32,
+    pub format: HardwareBufferFormat,
+    pub usage: HardwareBufferUsage,
 }
 
 pub struct HardwareBuffer(Rc<(Buffer, Log)>);
@@ -169,10 +172,13 @@ impl HardwareBuffer {
     }
 
     pub fn describe(&self) -> HardwareBufferDesc {
-        let size = self.0.0.size;
+        let buffer = &self.0.0;
         HardwareBufferDesc {
-            width: size.width,
-            height: size.height,
+            width: buffer.size.width,
+            height: buffer.size.height,
+            layers: buffer.layers,
+            format: buffer.format,
+            usage: buffer.usage,
         }
     }
 

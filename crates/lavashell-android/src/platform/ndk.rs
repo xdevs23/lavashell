@@ -5,6 +5,10 @@ pub mod hardware_buffer {
     pub use crate::platform::image::{HardwareBuffer, HardwareBufferRef, HardwareBufferUsage};
 }
 
+pub mod hardware_buffer_format {
+    pub use crate::platform::image::HardwareBufferFormat;
+}
+
 pub mod media {
     pub mod image_reader {
         pub use crate::platform::image::{AcquireResult, CropRect, Image, ImageFormat};

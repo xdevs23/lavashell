@@ -10,7 +10,7 @@ use crate::failure::DrawFailure;
 use lavashell_core::prelude::*;
 use skia_safe::{Canvas, IPoint, IRect};
 use std::any::Any;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -73,43 +73,6 @@ impl StreamFrames {
         let (width, height) = image.size.signed().ok_or(DrawFailure::ImageSize)?;
         let crop = IRect::from_xywh(bound.origin.x, bound.origin.y, width, height);
         draw_framed(canvas, &bound.pixels.image, crop, destination, frame)
-    }
-}
-
-pub struct HardwareBufferDescription {
-    pub size: PixelSize,
-    pub layers: u32,
-    pub usage: BTreeSet<BufferFlag>,
-    pub alpha: BufferAlpha,
-}
-
-/// A usage flag of a hardware buffer that affects whether the import can sample the buffer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BufferFlag {
-    GpuSampled,
-    Protected,
-    MipmapComplete,
-}
-
-/// What the alpha channel of a buffer means.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BufferAlpha {
-    Premultiplied,
-    /// The format has an alpha channel without meaning, such as R8G8B8X8.
-    Undefined,
-}
-
-impl HardwareBufferDescription {
-    /// The rejection of a buffer that the import cannot sample: a buffer with several layers, a
-    /// complete mipmap chain, protected content or without GPU sampled usage.
-    #[must_use]
-    pub fn rejection(&self) -> Option<StreamRejection> {
-        let usage = &self.usage;
-        let sampled = self.layers == 1 && usage.contains(&BufferFlag::GpuSampled);
-        (!sampled
-            || usage.contains(&BufferFlag::Protected)
-            || usage.contains(&BufferFlag::MipmapComplete))
-        .then_some(StreamRejection::UnusableBuffer)
     }
 }
 
