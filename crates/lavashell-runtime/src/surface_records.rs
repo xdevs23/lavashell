@@ -6,6 +6,8 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::view::{Proposal, TextMeasurer, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 
 struct Record {
     view: View,
@@ -30,11 +32,12 @@ impl Record {
     }
 }
 
-/// The record of every surface opened by a platform. The id of a surface is the index of its record. A retired
-/// surface still has its record, so no id is reused.
+/// Contains a record for each surface opened by a platform until that surface retires. Ids come from a counter that
+/// only increases, so an id never repeats and a retired id is unknown.
 #[derive(Default)]
 pub struct SurfaceRecords {
-    records: Vec<Record>,
+    records: BTreeMap<SurfaceId, Record>,
+    last_id: Option<u64>,
 }
 
 impl SurfaceRecords {
@@ -42,15 +45,21 @@ impl SurfaceRecords {
     ///
     /// # Errors
     ///
-    /// Fails when the number of the new surface does not fit a surface id.
+    /// Fails when every surface id is used.
     pub fn open(&mut self, view: View, size: Size, density: Density) -> Result<SurfaceId, Error> {
-        let id = SurfaceId(u64::try_from(self.records.len()).map_err(Error::NumberSurface)?);
-        self.records.push(Record {
+        let id = match self.last_id {
+            None => 0,
+            Some(last) => last.checked_add(1).ok_or(Error::NumberSurface)?,
+        };
+        self.last_id = Some(id);
+        let id = SurfaceId(id);
+        let record = Record {
             view,
             size,
             density,
             lifecycle: Lifecycle::Waiting,
-        });
+        };
+        let _replaced_record = self.records.insert(id, record);
         Ok(id)
     }
 
@@ -70,15 +79,14 @@ impl SurfaceRecords {
         None
     }
 
-    /// Retires a closing `surface` once the platform destroyed its native surface. The view is replaced with an
-    /// empty view, so the view shown by the app and every resource in it are dropped only after the native surface
-    /// and everything that presented to it.
+    /// Retires a closing `surface` once the platform has destroyed the native surface. The record is removed. The view
+    /// shown by the app and every resource in it are therefore dropped only after the native surface and everything
+    /// that presented to it.
     pub fn retire(&mut self, surface: SurfaceId) {
-        if let Some(record) = self.record_mut(surface)
-            && record.lifecycle == Lifecycle::Closing
+        if let Entry::Occupied(record) = self.records.entry(surface)
+            && record.get().lifecycle == Lifecycle::Closing
         {
-            record.view = View::new(record.view.platform(), |_| {});
-            record.lifecycle = Lifecycle::Retired;
+            drop(record.remove());
         }
     }
 
@@ -99,10 +107,9 @@ impl SurfaceRecords {
         (self.open_record(surface)).map(|record| Viewport::new(record.size, record.density))
     }
 
-    /// The view of `surface` in any state. It is the view shown by the app until the surface retired, and an empty
-    /// view after that.
+    /// The view of `surface` while it is open or closing.
     pub fn view_mut(&mut self, surface: SurfaceId) -> Option<&mut View> {
-        self.record_mut(surface).map(|record| &mut record.view)
+        (self.records.get_mut(&surface)).map(|record| &mut record.view)
     }
 
     /// Whether `surface` is known and has not closed.
@@ -114,29 +121,20 @@ impl SurfaceRecords {
     /// Whether the host configured `surface` and it has not closed since.
     #[must_use]
     pub fn is_configured(&self, surface: SurfaceId) -> bool {
-        self.record(surface)
-            .is_some_and(|record| record.lifecycle.is_configured())
+        (self.records.get(&surface)).is_some_and(|record| record.lifecycle.is_configured())
     }
 
     #[must_use]
     pub fn any_open(&self) -> bool {
-        (self.records.iter()).any(|record| record.lifecycle.is_open())
-    }
-
-    fn record(&self, surface: SurfaceId) -> Option<&Record> {
-        self.records.get(usize::try_from(surface.0).ok()?)
-    }
-
-    fn record_mut(&mut self, surface: SurfaceId) -> Option<&mut Record> {
-        self.records.get_mut(usize::try_from(surface.0).ok()?)
+        (self.records.values()).any(|record| record.lifecycle.is_open())
     }
 
     fn open_record(&self, surface: SurfaceId) -> Option<&Record> {
-        (self.record(surface)).filter(|record| record.lifecycle.is_open())
+        (self.records.get(&surface)).filter(|record| record.lifecycle.is_open())
     }
 
     fn open_record_mut(&mut self, surface: SurfaceId) -> Option<&mut Record> {
-        (self.record_mut(surface)).filter(|record| record.lifecycle.is_open())
+        (self.records.get_mut(&surface)).filter(|record| record.lifecycle.is_open())
     }
 }
 

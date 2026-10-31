@@ -24,7 +24,7 @@ impl Platform {
         {
             return false;
         }
-        let Some(Role::Window { window }) = &native.role else {
+        let Role::Window { window } = &native.role else {
             return false;
         };
         window.move_(&seat, serial);

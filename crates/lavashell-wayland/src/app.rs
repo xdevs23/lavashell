@@ -139,10 +139,10 @@ struct Surface {
     target: Option<SurfaceTarget>,
     builder: SceneBuilder,
     damage: DamageTracker,
-    /// The role of the native surface until it retires.
-    role: Option<Role>,
+    role: Role,
     wl: wl_surface::WlSurface,
-    window: Option<std::sync::Arc<owned_wl_surface::OwnedWlSurface>>,
+    /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
+    _window: std::sync::Arc<owned_wl_surface::OwnedWlSurface>,
     wp_viewport: Option<WpViewport>,
     fractional: Option<WpFractionalScaleV1>,
     pointer_owner: Option<wl_pointer::WlPointer>,
@@ -228,11 +228,8 @@ fn physical_size(viewport: Viewport) -> Result<(u32, u32), crate::Error> {
     (viewport.size.buffer_size(viewport.density)).map_err(crate::Error::BufferSize)
 }
 
-impl Surface {
-    fn retire(&mut self) {
-        let Some(role) = self.role.take() else {
-            return;
-        };
+impl Drop for Surface {
+    fn drop(&mut self) {
         // The Vulkan target drops before the wl_surface is destroyed, because its swapchain presents to that
         // wl_surface. Dropping the swapchain waits until its queue is idle.
         self.target = None;
@@ -246,24 +243,11 @@ impl Surface {
         if let Some(wp_viewport) = self.wp_viewport.take() {
             wp_viewport.destroy();
         }
-        match role {
+        match &self.role {
             Role::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
             Role::Lock(surface) if surface.is_alive() => surface.destroy(),
             _ => {}
         }
-        self.window = None;
-        // The retired surface remains in `surfaces`, so a drag completion or a drop that arrives later still finds it.
-        self.builder = SceneBuilder::default();
-        self.damage.invalidate();
-        self.shape = None;
-        self.drag_region = None;
-        self.pointer_owner = None;
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        self.retire();
     }
 }
 
@@ -363,17 +347,15 @@ impl Platform {
         (self.surface_requests).extend(self.surface_records.handle(surface, event));
     }
 
-    /// Executes the requests made by the runtime. A destroyed surface retires in the runtime only after its native
-    /// surface released everything that presented to it.
+    /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires
+    /// in the runtime only after the native surface has released everything that presented to it.
     fn execute_surface_requests(&mut self) {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
                     self.paint.forget_effect_surface(id);
                     self.output_records.forget(id);
-                    if let Some(surface) = self.surfaces.get_mut(&id) {
-                        surface.retire();
-                    }
+                    drop(self.surfaces.remove(&id));
                     self.surface_records.retire(id);
                 }
             }

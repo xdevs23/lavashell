@@ -180,5 +180,6 @@ impl Platform {
             self.cancel_transfer(id, Cancellation::SurfaceClosed);
         }
         self.cancel_closed_drag_sources();
+        self.cancel_closed_pointer_grabs();
     }
 }
