@@ -5,10 +5,38 @@ mod tests;
 use super::SkiaFormat;
 use crate::paint::{StreamRejection, UnsampledFormat};
 use ash::vk;
+use lavashell_vulkan::ImageFormat;
 use skia_safe::gpu::vk as skvk;
 
+/// The format that the driver reports for foreign memory: its Vulkan format, its external format, the features of
+/// that format, and the YCbCr conversion that the driver suggests for sampling it.
+#[derive(Clone, Copy, Debug)]
+pub struct ForeignFormat {
+    pub format: vk::Format,
+    pub external_format: u64,
+    pub features: vk::FormatFeatureFlags,
+    pub components: vk::ComponentMapping,
+    pub model: vk::SamplerYcbcrModelConversion,
+    pub range: vk::SamplerYcbcrRange,
+    /// The chroma offsets along x and along y.
+    pub chroma_offsets: [vk::ChromaLocation; 2],
+}
+
+impl ForeignFormat {
+    /// The format of the image that imports memory of this format. Memory in `R8G8B8A8_UNORM` is imported in that
+    /// Vulkan format, memory in any other format in its external format.
+    #[must_use]
+    pub fn image_format(&self) -> ImageFormat {
+        if self.format == SkiaFormat::RGBA8.vulkan {
+            ImageFormat::Known(self.format)
+        } else {
+            ImageFormat::External
+        }
+    }
+}
+
 // Skia wraps an image in a Vulkan format only when the image also has both transfer usages, as the images created by
-// the hardware buffer import inside Skia have.
+// Skia's own import of foreign memory have.
 const RGBA_USAGE: vk::ImageUsageFlags = vk::ImageUsageFlags::from_raw(
     vk::ImageUsageFlags::SAMPLED.as_raw()
         | vk::ImageUsageFlags::TRANSFER_SRC.as_raw()
@@ -25,13 +53,6 @@ pub(super) enum ImportFormat {
 }
 
 impl ImportFormat {
-    pub fn vulkan_format(self) -> vk::Format {
-        match self {
-            Self::Rgba => SkiaFormat::RGBA8.vulkan,
-            Self::External(_) => vk::Format::UNDEFINED,
-        }
-    }
-
     pub fn skia_format(self) -> skvk::Format {
         match self {
             Self::Rgba => SkiaFormat::RGBA8.skia,
@@ -55,49 +76,48 @@ impl ImportFormat {
     }
 }
 
-/// The format in which an AOSP hardware buffer is imported, chosen from the format properties that Vulkan reports for
-/// the buffer. A buffer in the Vulkan format `R8G8B8A8_UNORM` is sampled directly. A buffer in any other format is
-/// sampled in its external format through a YCbCr conversion. That needs `ycbcr_conversion`, which is true when the
-/// device supports YCbCr conversion. Without that support, the buffer is rejected.
+/// The format in which foreign memory is imported. Memory imported in a Vulkan format, as `ForeignFormat::image_format`
+/// returns it, is sampled directly. Memory in any other format is sampled in its external format through a YCbCr
+/// conversion. That needs `ycbcr_conversion`, which is true when the device supports YCbCr conversion. Without that
+/// support, the memory is rejected.
 pub(super) fn import_format(
-    buffer: &vk::AndroidHardwareBufferFormatPropertiesANDROID,
+    format: &ForeignFormat,
     ycbcr_conversion: bool,
 ) -> Result<ImportFormat, StreamRejection> {
-    if buffer.format == SkiaFormat::RGBA8.vulkan {
+    if let ImageFormat::Known(_) = format.image_format() {
         return Ok(ImportFormat::Rgba);
     }
     if !ycbcr_conversion {
         return Err(NEEDS_YCBCR_CONVERSION);
     }
-    let conversion = skia_conversion(buffer).ok_or(StreamRejection::UnusableBuffer)?;
+    let conversion = skia_conversion(format).ok_or(StreamRejection::UnusableBuffer)?;
     Ok(ImportFormat::External(conversion))
 }
 
-/// The Skia YCbCr conversion for the external format of `buffer`, with the model, range, chroma offsets and component
+/// The Skia YCbCr conversion for the external format of `format`, with the model, range, chroma offsets and component
 /// mapping reported by the driver. Vulkan calls the model, range and offsets suggested, because an application may
 /// sample with others. The renderer uses them unchanged. Returns `None` when the external format is 0 or when one of
 /// these values has no Skia equivalent.
-fn skia_conversion(
-    buffer: &vk::AndroidHardwareBufferFormatPropertiesANDROID,
-) -> Option<skvk::YcbcrConversionInfo> {
-    // Vulkan reports an external format other than 0 for every AOSP hardware buffer. Properties with an external
-    // format of 0 therefore describe no buffer that can be imported.
-    if buffer.external_format == 0 {
+fn skia_conversion(format: &ForeignFormat) -> Option<skvk::YcbcrConversionInfo> {
+    // Vulkan reports an external format other than 0 for all importable memory in an external format. A format with
+    // an external format of 0 therefore describes no memory that can be imported.
+    if format.external_format == 0 {
         return None;
     }
     let linear = vk::FormatFeatureFlags::SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER;
-    let chroma_filter = if buffer.format_features.contains(linear) {
+    let chroma_filter = if format.features.contains(linear) {
         skvk::Filter::LINEAR
     } else {
         skvk::Filter::NEAREST
     };
-    let components = buffer.sampler_ycbcr_conversion_components;
+    let components = format.components;
+    let [x_chroma_offset, y_chroma_offset] = format.chroma_offsets;
     Some(skvk::YcbcrConversionInfo::new_with_external_format(
-        buffer.external_format,
-        skia_model(buffer.suggested_ycbcr_model)?,
-        skia_range(buffer.suggested_ycbcr_range)?,
-        skia_chroma_location(buffer.suggested_x_chroma_offset)?,
-        skia_chroma_location(buffer.suggested_y_chroma_offset)?,
+        format.external_format,
+        skia_model(format.model)?,
+        skia_range(format.range)?,
+        skia_chroma_location(x_chroma_offset)?,
+        skia_chroma_location(y_chroma_offset)?,
         chroma_filter,
         vk::FALSE,
         skvk::ComponentMapping {
@@ -106,7 +126,7 @@ fn skia_conversion(
             b: skia_swizzle(components.b)?,
             a: skia_swizzle(components.a)?,
         },
-        buffer.format_features.as_raw(),
+        format.features.as_raw(),
     ))
 }
 

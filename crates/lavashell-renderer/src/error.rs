@@ -207,9 +207,8 @@ pub enum Error {
     SubmitCompletion(#[source] lavashell_vulkan::Error),
     #[error("cannot read the completion of GPU work")]
     CompletionStatus(#[source] lavashell_vulkan::Error),
-    #[cfg(target_os = "android")]
-    #[error("the Vulkan device lacks {0:?}")]
-    MissingExtension(&'static CStr),
+    #[error("the Vulkan device cannot import foreign memory")]
+    ForeignExtensions(#[source] lavashell_vulkan::Error),
     #[error("cannot export a scene image")]
     ExportScene(#[source] lavashell_vulkan::Error),
     #[error("an imported scene image of {0:?} cannot be sampled as sRGB RGBA")]
@@ -237,25 +236,17 @@ pub enum Error {
     SceneMailboxFull,
     #[error("scene generation {generation} is not newer than the published generation {published}")]
     StaleScene { generation: u64, published: u64 },
-    #[cfg(target_os = "android")]
-    #[error("cannot read the Vulkan properties of a hardware buffer")]
-    HardwareBufferProperties(#[source] vk::Result),
-    #[cfg(target_os = "android")]
-    #[error("the Vulkan driver cannot import the hardware buffer")]
-    InvalidHardwareBuffer,
-    #[error("a hardware buffer of {0:?} is too large for Skia")]
-    HardwareBufferSize(PixelSize),
-    #[cfg(target_os = "android")]
-    #[error("cannot import a hardware buffer")]
-    ImportHardwareBuffer(#[source] lavashell_vulkan::Error),
-    #[error("Skia cannot wrap an imported hardware buffer")]
-    WrapHardwareBuffer,
+    #[error("foreign memory of {0:?} is too large for Skia")]
+    ForeignSize(PixelSize),
+    #[error("cannot import foreign memory")]
+    ImportForeign(#[source] lavashell_vulkan::Error),
+    #[error("Skia cannot wrap imported foreign memory")]
+    WrapForeign,
     #[error(
         "Skia did not hand the frames of streams back to their producers, which happens after the loss of the \
          Vulkan device"
     )]
-    HandBackHardwareBuffers,
-    #[cfg(target_os = "android")]
+    HandBackForeign,
     #[error("cannot signal the release fence of the frames of streams")]
     SignalRelease(#[source] lavashell_vulkan::Error),
     #[error("embedded rendering needs Vulkan 1.1, and the host instance has {0:#x}")]

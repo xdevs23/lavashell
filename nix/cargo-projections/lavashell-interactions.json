@@ -3135,6 +3135,7 @@
       },
       {
         "dependencies": [
+          "ash",
           "jni",
           "lavashell-core",
           "lavashell-renderer",

@@ -36,10 +36,7 @@ pub use skia_geometry::{skpoint, skrect};
 use skia_safe::textlayout::{FontCollection, Paragraph};
 use skia_safe::{Canvas, PaintStyle};
 use std::collections::HashMap;
-pub use stream::{
-    BufferAlpha, BufferFlag, HardwareBufferDescription, StreamFrames, StreamPixels,
-    StreamRejection, UnsampledFormat,
-};
+pub use stream::{StreamFrames, StreamPixels, StreamRejection, UnsampledFormat};
 
 pub struct Painter {
     pub(crate) blend_space: crate::BlendSpace,

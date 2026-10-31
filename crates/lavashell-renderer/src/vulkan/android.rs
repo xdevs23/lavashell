@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    FrameOutcome, SurfaceAlpha, SurfaceId, SurfaceTarget, SurfaceTiming, VulkanRenderer,
-    hardware_buffer, presentation, wsi,
+    FOREIGN_IMPORT_EXTENSIONS, FrameOutcome, SurfaceAlpha, SurfaceId, SurfaceTarget, SurfaceTiming,
+    VulkanRenderer, presentation, wsi,
 };
 use crate::Error;
+use ash::android::external_memory_android_hardware_buffer as hardware_buffer;
 use ash::khr::android_surface;
 use ash::vk;
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
@@ -23,7 +24,8 @@ impl presentation::Presentation for Android {
     fn device_extensions(&self) -> Vec<&'static CStr> {
         [
             presentation::SWAPCHAIN_EXTENSIONS.as_slice(),
-            hardware_buffer::EXTENSIONS.as_slice(),
+            FOREIGN_IMPORT_EXTENSIONS.as_slice(),
+            [hardware_buffer::NAME].as_slice(),
         ]
         .concat()
     }

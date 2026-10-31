@@ -35,19 +35,16 @@ pub use gpu_timing::GpuFrameTime;
 pub use image::{decode_image, encoded_image, raster_png};
 pub use packet_cache::{PacketCaching, RenderStats, SurfaceFrame};
 pub use paint::{
-    BufferAlpha, BufferFlag, HardwareBufferDescription, Painter, StreamFrames, StreamPixels,
-    StreamRejection, UnsampledFormat, skpoint, skrect,
+    Painter, StreamFrames, StreamPixels, StreamRejection, UnsampledFormat, skpoint, skrect,
 };
 pub use skia_safe as skia;
 #[cfg(target_os = "linux")]
 pub use vulkan::WaylandTarget;
 pub use vulkan::{
-    BorrowedImage, EmbeddedVulkanRenderer, ExternalImage, FrameOutcome, PresentationPolicy,
-    ReadySignal, SurfaceAlpha, SurfaceContents, SurfaceTarget, SurfaceTiming, VulkanRenderer,
-};
-#[cfg(target_os = "android")]
-pub use vulkan::{
-    Completion, HardwareBufferImport, HardwareBufferImporter, HardwareBufferProperties, Sampling,
+    BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
+    ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, PresentationPolicy, ReadySignal,
+    SampledMemory, Sampling, SurfaceAlpha, SurfaceContents, SurfaceTarget, SurfaceTiming,
+    VulkanRenderer,
 };
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::platform::ReleaseError;
 use crate::platform::ndk::media_error::MediaError;
+use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
 use lavashell_core::error::message_chain;
 use lavashell_renderer::{Error as RendererError, FrameOutcome};
@@ -64,10 +64,10 @@ pub enum Error {
     #[error("a frame of the stream is still latched after the frame latched before was returned")]
     StillLatched,
     #[error("cannot read how the Vulkan device samples the buffer of a frame of a stream")]
-    BufferProperties(#[source] RendererError),
+    BufferProperties(#[source] PropertiesError),
     #[cfg(target_os = "android")]
     #[error("cannot read the format that the Vulkan device reports for a hardware buffer")]
-    BufferFormat(#[source] RendererError),
+    BufferFormat(#[source] PropertiesError),
     #[error("cannot import the buffer of a frame of a stream")]
     ImportBuffer(#[source] RendererError),
     #[error("cannot wrap the import of a frame of a stream for Skia")]
