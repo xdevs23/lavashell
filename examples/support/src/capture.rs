@@ -28,7 +28,7 @@ impl Capture {
             width: None,
             height: None,
         };
-        (view.size_that_fits(unbounded, &mut self.painter)).map_err(Error::Measure)
+        (view.size_that_fits(unbounded, self.painter.shaper())).map_err(Error::Measure)
     }
 
     /// Paints a frame of `view` in `viewport` into the PNG file at `path`, and reports each component that failed in
@@ -43,7 +43,7 @@ impl Capture {
         path: impl AsRef<Path>,
     ) -> Result<(), Error> {
         let mut tree = SceneTree::default();
-        (view.show_frame(&mut tree, viewport, &mut self.painter))
+        (view.show_frame(&mut tree, viewport, self.painter.shaper()))
             .map(report_failures)
             .map_err(Error::Frame)?;
         self.paint(tree.at(view.motion().now()), viewport, path)
@@ -155,8 +155,8 @@ impl OffscreenView {
             presentation: self.time,
             ..FrameTime::default()
         };
-        let painter = &mut self.capture.painter;
-        match (self.view).frame_at(self.viewport, painter, timing) {
+        let shaper = self.capture.painter.shaper();
+        match (self.view).frame_at(self.viewport, shaper, timing) {
             Ok(frame) => {
                 report_failures(frame.failures);
                 Ok(frame.update)

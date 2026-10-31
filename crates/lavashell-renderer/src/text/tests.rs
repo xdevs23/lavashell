@@ -51,7 +51,7 @@ fn policy_changes_replace_native_runs_and_keep_painters_independent() -> Result<
     a.set_text_rendering(none, target);
     b.set_text_rendering(full, target);
     let first = render(&mut a, 13.0, target)?;
-    assert_eq!(b.fonts.paragraph_cache_mut().count(), 0);
+    assert_eq!(b.shaper.skia_cache_count(), 0);
     let other = render(&mut b, 13.0, target)?;
     assert_ne!(
         first, other,
@@ -60,7 +60,7 @@ fn policy_changes_replace_native_runs_and_keep_painters_independent() -> Result<
     assert_eq!(render(&mut a, 13.0, target)?, first);
     assert_eq!(render(&mut b, 13.0, target)?, other);
     a.set_text_rendering(full, target);
-    assert_eq!(a.fonts.paragraph_cache_mut().count(), 0);
+    assert_eq!(a.shaper.skia_cache_count(), 0);
     assert_eq!(render(&mut a, 13.0, target)?, other);
     a.set_text_rendering(none, target);
     assert_eq!(render(&mut a, 13.0, target)?, first);
@@ -112,7 +112,7 @@ fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
         },
         target,
     );
-    let first = painter.geometry(value, &style, 1200.dp());
+    let first = painter.shaper.geometry(value, &style, 1200.dp());
     painter.set_text_rendering(
         TextRendering {
             hinting: Hinting::Full,
@@ -120,7 +120,7 @@ fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
         },
         target,
     );
-    let other = painter.geometry(value, &style, 1200.dp());
+    let other = painter.shaper.geometry(value, &style, 1200.dp());
     let bounds = |geometry: &TextGeometry| {
         geometry
             .clusters

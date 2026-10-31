@@ -417,7 +417,7 @@ fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(),
             });
         });
         let mut tree = SceneTree::default();
-        tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
+        tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
         for _ in 0..3 {
             paint(&mut painter, &mut target, &tree);
         }

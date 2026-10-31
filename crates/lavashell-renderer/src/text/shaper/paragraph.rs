@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::solid;
 use crate::failure::DrawFailure;
+use crate::paint::solid;
 use crate::scalar::scalars;
 use crate::text_cache::{CachedParagraph, ParagraphSource, TextCache};
 use lavashell_core::prelude::*;
@@ -12,28 +12,6 @@ use skia_safe::{
     },
 };
 use std::hash::{Hash, Hasher};
-
-pub(crate) struct Sources {
-    fonts: FontCollection,
-    rendering: Option<crate::text::TextRendering>,
-}
-
-impl Sources {
-    pub fn new(registry: &crate::Fonts) -> Result<Self, crate::Error> {
-        Ok(Self {
-            fonts: registry.collection()?,
-            rendering: None,
-        })
-    }
-
-    pub fn collection(&mut self, rendering: crate::text::TextRendering) -> FontCollection {
-        if self.rendering != Some(rendering) {
-            self.fonts.paragraph_cache_mut().reset();
-            self.rendering = Some(rendering);
-        }
-        self.fonts.clone()
-    }
-}
 
 /// The numbers of a paragraph converted to Skia scalars, and the paint of its text, as Skia uses them for the layout.
 pub(super) struct Layout {
@@ -109,7 +87,7 @@ impl<'t> ParagraphInput<'t> {
 
     /// The paragraph stored in `paragraphs`, built first when it is missing. Another paragraph stored under the
     /// same hash is replaced.
-    pub fn cached<'c>(
+    pub(super) fn cached<'c>(
         self,
         paragraphs: &'c mut TextCache,
         registry: &crate::Fonts,

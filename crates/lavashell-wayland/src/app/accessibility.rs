@@ -52,7 +52,7 @@ impl Platform {
         }
         let viewport = surface.logical_viewport();
         let mut frame = |view: &mut View, tree: &mut SceneTree| {
-            view.show_frame(tree, viewport, &mut self.paint)
+            view.show_frame(tree, viewport, self.paint.shaper())
         };
         let shown =
             surface.view.needs_visual_frame() || surface.view.accessibility().nodes.is_empty();

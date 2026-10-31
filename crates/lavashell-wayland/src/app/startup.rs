@@ -156,7 +156,7 @@ impl Platform {
                 };
                 let size = match options.size {
                     Some(size) => size,
-                    None => (view.size_that_fits(unbounded, &mut self.paint))
+                    None => (view.size_that_fits(unbounded, self.paint.shaper()))
                         .map_err(Error::MeasureView)?,
                 };
                 let whole = window_extent(size).filter(|&(width, height)| width > 0 && height > 0);

@@ -40,7 +40,7 @@ impl Painter {
             }
         };
         let surface = self.effect_planner.current_surface();
-        self.paragraphs.begin_paint(surface);
+        self.shaper.begin_paint(surface);
         self.resources.begin_frame(surface);
         if !plan.all_leaves_cacheable {
             self.forget_transient_effect_inputs();
@@ -49,7 +49,7 @@ impl Painter {
         let text_scope = self.text_scopes.enter(
             canvas,
             self.text_rasterizers
-                .reads_destination(self.text_configuration.peek().rendering),
+                .reads_destination(self.shaper.configuration().rendering),
         );
         let _chained_canvas = canvas.scale((scale, scale));
         self.begin_compositing(canvas);

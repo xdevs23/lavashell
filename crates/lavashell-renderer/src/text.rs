@@ -6,6 +6,7 @@ mod lcd;
 mod policy;
 mod raster;
 mod scope;
+mod shaper;
 
 use crate::failure::DrawFailure;
 use crate::paint::dp_of;
@@ -15,6 +16,8 @@ use lavashell_core::units::Dp;
 pub use policy::{Hinting, PixelGeometry, TextAntialiasing, TextDestination, TextRendering};
 pub(crate) use raster::{Drawn, RasterInput, Rasterizers};
 pub(crate) use scope::Scopes;
+pub(crate) use shaper::ParagraphInput;
+pub use shaper::Shaper;
 use skia_safe::textlayout::Paragraph;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -29,26 +32,15 @@ impl crate::Painter {
     /// properties of the new destination, because subpixel text needs surface properties that match it. Ordinary
     /// transparent raster tiles have grayscale coverage on every device.
     pub fn set_text_rendering(&mut self, rendering: TextRendering, destination: TextDestination) {
-        let rendering = rendering.for_destination(destination);
-        let previous = self.text_configuration.peek();
-        if previous.rendering != rendering || previous.destination != destination {
-            let configuration = Configuration {
-                rendering,
-                destination,
-            };
-            // The key of the shaping cache inside SkParagraph does not contain the font edging, the hinting or the
-            // fractional positioning. The runs shaped with the previous policy are therefore discarded too.
-            self.fonts.paragraph_cache_mut().reset();
-            self.paragraphs.clear();
+        if self.shaper.set_text_rendering(rendering, destination) {
             self.invalidate_paint_configuration();
-            self.text_configuration.set(configuration);
         }
     }
 
     /// The text rendering policy after its adjustment to the destination. A backend may still rasterize grayscale
     /// coverage into an intermediate transparent tile.
     pub fn text_rendering(&self) -> TextRendering {
-        self.text_configuration.get().rendering
+        self.shaper.tracked_configuration().rendering
     }
 
     pub(crate) fn paint_text(
@@ -58,7 +50,7 @@ impl crate::Painter {
         rect: lavashell_core::geometry::Rect,
         style: &lavashell_core::scene::TextStyle<Dp>,
     ) -> Result<(), DrawFailure> {
-        let configuration = self.text_configuration.peek();
+        let configuration = self.shaper.configuration();
         let input = raster::RasterInput {
             canvas,
             policy: configuration.rendering,
@@ -74,7 +66,7 @@ impl crate::Painter {
         {
             let source_input =
                 self.source_paragraph_input(text, &source_style, rect.width, source_rendering)?;
-            let source = source_input.cached(&mut self.paragraphs, &self.registry);
+            let source = self.shaper.cached(source_input);
             let drawn = self.text_rasterizers.draw(
                 provider,
                 &input,
@@ -91,8 +83,8 @@ impl crate::Painter {
                     .record_caused(DrawFailure::SubpixelText, &error),
             }
         }
-        let input = self.paragraph_input(text, style, rect.width)?;
-        let cached = input.cached(&mut self.paragraphs, &self.registry);
+        let input = self.shaper.paragraph_input(text, style, rect.width)?;
+        let cached = self.shaper.cached(input);
         let origin = centered(rect, &cached.shaped.paragraph)?;
         (self.resources.tiles.get_mut()).paragraph(canvas, &mut cached.shaped, cached.key, origin);
         Ok(())
