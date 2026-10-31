@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{GroupId, Painted};
 use crate::scene::tree::{
-    Change, Content, Group, Node, NodeKey, Packet, SceneNodeId, SceneTree, Slot, SlotChange, TreeId,
+    Change, Content, Group, Node, NodeKey, Packet, SceneNodeId, SceneTree, Slot, SlotChange,
 };
 use crate::scene::{Affine, ChangeSink, SinkId};
 use crate::view::FrameError;
@@ -28,7 +28,6 @@ enum NodeIdentity {
 pub(in crate::view) enum Recipient {
     #[default]
     Caller,
-    Tree(TreeId),
     /// The sink passed to `View::frame_into` and `View::frame_into_at`.
     Sink(SinkId),
 }

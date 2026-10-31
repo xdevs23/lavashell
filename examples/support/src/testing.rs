@@ -4,7 +4,7 @@ use lavashell::core::accessibility::AccessibleNode;
 use lavashell::core::view::{Failures, FrameError};
 use lavashell::prelude::*;
 
-/// A new tree that shows the whole scene of a frame of `view`.
+/// A snapshot of the whole scene of a frame of `view`.
 ///
 /// # Errors
 /// Returns an error when the frame cannot be shown or a component failed in it.
@@ -12,10 +12,10 @@ pub fn scene(
     view: &mut View,
     viewport: Viewport,
     text: &mut impl TextMeasurer,
-) -> Result<SceneTree, Error> {
-    let mut tree = SceneTree::default();
-    without_failures(view.show_frame(&mut tree, viewport, text))?;
-    Ok(tree)
+) -> Result<SceneSnapshot, Error> {
+    let mut builder = SceneBuilder::default();
+    without_failures(view.frame_into(viewport, text, &mut builder))?;
+    Ok(builder.snapshot())
 }
 
 /// Turns the result of showing a frame into an error where the frame or a component in it failed.

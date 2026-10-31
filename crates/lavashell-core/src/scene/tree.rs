@@ -59,9 +59,6 @@ impl std::fmt::Display for SceneNodeId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TreeId(u64);
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PacketGeneration(u64);
 
@@ -186,7 +183,6 @@ struct Namespace {
 struct Namespaces(BTreeMap<NamespaceId, Namespace>);
 
 pub struct SceneTree {
-    id: TreeId,
     namespaces: Namespaces,
     next_namespace: u64,
     placements: u64,
@@ -195,9 +191,7 @@ pub struct SceneTree {
 
 impl Default for SceneTree {
     fn default() -> Self {
-        static NEXT: AtomicU64 = AtomicU64::new(1);
         Self {
-            id: TreeId(NEXT.fetch_add(1, Ordering::Relaxed)),
             namespaces: Namespaces(BTreeMap::from([(Self::ROOT, Namespace::default())])),
             next_namespace: Self::ROOT.0 + 1,
             placements: 0,
@@ -208,11 +202,6 @@ impl Default for SceneTree {
 
 impl SceneTree {
     pub const ROOT: NamespaceId = NamespaceId(0);
-
-    #[must_use]
-    pub fn id(&self) -> TreeId {
-        self.id
-    }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {

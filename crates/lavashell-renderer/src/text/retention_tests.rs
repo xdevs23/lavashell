@@ -70,15 +70,15 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
     view.set_accessibility_text_geometry(true);
     painter.set_text_rendering(unhinted, target);
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     let first = [
         snapshot(&view, "root text")?,
         snapshot(&view, "component text")?,
     ];
     let compositions = view.stats().root_compositions;
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     assert!(!view.needs_frame());
     assert!(view.stats().reused_components > 0);
@@ -87,7 +87,7 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
         view.needs_frame(),
         "renderer policy did not notify the existing Core scopes"
     );
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     let other = [
         snapshot(&view, "root text")?,
@@ -107,7 +107,7 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
     assert!(!view.needs_frame());
     painter.set_text_rendering(unhinted, target);
     assert!(view.needs_frame());
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     assert_eq!(
         [
@@ -149,8 +149,8 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
     let size = Size::new(600.dp(), 100.dp());
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     let first_bounds = bounds_of(&view, "static")?;
     let painted_before = view.stats().painted_components;
@@ -163,7 +163,7 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
         target,
     );
     assert!(view.needs_frame());
-    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.update_accessibility();
     assert_eq!(bounds_of(&view, "static")?, first_bounds);
     assert!(

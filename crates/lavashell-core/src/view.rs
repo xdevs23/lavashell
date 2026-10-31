@@ -72,7 +72,7 @@ use crate::keyboard::{Key, Shortcut};
 use crate::local::{LocalReader, LocalScope, RootValues};
 use crate::platform::PlatformFacts;
 use crate::reactive::{Derived, Phase, Scope};
-use crate::scene::tree::{ApplyError, SceneTree, SceneUpdate};
+use crate::scene::tree::SceneUpdate;
 use crate::scene::{Affine, Brush, DrawCommand, Drawing, TextStyle, Transform};
 use crate::shape::{Corners, DrawnRoundedRect, Radius};
 use crate::text_edit::{FieldGeometry, TextEdit};

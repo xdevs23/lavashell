@@ -86,7 +86,7 @@ pub mod prelude {
     pub use crate::reactive::{Derived, Phase, Scope, Selector, State};
     pub use crate::scene::{
         Affine, Brush, DrawCommand, DrawContext, Drawing, FontSize, FontWeight, Icon, IconPath,
-        ParagraphDirection, Segment, TEXT_STYLE, TextAlignment, TextSpan, TextStyle,
+        ParagraphDirection, SceneBuilder, Segment, TEXT_STYLE, TextAlignment, TextSpan, TextStyle,
         tree::{DamageTracker, Presented, SceneSnapshot, SceneTree, SceneUpdate},
     };
     pub use crate::scroll::{ScrollState, ScrollView, Scrolling};

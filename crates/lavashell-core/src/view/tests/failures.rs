@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::animation::{AnimationError, Tween};
-use crate::scene::tree::{Change, Group, Node as SceneNode, SceneNodeId, SceneTree};
 use crate::scroll::{ScrollError, ScrollState};
 use std::time::Duration;
 
@@ -373,51 +372,5 @@ fn a_failed_root_composition_empties_the_view_and_the_frame_still_returns() -> T
     assert_eq!(next_failures(&mut view, &mut scene)?, [(None, cause)]);
     assert!(scene.commands().is_empty());
     assert_eq!(view.bounds_of("square"), None);
-    Ok(())
-}
-
-#[test]
-fn the_next_frame_returns_the_failures_of_a_frame_whose_update_fails() -> TestResult {
-    let (count, broken) = (State::new(1), State::new(false));
-    let (rows, reads) = (count.clone(), broken.clone());
-    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
-        for row in 0..rows.get() {
-            let broken = reads.clone();
-            ui.scoped(row, Modifier::new(), move |ui| {
-                if row == 0 && broken.get() {
-                    ui.fail(CompositionError::DuplicateItemKey);
-                }
-                ui.spacer(20.dp(), 20.dp(), Modifier::new().background(Color::WHITE));
-            });
-        }
-    });
-    let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
-    // The ids from 3 on are free after the first frame. Inserting nodes with those ids makes the update that adds a
-    // row fail.
-    let planted = (3..64).map(|id| Change::Insert {
-        id: SceneNodeId(id),
-        parent: None,
-        index: 1,
-        node: SceneNode::Group(Group::default()),
-    });
-    tree.show(planted.collect())?;
-    count.set(2);
-    broken.set(true);
-    assert!(matches!(
-        view.show_frame(&mut tree, viewport, &mut Metrics),
-        Err(FrameError::Sink(_))
-    ));
-    let failures = view.show_frame(&mut tree, viewport, &mut Metrics)?;
-    let causes: Vec<_> = (failures.into_iter())
-        .map(|failure| failure.cause)
-        .collect();
-    assert_eq!(
-        causes,
-        [ComponentError::Composition(
-            CompositionError::DuplicateItemKey
-        )]
-    );
     Ok(())
 }

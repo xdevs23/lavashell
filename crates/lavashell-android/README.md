@@ -17,11 +17,12 @@ let window = NativeWindow::new(window_of_surface(env, &surface)?, timing);
 renderer.attach(window, SurfaceAlpha::Opaque)?;
 
 // In the frame callback of the host:
-let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), renderer.painter().shaper(), frame)?;
+let failures = view.frame_into_at(Viewport::new(size, density), renderer.painter().shaper(), frame, &mut builder)?;
 for failure in failures {
     log::error!("{}", lavashell::core::error::message_chain(failure));
 }
-let result = renderer.render(tree.at(frame.presentation), density, skia::Color::BLACK)?;
+let snapshot = builder.snapshot();
+let result = renderer.render(snapshot.at(frame.presentation), density, skia::Color::BLACK)?;
 match result {
     FrameOutcome::Shown => view.record_presentation(frame.presentation),
     FrameOutcome::Pending | FrameOutcome::Stale => { /* Request another frame from the host. */ }
@@ -36,7 +37,7 @@ let window = renderer.detach();
 
 ```rust,ignore
 if renderer.supports_presentation_time() {
-    renderer.render_at(tree.at(frame.presentation), density, skia::Color::BLACK, timestamp_ns)?;
+    renderer.render_at(snapshot.at(frame.presentation), density, skia::Color::BLACK, timestamp_ns)?;
 }
 ```
 

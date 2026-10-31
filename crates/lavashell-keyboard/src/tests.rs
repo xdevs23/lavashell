@@ -4,7 +4,6 @@ use icu_locale_core::LanguageIdentifier;
 use icu_locale_core::subtags::language;
 use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::SceneTree;
 use lavashell_test_fixtures::{
     DOUBLE_TAP, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
 };
@@ -177,7 +176,7 @@ const SCREEN: Size = Size::new(Dp::new(1037.0), Dp::new(466.0));
 
 #[derive(Default)]
 struct Scene {
-    tree: SceneTree,
+    builder: SceneBuilder,
     now: Duration,
 }
 
@@ -195,7 +194,7 @@ fn frame_at(view: &mut View, scene: &mut Scene, time: Duration) -> Result<(), Te
         ..FrameTime::default()
     };
     let viewport = Viewport::new(SCREEN, Density::ONE);
-    (view.show_frame_at(&mut scene.tree, viewport, &mut Metrics, timing)).without_failures()?;
+    (view.frame_into_at(viewport, &mut Metrics, timing, &mut scene.builder)).without_failures()?;
     scene.now = time;
     Ok(())
 }

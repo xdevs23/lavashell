@@ -37,6 +37,20 @@ fn a_snapshot_shows_the_changes_of_a_frame_once_the_frame_ends() -> TestResult {
 }
 
 #[test]
+fn a_change_that_does_not_fit_leaves_the_snapshot_at_the_last_ended_frame() -> TestResult {
+    let mut builder = SceneBuilder::default();
+    builder.change(leaf(1))?;
+    builder.end_frame()?;
+    builder.change(leaf(2))?;
+    assert_eq!(
+        builder.change(leaf(2)),
+        Err(ApplyError::DuplicateNode(SceneNodeId(2)))
+    );
+    assert_eq!(leaves(&builder.snapshot()), [SceneNodeId(1)]);
+    Ok(())
+}
+
+#[test]
 fn a_restart_after_a_change_that_does_not_fit_builds_the_next_frame_from_empty() -> TestResult {
     let mut builder = SceneBuilder::default();
     builder.change(leaf(1))?;
