@@ -66,7 +66,7 @@ fn faded(
     below: Vec<DrawCommand>,
     alpha: f64,
     inside: Vec<DrawCommand>,
-) -> Result<SceneTree, TestError> {
+) -> Result<SceneSnapshot, TestError> {
     let leaf =
         |commands: Vec<DrawCommand>| Node::Leaf(Content::Packet(Packet::new(Arc::from(commands))));
     let group = Group {
@@ -86,7 +86,7 @@ fn faded(
     ];
     let mut tree = SceneTree::default();
     tree.show(SceneUpdate { changes })?;
-    Ok(tree)
+    Ok(tree.snapshot())
 }
 
 fn assert_first_frame_blur(surface: &mut Surface) -> Result<(), TestError> {

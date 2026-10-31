@@ -57,7 +57,7 @@ struct Level<'a> {
 }
 
 /// The nodes of a scene tree or a snapshot whose animated slots are sampled at `now`. `now` is the presentation time,
-/// measured from the same epoch as the time passed to `View::frame_at`.
+/// measured from the same epoch as the time passed to `View::frame_into_at`.
 #[derive(Clone, Copy)]
 pub struct Presented<'a> {
     pub(super) namespaces: &'a Namespaces,

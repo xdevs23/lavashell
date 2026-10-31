@@ -25,8 +25,8 @@ fn new_painter() -> Result<Painter, TestError> {
     Ok(painter)
 }
 
-fn find(tree: &SceneTree) -> Option<PrivateText> {
-    (tree.at(Duration::ZERO).leaf_commands()).find_map(|command| match command {
+fn find(scene: &SceneSnapshot) -> Option<PrivateText> {
+    (scene.at(Duration::ZERO).leaf_commands()).find_map(|command| match command {
         DrawCommand::PrivateText { text, .. } => Some(text.clone()),
         _ => None,
     })
@@ -35,7 +35,7 @@ fn find(tree: &SceneTree) -> Option<PrivateText> {
 fn field(
     painter: &mut Painter,
     value: &str,
-) -> Result<(View, SceneTree, ProtectedText, PrivateText), TestError> {
+) -> Result<(View, SceneBuilder, ProtectedText, PrivateText), TestError> {
     let secret = ProtectedText::new();
     let state = secret.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -54,26 +54,27 @@ fn field(
     });
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = SceneTree::default();
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
     });
     view.input(InputEvent::Text(value.into()));
     secret.set_revealed(true);
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    let tree = builder.snapshot();
     let private = find(&tree).ok_or(TestError::Missing("private text draw"))?;
-    Ok((view, tree, secret, private))
+    Ok((view, builder, secret, private))
 }
 
 fn pixels(painter: &mut Painter, commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
     drawn(|canvas| painter.paint_as_leaf(canvas, commands, Density::ONE))
 }
 
-fn tree_pixels(painter: &mut Painter, tree: &SceneTree) -> Result<Vec<u8>, TestError> {
+fn scene_pixels(painter: &mut Painter, scene: &SceneSnapshot) -> Result<Vec<u8>, TestError> {
     drawn(|canvas| {
-        crate::test_scenes::paint(painter, canvas, tree, Density::ONE);
+        crate::test_scenes::paint(painter, canvas, scene, Density::ONE);
         Ok(())
     })
 }
@@ -148,6 +149,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
     ];
     let mut tree = SceneTree::default();
     tree.show(SceneUpdate { changes })?;
+    let scene = tree.snapshot();
     for _ in 0..3 {
         let geometry = painter.shaper.private_geometry(&private, &style, 260.dp());
         assert!(geometry.word_starts.is_none());
@@ -167,7 +169,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
                 .iter()
                 .any(|c| c.direction == lavashell_core::accessibility::TextDirection::RightToLeft)
         );
-        let image = tree_pixels(&mut painter, &tree)?;
+        let image = scene_pixels(&mut painter, &scene)?;
         assert!(image.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
         let after = counts(&mut painter);
         // Frames drop the paragraphs that they do not draw. Private text adds no paragraphs.
@@ -179,7 +181,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
         assert_eq!(painter.shaper.private_skia_cache_count(), 0);
     }
     assert!(painter.packet_cache.stats.uncached_leaves >= 3);
-    let debug = format!("{:?}", find(&tree));
+    let debug = format!("{:?}", find(&scene));
     assert!(!debug.contains("iWé") && debug.contains("[redacted]"));
     Ok(())
 }
@@ -248,12 +250,12 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
         },
         TextDestination::default(),
     );
-    let (mut view, mut tree, secret, private) = field(&mut painter, "iWé office")?;
+    let (mut view, mut builder, secret, private) = field(&mut painter, "iWé office")?;
     let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
     let first = painter.shaper.private_geometry(&private, &style, 260.dp());
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     assert!(!view.needs_frame());
     painter.set_text_rendering(
         TextRendering {
@@ -263,15 +265,15 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
         TextDestination::default(),
     );
     assert!(view.needs_frame());
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     let second = painter.shaper.private_geometry(&private, &style, 260.dp());
     assert_ne!(carets(&first), carets(&second));
     assert!(!view.needs_frame());
     secret.set_revealed(false);
     secret.clear();
     assert!(view.needs_frame());
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
-    assert!(find(&tree).is_none());
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    assert!(find(&builder.snapshot()).is_none());
     assert!(
         view.accessibility()
             .nodes

@@ -5,7 +5,7 @@ use lavashell_core::preferences::{
     CONTRAST, PreferenceValues, REDUCED_MOTION, REDUCED_TRANSPARENCY, TEXT_SCALING,
 };
 use lavashell_core::view::View;
-use lavashell_test_fixtures::{FrameFailure, NoText, WithoutFailures};
+use lavashell_test_fixtures::{FrameFailure, NoText, RecordedScene, WithoutFailures};
 use std::{cell::RefCell, rc::Rc};
 
 /// The preference values read by a view at its root in its latest composition.
@@ -31,8 +31,8 @@ impl PreferenceReader {
 
     /// Frames `view` and returns the values read by its latest composition.
     pub fn values(&self, view: &mut View) -> Result<PreferenceValues, FrameFailure> {
-        let frame = view.frame(Viewport::default(), &mut NoText);
-        let _update = frame.without_failures()?;
+        let mut scene = RecordedScene::default();
+        (view.frame_into(Viewport::default(), &mut NoText, &mut scene)).without_failures()?;
         Ok(self.values.borrow().clone())
     }
 }

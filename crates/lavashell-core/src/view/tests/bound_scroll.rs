@@ -43,8 +43,8 @@ fn scrolled(offset: Dp) -> Slot<Affine> {
     Slot::Value(Affine::translate(Point::new(Dp::ZERO, -offset)))
 }
 
-fn transforms(update: &SceneUpdate) -> Vec<Slot<Affine>> {
-    (update.changes.iter())
+fn transforms(changes: &[Change]) -> Vec<Slot<Affine>> {
+    (changes.iter())
         .filter_map(|change| match change {
             Change::SetSlot {
                 slot: SlotChange::Transform(slot),
@@ -68,9 +68,9 @@ fn jumping_a_scroll_on_every_frame_changes_only_the_content_slot() -> TestResult
     for (ms, offset) in [(10, 30.dp()), (20, 60.dp()), (30, 90.dp())] {
         scroll.jump_to(offset);
         assert!(view.needs_frame(), "{ms} ms");
-        let update = frame(&mut view, WINDOW_SIZE, ms)?;
-        assert_eq!(update.changes.len(), 1, "{ms} ms");
-        assert!(transforms(&update) == [scrolled(offset)], "{ms} ms");
+        let changes = frame(&mut scene, &mut view, WINDOW_SIZE, ms)?;
+        assert_eq!(changes.len(), 1, "{ms} ms");
+        assert!(transforms(&changes) == [scrolled(offset)], "{ms} ms");
     }
     let after = view.stats();
     assert_eq!(after.painted_components, before.painted_components);
@@ -94,7 +94,7 @@ fn a_scroll_that_stops_jumping_paints_its_component_once() -> TestResult {
     advance(&mut scene, &mut view, WINDOW_SIZE, 10)?;
     let painted = view.stats().painted_components;
     assert!(view.needs_frame());
-    assert!(frame(&mut view, WINDOW_SIZE, 20)?.changes.is_empty());
+    assert!(frame(&mut scene, &mut view, WINDOW_SIZE, 20)?.is_empty());
     assert_eq!(view.stats().painted_components, painted + 1);
     assert!(!view.needs_frame());
     Ok(())

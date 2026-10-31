@@ -66,7 +66,8 @@ impl View {
     }
 
     /// Rebuilds the tree returned by [`View::accessibility`] from the last complete layout, without composing and
-    /// without changing the drawing commands. Before the first layout, the view still needs a frame from `frame_at`.
+    /// without changing the drawing commands. Before the first layout, the view still needs a frame from
+    /// `frame_into_at`.
     pub fn update_accessibility(&mut self) {
         self.refresh_accessibility();
     }

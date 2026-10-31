@@ -20,8 +20,8 @@ fn plays<T: SlotValue>(slot: &Slot<T>) -> bool {
     matches!(slot, Slot::Motion(_))
 }
 
-fn motions(update: &SceneUpdate) -> usize {
-    (update.changes.iter())
+fn motions(changes: &[Change]) -> usize {
+    (changes.iter())
         .map(|change| match change {
             Change::Insert {
                 node: Node::Group(group),
@@ -97,14 +97,13 @@ fn sliding_card(taps: &State<u32>) -> View {
 fn a_sliding_card_emits_one_motion_and_repaints_nothing_until_it_ends() -> TestResult {
     let mut view = sliding_card(&State::new(0));
     let mut scene = Scene::default();
-    let update = frame(&mut view, WINDOW_SIZE, 0)?;
-    assert_eq!(motions(&update), 1);
-    scene.show(update)?;
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    assert_eq!(motions(&changes), 1);
     assert!(!view.needs_frame());
     assert_eq!(view.next_deadline(), Some(Duration::from_secs(1)));
     let painted = view.stats().painted_components;
     for ms in [250, 500, 999] {
-        assert!(frame(&mut view, WINDOW_SIZE, ms)?.changes.is_empty());
+        assert!(frame(&mut scene, &mut view, WINDOW_SIZE, ms)?.is_empty());
     }
     assert_eq!(view.stats().painted_components, painted);
     let card = |scene: &Scene| painted_fills(&scene.commands()).map(|fills| fills[0].rect.x);
@@ -161,11 +160,10 @@ fn a_node_removed_during_a_move_moves_on_while_it_fades() -> TestResult {
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     shown.set(false);
     // The frame at 500 ms, composed without the node keyed "slot", starts the fade of that node as
-    // the only motion in its update. The move of "piece" goes on in the scene from the motion sent
+    // the only motion of the frame. The move of "piece" goes on in the scene from the motion sent
     // by the earlier frame.
-    let update = frame(&mut view, WINDOW_SIZE, 500)?;
-    assert_eq!(motions(&update), 1);
-    scene.show(update)?;
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
+    assert_eq!(motions(&changes), 1);
     assert!(!view.needs_frame());
     assert_eq!(view.next_deadline(), Some(Duration::from_secs(1)));
     let piece = |scene: &Scene| painted_fills(&scene.commands()).map(|fills| fills[0].rect.x);
@@ -205,8 +203,8 @@ fn an_endless_pulse_plays_in_the_scene_without_frames_of_the_view() -> TestResul
     };
     pulse.play(frames, forever);
     assert!(view.needs_frame());
-    let update = frame(&mut view, WINDOW_SIZE, 0)?;
-    assert_eq!(motions(&update), 1);
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    assert_eq!(motions(&changes), 1);
     assert!(!view.needs_frame());
     assert_eq!(view.next_deadline(), None);
     Ok(())
@@ -284,9 +282,8 @@ fn a_smooth_scroll_toward_the_end_plays_in_the_slot_of_the_content_clamped_to_it
             at: Point::new(10.dp(), 10.dp()),
             delta: Point::new(Dp::ZERO, 100.dp()),
         });
-        let update = frame(&mut view, WINDOW_SIZE, 0)?;
-        assert_eq!(motions(&update), 1, "{spec:?}");
-        scene.show(update)?;
+        let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+        assert_eq!(motions(&changes), 1, "{spec:?}");
         assert!(!view.needs_frame(), "{spec:?}");
         let animation = scroll.animation().required("a scroll animation")?;
         let mut passed = false;
@@ -343,15 +340,14 @@ fn a_scaling_presence_plays_in_one_slot_with_the_transforms_that_painting_gives(
     };
     let mut view = scaling_card(false);
     let mut scene = Scene::default();
-    let update = frame(&mut view, WINDOW_SIZE, 0)?;
-    assert_eq!(motions(&update), 1);
-    scene.show(update)?;
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    assert_eq!(motions(&changes), 1);
     let painted = view.stats().painted_components;
     let mut painting = scaling_card(true);
     let mut reference = Scene::default();
     for ms in [0, 40, 90, 150, 220, 300, 400, 520, 680, 900] {
         assert!(
-            frame(&mut view, WINDOW_SIZE, ms)?.changes.is_empty(),
+            frame(&mut scene, &mut view, WINDOW_SIZE, ms)?.is_empty(),
             "{ms} ms"
         );
         show_frame(&mut reference, &mut painting, WINDOW_SIZE, ms)?;

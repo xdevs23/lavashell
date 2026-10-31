@@ -58,14 +58,15 @@ fn section_content(ui: &mut Ui, list: Recycler<usize>, spring: Spring) {
     });
 }
 
-fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameFailure> {
+/// Makes a frame of `view` at the time `ms` into `scene`.
+fn frame_at(view: &mut View, scene: &mut RecordedScene, ms: u64) -> Result<(), FrameFailure> {
     let time = Duration::from_millis(ms);
     let timing = FrameTime {
         now: time,
         presentation: time,
         ..FrameTime::default()
     };
-    (view.frame_at(SECTION, &mut Metrics, timing)).without_failures()
+    (view.frame_into_at(SECTION, &mut Metrics, timing, scene)).without_failures()
 }
 
 /// The jumps move the scroll in steps of 2 dp up to 18 dp. Up to 40 dp, rows 0 to 3 are in view, so
@@ -75,22 +76,22 @@ fn jumped_on_every_frame_composes_and_paints_nothing(
 ) -> Result<(), TestError> {
     let recycler = Recycler::<usize>::new();
     let mut view = section(&recycler, style)?;
-    let mut tree = SceneTree::default();
-    tree.show(frame_at(&mut view, 0)?)?;
+    let mut scene = RecordedScene::default();
+    frame_at(&mut view, &mut scene, 0)?;
     recycler.scroll.jump_to(2.dp());
-    tree.show(frame_at(&mut view, 10)?)?;
+    frame_at(&mut view, &mut scene, 10)?;
     recycler.scroll.jump_to(4.dp());
-    tree.show(frame_at(&mut view, 20)?)?;
+    frame_at(&mut view, &mut scene, 20)?;
     let before = view.stats();
     for step in 3..10_u16 {
         recycler.scroll.jump_to(2.dp() * f64::from(step));
-        let update = frame_at(&mut view, 10 * (u64::from(step) + 1))?;
-        assert_eq!(update.changes.len(), 2, "step {step}");
+        frame_at(&mut view, &mut scene, 10 * (u64::from(step) + 1))?;
+        let changes = scene.changes();
+        assert_eq!(changes.len(), 2, "step {step}");
         assert!(
-            (update.changes.iter()).all(|change| matches!(change, Change::SetSlot { .. })),
+            (changes.iter()).all(|change| matches!(change, Change::SetSlot { .. })),
             "step {step}"
         );
-        tree.show(update)?;
     }
     let after = view.stats();
     assert_eq!(after.component_compositions, before.component_compositions);

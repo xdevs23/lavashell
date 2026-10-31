@@ -6,7 +6,7 @@ use focus_wire::Wire;
 use lavashell_core::prelude::{
     Density, DpExt, Modifier, NonNegativeDp, TextMeasurer, TextStyle, Viewport,
 };
-use lavashell_test_fixtures::WithoutFailures;
+use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
 use wire_tests::requests;
 
 #[test]
@@ -334,8 +334,9 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
     });
     let viewport = Viewport::new(Size::new(1.dp(), 1.dp()), Density::ONE);
     // A spacer draws nothing.
-    let update = (view.frame(viewport, &mut Metrics)).without_failures()?;
-    assert!(update.changes.is_empty());
+    let mut scene = RecordedScene::default();
+    (view.frame_into(viewport, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(scene.changes().is_empty());
     assert!(!wire.flush()?.is_empty());
     assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
     let mut grab = None;
@@ -355,8 +356,8 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
         );
         assert!(view.needs_visual_frame());
         assert!(wire.focus(&mut layer)?.is_empty());
-        let update = (view.frame(viewport, &mut Metrics)).without_failures()?;
-        assert!(update.changes.is_empty());
+        (view.frame_into(viewport, &mut Metrics, &mut scene)).without_failures()?;
+        assert!(scene.changes().is_empty());
         assert!(!view.needs_visual_frame());
         assert_eq!(
             wire.present(&mut layer, FrameOutcome::Shown)?,

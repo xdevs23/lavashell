@@ -32,7 +32,7 @@ impl SceneTree {
 
 impl SceneSnapshot {
     /// The snapshot with its animated slots sampled at `now`, measured from the same epoch as the time passed to
-    /// `View::frame_at`.
+    /// `View::frame_into_at`.
     #[must_use]
     pub fn at(&self, now: Duration) -> Presented<'_> {
         self.namespaces.at(now)

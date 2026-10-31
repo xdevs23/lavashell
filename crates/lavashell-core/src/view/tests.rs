@@ -3,7 +3,7 @@ use super::*;
 use crate::effects::{Material, Shadow, Stroke};
 use crate::input_method::{TextAction, TextHints};
 use crate::reactive::State;
-use crate::scene::tree::ApplyError;
+use crate::scene::tree::Change;
 use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};
@@ -22,23 +22,16 @@ impl TextMeasurer for Metrics {
 
 const WINDOW_SIZE: Size = Size::new(Dp::new(500.0), Dp::new(300.0));
 
-/// Makes a frame of `view` at `time_ms`, and fails where a component fails.
-fn frame(view: &mut View, size: Size, time_ms: u64) -> Result<SceneUpdate, TestError> {
-    framed(view, size, time_ms).without_failures()
-}
-
-/// Makes a frame of `view` at `time_ms`.
-fn framed(view: &mut View, size: Size, time_ms: u64) -> Result<Frame, FrameError> {
-    let time = std::time::Duration::from_millis(time_ms);
-    view.frame_at(
-        Viewport::new(size, Density::ONE),
-        &mut Metrics,
-        FrameTime {
-            now: time,
-            presentation: time,
-            ..Default::default()
-        },
-    )
+/// Makes a frame of `view` at `time_ms` into `scene`, fails where a component fails, and returns the changes of the
+/// frame.
+fn frame(
+    scene: &mut Scene,
+    view: &mut View,
+    size: Size,
+    time_ms: u64,
+) -> Result<Vec<Change>, TestError> {
+    advance(scene, view, size, time_ms)?;
+    Ok(scene.changes().to_vec())
 }
 
 /// The causes of the component failures with which `result` failed, in the order of the failures. Passes on any other
@@ -53,23 +46,27 @@ fn failure_causes<T>(result: Result<T, TestError>) -> Result<Vec<ComponentError>
     }
 }
 
-/// Paints a frame of `view` at `time_ms` and applies the resulting scene update to `scene`.
+/// Paints a frame of `view` at `time_ms` into `scene`.
 fn advance(scene: &mut Scene, view: &mut View, size: Size, time_ms: u64) -> Result<(), TestError> {
-    scene.show(frame(view, size, time_ms)?)?;
-    Ok(())
+    let time = std::time::Duration::from_millis(time_ms);
+    let timing = FrameTime {
+        now: time,
+        presentation: time,
+        ..Default::default()
+    };
+    let viewport = Viewport::new(size, Density::ONE);
+    advance_with_timing(scene, view, viewport, &mut Metrics, timing)
 }
 
-/// Paints a frame of `view` at `time_ms` and applies the resulting scene update to `scene`. `scene`
-/// then evaluates its animated slots at `time_ms`, the time at which the frame is presented.
+/// Paints a frame of `view` at `time_ms` into `scene`. `scene` then evaluates its animated slots at `time_ms`, the
+/// time at which the frame is presented.
 fn show_frame(
     scene: &mut Scene,
     view: &mut View,
     size: Size,
     time_ms: u64,
 ) -> Result<(), TestError> {
-    let update = frame(view, size, time_ms)?;
-    scene.at(time_ms).show(update)?;
-    Ok(())
+    advance(scene.at(time_ms), view, size, time_ms)
 }
 
 const TAB: InputEvent = InputEvent::Key {
@@ -125,12 +122,14 @@ fn counting_enter(count: State<u32>) -> impl FnMut(Shortcut) -> bool + 'static {
     }
 }
 
-/// The draw commands of `update` applied to an empty scene. `update` must be the first update of a
-/// view, because only the first update contains the whole scene and later updates contain only
-/// changes.
-fn painted(update: SceneUpdate) -> Result<Vec<DrawCommand>, ApplyError> {
+/// The draw commands of the next frame of `view`, made into an empty scene.
+fn painted(
+    view: &mut View,
+    viewport: Viewport,
+    text: &mut impl TextMeasurer,
+) -> Result<Vec<DrawCommand>, TestError> {
     let mut scene = Scene::default();
-    scene.show(update)?;
+    advance_with(&mut scene, view, viewport, text)?;
     Ok(scene.commands())
 }
 

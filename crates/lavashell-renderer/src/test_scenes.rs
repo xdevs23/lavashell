@@ -5,6 +5,7 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{
     Change, Content, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
+use lavashell_test_fixtures::WithoutFailures;
 use skia_safe::Canvas;
 use std::time::Duration;
 
@@ -17,8 +18,10 @@ pub(crate) fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> 
     }
 }
 
-/// A scene tree with one top-level leaf for each packet in `packets`, in order, with the node IDs 1, 2 and so on.
-pub(crate) fn leaves(packets: impl IntoIterator<Item = Packet>) -> Result<SceneTree, TestError> {
+/// A scene with one top-level leaf for each packet in `packets`, in order, with the node IDs 1, 2 and so on.
+pub(crate) fn leaves(
+    packets: impl IntoIterator<Item = Packet>,
+) -> Result<SceneSnapshot, TestError> {
     let changes = (packets.into_iter().enumerate())
         .map(|(index, packet)| {
             insert(
@@ -31,11 +34,16 @@ pub(crate) fn leaves(packets: impl IntoIterator<Item = Packet>) -> Result<SceneT
         .collect();
     let mut tree = SceneTree::default();
     tree.show(SceneUpdate { changes })?;
-    Ok(tree)
+    Ok(tree.snapshot())
 }
 
-pub(crate) fn paint(painter: &mut Painter, canvas: &Canvas, tree: &SceneTree, density: Density) {
-    painter.paint_scene(canvas, tree.at(Duration::ZERO), density);
+pub(crate) fn paint(
+    painter: &mut Painter,
+    canvas: &Canvas,
+    scene: &SceneSnapshot,
+    density: Density,
+) {
+    painter.paint_scene(canvas, scene.at(Duration::ZERO), density);
 }
 
 impl Painter {
@@ -64,12 +72,12 @@ impl Painter {
 pub(crate) fn paint_damage(
     painter: &mut Painter,
     canvas: &Canvas,
-    tree: &SceneTree,
+    scene: &SceneSnapshot,
     damage: Option<Rect>,
     clear: skia_safe::Color,
 ) -> Result<(), TestError> {
     let frame = crate::SurfaceFrame {
-        tree: tree.at(Duration::ZERO),
+        tree: scene.at(Duration::ZERO),
         density: Density::ONE,
         damage,
         clear,
@@ -80,12 +88,16 @@ pub(crate) fn paint_damage(
     Ok(())
 }
 
-pub(crate) fn leaf_commands(update: SceneUpdate) -> Result<Vec<DrawCommand>, TestError> {
-    let mut tree = SceneTree::default();
-    tree.show(update)?;
-    Ok(commands(&tree))
+pub(crate) fn commands(scene: &SceneSnapshot) -> Vec<DrawCommand> {
+    scene.at(Duration::ZERO).leaf_commands().cloned().collect()
 }
 
-pub(crate) fn commands(tree: &SceneTree) -> Vec<DrawCommand> {
-    tree.at(Duration::ZERO).leaf_commands().cloned().collect()
+pub(crate) fn framed_commands(
+    view: &mut View,
+    viewport: Viewport,
+    painter: &mut Painter,
+) -> Result<Vec<DrawCommand>, TestError> {
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    Ok(commands(&builder.snapshot()))
 }

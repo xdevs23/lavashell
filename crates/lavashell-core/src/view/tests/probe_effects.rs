@@ -70,9 +70,7 @@ impl Traced {
     }
 
     fn frame(&mut self) -> TestResult {
-        let update = self.view.frame(WINDOW, &mut Wrapping).without_failures()?;
-        self.scene.show(update)?;
-        Ok(())
+        advance_with(&mut self.scene, &mut self.view, WINDOW, &mut Wrapping)
     }
 
     fn click_button(&mut self) -> TestResult {

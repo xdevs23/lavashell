@@ -24,17 +24,10 @@ enum NodeIdentity {
     },
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::view) enum Recipient {
-    #[default]
-    Caller,
-    /// The sink passed to `View::frame_into` and `View::frame_into_at`.
-    Sink(SinkId),
-}
-
 #[derive(Default)]
 pub(in crate::view) struct Shown {
-    recipient: Recipient,
+    /// The sink that received the last update, or none before the first update and after a failed restart.
+    sink: Option<SinkId>,
     tree: SceneTree,
     ids: BTreeMap<NodeIdentity, SceneNodeId>,
     identities: BTreeMap<SceneNodeId, NodeIdentity>,
@@ -51,15 +44,15 @@ struct Counters {
 }
 
 impl Shown {
-    pub fn is_shown_to(&self, recipient: Recipient) -> bool {
-        self.recipient == recipient
+    pub fn is_shown_to(&self, sink: SinkId) -> bool {
+        self.sink == Some(sink)
     }
 
-    /// Sets the recipient of the next update. When `recipient` differs from the last one, the next update builds the
-    /// whole scene.
-    pub fn retarget(&mut self, recipient: Recipient) {
-        if !self.is_shown_to(recipient) {
-            self.recipient = recipient;
+    /// Sets the sink of the next update. When `sink` differs from the last one, the next update builds the whole
+    /// scene.
+    pub fn retarget(&mut self, sink: Option<SinkId>) {
+        if self.sink != sink {
+            self.sink = sink;
             self.forget_scene();
         }
     }
@@ -71,7 +64,7 @@ impl Shown {
         self.tree = SceneTree::default();
     }
 
-    /// Sends each change that makes the scene in the recipient match `items` to `sink`, then ends the frame.
+    /// Sends to `sink` each change that makes the scene in `sink` match `items`, then ends the frame.
     /// `followed` replaces the painted transforms of the groups listed in it. After an error, the next update builds
     /// the whole scene.
     pub fn update<S: ChangeSink>(

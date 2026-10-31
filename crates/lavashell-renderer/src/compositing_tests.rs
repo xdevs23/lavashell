@@ -15,7 +15,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
         shape: size.into(),
         brush: Color::WHITE.with_alpha(0.5).into(),
     };
-    let tree = SceneTree::with_leaf([fill])?;
+    let tree = SceneTree::with_leaf([fill])?.snapshot();
     let working = skia_safe::ImageInfo::new(
         (16, 8),
         skia_safe::ColorType::RGBAF16,
@@ -128,7 +128,7 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
         if change_after_plan {
             planned.set_blend_space(BlendSpace::Linear);
         }
-        let tree = SceneTree::with_leaf(commands)?;
+        let tree = SceneTree::with_leaf(commands)?.snapshot();
         assert_eq!(
             planned.plan_scene_effects(
                 tree.at(Duration::ZERO),

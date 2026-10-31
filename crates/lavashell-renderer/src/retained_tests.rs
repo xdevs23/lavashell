@@ -46,14 +46,14 @@ fn surface() -> Result<skia_safe::Surface, TestError> {
     skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)
 }
 
-fn paint(painter: &mut Painter, target: &mut skia_safe::Surface, tree: &SceneTree) {
-    painter.paint_scene(target.canvas(), tree.at(Duration::ZERO), Density::ONE);
+fn paint(painter: &mut Painter, target: &mut skia_safe::Surface, scene: &SceneSnapshot) {
+    painter.paint_scene(target.canvas(), scene.at(Duration::ZERO), Density::ONE);
 }
 
 fn repainted_pixels(
     painter: &mut Painter,
     shape: Option<&skia_safe::Path>,
-    frames: impl IntoIterator<Item = (SceneTree, Rect)>,
+    frames: impl IntoIterator<Item = (SceneSnapshot, Rect)>,
 ) -> Result<Vec<u64>, TestError> {
     repainted_pixels_on(&mut surface()?, painter, shape, frames)
 }
@@ -62,7 +62,7 @@ fn repainted_pixels_on(
     target: &mut skia_safe::Surface,
     painter: &mut Painter,
     shape: Option<&skia_safe::Path>,
-    frames: impl IntoIterator<Item = (SceneTree, Rect)>,
+    frames: impl IntoIterator<Item = (SceneSnapshot, Rect)>,
 ) -> Result<Vec<u64>, TestError> {
     (frames.into_iter())
         .map(|(tree, damage)| -> Result<u64, TestError> {
@@ -81,12 +81,12 @@ fn repainted_pixels_on(
         .collect()
 }
 
-/// A scene tree and a damage rectangle for each of `damages`. The leaves of each tree are new packets from one call
-/// of `make_packets`.
+/// A scene and a damage rectangle for each of `damages`. The leaves of each scene are new packets from one call of
+/// `make_packets`.
 fn damage_frames(
     damages: [Rect; 4],
     make_packets: impl Fn() -> Vec<Packet>,
-) -> Result<Vec<(SceneTree, Rect)>, TestError> {
+) -> Result<Vec<(SceneSnapshot, Rect)>, TestError> {
     let mut frames = Vec::new();
     for damage in damages {
         frames.push((leaves(make_packets())?, damage));
@@ -203,7 +203,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
         };
         painter.paint_surface(retained.canvas(), frame)?;
         let _chained_canvas = reference.canvas().clear(skia_safe::Color::TRANSPARENT);
-        paint(&mut full, &mut reference, &tree);
+        paint(&mut full, &mut reference, &tree.snapshot());
         let a = pixels(&mut retained);
         let b = pixels(&mut reference);
         let worst = a
@@ -327,18 +327,8 @@ fn a_stable_leaf_cut_by_window_shape_neither_fills_nor_widens_damage() -> Result
 #[test]
 fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), TestError> {
     let rect = Rect::new(0.dp(), 0.dp(), 100.dp(), 100.dp());
-    let mut red = SceneTree::default();
-    red.show(SceneUpdate::from_iter([top_leaf(
-        1,
-        0,
-        packet(rect, |d| d.fill(rect, Color::rgb(0x00ff_0000))),
-    )]))?;
-    let mut blue = SceneTree::default();
-    blue.show(SceneUpdate::from_iter([top_leaf(
-        1,
-        0,
-        packet(rect, |d| d.fill(rect, Color::rgb(0x0000_00ff))),
-    )]))?;
+    let red = leaves([packet(rect, |d| d.fill(rect, Color::rgb(0x00ff_0000)))])?;
+    let blue = leaves([packet(rect, |d| d.fill(rect, Color::rgb(0x0000_00ff)))])?;
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut target = surface()?;
     for (frame, window, tree) in [
@@ -393,8 +383,9 @@ fn transient_packets_paint_correctly_without_allocating_cached_images() -> Resul
             }
         };
         tree.show(SceneUpdate::from_iter([change]))?;
-        paint(&mut painter, &mut target, &tree);
-        paint(&mut reference, &mut full, &tree);
+        let scene = tree.snapshot();
+        paint(&mut painter, &mut target, &scene);
+        paint(&mut reference, &mut full, &scene);
         assert_eq!(pixels(&mut target), pixels(&mut full));
     }
     assert_eq!(painter.render_stats().cache_misses, 0);
@@ -416,10 +407,11 @@ fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(),
                 d.fill(Rect::new(0.dp(), 0.dp(), 100.dp(), 100.dp()), color);
             });
         });
-        let mut tree = SceneTree::default();
-        tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+        let mut builder = SceneBuilder::default();
+        (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+        let scene = builder.snapshot();
         for _ in 0..3 {
-            paint(&mut painter, &mut target, &tree);
+            paint(&mut painter, &mut target, &scene);
         }
     }
     assert!(painter.render_stats().cache_hits > 0);

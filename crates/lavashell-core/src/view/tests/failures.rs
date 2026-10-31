@@ -4,16 +4,18 @@ use crate::animation::{AnimationError, Tween};
 use crate::scroll::{ScrollError, ScrollState};
 use std::time::Duration;
 
-/// For each failure in the next frame of `view`, the tag of the failed component and the cause. The update of the
-/// frame goes to `scene`.
+/// For each failure in the next frame of `view`, the tag of the failed component and the cause. The frame goes into
+/// `scene`.
 fn next_failures(
     view: &mut View,
     scene: &mut Scene,
 ) -> Result<Vec<(Option<String>, ComponentError)>, TestError> {
-    let Frame { update, failures } = framed(view, WINDOW_SIZE, 0)?;
-    scene.show(update)?;
-    let failures = failures.into_iter();
-    Ok(failures
+    let failures = match advance(scene, view, WINDOW_SIZE, 0) {
+        Ok(()) => Vec::new(),
+        Err(TestError::Failed(failures)) => failures,
+        Err(error) => return Err(error),
+    };
+    Ok((failures.into_iter())
         .map(|failure| (failure.component.tag, failure.cause))
         .collect())
 }

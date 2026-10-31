@@ -1,57 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::component::Refresh;
 use super::frame_error::{FrameError, NodeName};
-use super::frame_result::{Failures, Frame};
+use super::frame_result::Failures;
 use super::parents::ROOT;
 use super::scroll_followers::Presentation;
 use super::{
     Action, BTreeSet, Constraints, FrameTime, Layout, LocalReader, LocalScope, Moving, NodeId,
-    Phase, Point, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT, View, ViewHandles,
-    Viewport, Visibility, output, paint,
+    Phase, Point, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT, View, ViewHandles, Viewport,
+    Visibility, output, paint,
 };
-use crate::scene::tree::Change;
-use crate::scene::{ChangeSink, SinkId};
-use std::convert::Infallible;
+use crate::scene::ChangeSink;
 
 impl View {
-    /// Sets `viewport` as the root value of `VIEWPORT`, then composes, lays out and paints what changed. The update of
-    /// the returned frame changes the scene made from every earlier update returned by `frame` and `frame_at`. After
-    /// an error, and after a frame sent with `frame_into` or `frame_into_at`, the next update builds the whole scene
-    /// from an empty scene.
+    /// Sets `viewport` as the root value of `VIEWPORT`, then composes, lays out and paints what changed. Sends each
+    /// change to `sink` while the view composes the frame, and then ends the frame in `sink`. The changes update the
+    /// scene that `sink` built from earlier frames. `sink` restarts first when it did not receive the last frame, or
+    /// when the last restart of `sink` failed. An error restarts `sink` at once. The frame after a restart sends the
+    /// whole scene.
     ///
     /// A component that fails in its composition, its layout or its paint has no nodes in the tree, and the rest of the
-    /// view is unchanged. The frame returns the failures since the last frame. A failed component composes again once
-    /// a value read by the component changes. A failed root composition leaves the view empty.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the update does not fit the scene shown before.
-    pub fn frame(
-        &mut self,
-        viewport: Viewport,
-        text: &mut impl TextMeasurer,
-    ) -> Result<Frame, FrameError> {
-        self.shown.retarget(output::Recipient::Caller);
-        collect_update(|update| self.frame_presenting(viewport, text, Presentation::New, update))
-    }
-
-    /// # Errors
-    ///
-    /// Fails as [`View::frame`] does.
-    pub fn frame_at(
-        &mut self,
-        viewport: Viewport,
-        text: &mut impl TextMeasurer,
-        timing: FrameTime,
-    ) -> Result<Frame, FrameError> {
-        self.shown.retarget(output::Recipient::Caller);
-        collect_update(|update| self.timed_frame(viewport, text, timing, update))
-    }
-
-    /// Makes a frame as [`View::frame`] does, sends each change to `sink` while the view composes the frame, and then
-    /// ends the frame in `sink`. Returns the failures since the last frame. The changes update the scene that `sink`
-    /// built from earlier frames. `sink` restarts first when it did not receive the last frame, or when the last
-    /// restart of `sink` failed. An error restarts `sink` at once. The frame after a restart sends the whole scene.
+    /// view is unchanged. Returns the failures since the last frame. A failed component composes again once a value
+    /// read by the component changes. A failed root composition leaves the view empty.
     ///
     /// # Errors
     ///
@@ -68,7 +37,8 @@ impl View {
         })
     }
 
-    /// Makes a frame as [`View::frame_at`] does and sends it to `sink` as [`View::frame_into`] does.
+    /// Advances the motions of the view to the presentation time of `timing`, then makes a frame as
+    /// [`View::frame_into`] does.
     ///
     /// # Errors
     ///
@@ -90,7 +60,7 @@ impl View {
         sink: &mut S,
         frame: impl FnOnce(&mut Self, &mut S) -> Result<Failures, FrameError<S::Error>>,
     ) -> Result<Failures, FrameError<S::Error>> {
-        if !self.shown.is_shown_to(output::Recipient::Sink(sink.id())) {
+        if !self.shown.is_shown_to(sink.id()) {
             self.restart_sink(sink)?;
         }
         frame(self, sink).or_else(|error| {
@@ -103,9 +73,9 @@ impl View {
     /// Restarts `sink`, so that the next frame sends the whole scene to it. Until a restart succeeds, every frame into
     /// `sink` restarts it first.
     fn restart_sink<S: ChangeSink>(&mut self, sink: &mut S) -> Result<(), FrameError<S::Error>> {
-        self.shown.retarget(output::Recipient::Caller);
+        self.shown.retarget(None);
         sink.restart().map_err(FrameError::Sink)?;
-        self.shown.retarget(output::Recipient::Sink(sink.id()));
+        self.shown.retarget(Some(sink.id()));
         Ok(())
     }
 
@@ -348,49 +318,5 @@ impl View {
             .filter(|shortcut| !hidden.contains(&shortcut.node))
             .map(|shortcut| (shortcut.shortcut, shortcut.action))
             .collect()
-    }
-}
-
-/// Runs `frame` with a sink that collects the changes of the frame into one update.
-fn collect_update(
-    frame: impl FnOnce(&mut CollectedUpdate) -> Result<Failures, FrameError<Infallible>>,
-) -> Result<Frame, FrameError> {
-    let mut collected = CollectedUpdate::default();
-    match frame(&mut collected) {
-        Ok(failures) => Ok(Frame {
-            update: collected.update,
-            failures,
-        }),
-        Err(FrameError::Mirror(error)) => Err(FrameError::Mirror(error)),
-        Err(FrameError::Sink(never)) => match never {},
-    }
-}
-
-/// The changes of one frame, collected for `View::frame` and `View::frame_at`.
-#[derive(Default)]
-struct CollectedUpdate {
-    id: SinkId,
-    update: SceneUpdate,
-}
-
-impl ChangeSink for CollectedUpdate {
-    type Error = Infallible;
-
-    fn id(&self) -> SinkId {
-        self.id
-    }
-
-    fn change(&mut self, change: Change) -> Result<(), Infallible> {
-        self.update.changes.push(change);
-        Ok(())
-    }
-
-    fn end_frame(&mut self) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    fn restart(&mut self) -> Result<(), Infallible> {
-        self.update.changes.clear();
-        Ok(())
     }
 }

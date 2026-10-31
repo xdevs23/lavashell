@@ -5,7 +5,7 @@ mod canvas_tests;
 mod shown;
 
 pub(super) use canvas::{Canvas, ScopeKind};
-pub(super) use shown::{Recipient, Shown};
+pub(super) use shown::Shown;
 
 use crate::geometry::Point;
 use crate::scene::tree::{Group, GroupValues};

@@ -52,7 +52,9 @@ fn each_failed_component_is_logged_as_an_error_with_its_causes() -> Result<(), T
         });
     });
     let viewport = Viewport::new(Size::new(10.dp(), 10.dp()), Density::ONE);
-    let frame = (view.frame(viewport, &mut NoText)).map_err(FrameFailure::Frame)?;
+    let mut scene = SceneBuilder::default();
+    let frame = view.frame_into(viewport, &mut NoText, &mut scene);
+    let failures = frame.map_err(FrameFailure::Frame)?;
     let expected = [
         "component \"forecast\" failed: a component composes a number that is not valid: \
          the number is outside the range of its type",
@@ -60,6 +62,6 @@ fn each_failed_component_is_logged_as_an_error_with_its_causes() -> Result<(), T
          the number must be finite",
     ]
     .map(|message| (log::Level::Error, message.to_owned()));
-    assert_eq!(recorded(|| log_failures(frame.failures))?, expected);
+    assert_eq!(recorded(|| log_failures(failures))?, expected);
     Ok(())
 }

@@ -72,9 +72,8 @@ fn a_shared_node_in_a_sliding_parent_ends_where_it_is_laid_out() -> TestResult {
     assert!(!view.needs_frame());
     assert_eq!(view.next_deadline(), Some(Duration::from_secs(1)));
     let before = shown(scene.at(1000))?;
-    let rest = frame(&mut view, WINDOW_SIZE, 1000)?;
-    assert_eq!(rest.changes.len(), 1, "only the slot of the parent changes");
-    scene.show(rest)?;
+    let rest = frame(&mut scene, &mut view, WINDOW_SIZE, 1000)?;
+    assert_eq!(rest.len(), 1, "only the slot of the parent changes");
     assert_eq!(shown(&scene)?, before);
     let before = shown(scene.at(1500))?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;

@@ -7,7 +7,7 @@ use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::ReceivedData;
-use lavashell_test_fixtures::WithoutFailures;
+use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
 
 #[path = "native_source_tests.rs"]
 mod native_source_tests;
@@ -23,11 +23,18 @@ impl TextMeasurer for Metrics {
 
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
 
-fn editor() -> Result<(View, State<String>, NodeId), TestError> {
+struct Editor {
+    view: View,
+    scene: RecordedScene,
+    text: State<String>,
+    field: NodeId,
+}
+
+fn editor() -> Result<Editor, TestError> {
     editor_with(Modifier::new())
 }
 
-fn editor_with(modifier: Modifier) -> Result<(View, State<String>, NodeId), TestError> {
+fn editor_with(modifier: Modifier) -> Result<Editor, TestError> {
     let text = State::new("abc def".to_string());
     let value = text.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -42,10 +49,16 @@ fn editor_with(modifier: Modifier) -> Result<(View, State<String>, NodeId), Test
             move |text| value.set(text),
         );
     });
-    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
-    assert!(!update.changes.is_empty());
-    let id = field_id(&view)?;
-    Ok((view, text, id))
+    let mut scene = RecordedScene::default();
+    (view.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let field = field_id(&view)?;
+    Ok(Editor {
+        view,
+        scene,
+        text,
+        field,
+    })
 }
 
 /// The id of the accessibility node named `field` in `view`, which is the text field of the test editor.
@@ -91,7 +104,7 @@ fn text_formats_preserve_utf8_and_choose_preferred_format() -> Result<(), TestEr
         let bytes = data.get(format).ok_or(TestError::MissingFormat(format))?;
         assert_eq!(bytes.as_ref(), "雪🙂".as_bytes());
     }
-    let (view, _, _) = editor()?;
+    let Editor { view, .. } = editor()?;
     let mut adapter = TextTransfers::default();
     let info = offer(1, Point::new(21.dp(), 5.dp()), DragAction::Copy);
     let acceptance = adapter
@@ -104,7 +117,7 @@ fn text_formats_preserve_utf8_and_choose_preferred_format() -> Result<(), TestEr
 #[test]
 fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target()
 -> Result<(), TestError> {
-    let (mut view, text, _) = editor()?;
+    let Editor { mut view, text, .. } = editor()?;
     let mut adapter = TextTransfers::default();
     let mut info = offer(1, Point::new(11.dp(), 5.dp()), DragAction::Copy);
     assert!(
@@ -146,7 +159,7 @@ fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target(
 #[test]
 fn invalid_utf8_stale_destination_and_wrong_transfer_are_rejected() -> Result<(), TestError> {
     for invalid in [true, false] {
-        let (mut view, text, _) = editor()?;
+        let Editor { mut view, text, .. } = editor()?;
         let mut adapter = TextTransfers::default();
         let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
         assert!(
@@ -176,7 +189,7 @@ fn invalid_utf8_stale_destination_and_wrong_transfer_are_rejected() -> Result<()
 
 #[test]
 fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), TestError> {
-    let (mut view, text, _) = editor()?;
+    let Editor { mut view, text, .. } = editor()?;
     let mut adapter = TextTransfers::default();
     let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
     assert!(
@@ -220,7 +233,7 @@ fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), 
 
 #[test]
 fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result<(), TestError> {
-    let (mut view, text, _) = editor()?;
+    let Editor { mut view, text, .. } = editor()?;
     let mut adapter = TextTransfers::default();
     let mut info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
     assert!(
@@ -256,10 +269,15 @@ fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result
 
 #[test]
 fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result<(), TestError> {
-    let (mut view, text, id) = editor()?;
+    let Editor {
+        mut view,
+        text,
+        field,
+        ..
+    } = editor()?;
     assert_eq!(
         view.accessibility_action(ActionRequest {
-            target: id,
+            target: field,
             action: AccessibilityAction::SetTextSelection(TextSelection {
                 anchor: 0,
                 focus: 3
@@ -315,7 +333,7 @@ fn read_only(semantics: &mut Semantics) {
 #[test]
 fn a_cut_needs_selected_text_in_the_focused_field() -> Result<(), TestError> {
     let cut = Key::Character('x');
-    let (mut view, _, _) = editor()?;
+    let Editor { mut view, .. } = editor()?;
     assert!(clipboard_shortcut(&mut view, cut).is_none());
     focus_field(&mut view);
     assert!(clipboard_shortcut(&mut view, cut).is_none());
@@ -329,11 +347,13 @@ fn a_cut_needs_selected_text_in_the_focused_field() -> Result<(), TestError> {
 
 #[test]
 fn a_read_only_field_copies_but_does_not_cut() -> Result<(), TestError> {
-    let (mut view, _, id) = editor_with(Modifier::new().semantics_with(read_only))?;
+    let Editor {
+        mut view, field, ..
+    } = editor_with(Modifier::new().semantics_with(read_only))?;
     focus_field(&mut view);
     select_all(&mut view);
     let source = view
-        .text_selection_source(id)
+        .text_selection_source(field)
         .ok_or(TestError::MissingField)?;
     assert_eq!(source.text(), "abc def");
     assert!(!source.can_move());
@@ -348,7 +368,7 @@ fn a_read_only_field_copies_but_does_not_cut() -> Result<(), TestError> {
 #[test]
 fn a_paste_needs_an_editable_focused_field() -> Result<(), TestError> {
     let paste = Key::Character('v');
-    let (mut view, _, _) = editor()?;
+    let Editor { mut view, .. } = editor()?;
     assert!(clipboard_shortcut(&mut view, paste).is_none());
     focus_field(&mut view);
     assert!(matches!(

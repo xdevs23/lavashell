@@ -2,7 +2,7 @@
 use super::material_motion::{linear, painted_fills};
 use super::*;
 use crate::retained::Extent;
-use crate::scene::tree::{Change, DamageTracker, SceneTree};
+use crate::scene::tree::{Change, DamageTracker};
 use crate::scroll::ScrollState;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -48,10 +48,9 @@ fn a_scroll_step_changes_one_slot() -> TestResult {
         at: Point::new(10.dp(), 10.dp()),
         delta: Point::new(Dp::ZERO, 30.dp()),
     });
-    let update = frame(&mut view, WINDOW_SIZE, 0)?;
-    assert_eq!(update.changes.len(), 1);
-    assert!(matches!(update.changes[0], Change::SetSlot { .. }));
-    scene.show(update)?;
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    assert_eq!(changes.len(), 1);
+    assert!(matches!(changes[0], Change::SetSlot { .. }));
     assert_eq!(view.stats().painted_components, before.painted_components);
     assert_eq!(view.stats().reused_components, before.reused_components + 6);
     tap_at(&mut view, Point::new(10.dp(), 55.dp()));
@@ -60,12 +59,12 @@ fn a_scroll_step_changes_one_slot() -> TestResult {
 }
 
 #[test]
-fn a_frame_that_changes_nothing_sends_an_empty_update() -> TestResult {
+fn a_frame_that_changes_nothing_sends_no_change() -> TestResult {
     let mut scene = Scene::default();
     let mut view = rows(&ScrollState::new(Axis::Vertical), &Rc::default());
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.invalidate();
-    assert!(frame(&mut view, WINDOW_SIZE, 0)?.changes.is_empty());
+    assert!(frame(&mut scene, &mut view, WINDOW_SIZE, 0)?.is_empty());
     Ok(())
 }
 
@@ -82,11 +81,10 @@ fn a_root_composition_changes_only_the_leaves_that_paint_differently() -> TestRe
     let mut scene = Scene::default();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     text.set("after");
-    let update = frame(&mut view, WINDOW_SIZE, 0)?;
+    let changes = frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(view.stats().root_compositions, 2);
-    assert!(!update.changes.is_empty());
-    assert!((update.changes.iter()).all(|change| matches!(change, Change::SetContent { .. })));
-    scene.show(update)?;
+    assert!(!changes.is_empty());
+    assert!((changes.iter()).all(|change| matches!(change, Change::SetContent { .. })));
     let texts: Vec<_> = (scene.commands().into_iter())
         .filter_map(|command| match command {
             DrawCommand::Text { text, .. } => Some(text),
@@ -108,7 +106,9 @@ fn a_component_inside_a_blur_paints_inside_it() -> TestResult {
             });
         });
     });
-    let commands = painted(frame(&mut view, WINDOW_SIZE, 0)?)?;
+    let mut scene = Scene::default();
+    advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    let commands = scene.commands();
     let at = |found: fn(&DrawCommand) -> bool| commands.iter().position(found);
     let blur =
         at(|command| matches!(command, DrawCommand::EffectLayer { .. })).required("a blur")?;
@@ -181,13 +181,15 @@ fn a_node_moved_by_an_offset_damages_only_where_it_paints() -> TestResult {
         );
     });
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let (mut tree, mut presented) = (SceneTree::default(), DamageTracker::default());
-    tree.show(frame(&mut view, WINDOW_SIZE, 0)?)?;
-    let _baseline_damage = presented.damage(tree.at(Duration::ZERO), viewport);
+    let (mut scene, mut presented) = (Scene::default(), DamageTracker::default());
+    advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    let baseline = scene.snapshot();
+    let _baseline_damage = presented.damage(baseline.at(Duration::ZERO), viewport);
     shift.set(2.0);
-    tree.show(frame(&mut view, WINDOW_SIZE, 0)?)?;
+    advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    let shifted = scene.snapshot();
     let damage = presented
-        .damage(tree.at(Duration::ZERO), viewport)
+        .damage(shifted.at(Duration::ZERO), viewport)
         .required("damage")?;
     assert!(
         damage.x >= 190.dp() && damage.y >= 90.dp() && damage.width < 60.dp(),
@@ -203,9 +205,9 @@ fn a_leaf_at_the_top_level_covers_what_it_paints_only() -> TestResult {
             d.circle(Point::new(10.dp(), 10.dp()), 4.dp(), Color::WHITE);
         });
     });
-    let mut tree = SceneTree::default();
-    tree.show(frame(&mut view, WINDOW_SIZE, 0)?)?;
-    let outputs = (tree.at(Duration::ZERO).paint_order().leaves())
+    let mut scene = Scene::default();
+    advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    let outputs = (scene.snapshot().at(Duration::ZERO).paint_order().leaves())
         .map(|leaf| leaf.packet.footprint().output)
         .collect::<Vec<_>>();
     let painted = Rect::new(6.dp(), 6.dp(), 8.dp(), 8.dp());

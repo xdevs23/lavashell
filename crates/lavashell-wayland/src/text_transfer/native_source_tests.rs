@@ -66,8 +66,9 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
             },
         );
     });
-    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
-    assert!(!update.changes.is_empty());
+    let mut scene = RecordedScene::default();
+    (view.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -98,10 +99,15 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
 fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
 -> Result<(), TestError> {
     for device in [1, 2] {
-        let (mut view, text, _) = editor()?;
+        let Editor {
+            mut view,
+            mut scene,
+            text,
+            ..
+        } = editor()?;
         text.set("abc abc xyz".to_string());
-        let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
-        assert!(!update.changes.is_empty());
+        (view.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+        assert!(!scene.changes().is_empty());
         let mut adapter = TextTransfers::default();
         let mut request = native_source(&adapter, &mut view)?;
         start_drag(&mut request, &mut view)?;
@@ -144,10 +150,15 @@ fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
 #[test]
 fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
 -> Result<(), TestError> {
-    let (mut view, text, _) = editor()?;
+    let Editor {
+        mut view,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
     text.set("abc abc xyz".to_string());
-    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
-    assert!(!update.changes.is_empty());
+    (view.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -172,10 +183,15 @@ fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
 #[test]
 fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> Result<(), TestError>
 {
-    let (mut view, text, _) = editor()?;
+    let Editor {
+        mut view,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
     text.set("abc abc xyz".to_string());
-    let update = (view.frame(WINDOW, &mut Metrics)).without_failures()?;
-    assert!(!update.changes.is_empty());
+    (view.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut view)?;
     start_drag(&mut request, &mut view)?;
@@ -199,11 +215,20 @@ fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> R
 
 #[test]
 fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Result<(), TestError> {
-    let (mut origin, text, _) = editor()?;
+    let Editor {
+        view: mut origin,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
     text.set("abc abc xyz".to_string());
-    let update = (origin.frame(WINDOW, &mut Metrics)).without_failures()?;
-    assert!(!update.changes.is_empty());
-    let (mut destination, target, _) = editor()?;
+    (origin.frame_into(WINDOW, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let Editor {
+        view: mut destination,
+        text: target,
+        ..
+    } = editor()?;
     let mut adapter = TextTransfers::default();
     let mut request = native_source(&adapter, &mut origin)?;
     start_drag(&mut request, &mut origin)?;

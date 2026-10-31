@@ -58,15 +58,16 @@ fn private_prefixes_are_never_held_in_effect_inputs_or_reusable_backdrop_snapsho
     });
     let size = Size::new(100.dp(), 40.dp());
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = lavashell_core::scene::tree::SceneTree::default();
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
     });
     view.input(InputEvent::Text("synthetic fixture".into()));
     secret.set_revealed(true);
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    let tree = builder.snapshot();
     let private = crate::test_scenes::commands(&tree);
     assert!(!Footprint::analyze(&private).cacheable);
     let inputs = Rc::new(RefCell::new(Vec::new()));

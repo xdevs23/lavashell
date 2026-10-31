@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! A scene tree for tests that applies every update returned by a view. Tests read the scene in paint order, with
-//! every animated slot evaluated at one chosen time.
+//! A scene for tests that builds the scene from every frame of a view and records the changes of the last frame.
+//! Tests read the scene in paint order, with every animated slot evaluated at one chosen time.
 
 use crate::frame::FrameTime;
 use crate::geometry::Viewport;
 use crate::scene::tree::{
-    ApplyError, GroupValues, NamespaceId, NodeKey, PaintVisitor, PlacedLeaf, SceneTree, SceneUpdate,
+    ApplyError, Change, GroupValues, NamespaceId, NodeKey, PaintVisitor, PlacedLeaf, SceneSnapshot,
 };
-use crate::scene::{Affine, DrawCommand};
+use crate::scene::{Affine, ChangeSink, DrawCommand, SceneBuilder, SinkId};
 use crate::test_error::{TestError, WithoutFailures};
 use crate::view::{TextMeasurer, View};
 use std::time::Duration;
 
-/// Paints a frame of `view` and shows its update in `scene`.
+/// Paints a frame of `view` into `scene`.
 pub(crate) fn advance_with(
     scene: &mut Scene,
     view: &mut View,
     viewport: Viewport,
     text: &mut impl TextMeasurer,
 ) -> Result<(), TestError> {
-    scene.show(view.frame(viewport, text).without_failures()?)?;
-    Ok(())
+    view.frame_into(viewport, text, scene).without_failures()
 }
 
-/// Paints a frame of `view` at `timing` and shows its update in `scene`.
+/// Paints a frame of `view` at `timing` into `scene`.
 pub(crate) fn advance_with_timing(
     scene: &mut Scene,
     view: &mut View,
@@ -31,20 +30,28 @@ pub(crate) fn advance_with_timing(
     text: &mut impl TextMeasurer,
     timing: FrameTime,
 ) -> Result<(), TestError> {
-    let frame = view.frame_at(viewport, text, timing);
-    scene.show(frame.without_failures()?)?;
-    Ok(())
+    (view.frame_into_at(viewport, text, timing, scene)).without_failures()
 }
 
 #[derive(Default)]
 pub(crate) struct Scene {
-    tree: SceneTree,
+    builder: SceneBuilder,
+    /// The changes received since the last end of a frame.
+    open: Vec<Change>,
+    /// The changes of the last frame that ended.
+    ended: Vec<Change>,
     now: Duration,
 }
 
 impl Scene {
-    pub fn show(&mut self, update: SceneUpdate) -> Result<(), ApplyError> {
-        self.tree.show(update)
+    /// The changes of the last frame that ended.
+    pub fn changes(&self) -> &[Change] {
+        &self.ended
+    }
+
+    /// The scene as it was when the last frame ended.
+    pub fn snapshot(&self) -> SceneSnapshot {
+        self.builder.snapshot()
     }
 
     /// Sets the time at which later reads of this scene evaluate the animated slots: `ms` milliseconds after the start
@@ -55,17 +62,43 @@ impl Scene {
     }
 
     pub fn commands(&self) -> Vec<DrawCommand> {
-        self.tree.at(self.now).commands()
+        self.snapshot().at(self.now).commands()
     }
 
     pub fn leaf_commands(&self) -> Vec<DrawCommand> {
-        self.tree.at(self.now).leaf_commands().cloned().collect()
+        let snapshot = self.snapshot();
+        snapshot.at(self.now).leaf_commands().cloned().collect()
     }
 
     pub fn groups(&self) -> Vec<GroupValues> {
         let mut groups = Groups(Vec::new());
-        self.tree.at(self.now).paint_order().walk(&mut groups);
+        let snapshot = self.snapshot();
+        snapshot.at(self.now).paint_order().walk(&mut groups);
         groups.0
+    }
+}
+
+impl ChangeSink for Scene {
+    type Error = ApplyError;
+
+    fn id(&self) -> SinkId {
+        self.builder.id()
+    }
+
+    fn change(&mut self, change: Change) -> Result<(), ApplyError> {
+        self.open.push(change.clone());
+        self.builder.change(change)
+    }
+
+    fn end_frame(&mut self) -> Result<(), ApplyError> {
+        self.builder.end_frame()?;
+        self.ended = std::mem::take(&mut self.open);
+        Ok(())
+    }
+
+    fn restart(&mut self) -> Result<(), ApplyError> {
+        self.open.clear();
+        self.builder.restart()
     }
 }
 

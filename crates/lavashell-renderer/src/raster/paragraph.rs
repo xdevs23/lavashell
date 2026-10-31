@@ -80,7 +80,6 @@ impl RasterCache {
 mod tests {
     use crate::test_error::TestError;
     use lavashell_core::prelude::*;
-    use lavashell_test_fixtures::WithoutFailures;
 
     #[test]
     fn tiles_match_direct_paragraphs_at_integer_and_fractional_origins() -> Result<(), TestError> {
@@ -102,11 +101,9 @@ mod tests {
                                 .offset(Dp::new(12.0 + phase), Dp::new(8.0 + phase)),
                         );
                     });
-                    let frame = view.frame(
-                        Viewport::new(Size::new(240.dp(), 40.dp()), Density::ONE),
-                        &mut painter.shaper,
-                    );
-                    let commands = crate::test_scenes::leaf_commands(frame.without_failures()?)?;
+                    let viewport = Viewport::new(Size::new(240.dp(), 40.dp()), Density::ONE);
+                    let commands =
+                        crate::test_scenes::framed_commands(&mut view, viewport, &mut painter)?;
                     let info = skia_safe::ImageInfo::new(
                         (240, 40),
                         skia_safe::ColorType::RGBA8888,

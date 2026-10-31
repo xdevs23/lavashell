@@ -4,7 +4,6 @@ use super::tests::{new_painter, pixels, target};
 use super::*;
 use crate::test_error::TestError;
 use crate::test_scenes::{paint, paint_damage};
-use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
 use lavashell_test_fixtures::WithoutFailures;
 
@@ -27,8 +26,9 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
     let size = Size::new(300.dp(), 150.dp());
     view.set_accessibility_text_geometry(true);
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = SceneTree::default();
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    let tree = builder.snapshot();
     view.update_accessibility();
     let initial_bounds = view.bounds_of("text");
     let first_text = view
@@ -65,7 +65,8 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
             view.needs_frame(),
             "existing scopes ignored the new provider request"
         );
-        tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+        (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+        let tree = builder.snapshot();
         view.update_accessibility();
         assert_eq!(view.bounds_of("text"), initial_bounds);
         assert_eq!(

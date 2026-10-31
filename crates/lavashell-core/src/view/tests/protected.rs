@@ -16,7 +16,7 @@ fn field() -> Result<(View, Scene, ProtectedText), TestError> {
         );
     });
     let mut scene = Scene::default();
-    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
@@ -46,7 +46,7 @@ fn protected_unicode_editing_only_shapes_masks_and_blocks_exports() -> TestResul
         shift: false,
     });
     assert_eq!(secret.masked('•'), "•••");
-    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
     let commands = scene.commands();
     let texts: Vec<_> = commands
         .iter()
@@ -87,7 +87,7 @@ fn a_protected_field_shows_the_mask_of_the_platform_and_edits_by_characters_of_i
         password_mask: '*',
         ..crate::platform::fixture::facts()
     });
-    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
     let shown = |scene: &Scene| {
         (scene.commands().iter()).find_map(|command| match command {
             DrawCommand::Text { text, .. } => Some(text.clone()),
@@ -100,7 +100,7 @@ fn a_protected_field_shows_the_mask_of_the_platform_and_edits_by_characters_of_i
         shift: false,
     });
     view.input(InputEvent::Text("z".into()));
-    scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
     assert_eq!(shown(&scene).as_deref(), Some("**"));
     assert_eq!(secret.masked('*'), "**");
     secret.take().expose(|value| assert_eq!(value, "éz"));
@@ -181,7 +181,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
     let (mut view, mut scene, secret) = field()?;
     view.input(InputEvent::Text("iWé💡".into()));
     secret.set_revealed(true);
-    scene.show(view.frame(WINDOW, &mut PrivateMetrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut PrivateMetrics)?;
     let commands = scene.commands();
     assert!(
         commands
@@ -207,7 +207,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
         key: Key::Backspace,
         shift: false,
     });
-    scene.show(view.frame(WINDOW, &mut PrivateMetrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut PrivateMetrics)?;
     let commands = scene.commands();
     let private = commands
         .iter()
@@ -221,7 +221,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
     assert!(view.copy_selection().is_none());
     assert!(view.editing_target().is_none());
     secret.set_revealed(false);
-    scene.show(view.frame(WINDOW, &mut PrivateMetrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, WINDOW, &mut PrivateMetrics)?;
     let commands = scene.commands();
     assert!(
         !commands
@@ -263,26 +263,26 @@ fn protected_field_with_key_handler_edits_text_and_space_in_a_retained_scope() -
     });
     let window = Viewport::new(Size::new(220.dp(), 60.dp()), Density::ONE);
     let mut scene = Scene::default();
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     let point = Point::new(15.dp(), 20.dp());
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert!(view.tagged_state("private-with-handler")?.focus.focused);
     view.input(InputEvent::Text("wadswads".into()));
     assert_eq!(secret.masked('•').chars().count(), 8);
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     view.input(InputEvent::Key {
         key: Key::Space,
         shift: false,
     });
     assert_eq!(secret.masked('•').chars().count(), 9);
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert!(scene.commands().iter().any(|command| matches!(command,
         DrawCommand::Text { text, .. } if *text == "•".repeat(9))));
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     secret.set_revealed(true);
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     view.input(InputEvent::Text("é".into()));
     view.input(InputEvent::Key {
         key: Key::Backspace,
@@ -292,7 +292,7 @@ fn protected_field_with_key_handler_edits_text_and_space_in_a_retained_scope() -
         key: Key::Enter,
         shift: false,
     });
-    scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert_eq!(accepted.get(), 1);
     assert!(!format!("{:?}", scene.commands()).contains("wadswads"));
     assert!(view.copy_selection().is_none());

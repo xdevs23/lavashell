@@ -3,7 +3,6 @@ use super::*;
 use crate::test_error::TestError;
 use crate::test_scenes::{commands, paint, paint_damage};
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
 use lavashell_test_fixtures::WithoutFailures;
 
@@ -218,8 +217,9 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
     let mut surfaces = [make()?, make()?];
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
-    let mut tree = SceneTree::default();
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    let mut builder = SceneBuilder::default();
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    let tree = builder.snapshot();
     let first_commands = commands(&tree);
     for (index, surface) in surfaces.iter_mut().enumerate() {
         painter.effect_planner.surface = Some(SurfaceId(index as u64 + 1));
@@ -239,7 +239,8 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
         },
         target,
     );
-    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
+    let tree = builder.snapshot();
     assert_eq!(
         commands(&tree),
         first_commands,
