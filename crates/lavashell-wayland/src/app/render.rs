@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::scene::SceneRuntime;
 use super::shape::{ShapeUpdate, SurfaceShape};
-use super::view_actions::PendingAction;
 use super::{
     Density, Dp, Duration, FrameCallbackData, FrameOutcome, FrameReport, FrameStage, FrameTime,
     Instant, Platform, Rect, Role, SceneBuilder, Size, SurfaceId, View, Viewport, layer,
@@ -12,6 +11,7 @@ use lavashell_core::frame::Submission;
 use lavashell_renderer::effect_registry::QualityChange;
 use lavashell_renderer::vulkan::{CompletedScene, SceneImage};
 use lavashell_renderer::{SurfaceContents, SurfaceTarget};
+use lavashell_runtime::ActionBatch;
 use std::sync::Arc;
 
 #[derive(Clone, Copy)]
@@ -37,7 +37,7 @@ impl Platform {
         self.execute_surface_requests();
         self.submit_transfers();
         self.accessibility_updates();
-        let mut actions = self.config.view_actions.drain();
+        let mut actions = self.config.action_queue.take_batch();
         let mut scene = self.begin_frame(&actions)?;
         let mut frame_notified = false;
         let mut next = NextRender::AfterEvent;
@@ -60,11 +60,10 @@ impl Platform {
                 next = NextRender::Immediately;
             }
         }
-        actions.retain(|action| self.surface_records.is_open(action.surface));
-        self.config.view_actions.restore(actions);
+        self.config.action_queue.requeue(actions);
         // View actions queued during composition run in another frame. A configured surface that waits for no
         // frame callback can draw that frame at once.
-        if self.config.view_actions.pending()
+        if self.config.action_queue.has_pending()
             && (self.surfaces.iter()).any(|(&id, surface)| {
                 self.surface_records.is_configured(id) && surface.frame_callback.is_none()
             })
@@ -75,7 +74,7 @@ impl Platform {
         Ok(next)
     }
 
-    fn wants_frame(&self, id: SurfaceId, actions: &[PendingAction]) -> Wanted {
+    fn wants_frame(&self, id: SurfaceId, actions: &ActionBatch) -> Wanted {
         let continuous =
             self.config.tick.is_some() || self.config.on_frame.is_some() || self.scene.is_some();
         let (Some(surface), Some(view)) =
@@ -85,10 +84,7 @@ impl Platform {
         };
         if !self.surface_records.is_configured(id) || surface.frame_callback.is_some() {
             Wanted::Idle
-        } else if continuous
-            || surface.needs_visual_frame(view)
-            || actions.iter().any(|action| action.surface == id)
-        {
+        } else if continuous || surface.needs_visual_frame(view) || actions.has_actions_for(id) {
             Wanted::View
         } else if surface.moving(self.start.elapsed()) {
             Wanted::Scene
@@ -101,7 +97,7 @@ impl Platform {
     /// app when at least one surface draws. Returns the latest completed scene.
     fn begin_frame(
         &mut self,
-        actions: &[PendingAction],
+        actions: &ActionBatch,
     ) -> Result<Option<Arc<CompletedScene<SceneImage>>>, Error> {
         let frames = self.scene_frames_in_flight();
         if let Some(scene) = &mut self.scene
@@ -147,7 +143,7 @@ impl Platform {
         &mut self,
         id: SurfaceId,
         wanted: Wanted,
-        actions: &mut Vec<PendingAction>,
+        actions: &mut ActionBatch,
         frame_notified: &mut bool,
     ) -> Result<FrameStart, Error> {
         let (surface, view, viewport) =
@@ -176,13 +172,7 @@ impl Platform {
             };
             changed = view.needs_visual_frame();
             surface.show(view, &mut frame)?;
-            let (own, others): (Vec<_>, Vec<_>) = std::mem::take(actions)
-                .into_iter()
-                .partition(|action| action.surface == id);
-            *actions = others;
-            for action in own {
-                (action.apply)(view);
-            }
+            actions.run(id, view);
             if view.needs_visual_frame() {
                 changed = true;
                 surface.show(view, &mut frame)?;

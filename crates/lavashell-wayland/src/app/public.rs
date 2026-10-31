@@ -8,6 +8,7 @@ use super::{
 };
 use crate::Error;
 use crate::logical::{whole_size, window_size};
+use lavashell_runtime::ViewActions;
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before
@@ -48,8 +49,8 @@ impl App {
     /// Returns the handle through which the app runs actions on its views. Each action selects its surface by the
     /// id assigned when the surface was created, which no other surface gets.
     #[must_use]
-    pub fn view_actions(&self) -> super::ViewActions {
-        self.config.view_actions.clone()
+    pub fn view_actions(&self) -> ViewActions {
+        self.config.action_queue.view_actions()
     }
 
     /// Sets `callback`, which runs for each event of a drag offered by another client and returns whether the drag
@@ -323,7 +324,7 @@ impl App {
             if platform.finished() {
                 break;
             }
-            platform.watch_readable_sources()?;
+            platform.execute_watch_requests()?;
             let timeout = match next {
                 NextRender::Immediately => Some(Duration::ZERO),
                 NextRender::AfterEvent => platform.timeout(),

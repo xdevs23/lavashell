@@ -5,10 +5,11 @@ use lavashell_core::scene::SceneBuilder;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
-use lavashell_platform::{SurfaceEvent, SurfaceRequest};
+use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
 use lavashell_runtime::{
-    DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd, SurfaceRecords, Window,
+    ActionQueue, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd, SurfaceRecords,
+    Window,
 };
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
@@ -77,12 +78,11 @@ mod standard_error;
 mod startup;
 mod touch;
 mod transfer;
-mod view_actions;
 mod wake;
+mod watch;
 mod window_input;
 
 pub use input::{HostKey, KeyboardFocus};
-pub use view_actions::ViewActions;
 
 type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
 type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
@@ -119,7 +119,7 @@ pub(crate) struct AppConfig {
     key_observer: Option<Box<dyn FnMut(HostKey) -> bool>>,
     focus_observer: Option<Box<dyn FnMut(KeyboardFocus)>>,
     view_observer: Option<ViewObserver>,
-    pub(crate) view_actions: ViewActions,
+    pub(crate) action_queue: ActionQueue,
     drag_observer: Option<transfer::DragObserver>,
     drop_observer: Option<transfer::DropObserver>,
     drag_source_observer: Option<transfer::DragSourceObserver>,
@@ -284,7 +284,8 @@ pub(super) struct Platform {
     accessibility_events: sctk::reexports::calloop::channel::Sender<crate::accessibility::Event>,
     session_lock: Option<session_lock::Runtime>,
     sources: Vec<RegistrationToken>,
-    readable_sources: Vec<view_actions::ReadableSource>,
+    /// The event loop source of each watched file descriptor.
+    watches: BTreeMap<WatchId, RegistrationToken>,
     // `drop` releases the native surfaces first. `surface_records` is declared before `paint` and `paint` before `gpu`,
     // so the views drop after the native surfaces and before the painter, and the GPU images and query pools cached by
     // the painter drop before the Vulkan device.
@@ -317,7 +318,7 @@ pub(super) struct Platform {
 
 impl Drop for Platform {
     fn drop(&mut self) {
-        self.config.view_actions.close();
+        self.config.action_queue.close();
         self.shutdown_transfers();
         self.paint.retire_gpu_resources();
         self.surfaces.clear();
@@ -325,8 +326,8 @@ impl Drop for Platform {
         for source in self.sources.drain(..) {
             self.loop_handle.remove(source);
         }
-        for source in self.readable_sources.drain(..) {
-            self.loop_handle.remove(source.token);
+        for token in std::mem::take(&mut self.watches).into_values() {
+            self.loop_handle.remove(token);
         }
     }
 }
@@ -353,6 +354,7 @@ impl Platform {
                     self.input.forget_surface(id);
                     drop(self.surfaces.remove(&id));
                     self.surface_records.retire(id);
+                    self.config.action_queue.forget_surface(id);
                 }
             }
         }
