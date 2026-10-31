@@ -6,8 +6,6 @@ mod error;
 mod failures;
 mod focus_grab;
 mod logical;
-#[cfg(test)]
-mod preference_reader;
 mod preferences;
 mod single_precision;
 mod surface;

@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use crate::lifecycle::Lifecycle;
+use crate::settings::HostSettings;
 use lavashell_core::geometry::{Size, Viewport};
+use lavashell_core::platform::PlatformFacts;
+use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::view::{Proposal, TextMeasurer, View};
-use lavashell_platform::{SurfaceEvent, SurfaceRequest};
+use lavashell_platform::{SettingsEvent, SurfaceEvent, SurfaceRequest};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 struct Record {
     view: View,
+    /// The platform facts supplied by the app for the view, before facts reported by the host replace them.
+    supplied: PlatformFacts,
     size: Size,
     density: Density,
     lifecycle: Lifecycle,
@@ -32,16 +37,29 @@ impl Record {
     }
 }
 
-/// Contains a record for each surface opened by a platform until that surface retires. Ids come from a counter that
-/// only increases, so an id never repeats and a retired id is unknown.
-#[derive(Default)]
+/// Contains a record for each surface opened by a platform until that surface retires, and the settings provided to
+/// the view of every open surface. Ids come from a counter that only increases, so an id never repeats and a retired
+/// id is unknown.
 pub struct SurfaceRecords {
     records: BTreeMap<SurfaceId, Record>,
     last_id: Option<u64>,
+    settings: HostSettings,
 }
 
 impl SurfaceRecords {
-    /// Opens a surface that shows `view` at `size` and `density` until the host configures it.
+    /// Creates records without a surface. Each preference set in `overrides` replaces the preference reported by the
+    /// host.
+    #[must_use]
+    pub fn new(overrides: PreferenceOverrides) -> Self {
+        Self {
+            records: BTreeMap::new(),
+            last_id: None,
+            settings: HostSettings::new(overrides),
+        }
+    }
+
+    /// Opens a surface that shows `view` at `size` and `density` until the host configures it. The view gets the
+    /// current settings.
     ///
     /// # Errors
     ///
@@ -53,8 +71,11 @@ impl SurfaceRecords {
         };
         self.last_id = Some(id);
         let id = SurfaceId(id);
+        let supplied = view.platform();
+        self.settings.provide([(&view, &supplied)]);
         let record = Record {
             view,
+            supplied,
             size,
             density,
             lifecycle: Lifecycle::Waiting,
@@ -77,6 +98,14 @@ impl SurfaceRecords {
             SurfaceEvent::DensityChanged(density) => record.change_density(density),
         }
         None
+    }
+
+    /// Applies a setting reported by the host, and provides the settings to the view of every open surface.
+    pub fn change_settings(&mut self, event: SettingsEvent) {
+        self.settings.change(event);
+        let open = (self.records.values()).filter(|record| record.lifecycle.is_open());
+        self.settings
+            .provide(open.map(|record| (&record.view, &record.supplied)));
     }
 
     /// Retires a closing `surface` once the platform has destroyed the native surface. The record is removed. The view

@@ -29,7 +29,8 @@ impl Platform {
         spec: NativeSpec,
         role: impl FnOnce(&mut Self, &wl_surface::WlSurface, SurfaceId) -> Result<Role, Error>,
     ) -> Result<(), Error> {
-        let supplied_facts = self.view_configuration.apply(&spec.view, self.start);
+        let start = self.start;
+        spec.view.motion().time_source(move || start.elapsed());
         let size = crate::logical::size(spec.size);
         let id = self.surface_records.open(spec.view, size, Density::ONE)?;
         let wl = self.compositor.create_surface(&self.qh);
@@ -83,7 +84,6 @@ impl Platform {
             _window: window,
             wp_viewport,
             fractional,
-            supplied_facts,
             frame_request: None,
             frame_callback: None,
             feedback: Vec::new(),

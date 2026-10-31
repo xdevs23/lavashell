@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::Error;
-use crate::preference_reader::PreferenceReader;
 use crate::test_error::TestError;
-use lavashell_core::preferences::{PreferenceOverrides, PreferenceSource};
+use lavashell_core::platform::ColorScheme;
+use lavashell_core::preferences::{Appearance, ContrastPreference};
 use smithay_client_toolkit::reexports::calloop::{EventLoop, channel};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use zbus::blocking::{Connection, connection::Builder};
 use zbus::zvariant::OwnedValue;
 
@@ -160,22 +158,11 @@ fn child() -> Result<(), TestError> {
         .name("org.freedesktop.portal.Desktop")?
         .serve_at("/org/freedesktop/portal/desktop", Settings)?
         .build()?;
-    let mut source = PreferenceSource::default();
-    source.set_overrides(PreferenceOverrides {
-        reduced_motion: Some(false),
-        ..PreferenceOverrides::default()
-    });
-    let reader = Rc::new(RefCell::new(PreferenceReader::new(
-        lavashell_test_fixtures::facts(),
-    )));
-    reader.borrow().view.provide_preferences(&source.values());
-    let source = Rc::new(RefCell::new(source));
     let mut loop_: EventLoop<Updates> = EventLoop::try_new()?;
     let (sender, receiver) = channel::channel::<Appearance>();
-    let (handle, view) = (source.clone(), reader.clone());
     let receipt = loop_
         .handle()
-        .insert_source(receiver, move |event, (), updates| {
+        .insert_source(receiver, |event, (), updates| {
             let channel::Event::Msg(update) = event else {
                 // A failed watch also closes the channel. The error already stored for that failure by the
                 // executor callback is not replaced.
@@ -184,10 +171,6 @@ fn child() -> Result<(), TestError> {
                 }
                 return;
             };
-            let mut source = handle.borrow_mut();
-            let system = update.applied_to(source.system());
-            source.set_system(system);
-            view.borrow().view.provide_preferences(&source.values());
             updates.appearances.push(update);
         })?;
     let (executor, scheduler) = calloop::futures::executor::<zbus::Result<()>>()?;
@@ -202,18 +185,14 @@ fn child() -> Result<(), TestError> {
         .map_err(Error::SchedulePreferenceWatch)?;
     let mut updates = Updates::default();
     dispatch_until(&mut loop_, &mut updates, 1)?;
-    assert_eq!(
-        reader.borrow_mut().values().contrast,
-        ContrastPreference::More
-    );
+    assert_eq!(updates.appearances[0].contrast, ContrastPreference::More);
     signal(&service, "org.freedesktop.appearance", "reduced-motion", 1)?;
     dispatch_until(&mut loop_, &mut updates, 2)?;
-    assert!(source.borrow().system().reduced_motion);
-    assert!(!reader.borrow_mut().values().reduced_motion);
+    assert!(updates.appearances[1].reduced_motion);
     signal(&service, "org.freedesktop.appearance", "contrast", 42)?;
     dispatch_until(&mut loop_, &mut updates, 3)?;
     assert_eq!(
-        reader.borrow_mut().values().contrast,
+        updates.appearances[2].contrast,
         ContrastPreference::NoPreference
     );
     // The bus delivers signals in the order they were sent. A wrongly applied signal of the other namespace
@@ -235,7 +214,7 @@ fn child() -> Result<(), TestError> {
     let (sender, _receiver) = channel::channel();
     assert!(futures_lite::future::block_on(portal::watch(sender)).is_err());
     eprintln!(
-        "Portal private bus passed: initial read, changed signal, idle wake, override, unknown value, stop, fallback"
+        "Portal private bus passed: initial read, changed signal, idle wake, unknown value, stop, fallback"
     );
     Ok(())
 }

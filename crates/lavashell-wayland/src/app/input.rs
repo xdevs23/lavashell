@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::device::{keyboard_device, pointer_device, pointer_event};
-use super::preferences::HostRepeat;
 use super::{
     Capability, Connection, Cursor, CursorIcon, Duration, KeyEvent, KeyboardHandler, Keysym,
     Modifiers, Platform, PointerEvent, PointerEventKind, PointerHandler, QueueHandle, RawModifiers,
@@ -9,6 +8,7 @@ use super::{
 };
 use lavashell_core::platform::KeyRepeat;
 use lavashell_core::ui::InputModifiers;
+use lavashell_platform::SettingsEvent;
 use lavashell_platform::{DeviceEvent, InputRequest, KeyboardDevice, PointerDevice, PressState};
 use lavashell_runtime::{InputRouter, RoutedInput};
 use sctk::seat::keyboard::RepeatInfo;
@@ -317,15 +317,10 @@ impl KeyboardHandler for Platform {
             RepeatInfo::Repeat { rate, delay } => KeyRepeat::new(
                 Duration::from_millis(delay.into()),
                 Duration::from_secs(1) / rate.get(),
-            )
-            .map_or(HostRepeat::Disabled, HostRepeat::Repeats),
-            RepeatInfo::Disable => HostRepeat::Disabled,
+            ),
+            RepeatInfo::Disable => None,
         };
-        let views = (self.surfaces.iter()).filter_map(|(&id, surface)| {
-            let view = self.surface_records.open_view(id)?;
-            Some((view, &surface.supplied_facts))
-        });
-        self.view_configuration.repeat(repeat, views);
+        (self.surface_records).change_settings(SettingsEvent::KeyRepeat(repeat));
     }
 
     fn enter(

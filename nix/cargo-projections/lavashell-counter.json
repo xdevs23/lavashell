@@ -536,6 +536,14 @@
             {
               "manifest": {
                 "dependencies": {
+                  "icu_locale_core": {
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "package": "icu_locale_core",
+                    "version": "=2.3.0"
+                  },
                   "lavashell-core": {
                     "default-features": false,
                     "features": [
@@ -695,6 +703,14 @@
             {
               "manifest": {
                 "dependencies": {
+                  "icu_locale_core": {
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "package": "icu_locale_core",
+                    "version": "=2.3.0"
+                  },
                   "lavashell-core": {
                     "default-features": false,
                     "features": [
@@ -2543,6 +2559,7 @@
               },
               {
                 "dependencies": [
+                  "icu_locale_core",
                   "lavashell-core"
                 ],
                 "name": "lavashell-platform",
@@ -2567,6 +2584,7 @@
               },
               {
                 "dependencies": [
+                  "icu_locale_core",
                   "lavashell-core",
                   "lavashell-platform",
                   "thiserror"
@@ -3881,7 +3899,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "b4664b39de9fbfa3b6eb4acc4855d5c294b0217dfd8ece31ee9d88bf00368b69"
+        "seedHash": "158ef200603b290b21fa897b12d9eed82eb316d6f98acc1bd02627e7aead5542"
       }
     }
   },
@@ -5023,6 +5041,7 @@
       },
       {
         "dependencies": [
+          "icu_locale_core",
           "lavashell-core"
         ],
         "name": "lavashell-platform",
@@ -5049,6 +5068,7 @@
       },
       {
         "dependencies": [
+          "icu_locale_core",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-test-fixtures",
