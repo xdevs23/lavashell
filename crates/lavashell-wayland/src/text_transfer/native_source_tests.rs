@@ -17,7 +17,7 @@ fn native_source(adapter: &TextTransfers, view: &mut View) -> Result<DragRequest
     );
     view.input(InputEvent::Press(Point::new(51.dp(), 5.dp())));
     let gesture = DragGesture {
-        surface: 0,
+        surface: SurfaceId(0),
         origin: Point::new(51.dp(), 5.dp()),
         position: Point::new(150.dp(), 5.dp()),
     };
@@ -208,7 +208,7 @@ fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Resul
     let mut request = native_source(&adapter, &mut origin)?;
     start_drag(&mut request, &mut origin)?;
     let mut info = offer(3, Point::new(31.dp(), 5.dp()), DragAction::Move);
-    info.surface = 1;
+    info.surface = SurfaceId(1);
     assert!(
         adapter
             .drag(&DragEvent::Enter(info.clone()), 1, &destination)

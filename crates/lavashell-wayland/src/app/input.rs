@@ -3,8 +3,8 @@ use super::preferences::HostRepeat;
 use super::{
     Capability, Connection, Cursor, CursorIcon, Duration, InputEvent, InputModifiers, Key,
     KeyEvent, KeyboardHandler, Keysym, Modifiers, Platform, PointerEvent, PointerEventKind,
-    PointerHandler, QueueHandle, RawModifiers, SeatDevices, SeatHandler, SeatState, ThemeSpec,
-    sctk, wl_keyboard, wl_pointer, wl_seat, wl_surface,
+    PointerHandler, QueueHandle, RawModifiers, SeatDevices, SeatHandler, SeatState, SurfaceId,
+    ThemeSpec, sctk, wl_keyboard, wl_pointer, wl_seat, wl_surface,
 };
 use lavashell_core::platform::KeyRepeat;
 use sctk::seat::keyboard::RepeatInfo;
@@ -14,7 +14,7 @@ use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT};
 /// layout and of text editing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HostKey {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub code: u32,
     pub pressed: bool,
     pub repeat: bool,
@@ -23,7 +23,7 @@ pub struct HostKey {
 /// A surface that gained or lost the keyboard focus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct KeyboardFocus {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub focused: bool,
 }
 
@@ -47,10 +47,12 @@ impl Platform {
             .and_then(|device| device.pointer.as_ref())
             .map(smithay_client_toolkit::seat::pointer::ThemedPointer::pointer);
         if let Some(pointer) = pointer {
-            for surface in &mut self.surfaces {
+            for (&id, surface) in &mut self.surfaces {
                 if surface.pointer_owner.as_ref() == Some(pointer) {
                     surface.pointer_owner = None;
-                    surface.view.input(InputEvent::CancelPointer);
+                    if let Some(view) = self.surface_records.open_view_mut(id) {
+                        view.input(InputEvent::CancelPointer);
+                    }
                 }
             }
         }
@@ -197,23 +199,28 @@ impl PointerHandler for Platform {
         events: &[PointerEvent],
     ) {
         for event in events {
-            let Some(index) = self.index(&event.surface) else {
+            let Some(id) = self.find_surface(&event.surface) else {
                 continue;
             };
             if let PointerEventKind::Release { button, .. } = event.kind {
                 self.transfer_pointer_release(pointer, &event.surface, button);
             }
+            let Some(surface) = self.surfaces.get_mut(&id) else {
+                continue;
+            };
             if matches!(
                 event.kind,
                 PointerEventKind::Leave { .. } | PointerEventKind::Release { .. }
-            ) && self.surfaces[index].pointer_owner.as_ref() != Some(pointer)
+            ) && surface.pointer_owner.as_ref() != Some(pointer)
             {
                 continue;
             }
-            if let Some(previous) = self.surfaces[index].pointer_owner.replace(pointer.clone())
+            if let Some(previous) = surface.pointer_owner.replace(pointer.clone())
                 && previous != *pointer
             {
-                self.surfaces[index].view.input(InputEvent::CancelPointer);
+                if let Some(view) = self.surface_records.open_view_mut(id) {
+                    view.input(InputEvent::CancelPointer);
+                }
                 self.transfer_pointer_release(&previous, &event.surface, BTN_LEFT);
             }
             let at = crate::logical::point(event.position.0, event.position.1);
@@ -222,7 +229,7 @@ impl PointerHandler for Platform {
                     serial,
                     button: BTN_LEFT,
                     ..
-                } if self.move_window(index, pointer, at, serial) => {
+                } if self.move_window(id, pointer, at, serial) => {
                     continue;
                 }
                 PointerEventKind::Press { serial, button, .. } => {
@@ -265,15 +272,18 @@ impl PointerHandler for Platform {
                 }),
                 _ => None,
             };
-            if let Some(input) = input {
-                self.surfaces[index].view.input(input);
+            if let Some(input) = input
+                && let Some(view) = self.surface_records.open_view_mut(id)
+            {
+                view.input(input);
+                let cursor = view.cursor();
                 if let Some(themed) = self
                     .devices
                     .iter()
                     .filter_map(|seat| seat.pointer.as_ref())
                     .find(|themed| themed.pointer() == pointer)
                 {
-                    let icon = match self.surfaces[index].view.cursor() {
+                    let icon = match cursor {
                         Cursor::Default => CursorIcon::Default,
                         Cursor::Pointer => CursorIcon::Pointer,
                         Cursor::Text => CursorIcon::Text,
@@ -303,9 +313,10 @@ impl KeyboardHandler for Platform {
             .map_or(HostRepeat::Disabled, HostRepeat::Repeats),
             RepeatInfo::Disable => HostRepeat::Disabled,
         };
-        let views = (self.surfaces.iter())
-            .filter(|surface| surface.lifecycle.is_open())
-            .map(|surface| (&surface.view, &surface.supplied_facts));
+        let views = (self.surfaces.iter()).filter_map(|(&id, surface)| {
+            let view = self.surface_records.open_view(id)?;
+            Some((view, &surface.supplied_facts))
+        });
         self.view_configuration.repeat(repeat, views);
     }
 
@@ -319,7 +330,7 @@ impl KeyboardHandler for Platform {
         _: &[u32],
         _: &[Keysym],
     ) {
-        let focus = self.index(wl);
+        let focus = self.find_surface(wl);
         if let Some(surface) = focus
             && let Some(observer) = &mut self.config.focus_observer
         {
@@ -392,14 +403,16 @@ impl KeyboardHandler for Platform {
         if self.host_key(keyboard, &event, false, false) {
             return;
         }
-        if let Some(index) = self.keyboard_seat(keyboard).and_then(|seat| seat.focus) {
+        if let Some(surface) = self.keyboard_seat(keyboard).and_then(|seat| seat.focus) {
             let key = match event.keysym {
                 Keysym::Return | Keysym::KP_Enter => Some(Key::Enter),
                 Keysym::space => Some(Key::Space),
                 _ => None,
             };
-            if let Some(key) = key {
-                self.surfaces[index].view.input(InputEvent::KeyRelease(key));
+            if let Some(key) = key
+                && let Some(view) = self.surface_records.open_view_mut(surface)
+            {
+                view.input(InputEvent::KeyRelease(key));
             }
         }
     }
@@ -416,14 +429,14 @@ impl KeyboardHandler for Platform {
     ) {
         if let Some(seat) = self.keyboard_seat_mut(keyboard) {
             seat.modifiers = modifiers;
-            if let Some(index) = seat.focus {
-                self.surfaces[index]
-                    .view
-                    .input(InputEvent::Modifiers(InputModifiers {
-                        control: modifiers.ctrl,
-                        shift: modifiers.shift,
-                        alt: modifiers.alt,
-                    }));
+            if let Some(surface) = seat.focus
+                && let Some(view) = self.surface_records.open_view_mut(surface)
+            {
+                view.input(InputEvent::Modifiers(InputModifiers {
+                    control: modifiers.ctrl,
+                    shift: modifiers.shift,
+                    alt: modifiers.alt,
+                }));
             }
         }
     }

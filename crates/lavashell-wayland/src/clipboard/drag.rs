@@ -6,6 +6,7 @@ mod handlers;
 use crate::Error;
 use lavashell_core::{
     geometry::Point,
+    surface::SurfaceId,
     transfer::{DragAction, DragActions, DropAcceptance, ReceivedData, TransferData},
     units::Dp,
 };
@@ -21,7 +22,7 @@ pub struct TransferId(pub(super) u64);
 #[derive(Clone, Debug)]
 pub struct DragOfferInfo {
     pub id: TransferId,
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub position: Point,
     pub mime_types: Vec<String>,
     pub actions: DragActions,
@@ -39,16 +40,16 @@ pub enum DragEvent {
     /// The drag left the surface before a drop. The acceptance returned during enter and motion no longer applies.
     Leave {
         id: TransferId,
-        surface: usize,
+        surface: SurfaceId,
     },
     Cancelled {
         id: TransferId,
-        surface: usize,
+        surface: SurfaceId,
     },
 }
 
 impl DragEvent {
-    pub(crate) fn surface(&self) -> usize {
+    pub(crate) fn surface(&self) -> SurfaceId {
         match self {
             Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.surface,
             Self::Leave { surface, .. } | Self::Cancelled { surface, .. } => *surface,
@@ -59,7 +60,7 @@ impl DragEvent {
 #[derive(Debug)]
 pub struct DropEvent {
     pub id: TransferId,
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub position: Point,
     pub action: DragAction,
     pub data: Result<ReceivedData, Error>,
@@ -70,7 +71,7 @@ pub struct DropEvent {
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct DragGesture {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub origin: Point,
     pub position: Point,
 }

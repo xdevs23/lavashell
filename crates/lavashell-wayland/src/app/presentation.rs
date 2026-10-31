@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
     Connection, Dispatch, Duration, FrameMetrics, FrameTime, GlobalList, Instant, Platform,
-    PresentedFrame, QueueHandle, sctk,
+    PresentedFrame, QueueHandle, SurfaceId, sctk,
 };
 use lavashell_core::view::ViewStats;
 use lavashell_renderer::{GpuFrameTime, RenderStats};
@@ -19,7 +19,7 @@ pub enum FrameStage {
 
 #[derive(Clone, Copy, Debug)]
 pub struct FrameReport {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub timing: FrameTime,
     pub stage: FrameStage,
     /// The time of the presentation, measured from the start of the app. For a discarded frame, or when the clock
@@ -123,7 +123,7 @@ fn midpoint(earlier: Duration, later: Duration) -> Duration {
 }
 
 pub(super) struct Feedback {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub timing: FrameTime,
 }
 
@@ -164,7 +164,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
         _: &QueueHandle<Self>,
     ) {
         if !matches!(event, wp_presentation_feedback::Event::SyncOutput { .. })
-            && let Some(surface) = state.surfaces.get_mut(data.surface)
+            && let Some(surface) = state.surfaces.get_mut(&data.surface)
         {
             surface.feedback.retain(|feedback| feedback != proxy);
         }
@@ -185,7 +185,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
                     .and_then(|presentation| presentation.observed(absolute, state.start));
                 let interval = (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh)));
                 let mut metrics = None;
-                if let Some(surface) = state.surfaces.get_mut(data.surface) {
+                if let Some(surface) = state.surfaces.get_mut(&data.surface) {
                     if let Some(time) = observed {
                         surface
                             .clock

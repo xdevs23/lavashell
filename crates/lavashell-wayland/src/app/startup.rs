@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::SurfaceSpec;
 use super::{
-    App, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts, GlobalList,
-    Instant, LoopHandle, OutputState, Painter, PainterSetup, Platform, QueueHandle, RegistryState,
-    Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols, VulkanRenderer, WaylandSurface,
-    Window, WindowDecorations, XdgShell, accessibility, focus_grab, output_layers, preferences,
-    presentation, scene, session_lock, wl_surface,
+    App, BTreeMap, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts,
+    GlobalList, Instant, LoopHandle, OutputState, Painter, PainterSetup, Platform, QueueHandle,
+    RegistryState, Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols, SurfaceRecords,
+    VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell, accessibility, focus_grab,
+    output_layers, preferences, presentation, scene, session_lock, wl_surface,
 };
 use crate::Error;
 use crate::logical::extent;
 use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceSource;
-use lavashell_core::view::Proposal;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 
 fn window_extent(size: Size) -> Option<(u32, u32)> {
@@ -73,6 +72,7 @@ impl Platform {
             gpu_timing,
             preference_overrides,
             config,
+            run_end,
             ..
         } = app;
         let protocols = SurfaceProtocols::bind(globals, &qh);
@@ -122,7 +122,9 @@ impl Platform {
             session_lock,
             sources,
             readable_sources: Vec::new(),
-            surfaces: Vec::new(),
+            surface_records: SurfaceRecords::default(),
+            surface_requests: Vec::new(),
+            surfaces: BTreeMap::new(),
             gpu,
             paint,
             connection: connection.clone(),
@@ -137,6 +139,7 @@ impl Platform {
             loop_handle,
             config,
             presentation: presentation::Presentation::bind(globals, &qh),
+            run_end,
             start,
             last_tick: Duration::ZERO,
             scene: scene.map(scene::SceneRuntime::new),
@@ -151,15 +154,8 @@ impl Platform {
     fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
         match request {
             Request::Window(options, mut view) => {
-                let unbounded = Proposal {
-                    width: None,
-                    height: None,
-                };
-                let size = match options.size {
-                    Some(size) => size,
-                    None => (view.size_that_fits(unbounded, self.paint.shaper()))
-                        .map_err(Error::MeasureView)?,
-                };
+                let size =
+                    lavashell_runtime::initial_size(options.size, &mut view, self.paint.shaper())?;
                 let whole = window_extent(size).filter(|&(width, height)| width > 0 && height > 0);
                 let spec = SurfaceSpec {
                     view,

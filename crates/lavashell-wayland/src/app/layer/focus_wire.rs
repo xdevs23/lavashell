@@ -18,7 +18,7 @@ pub(super) struct Wire {
     pub(super) manager: HyprlandFocusGrabManagerV1,
     compositor: wl_compositor::WlCompositor,
     client_qh: QueueHandle<wire_tests::Client>,
-    pub(super) size: (u32, u32),
+    pub(super) size: Size,
     pub(super) input: bool,
 }
 
@@ -46,7 +46,7 @@ impl Wire {
             manager,
             compositor,
             client_qh,
-            size: (1, 1),
+            size: crate::logical::size((1, 1)),
             input: true,
         })
     }
@@ -63,7 +63,7 @@ impl Wire {
             options,
             layout,
             &self.qh,
-            0,
+            SurfaceId(0),
         );
         Ok(Runtime::new(proxy, options, context, layout))
     }
@@ -105,7 +105,7 @@ impl Wire {
             Some(&self.manager),
             &self.surface,
             &self.qh,
-            0,
+            SurfaceId(0),
             true,
             self.size,
         );

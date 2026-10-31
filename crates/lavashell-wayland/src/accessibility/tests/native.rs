@@ -176,12 +176,12 @@ fn child() -> Result<(), TestError> {
             channel::Event::Msg(event) => requests.events.push(event),
             channel::Event::Closed => requests.closed = true,
         })?;
-    let mut bridge = Bridge::new(0, "Fixture".into(), sender);
+    let mut bridge = Bridge::new(SurfaceId(0), "Fixture".into(), sender);
     let mut requests = Requests::default();
     let activation = wait_event(&mut loop_, &mut requests, |event| {
         matches!(event, Event::Activate(_))
     })?;
-    assert!(matches!(activation, Event::Activate(0)));
+    assert!(matches!(activation, Event::Activate(SurfaceId(0))));
     let mut tree = tree();
     bridge.activate();
     bridge.publish(&tree, true);
@@ -213,7 +213,7 @@ fn child() -> Result<(), TestError> {
     let selection: bool = text_proxy.call("SetSelection", &(0i32, 1i32, 3i32))?;
     assert!(selection);
     let Event::Action(_, action) = wait_event(&mut loop_, &mut requests, |event| {
-        matches!(event, Event::Action(0, _))
+        matches!(event, Event::Action(SurfaceId(0), _))
     })?
     else {
         return Err(TestError::UnexpectedEvent);
@@ -268,7 +268,7 @@ fn check_button(
         proxy(client, button, "org.a11y.atspi.Action")?.call("DoAction", &(0i32,))?;
     assert!(accepted);
     let Event::Action(_, action) = wait_event(loop_, requests, |event| {
-        matches!(event, Event::Action(0, _))
+        matches!(event, Event::Action(SurfaceId(0), _))
     })?
     else {
         return Err(TestError::UnexpectedEvent);
@@ -347,11 +347,11 @@ fn lifecycle(
     let deactivation = wait_event(loop_, requests, |event| {
         matches!(event, Event::Deactivate(_))
     })?;
-    assert!(matches!(deactivation, Event::Deactivate(0)));
+    assert!(matches!(deactivation, Event::Deactivate(SurfaceId(0))));
     bridge.deactivate();
     status.set_property("IsEnabled", true)?;
     let activation = wait_event(loop_, requests, |event| matches!(event, Event::Activate(_)))?;
-    assert!(matches!(activation, Event::Activate(0)));
+    assert!(matches!(activation, Event::Activate(SurfaceId(0))));
     bridge.activate();
     bridge.publish(tree, true);
     Ok(())
