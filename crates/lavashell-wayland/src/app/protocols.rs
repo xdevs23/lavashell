@@ -3,10 +3,12 @@ use super::{
     CompositorHandler, Connection, Density, Dispatch, Duration, ExtBackgroundEffectManagerV1,
     ExtBackgroundEffectSurfaceV1, NativeWindow, OutputHandler, OutputState, Platform,
     ProvidesRegistryState, Proxy, QueueHandle, RegistryState, SeatState, Shm, ShmHandler,
-    WaylandSurface, WindowConfigure, WindowHandler, WpFractionalScaleManagerV1,
-    WpFractionalScaleV1, WpViewport, WpViewporter, ZwlrLayerShellV1, ZwlrLayerSurfaceV1,
-    delegate_noop, sctk, wl_output, wl_surface, wp_fractional_scale_v1, zwlr_layer_surface_v1,
+    SurfaceEvent, SurfaceId, WaylandSurface, WindowConfigure, WindowHandler,
+    WpFractionalScaleManagerV1, WpFractionalScaleV1, WpViewport, WpViewporter, ZwlrLayerShellV1,
+    ZwlrLayerSurfaceV1, configure_event, delegate_noop, sctk, wl_output, wl_surface,
+    wp_fractional_scale_v1, zwlr_layer_surface_v1,
 };
+use std::num::NonZero;
 
 /// wp-fractional-scale-v1 sends the preferred scale as the numerator of a fraction over 120.
 const FRACTIONAL_SCALE_DENOMINATOR: u32 = 120;
@@ -18,7 +20,7 @@ impl Platform {
         if self.presentation.is_some() {
             return;
         }
-        for surface in &mut self.surfaces {
+        for surface in self.surfaces.values_mut() {
             let interval = surface
                 .wl
                 .data::<sctk::compositor::SurfaceData<()>>()
@@ -44,16 +46,11 @@ impl CompositorHandler for Platform {
         wl: &wl_surface::WlSurface,
         scale: i32,
     ) {
-        if let Some(index) = self
-            .index(wl)
-            .filter(|index| self.surfaces[*index].fractional.is_none())
+        if let Some(id) = self.find_surface(wl)
+            && (self.surfaces.get(&id)).is_some_and(|surface| surface.fractional.is_none())
         {
             match Density::from_scale(f64::from(scale)) {
-                Some(density) => {
-                    let surface = &mut self.surfaces[index];
-                    surface.density = density;
-                    surface.view.invalidate();
-                }
+                Some(density) => self.surface_event(id, SurfaceEvent::DensityChanged(density)),
                 None => log::warn!("the scale {scale} of a surface is not above zero"),
             }
         }
@@ -69,8 +66,10 @@ impl CompositorHandler for Platform {
     }
 
     fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, wl: &wl_surface::WlSurface, _: u32) {
-        if let Some(index) = self.index(wl) {
-            self.surfaces[index].frame_callback = None;
+        if let Some(id) = self.find_surface(wl)
+            && let Some(surface) = self.surfaces.get_mut(&id)
+        {
+            surface.frame_callback = None;
         }
     }
 
@@ -97,8 +96,8 @@ impl CompositorHandler for Platform {
 
 impl WindowHandler for Platform {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &NativeWindow) {
-        if let Some(index) = self.index(window.wl_surface()) {
-            self.surfaces[index].lifecycle.close();
+        if let Some(id) = self.find_surface(window.wl_surface()) {
+            self.surface_event(id, SurfaceEvent::Closed);
         }
     }
 
@@ -110,30 +109,20 @@ impl WindowHandler for Platform {
         configure: WindowConfigure,
         _: u32,
     ) {
-        if let Some(index) = self.index(window.wl_surface()) {
-            let surface = &mut self.surfaces[index];
-            surface.size = (
-                configure
-                    .new_size
-                    .0
-                    .map_or(surface.size.0, std::num::NonZero::get),
-                configure
-                    .new_size
-                    .1
-                    .map_or(surface.size.1, std::num::NonZero::get),
-            );
-            surface.lifecycle.configure();
-            surface.view.invalidate();
+        if let Some(id) = self.find_surface(window.wl_surface()) {
+            let (width, height) = configure.new_size;
+            let event = configure_event(width.map(NonZero::get), height.map(NonZero::get));
+            self.surface_event(id, event);
         }
     }
 }
 
-impl Dispatch<ZwlrLayerSurfaceV1, usize> for Platform {
+impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
     fn event(
         state: &mut Self,
         layer: &ZwlrLayerSurfaceV1,
         event: zwlr_layer_surface_v1::Event,
-        id: &usize,
+        id: &SurfaceId,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -144,35 +133,28 @@ impl Dispatch<ZwlrLayerSurfaceV1, usize> for Platform {
                 height,
             } => {
                 layer.ack_configure(serial);
-                let surface = &mut state.surfaces[*id];
-                surface.size = (
-                    if width == 0 { surface.size.0 } else { width },
-                    if height == 0 { surface.size.1 } else { height },
-                );
-                surface.lifecycle.configure();
-                surface.view.invalidate();
+                let leave_to_surface = |length| (length != 0).then_some(length);
+                let event = configure_event(leave_to_surface(width), leave_to_surface(height));
+                state.surface_event(*id, event);
             }
-            zwlr_layer_surface_v1::Event::Closed => state.surfaces[*id].lifecycle.close(),
+            zwlr_layer_surface_v1::Event::Closed => state.surface_event(*id, SurfaceEvent::Closed),
             _ => {}
         }
     }
 }
 
-impl Dispatch<WpFractionalScaleV1, usize> for Platform {
+impl Dispatch<WpFractionalScaleV1, SurfaceId> for Platform {
     fn event(
         state: &mut Self,
         _: &WpFractionalScaleV1,
         event: wp_fractional_scale_v1::Event,
-        id: &usize,
+        id: &SurfaceId,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
             match Density::from_ratio(f64::from(scale), f64::from(FRACTIONAL_SCALE_DENOMINATOR)) {
-                Ok(density) => {
-                    state.surfaces[*id].density = density;
-                    state.surfaces[*id].view.invalidate();
-                }
+                Ok(density) => state.surface_event(*id, SurfaceEvent::DensityChanged(density)),
                 Err(error) => log::warn!("the fractional scale {scale} is not usable: {error}"),
             }
         }

@@ -124,9 +124,10 @@ pub(super) fn install(
     let updates = handle
         .insert_source(channel, |event, (), platform| {
             if let Event::Msg(appearance) = event {
-                let views = (platform.surfaces.iter())
-                    .filter(|surface| surface.lifecycle.is_open())
-                    .map(|surface| (&surface.view, &surface.supplied_facts));
+                let views = (platform.surfaces.iter()).filter_map(|(&id, surface)| {
+                    let view = platform.surface_records.open_view(id)?;
+                    Some((view, &surface.supplied_facts))
+                });
                 platform.view_configuration.update(appearance, views);
             }
         })

@@ -4,8 +4,8 @@ use super::shape::{ShapeUpdate, SurfaceShape};
 use super::view_actions::PendingAction;
 use super::{
     Density, Dp, Duration, FrameCallbackData, FrameOutcome, FrameReport, FrameStage, FrameTime,
-    Instant, Platform, Rect, Role, SceneTree, Submission, View, Viewport, layer, presentation,
-    sctk,
+    Instant, Platform, Rect, Role, SceneTree, Size, Submission, SurfaceId, View, Viewport, layer,
+    open_surface, physical_size, presentation, sctk,
 };
 use crate::Error;
 use lavashell_renderer::effect_registry::QualityChange;
@@ -18,6 +18,7 @@ struct FrameStart {
     wall: Instant,
     cpu: Option<Duration>,
     timing: FrameTime,
+    viewport: Viewport,
 }
 
 /// Whether the event loop renders the surfaces again at once or waits for the next event.
@@ -29,47 +30,39 @@ pub(super) enum NextRender {
 
 impl Platform {
     pub(super) fn render(&mut self) -> Result<NextRender, Error> {
+        self.execute_surface_requests();
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.view_actions.drain();
         let mut scene = self.begin_frame(&actions)?;
         let mut frame_notified = false;
         let mut next = NextRender::AfterEvent;
-        for index in self.composition_order() {
-            let surface = &mut self.surfaces[index];
-            if surface.lifecycle.is_closing() {
-                self.paint.forget_effect_surface(surface.id);
-                surface.retire();
-            }
-            let wanted = self.wants_frame(index, &actions);
+        for id in self.composition_order() {
+            let wanted = self.wants_frame(id, &actions);
             if wanted == Wanted::Idle {
                 continue;
             }
-            let start = self.prepare_surface(index, wanted, &mut actions, &mut frame_notified)?;
+            let start = self.prepare_surface(id, wanted, &mut actions, &mut frame_notified)?;
             let frames = self.scene_frames_in_flight();
             if let Some(runtime) = &mut self.scene {
                 // Picks up a scene that completed while the views were composed. The UI queue acquires that
                 // scene before the draw below reads it.
-                let viewport = self.surfaces[index].logical_viewport();
-                runtime.tick(&mut self.gpu, self.start.elapsed(), viewport, frames)?;
+                runtime.tick(&mut self.gpu, self.start.elapsed(), start.viewport, frames)?;
                 scene = runtime.latest();
             }
-            let frame = self.draw_surface(index, start.timing, scene.as_deref())?;
+            let frame = self.draw_surface(id, start, scene.as_deref())?;
             let generation = scene.as_ref().map(|scene| scene.generation);
-            if self.report_frame(index, frame, start, generation) == NextRender::Immediately {
+            if self.report_frame(id, frame, start, generation)? == NextRender::Immediately {
                 next = NextRender::Immediately;
             }
         }
-        actions.retain(|action| {
-            (self.surfaces.iter())
-                .any(|surface| surface.id == action.surface && surface.lifecycle.is_open())
-        });
+        actions.retain(|action| self.surface_records.is_open(action.surface));
         self.config.view_actions.restore(actions);
         // View actions queued during composition run in another frame. A configured surface that waits for no
         // frame callback can draw that frame at once.
         if self.config.view_actions.pending()
-            && (self.surfaces.iter()).any(|surface| {
-                surface.lifecycle.is_configured() && surface.frame_callback.is_none()
+            && (self.surfaces.iter()).any(|(&id, surface)| {
+                self.surface_records.is_configured(id) && surface.frame_callback.is_none()
             })
         {
             next = NextRender::Immediately;
@@ -78,15 +71,19 @@ impl Platform {
         Ok(next)
     }
 
-    fn wants_frame(&self, index: usize, actions: &[PendingAction]) -> Wanted {
-        let surface = &self.surfaces[index];
+    fn wants_frame(&self, id: SurfaceId, actions: &[PendingAction]) -> Wanted {
         let continuous =
             self.config.tick.is_some() || self.config.on_frame.is_some() || self.scene.is_some();
-        if !surface.lifecycle.is_configured() || surface.frame_callback.is_some() {
+        let (Some(surface), Some(view)) =
+            (self.surfaces.get(&id), self.surface_records.open_view(id))
+        else {
+            return Wanted::Idle;
+        };
+        if !self.surface_records.is_configured(id) || surface.frame_callback.is_some() {
             Wanted::Idle
         } else if continuous
-            || surface.needs_visual_frame()
-            || actions.iter().any(|action| action.surface == surface.id)
+            || surface.needs_visual_frame(view)
+            || actions.iter().any(|action| action.surface == id)
         {
             Wanted::View
         } else if surface.moving(self.start.elapsed()) {
@@ -104,17 +101,13 @@ impl Platform {
     ) -> Result<Option<Arc<CompletedScene<SceneImage>>>, Error> {
         let frames = self.scene_frames_in_flight();
         if let Some(scene) = &mut self.scene
-            && let Some(surface) =
-                (self.surfaces.iter()).find(|candidate| candidate.lifecycle.is_configured())
+            && let Some(viewport) = (self.surfaces.keys())
+                .find(|&&id| self.surface_records.is_configured(id))
+                .and_then(|&id| self.surface_records.open_viewport(id))
         {
-            scene.tick(
-                &mut self.gpu,
-                self.start.elapsed(),
-                surface.logical_viewport(),
-                frames,
-            )?;
+            scene.tick(&mut self.gpu, self.start.elapsed(), viewport, frames)?;
         }
-        if (0..self.surfaces.len()).any(|index| self.wants_frame(index, actions) != Wanted::Idle) {
+        if (self.surfaces.keys()).any(|&id| self.wants_frame(id, actions) != Wanted::Idle) {
             let now = self.start.elapsed();
             if let Some(tick) = self.config.tick.as_mut() {
                 tick(now.saturating_sub(self.last_tick));
@@ -128,33 +121,33 @@ impl Platform {
     /// scene.
     fn scene_frames_in_flight(&self) -> Option<usize> {
         (self.surfaces.iter())
-            .filter(|surface| surface.lifecycle.is_configured())
-            .filter_map(|surface| surface.target.as_ref()?.frames_in_flight())
+            .filter(|&(&id, _)| self.surface_records.is_configured(id))
+            .filter_map(|(_, surface)| surface.target.as_ref()?.frames_in_flight())
             .min()
     }
 
-    fn composition_order(&self) -> Vec<usize> {
-        let mut order: Vec<_> = (self.surfaces.iter().enumerate())
-            .map(|(index, surface)| match surface.lifecycle.role() {
-                Some(Role::Layer(layer)) => (layer.composition_order, index),
-                _ => (0, index),
+    fn composition_order(&self) -> Vec<SurfaceId> {
+        let mut order: Vec<_> = (self.surfaces.iter())
+            .map(|(&id, surface)| match &surface.role {
+                Some(Role::Layer(layer)) => (layer.composition_order, id),
+                _ => (0, id),
             })
             .collect();
         order.sort_unstable();
-        order.into_iter().map(|(_, index)| index).collect()
+        order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `index` with its queued actions, and updates the role, the
+    /// Composes the view of surface `id` with its queued actions, and updates the role, the
     /// shape and the blur region of the surface for the frame.
     fn prepare_surface(
         &mut self,
-        index: usize,
+        id: SurfaceId,
         wanted: Wanted,
         actions: &mut Vec<PendingAction>,
         frame_notified: &mut bool,
     ) -> Result<FrameStart, Error> {
-        let surface = &mut self.surfaces[index];
-        let viewport = surface.logical_viewport();
+        let (surface, view, viewport) =
+            open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         let Viewport { size, density } = viewport;
         let start = FrameStart {
             wall: Instant::now(),
@@ -164,6 +157,7 @@ impl Platform {
                 .as_ref()
                 .and_then(|_| thread_cpu_time()),
             timing: surface.clock.sample(self.start.elapsed()),
+            viewport,
         };
         if !*frame_notified {
             if let Some(callback) = self.config.on_frame.as_mut() {
@@ -176,34 +170,32 @@ impl Platform {
             let mut frame = |view: &mut View, tree: &mut SceneTree| {
                 view.show_frame_at(tree, viewport, &mut self.paint, start.timing)
             };
-            changed = surface.view.needs_visual_frame();
-            surface.show(&mut frame)?;
-            let id = surface.id;
+            changed = view.needs_visual_frame();
+            surface.show(view, &mut frame)?;
             let (own, others): (Vec<_>, Vec<_>) = std::mem::take(actions)
                 .into_iter()
                 .partition(|action| action.surface == id);
             *actions = others;
             for action in own {
-                (action.apply)(&mut surface.view);
+                (action.apply)(view);
             }
-            if surface.view.needs_visual_frame() {
+            if view.needs_visual_frame() {
                 changed = true;
-                surface.show(&mut frame)?;
+                surface.show(view, &mut frame)?;
             }
         }
         // The composed view can change the size of a layer that fits its content, or the layer layout can
         // change its margins. The layer-shell requests for that are queued now, so that the compositor
         // applies them with the buffer of this frame.
-        if let Some(Role::Layer(layer)) = surface.lifecycle.role_mut() {
+        if let Some(Role::Layer(layer)) = &mut surface.role {
             if changed && let Some(proposal) = layer.content_proposal() {
-                let content = (surface.view.size_that_fits(proposal, &mut self.paint))
-                    .map_err(Error::MeasureView)?;
+                let content = lavashell_runtime::measure_content(view, proposal, &mut self.paint)?;
                 layer.content_measured(content);
             }
             layer.update();
         }
         if let Some(bridge) = &mut surface.accessibility {
-            bridge.publish(surface.view.accessibility(), false);
+            bridge.publish(view.accessibility(), false);
         }
         let shape_changed = match &mut surface.shape {
             Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
@@ -213,7 +205,7 @@ impl Platform {
             surface.damage.invalidate();
         }
         if let Some(wp_viewport) = &surface.wp_viewport {
-            let (width, height) = protocol_size(surface.size)?;
+            let (width, height) = protocol_size(size)?;
             wp_viewport.set_destination(width, height);
         } else {
             surface.wl.set_buffer_scale(buffer_scale(density)?);
@@ -226,7 +218,7 @@ impl Platform {
             } else {
                 let region =
                     sctk::compositor::Region::new(&self.compositor).map_err(Error::CreateRegion)?;
-                let (width, height) = protocol_size(surface.size)?;
+                let (width, height) = protocol_size(size)?;
                 region.add(0, 0, width, height);
                 region
             };
@@ -236,23 +228,26 @@ impl Platform {
         Ok(start)
     }
 
-    /// Plans the effects of surface `index`, then draws and submits its frame together with the completed
+    /// Plans the effects of surface `id`, then draws and submits its frame together with the completed
     /// `scene`.
     fn draw_surface(
         &mut self,
-        index: usize,
-        timing: FrameTime,
+        id: SurfaceId,
+        start: FrameStart,
         scene: Option<&CompletedScene<SceneImage>>,
     ) -> Result<FrameOutcome, Error> {
-        let surface = &mut self.surfaces[index];
-        let physical = surface.physical_size()?;
-        let Viewport { size, density } = surface.logical_viewport();
+        let FrameStart {
+            timing, viewport, ..
+        } = start;
+        let physical = physical_size(viewport)?;
+        let Viewport { size, density } = viewport;
+        let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         let shown = surface.tree.at(timing.presentation);
         let scene_generation = scene.map_or(0, |scene| scene.generation);
         let quality = self.paint.plan_scene_effects(
             shown,
             lavashell_effect_quality::FrameBudget {
-                surface: surface.id,
+                surface: id,
                 gpu_time: self.config.ui_budget,
             },
             timing.sequence,
@@ -282,62 +277,57 @@ impl Platform {
         let mut painted = Ok(());
         // The frame callback is requested inside the draw closure, so the Vulkan present commits it with this
         // frame. A request made for a frame that is not shown is reused from `frame_request` by the next draw.
-        let frame =
-            self.gpu
-                .draw_timed_in(surface.id, target, physical, timing.sequence, |canvas| {
-                    if surface.frame_request.is_none() {
-                        let data = FrameCallbackData(surface.wl.clone());
-                        surface.frame_request = Some(surface.wl.frame(&self.qh, data));
-                    }
-                    if let Some(presentation) = &self.presentation {
-                        let feedback = presentation::Feedback {
-                            surface: index,
-                            timing,
-                        };
-                        let proxy = presentation.proxy.feedback(&surface.wl, &self.qh, feedback);
-                        surface.feedback.push(proxy);
-                    }
-                    painted = paint.paint_surface(
-                        canvas,
-                        lavashell_renderer::SurfaceFrame {
-                            tree: shown,
-                            density,
-                            damage,
-                            clear: lavashell_renderer::skia::Color::TRANSPARENT,
-                            scene: scene.map(|scene| &scene.content),
-                            shape: surface.shape.as_ref().and_then(|shape| shape.path()),
-                        },
-                    );
-                });
+        let frame = self
+            .gpu
+            .draw_timed_in(id, target, physical, timing.sequence, |canvas| {
+                if surface.frame_request.is_none() {
+                    let data = FrameCallbackData(surface.wl.clone());
+                    surface.frame_request = Some(surface.wl.frame(&self.qh, data));
+                }
+                if let Some(presentation) = &self.presentation {
+                    let feedback = presentation::Feedback {
+                        surface: id,
+                        timing,
+                    };
+                    let proxy = presentation.proxy.feedback(&surface.wl, &self.qh, feedback);
+                    surface.feedback.push(proxy);
+                }
+                painted = paint.paint_surface(
+                    canvas,
+                    lavashell_renderer::SurfaceFrame {
+                        tree: shown,
+                        density,
+                        damage,
+                        clear: lavashell_renderer::skia::Color::TRANSPARENT,
+                        scene: scene.map(|scene| &scene.content),
+                        shape: surface.shape.as_ref().and_then(|shape| shape.path()),
+                    },
+                );
+            });
         let frame = frame.map_err(Error::Draw)?;
         painted.map_err(Error::Paint)?;
-        if let Some(Role::Layer(layer)) = surface.lifecycle.role_mut() {
+        if let Some(Role::Layer(layer)) = &mut surface.role {
             let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
-            layer.presented(
-                frame,
-                layer::Content {
-                    size: surface.size,
-                    input,
-                },
-            );
+            layer.presented(frame, layer::Content { size, input });
         }
         Ok(frame)
     }
 
-    /// Reports the frame of surface `index` to the observers of the app. Returns whether the loop renders again
+    /// Reports the frame of surface `id` to the observers of the app. Returns whether the loop renders again
     /// at once. A stale swapchain is replaced by the next draw, so that draw follows at once. A pending frame
     /// waits for a configure or a buffer release sent by the compositor. A shown frame waits for its frame
     /// callback.
     fn report_frame(
         &mut self,
-        index: usize,
+        id: SurfaceId,
         frame: FrameOutcome,
         start: FrameStart,
         scene: Option<u64>,
-    ) -> NextRender {
-        let surface = &mut self.surfaces[index];
+    ) -> Result<NextRender, Error> {
+        let (surface, view, viewport) =
+            open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         if let Some(observer) = &mut self.config.view_observer {
-            observer(surface.id, surface.logical_viewport(), &surface.view);
+            observer(id, viewport, view);
         }
         let output = surface.target.as_ref().and_then(SurfaceTarget::output);
         if let Some(info) = output
@@ -345,19 +335,19 @@ impl Platform {
         {
             surface.output = Some(info);
             if let Some(observer) = &mut self.config.output_observer {
-                observer(index, info);
+                observer(id, info);
             }
         }
         if frame != FrameOutcome::Shown {
-            surface.view.invalidate();
+            view.invalidate();
             surface.damage.invalidate();
-            return if frame == FrameOutcome::Stale {
+            return Ok(if frame == FrameOutcome::Stale {
                 NextRender::Immediately
             } else {
                 NextRender::AfterEvent
-            };
+            });
         }
-        surface.view.record_presentation(start.timing.presentation);
+        view.record_presentation(start.timing.presentation);
         surface.frame_callback = surface.frame_request.take();
         let render_cost = start.wall.elapsed();
         surface.clock.render_cost(render_cost);
@@ -366,7 +356,7 @@ impl Platform {
             && let Some(now) = thread_cpu_time()
         {
             observer(FrameReport {
-                surface: index,
+                surface: id,
                 timing: start.timing,
                 stage: FrameStage::Submitted,
                 observed: self.start.elapsed(),
@@ -376,14 +366,14 @@ impl Platform {
                 submission: Some(Submission {
                     render_cost,
                     cpu_time: now.saturating_sub(started),
-                    view: surface.view.stats(),
+                    view: view.stats(),
                     render: self.paint.render_stats(),
                     scene,
-                    gpu: self.paint.take_gpu_frame_time(surface.id),
+                    gpu: self.paint.take_gpu_frame_time(id),
                 }),
             });
         }
-        NextRender::AfterEvent
+        Ok(NextRender::AfterEvent)
     }
 }
 
@@ -404,9 +394,11 @@ fn buffer_scale(density: Density) -> Result<i32, Error> {
 }
 
 /// The width and the height of a surface as the `i32` integers used by the Wayland protocol.
-fn protocol_size((width, height): (u32, u32)) -> Result<(i32, i32), Error> {
-    let whole = |length| i32::try_from(length).map_err(Error::SurfaceSize);
-    Ok((whole(width)?, whole(height)?))
+fn protocol_size(size: Size) -> Result<(i32, i32), Error> {
+    let whole = crate::logical::whole;
+    whole(size.width)
+        .zip(whole(size.height))
+        .ok_or(Error::SurfaceSize(size))
 }
 
 /// The CPU time of the calling thread, or `None` when the clock reports a negative time.

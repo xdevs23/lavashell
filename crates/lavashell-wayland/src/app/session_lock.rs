@@ -2,7 +2,8 @@
 use super::creation::SurfaceSpec;
 use super::{
     Connection, Dispatch, GlobalList, OutputRequest, Platform, PlatformFacts, QueueHandle, Request,
-    Role, Ui, View, delegate_noop, sctk, wl_output, wl_surface,
+    Role, SurfaceEvent, SurfaceId, Ui, View, configure_event, delegate_noop, sctk, wl_output,
+    wl_surface,
 };
 use crate::Error;
 use sctk::reexports::client::protocol::wl_callback;
@@ -110,7 +111,7 @@ pub(super) struct Runtime {
     handle: SessionLock,
     phase: LockPhase,
     views: LockViews,
-    outputs: Vec<(wl_output::WlOutput, usize)>,
+    outputs: Vec<(wl_output::WlOutput, SurfaceId)>,
     failure: Option<Error>,
 }
 
@@ -174,7 +175,7 @@ impl Platform {
         &mut self,
         wl: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
-        id: usize,
+        id: SurfaceId,
     ) -> Result<Role, Error> {
         let lock = self
             .session_lock
@@ -221,7 +222,7 @@ impl Platform {
             .position(|(existing, _)| existing == output)
         {
             let (_, id) = lock.outputs.remove(index);
-            self.surfaces[id].lifecycle.close();
+            self.surface_event(id, SurfaceEvent::Closed);
         }
     }
 
@@ -244,8 +245,9 @@ impl Platform {
                 lock.proxy.unlock_and_destroy();
                 let sync = self.connection.display().sync(&self.qh, UnlockSync);
                 lock.phase = LockPhase::Unlocking(sync);
-                for surface in &mut self.surfaces {
-                    surface.lifecycle.close();
+                let surfaces: Vec<_> = self.surfaces.keys().copied().collect();
+                for id in surfaces {
+                    self.surface_event(id, SurfaceEvent::Closed);
                 }
                 self.connection.flush().map_err(Error::Flush)?;
                 Ok(LockState::Running)
@@ -281,12 +283,12 @@ impl Dispatch<ExtSessionLockV1, ()> for Platform {
     }
 }
 
-impl Dispatch<ExtSessionLockSurfaceV1, usize> for Platform {
+impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Platform {
     fn event(
         state: &mut Self,
         surface: &ExtSessionLockSurfaceV1,
         event: ext_session_lock_surface_v1::Event,
-        id: &usize,
+        id: &SurfaceId,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -300,14 +302,15 @@ impl Dispatch<ExtSessionLockSurfaceV1, usize> for Platform {
             // surface continues with the size of the last configure.
             let (Some(width), Some(height)) = (NonZeroU32::new(width), NonZeroU32::new(height))
             else {
-                log::warn!("lock surface {id} was configured with the empty size {width}x{height}");
+                log::warn!(
+                    "lock surface {} was configured with the empty size {width}x{height}",
+                    id.0
+                );
                 return;
             };
             surface.ack_configure(serial);
-            let native = &mut state.surfaces[*id];
-            native.size = (width.get(), height.get());
-            native.lifecycle.configure();
-            native.view.invalidate();
+            let event = configure_event(Some(width.get()), Some(height.get()));
+            state.surface_event(*id, event);
         }
     }
 }

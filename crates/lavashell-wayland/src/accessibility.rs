@@ -16,14 +16,15 @@ use accesskit::TreeUpdate;
 use accesskit_unix::Adapter;
 use handlers::{Actions, Activation, Deactivation, SharedSnapshot, lock_snapshot};
 use lavashell_core::accessibility::{AccessibilityTree, ActionRequest};
+use lavashell_core::surface::SurfaceId;
 use sctk::reexports::calloop::channel::Sender;
 use smithay_client_toolkit as sctk;
 use std::sync::{Arc, Mutex};
 
 pub(crate) enum Event {
-    Activate(usize),
-    Action(usize, accesskit::ActionRequest),
-    Deactivate(usize),
+    Activate(SurfaceId),
+    Action(SurfaceId, accesskit::ActionRequest),
+    Deactivate(SurfaceId),
 }
 
 pub(crate) struct Bridge {
@@ -37,7 +38,7 @@ pub(crate) struct Bridge {
 }
 
 impl Bridge {
-    pub(crate) fn new(surface: usize, title: String, events: Sender<Event>) -> Self {
+    pub(crate) fn new(surface: SurfaceId, title: String, events: Sender<Event>) -> Self {
         let shared = Arc::new(Mutex::new(None));
         let adapter = Adapter::new(
             Activation::new(surface, events.clone(), shared.clone()),

@@ -4,7 +4,9 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
+use lavashell_platform::{SurfaceEvent, SurfaceRequest};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, VulkanRenderer, WaylandTarget};
+use lavashell_runtime::{RunEnd, SurfaceRecords};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
@@ -45,6 +47,7 @@ use sctk::shell::xdg::{
 };
 use sctk::shm::{Shm, ShmHandler};
 use smithay_client_toolkit as sctk;
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use crate::surface::{LayerLevel, LayerSurface, Window};
@@ -55,7 +58,6 @@ mod focus_grab;
 mod input;
 mod key;
 mod layer;
-mod lifecycle;
 pub(crate) mod output_layers;
 mod owned_wl_surface;
 mod preferences;
@@ -79,7 +81,7 @@ pub use presentation::{FrameReport, FrameStage, PresentationFlags, Submission};
 pub use view_actions::ViewActions;
 
 type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
-type InputFilter = Box<dyn FnMut(usize, InputEvent) -> Option<InputEvent>>;
+type InputFilter = Box<dyn FnMut(SurfaceId, InputEvent) -> Option<InputEvent>>;
 type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
 
 enum Request {
@@ -93,7 +95,7 @@ pub struct App {
     output_layers: Option<output_layers::Configuration>,
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
-    should_exit: Option<Box<dyn FnMut() -> bool>>,
+    run_end: RunEnd,
     clipboard: Clipboard,
     painter_setup: Option<PainterSetup>,
     scene: Option<Box<dyn lavashell_renderer::vulkan::SceneSource>>,
@@ -108,7 +110,6 @@ pub struct App {
 #[derive(Default)]
 pub(crate) struct AppConfig {
     input_filter: Option<InputFilter>,
-    exit_after: Option<Duration>,
     tick: Option<Box<dyn FnMut(Duration)>>,
     on_frame: Option<Box<dyn FnMut(FrameTime)>>,
     observer: Option<Box<dyn FnMut(FrameReport)>>,
@@ -120,7 +121,7 @@ pub(crate) struct AppConfig {
     drop_observer: Option<transfer::DropObserver>,
     drag_source_observer: Option<transfer::DragSourceObserver>,
     pub(crate) text_transfers: Option<crate::text_transfer::TextTransfers>,
-    output_observer: Option<Box<dyn FnMut(usize, OutputInfo)>>,
+    output_observer: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
     ui_budget: Option<Duration>,
     full_redraw: bool,
 }
@@ -132,22 +133,18 @@ enum Role {
 }
 
 struct Surface {
-    /// The ID of the surface in the painter and the GPU renderer, the same in every frame.
-    id: SurfaceId,
     accessibility: Option<crate::accessibility::Bridge>,
     scene_generation: u64,
     target: Option<WaylandTarget>,
     tree: SceneTree,
     damage: DamageTracker,
-    lifecycle: lifecycle::Lifecycle,
+    /// The role of the native surface until it retires.
+    role: Option<Role>,
     wl: wl_surface::WlSurface,
     window: Option<std::sync::Arc<owned_wl_surface::OwnedWlSurface>>,
     wp_viewport: Option<WpViewport>,
     fractional: Option<WpFractionalScaleV1>,
-    view: View,
     pointer_owner: Option<wl_pointer::WlPointer>,
-    size: (u32, u32),
-    density: Density,
     /// The frame callback requested for the next commit, until a shown frame commits it.
     frame_request: Option<WlCallback>,
     /// The frame callback committed with the last shown frame, until the compositor sends its `done` event.
@@ -167,8 +164,8 @@ struct Surface {
 }
 
 impl Surface {
-    fn needs_visual_frame(&self) -> bool {
-        self.view.needs_visual_frame()
+    fn needs_visual_frame(&self, view: &View) -> bool {
+        view.needs_visual_frame()
             || self
                 .shape
                 .as_ref()
@@ -182,17 +179,18 @@ impl Surface {
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to apply the next frame of the view to the scene tree, and logs each component that failed in it
+    /// Runs `frame` to apply the next frame of `view` to the scene tree, and logs each component that failed in it
     /// as an error. When the tree fails to apply an update, the view empties the tree and sends the whole scene with
     /// the next frame of the view. If the tree showed a scene before, that failure is logged and the frame ends
     /// without an error.
     /// If the tree was empty, the failure ends the frame with an error.
     fn show(
         &mut self,
+        view: &mut View,
         frame: impl FnOnce(&mut View, &mut SceneTree) -> Result<Failures, FrameError>,
     ) -> Result<(), crate::Error> {
         let showed_nothing = self.tree.is_empty();
-        match frame(&mut self.view, &mut self.tree) {
+        match frame(view, &mut self.tree) {
             Ok(failures) => {
                 crate::failures::log_failures(failures);
                 Ok(())
@@ -214,32 +212,25 @@ impl Surface {
         self.damage.invalidate();
     }
 
-    fn wakes(&self, now: Duration) -> Option<Duration> {
+    fn wakes(&self, view: &View, now: Duration) -> Option<Duration> {
         let shown = self.clock.predict(now);
         wake::next_wake(
             now,
             shown,
-            self.view.next_deadline(),
+            view.next_deadline(),
             self.tree.next_change(shown),
         )
     }
+}
 
-    fn logical_size(&self) -> Size {
-        crate::logical::size(self.size)
-    }
-
-    fn physical_size(&self) -> Result<(u32, u32), crate::Error> {
-        (self.logical_size().buffer_size(self.density)).map_err(crate::Error::BufferSize)
-    }
-
-    fn logical_viewport(&self) -> Viewport {
-        Viewport::new(self.logical_size(), self.density)
-    }
+/// The size in buffer pixels of a surface in `viewport`.
+fn physical_size(viewport: Viewport) -> Result<(u32, u32), crate::Error> {
+    (viewport.size.buffer_size(viewport.density)).map_err(crate::Error::BufferSize)
 }
 
 impl Surface {
     fn retire(&mut self) {
-        let Some(role) = self.lifecycle.retire() else {
+        let Some(role) = self.role.take() else {
             return;
         };
         // The Vulkan target drops before the wl_surface is destroyed, because its swapchain presents to that
@@ -261,10 +252,7 @@ impl Surface {
             _ => {}
         }
         self.window = None;
-        // The retired surface stays in the list of surfaces, so its index continues to identify a closed surface.
-        // Replacing the view with an empty view drops the application view and every resource in it, because those
-        // resources must not outlive the native surface.
-        self.view = View::new(self.view.platform(), |_| {});
+        // The retired surface remains in `surfaces`, so a drag completion or a drop that arrives later still finds it.
         self.tree = SceneTree::default();
         self.damage.invalidate();
         self.shape = None;
@@ -285,7 +273,7 @@ struct SeatDevices {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     touch: Option<wl_touch::WlTouch>,
     touches: touch::TouchPoints,
-    focus: Option<usize>,
+    focus: Option<SurfaceId>,
     modifiers: Modifiers,
 }
 
@@ -319,10 +307,14 @@ pub(super) struct Platform {
     session_lock: Option<session_lock::Runtime>,
     sources: Vec<RegistrationToken>,
     readable_sources: Vec<view_actions::ReadableSource>,
-    // `paint` is declared before `gpu`, so the GPU images and query pools cached by the painter drop before the
-    // Vulkan device.
+    // `drop` releases the native surfaces first. `surface_records` is declared before `paint` and `paint` before `gpu`,
+    // so the views drop after the native surfaces and before the painter, and the GPU images and query pools cached by
+    // the painter drop before the Vulkan device.
+    surface_records: SurfaceRecords,
+    /// The requests made by the runtime and executed by the next render.
+    surface_requests: Vec<SurfaceRequest>,
     paint: Painter,
-    surfaces: Vec<Surface>,
+    surfaces: BTreeMap<SurfaceId, Surface>,
     scene: Option<scene::SceneRuntime>,
     gpu: VulkanRenderer,
     connection: Connection,
@@ -338,6 +330,7 @@ pub(super) struct Platform {
     pub(super) clipboard: ClipboardState,
     pub(super) config: AppConfig,
     presentation: Option<presentation::Presentation>,
+    run_end: RunEnd,
     start: Instant,
     last_tick: Duration,
 }
@@ -359,7 +352,53 @@ impl Drop for Platform {
 }
 
 impl Platform {
-    fn index(&self, surface: &wl_surface::WlSurface) -> Option<usize> {
-        self.surfaces.iter().position(|known| &known.wl == surface)
+    /// The id of the native surface `wl`.
+    fn find_surface(&self, wl: &wl_surface::WlSurface) -> Option<SurfaceId> {
+        (self.surfaces.iter()).find_map(|(id, known)| (&known.wl == wl).then_some(*id))
+    }
+
+    /// Hands `event` for `surface` to the runtime, and queues the request that follows from it.
+    fn surface_event(&mut self, surface: SurfaceId, event: SurfaceEvent) {
+        (self.surface_requests).extend(self.surface_records.handle(surface, event));
+    }
+
+    /// Executes the requests made by the runtime. A destroyed surface retires in the runtime only after its native
+    /// surface released everything that presented to it.
+    fn execute_surface_requests(&mut self) {
+        for request in std::mem::take(&mut self.surface_requests) {
+            match request {
+                SurfaceRequest::Destroy(id) => {
+                    self.paint.forget_effect_surface(id);
+                    if let Some(surface) = self.surfaces.get_mut(&id) {
+                        surface.retire();
+                    }
+                    self.surface_records.retire(id);
+                }
+            }
+        }
+    }
+}
+
+/// The native surface `id`, its view and its viewport, while the surface is open.
+fn open_surface<'a>(
+    surfaces: &'a mut BTreeMap<SurfaceId, Surface>,
+    records: &'a mut SurfaceRecords,
+    id: SurfaceId,
+) -> Result<(&'a mut Surface, &'a mut View, Viewport), crate::Error> {
+    let viewport = records.open_viewport(id);
+    let found = (surfaces.get_mut(&id))
+        .zip(records.open_view_mut(id))
+        .zip(viewport);
+    let ((surface, view), viewport) = found.ok_or(crate::Error::SurfaceNotOpen(id))?;
+    Ok((surface, view, viewport))
+}
+
+/// The configure event for the lengths in logical pixels that the compositor sets. A length that the compositor
+/// leaves to the surface is `None`.
+fn configure_event(width: Option<u32>, height: Option<u32>) -> SurfaceEvent {
+    let length = |pixels: u32| crate::logical::length(f64::from(pixels));
+    SurfaceEvent::Configured {
+        width: width.map(length),
+        height: height.map(length),
     }
 }

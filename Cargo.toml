@@ -8,6 +8,8 @@ members = [
     "crates/lavashell-keyboard",
     "crates/lavashell-vulkan",
     "crates/lavashell-renderer",
+    "crates/lavashell-platform",
+    "crates/lavashell-runtime",
     "crates/lavashell-wayland",
     "crates/lavashell-android",
     "crates/lavashell",
@@ -64,6 +66,8 @@ lavashell-core = { path = "crates/lavashell-core" }
 lavashell-components = { path = "crates/lavashell-components" }
 lavashell-vulkan = { path = "crates/lavashell-vulkan" }
 lavashell-renderer = { path = "crates/lavashell-renderer" }
+lavashell-platform = { path = "crates/lavashell-platform" }
+lavashell-runtime = { path = "crates/lavashell-runtime" }
 lavashell-wayland = { path = "crates/lavashell-wayland" }
 lavashell-android = { path = "crates/lavashell-android" }
 lavashell = { path = "crates/lavashell" }

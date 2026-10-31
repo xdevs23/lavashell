@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    Connection, Dispatch, GlobalList, Platform, Proxy, QueueHandle, Role, delegate_noop, wl_surface,
+    Connection, Dispatch, GlobalList, Platform, Proxy, QueueHandle, Role, Size, SurfaceId,
+    delegate_noop, wl_surface,
 };
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
@@ -70,7 +71,7 @@ impl Runtime {
         manager: Option<&Manager>,
         wl: &wl_surface::WlSurface,
         qh: &QueueHandle<Platform>,
-        index: usize,
+        surface: SurfaceId,
         readiness: Readiness,
     ) {
         if !(self.configuration.active)() {
@@ -82,7 +83,7 @@ impl Runtime {
             && matches!(self.state, GrabState::Released)
             && let Some(manager) = manager
         {
-            let proxy = manager.create_grab(qh, index);
+            let proxy = manager.create_grab(qh, surface);
             proxy.add_surface(wl);
             proxy.commit();
             self.state = GrabState::Held(proxy);
@@ -110,9 +111,9 @@ impl super::layer::Runtime {
         manager: Option<&Manager>,
         wl: &wl_surface::WlSurface,
         qh: &QueueHandle<Platform>,
-        index: usize,
+        surface: SurfaceId,
         configured: bool,
-        size: (u32, u32),
+        size: Size,
     ) {
         let readiness = if !(configured && self.keyboard_active() && self.input_enabled()) {
             Readiness::Unavailable
@@ -122,41 +123,42 @@ impl super::layer::Runtime {
             Readiness::Holdable
         };
         if let Some(grab) = &mut self.focus {
-            grab.update(manager, wl, qh, index, readiness);
+            grab.update(manager, wl, qh, surface, readiness);
         }
     }
 }
 
 impl Platform {
     pub(super) fn update_focus_grabs(&mut self) {
-        for (index, surface) in self.surfaces.iter_mut().enumerate() {
-            let configured = surface.lifecycle.is_configured();
-            if let Some(Role::Layer(layer)) = surface.lifecycle.role_mut() {
+        for (&id, surface) in &mut self.surfaces {
+            if let Some(Role::Layer(layer)) = &mut surface.role
+                && let Some(viewport) = self.surface_records.open_viewport(id)
+            {
                 layer.update_focus_grab(
                     self.focus_grabs.0.as_ref(),
                     &surface.wl,
                     &self.qh,
-                    index,
-                    configured,
-                    surface.size,
+                    id,
+                    self.surface_records.is_configured(id),
+                    viewport.size,
                 );
             }
         }
     }
 }
 
-impl Dispatch<Grab, usize> for Platform {
+impl Dispatch<Grab, SurfaceId> for Platform {
     fn event(
         state: &mut Self,
         proxy: &Grab,
         event: hyprland_focus_grab_v1::Event,
-        index: &usize,
+        surface: &SurfaceId,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         if let hyprland_focus_grab_v1::Event::Cleared = event
-            && let Some(surface) = state.surfaces.get_mut(*index)
-            && let Some(Role::Layer(layer)) = surface.lifecycle.role_mut()
+            && let Some(native) = state.surfaces.get_mut(surface)
+            && let Some(Role::Layer(layer)) = &mut native.role
             && let Some(grab) = &mut layer.focus
             && grab.holds(proxy)
         {

@@ -4,6 +4,7 @@ use crate::test_error::TestError;
 use crate::text_transfer::*;
 use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
 use lavashell_core::prelude::*;
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::ReceivedData;
 use lavashell_test_platform::WithoutFailures;
 
@@ -52,7 +53,7 @@ fn field_id(view: &View) -> Result<NodeId, TestError> {
 fn offer(id: u64, position: Point, action: DragAction) -> DragOfferInfo {
     DragOfferInfo {
         id: TransferId(id),
-        surface: 0,
+        surface: SurfaceId(0),
         position,
         mime_types: vec![
             "text/plain".to_string(),
@@ -121,7 +122,7 @@ fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target(
             .drag(
                 &DragEvent::Leave {
                     id: info.id,
-                    surface: 0,
+                    surface: SurfaceId(0),
                 },
                 1,
                 &view,
@@ -199,7 +200,7 @@ fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), 
             .drag(
                 &DragEvent::Cancelled {
                     id: info.id,
-                    surface: 0,
+                    surface: SurfaceId(0),
                 },
                 1,
                 &view,
@@ -233,7 +234,7 @@ fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result
             .drag(
                 &DragEvent::Leave {
                     id: info.id,
-                    surface: 0,
+                    surface: SurfaceId(0),
                 },
                 1,
                 &view,
@@ -266,7 +267,7 @@ fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result
         adapter
             .source(
                 &DragGesture {
-                    surface: 0,
+                    surface: SurfaceId(0),
                     origin: Point::new(11.dp(), 5.dp()),
                     position: Point::new(31.dp(), 5.dp())
                 },
@@ -279,7 +280,7 @@ fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result
         adapter
             .source(
                 &DragGesture {
-                    surface: 0,
+                    surface: SurfaceId(0),
                     origin: Point::new(11.dp(), 5.dp()),
                     position: Point::new(150.dp(), 5.dp())
                 },
