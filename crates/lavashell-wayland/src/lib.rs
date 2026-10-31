@@ -21,7 +21,6 @@ mod wayland_presentation;
 
 use smithay_client_toolkit as sctk;
 
-pub use app::output_layers::MonitorInfo;
 pub use app::session_lock::SessionLock;
 pub use app::{
     App, FrameReport, FrameStage, HostKey, KeyboardFocus, PresentationFlags, Submission,
@@ -32,6 +31,7 @@ pub use clipboard::{
 };
 pub use error::{Cancellation, Error};
 pub use focus_grab::FocusGrab;
+pub use lavashell_core::output::MonitorInfo;
 pub use shape::WindowShape;
 pub use surface::{
     AxisPlacement, ExclusiveZone, Extent, LayerLayout, LayerLevel, LayerMargins, LayerSurface,

@@ -3,27 +3,21 @@
 //! compositor removes the output.
 
 use super::creation::SurfaceSpec;
+use super::outputs::output_id;
 use super::{
-    App, LayerSurface, Platform, Size, State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1,
-    wl_output,
+    App, LayerSurface, Platform, State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, wl_output,
 };
 use crate::Error;
+use lavashell_core::output::MonitorInfo;
+use lavashell_platform::OutputId;
 use std::{cell::RefCell, rc::Rc};
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct MonitorInfo {
-    /// `None` when the compositor sends no name for the output.
-    pub name: Option<String>,
-    pub size: Size,
-    pub physical_size_mm: (i32, i32),
-}
 
 type Factory = Box<dyn FnMut(State<MonitorInfo>) -> Vec<(LayerSurface, View)>>;
 
 pub(super) struct Configuration(pub Factory);
 
 struct Group {
-    output: wl_output::WlOutput,
+    output: OutputId,
     info: State<MonitorInfo>,
     surfaces: Vec<SurfaceId>,
 }
@@ -75,7 +69,7 @@ impl App {
 }
 
 impl Platform {
-    pub(super) fn layers_output_changed(&mut self, output: wl_output::WlOutput) {
+    pub(super) fn layers_output_changed(&mut self, output: &wl_output::WlOutput) {
         if let Err(error) = self.add_output_layers(output)
             && let Some(runtime) = &mut self.output_layers
         {
@@ -83,35 +77,17 @@ impl Platform {
         }
     }
 
-    fn add_output_layers(&mut self, output: wl_output::WlOutput) -> Result<(), Error> {
+    fn add_output_layers(&mut self, output: &wl_output::WlOutput) -> Result<(), Error> {
         let Some(runtime) = &mut self.output_layers else {
             return Ok(());
         };
-        let Some(info) = self.outputs.info(&output) else {
+        let Some(id) = output_id(output) else {
             return Ok(());
         };
-        // An output that reports neither a logical size nor a current mode gets its layers with the first later
-        // update that reports one.
-        let Some((width, height)) = info.logical_size.or_else(|| {
-            let mode = info.modes.iter().find(|mode| mode.current)?;
-            let scale = info.scale_factor.max(1);
-            Some((mode.dimensions.0 / scale, mode.dimensions.1 / scale))
-        }) else {
+        let Some(info) = self.output_records.info(id).cloned() else {
             return Ok(());
         };
-        let info = MonitorInfo {
-            name: info.name,
-            size: Size::new(
-                crate::logical::length(width.into()),
-                crate::logical::length(height.into()),
-            ),
-            physical_size_mm: info.physical_size,
-        };
-        if let Some(group) = runtime
-            .groups
-            .iter_mut()
-            .find(|group| group.output == output)
-        {
+        if let Some(group) = runtime.groups.iter_mut().find(|group| group.output == id) {
             group.info.set(info);
             return Ok(());
         }
@@ -121,14 +97,14 @@ impl Platform {
         for (options, mut view) in requests {
             let context = self.layer_context(&options, &mut view)?;
             let spec = SurfaceSpec::layer(&options, view, context)?;
-            self.create_surface(spec, |platform, wl, id| {
-                surfaces.push(id);
-                platform.layer_role(wl, Some(&output), &options, context, id)
+            self.create_surface(spec, |platform, wl, surface| {
+                surfaces.push(surface);
+                platform.layer_role(wl, Some(output), &options, context, surface)
             })?;
         }
         if let Some(runtime) = &mut self.output_layers {
             runtime.groups.push(Group {
-                output,
+                output: id,
                 info,
                 surfaces,
             });
@@ -137,16 +113,12 @@ impl Platform {
     }
 
     pub(super) fn layers_output_removed(&mut self, output: &wl_output::WlOutput) {
-        let Some(runtime) = &mut self.output_layers else {
+        let (Some(runtime), Some(id)) = (&mut self.output_layers, output_id(output)) else {
             return;
         };
-        if let Some(index) = runtime
-            .groups
-            .iter()
-            .position(|group| &group.output == output)
-        {
-            for id in runtime.groups.remove(index).surfaces {
-                self.surface_event(id, SurfaceEvent::Closed);
+        if let Some(index) = runtime.groups.iter().position(|group| group.output == id) {
+            for surface in runtime.groups.remove(index).surfaces {
+                self.surface_event(surface, SurfaceEvent::Closed);
             }
         }
     }

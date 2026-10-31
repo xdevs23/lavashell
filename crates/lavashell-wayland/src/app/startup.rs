@@ -2,10 +2,11 @@
 use super::creation::SurfaceSpec;
 use super::{
     App, BTreeMap, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts,
-    GlobalList, Instant, LoopHandle, OutputState, Painter, PainterSetup, Platform, QueueHandle,
-    RegistryState, Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols, SurfaceRecords,
-    VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell, accessibility, focus_grab,
-    output_layers, preferences, presentation, scene, session_lock, wl_surface,
+    GlobalList, Instant, LoopHandle, OutputRecords, OutputState, Painter, PainterSetup, Platform,
+    QueueHandle, RegistryState, Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols,
+    SurfaceRecords, VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell,
+    accessibility, focus_grab, output_layers, preferences, presentation, scene, session_lock,
+    wl_surface,
 };
 use crate::Error;
 use crate::logical::extent;
@@ -133,6 +134,7 @@ impl Platform {
             clipboard: ClipboardState::new(globals, &qh, seats.seats(), clipboard),
             seats,
             outputs,
+            output_records: OutputRecords::default(),
             shm: Shm::bind(globals, &qh).map_err(Error::BindShm)?,
             compositor: CompositorState::bind(globals, &qh).map_err(Error::BindCompositor)?,
             protocols,
