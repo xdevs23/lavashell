@@ -6,7 +6,7 @@ use focus_wire::Wire;
 use lavashell_core::prelude::{
     Density, DpExt, Modifier, NonNegativeDp, TextMeasurer, TextStyle, Viewport,
 };
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use wire_tests::requests;
 
 #[test]
@@ -329,7 +329,7 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
         .focus_grab(crate::FocusGrab::new(|| true, || {}));
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.spacer(1.dp(), 1.dp(), Modifier::new());
     });
     let viewport = Viewport::new(Size::new(1.dp(), 1.dp()), Density::ONE);

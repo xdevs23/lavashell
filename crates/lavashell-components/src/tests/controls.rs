@@ -2,7 +2,7 @@
 use super::*;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::view::{ComponentError, CompositionError};
-use lavashell_test_platform::failure_causes;
+use lavashell_test_fixtures::failure_causes;
 
 #[test]
 fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> Result<(), TestError>
@@ -11,7 +11,7 @@ fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> R
     let enabled = State::new(true);
     let counter = clicks.clone();
     let active = enabled.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.button(
             Modifier::new()
                 .enabled(active.get())
@@ -51,7 +51,7 @@ fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> R
 fn styled_slider_keeps_capture_and_clamps_after_leaving_the_control() -> Result<(), TestError> {
     let value = State::new(0.0);
     let controlled = value.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let read = controlled.clone();
         ui.slider(
             move || read.get(),
@@ -88,7 +88,7 @@ fn styled_slider_keeps_capture_and_clamps_after_leaving_the_control() -> Result<
 
 #[test]
 fn a_slider_page_that_is_not_finite_fails_its_composition() -> Result<(), TestError> {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.slider(|| 0.5, Some(f64::NAN), Modifier::new(), |_| {}, |_, _| {});
     });
     let viewport = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
@@ -103,7 +103,7 @@ fn a_slider_page_that_is_not_finite_fails_its_composition() -> Result<(), TestEr
 
 fn slider(value: &State<f64>) -> Result<(View, Viewport), TestError> {
     let controlled = value.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let read = controlled.clone();
         ui.slider(
             move || read.get(),
@@ -181,7 +181,7 @@ fn controls_inherit_typography_without_inventing_decorations() -> Result<(), Tes
     let style = TextStyle::new("application-body", 17.sp(), Color::rgb(0x12_34_56))
         .weight(FontWeight::SEMI_BOLD);
     let expected = style.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.provide(&TEXT_STYLE, style.clone(), |ui| {
             ui.column(Modifier::new(), |ui| {
                 ui.button(
@@ -226,7 +226,7 @@ fn controls_inherit_typography_without_inventing_decorations() -> Result<(), Tes
 fn component_activation_follows_its_visual_offset() -> Result<(), TestError> {
     let clicks = State::new(0);
     let counter = clicks.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.icon_button(
             &BLANK,
             IconOptions::default(),
@@ -257,7 +257,7 @@ fn component_activation_follows_its_visual_offset() -> Result<(), TestError> {
 fn a_scrollbar_of_a_row_that_scrolls_drags_the_row_sideways() -> Result<(), TestError> {
     let scroll = ScrollState::new(Axis::Horizontal);
     let (row, bar) = (scroll.clone(), scroll.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(Modifier::new(), |ui| {
             ui.scroll(row.clone(), Modifier::new().width(200.dp()), |ui| {
                 for _ in 0..4 {
@@ -285,7 +285,7 @@ fn each_finger_on_a_scrollbar_drags_from_the_point_where_it_grabbed_the_thumb()
 -> Result<(), TestError> {
     let scroll = ScrollState::new(Axis::Horizontal);
     let (row, bar) = (scroll.clone(), scroll.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(Modifier::new(), |ui| {
             ui.scroll(row.clone(), Modifier::new().width(200.dp()), |ui| {
                 for _ in 0..4 {
@@ -333,7 +333,7 @@ fn an_arrow_key_moves_a_slider_by_one_pixel_of_its_track_and_page_keys_do_nothin
 -> Result<(), TestError> {
     let value = State::new(0.5);
     let controlled = value.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let read = controlled.clone();
         ui.slider(
             move || read.get(),
@@ -372,7 +372,7 @@ fn an_arrow_key_moves_a_slider_by_one_pixel_of_its_track_and_page_keys_do_nothin
 fn a_page_key_moves_a_slider_by_the_page_that_the_caller_gives() -> Result<(), TestError> {
     let value = State::new(0.5);
     let controlled = value.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let read = controlled.clone();
         ui.slider(
             move || read.get(),
@@ -402,7 +402,7 @@ fn a_scrollbar_without_a_drawn_thumb_moves_the_thumb_of_its_fraction_to_the_poin
 -> Result<(), TestError> {
     let scroll = ScrollState::new(Axis::Horizontal);
     let (row, bar) = (scroll.clone(), scroll.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(Modifier::new(), |ui| {
             ui.scroll(row.clone(), Modifier::new().width(200.dp()), |ui| {
                 for _ in 0..4 {

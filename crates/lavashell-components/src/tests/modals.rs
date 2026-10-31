@@ -6,7 +6,7 @@ fn modal_scrims_take_pointer_events_without_stealing_keyboard_focus() -> Result<
     let outside = State::new(0);
     let inside = State::new(0);
     let (scrim, menu) = (outside.clone(), inside.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.dialog(Modifier::new(), |ui| {
             ui.button(
                 Modifier::new().focusable(false),
@@ -60,7 +60,7 @@ fn modal_blocks_background_autofocuses_field_and_restores_keyboard_focus() -> Re
     let value = State::new(String::new());
     let clicks = State::new(0);
     let (shown, input, count) = (open.clone(), value.clone(), clicks.clone());
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.button(Modifier::new(), count.action(|n| *n += 1), |ui| {
             ui.spacer(100.dp(), 40.dp(), Modifier::new());
         });
@@ -122,7 +122,7 @@ fn modal_blocks_background_autofocuses_field_and_restores_keyboard_focus() -> Re
 fn a_popover_opens_under_its_button_and_moves_into_the_view_by_its_size() -> Result<(), TestError> {
     let view_size = Viewport::new(Size::new(300.dp(), 200.dp()), Density::ONE);
     let popover_at = |x: Dp| -> Result<Rect, TestError> {
-        let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
             let more = NodeRef::new();
             ui.stack(Modifier::new().offset(x, 30.dp()), |ui| {
                 ui.spacer(20.dp(), 20.dp(), Modifier::new().node_ref(&more));
@@ -150,7 +150,7 @@ fn a_popover_opens_under_its_button_and_moves_into_the_view_by_its_size() -> Res
 
 #[test]
 fn a_popover_in_a_moved_parent_opens_at_its_point_in_the_view() -> Result<(), TestError> {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         let menu = NodeRef::new();
         ui.stack(Modifier::new().offset(15.dp(), 25.dp()), |ui| {
             ui.popover(

@@ -2,7 +2,7 @@
 use crate::test_error::TestError;
 use crate::{Error, Fonts, Painter, decode_image, encoded_image, raster_png};
 use lavashell_core::prelude::*;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use skia_safe::{AlphaType, ColorSpace, ColorType, EncodedImageFormat, ImageInfo};
 use std::time::Duration;
 
@@ -27,7 +27,7 @@ fn encoded(format: EncodedImageFormat) -> Result<Vec<u8>, TestError> {
 
 fn scene(bytes: Vec<u8>) -> Result<Vec<DrawCommand>, TestError> {
     let image = decode_image(bytes)?;
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let image = image.clone();
         ui.canvas(Size::new(8.dp(), 8.dp()), Modifier::new(), move |canvas| {
             canvas.image(

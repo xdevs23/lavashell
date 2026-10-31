@@ -96,7 +96,7 @@ pub(super) fn with_taskbar(placement: State<Placement>) -> Result<Taskbar, TestE
     let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
     let composed = keyboard.clone();
     let top = 390.dp();
-    let view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.layout(Arrangement::Overlay, Modifier::new(), |ui| {
             if !composed.shown() {
                 let blur = constant!(Backdrop::blur(Dp::new(3.0)));
@@ -147,7 +147,7 @@ fn a_composition_gets_the_height_of_a_hidden_keyboard_from_an_island_in_its_firs
     let keyboard = Keyboard::new(target, &settings, State::new(&ENGLISH), placement)?;
     let (read, closed) = (Rc::new(Cell::new(Dp::ZERO)), 76.dp());
     let recorded = read.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         recorded.set(keyboard.height());
         ui.keyboard_from(&keyboard, "taskbar", closed, Modifier::new());
     });
@@ -240,7 +240,7 @@ fn the_return_to_an_island_waits_for_one_pixel_of_the_view() -> Result<(), TestE
     let after = |scale: f64| -> Result<Duration, TestError> {
         let content_after = Rc::new(Cell::new(Duration::ZERO));
         let seen = Rc::clone(&content_after);
-        let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
             let distance = constant!(NonNegativeDp::try_new(Dp::new(300.0)));
             let island = IslandReturn::new(ui, distance);
             seen.set(island.content_after);

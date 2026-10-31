@@ -7,7 +7,7 @@ use crate::{DrawFailure, Error, SkslDiagnostic, StreamRejection};
 use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
-use lavashell_test_platform::FrameFailure;
+use lavashell_test_fixtures::FrameFailure;
 use log::SetLoggerError;
 use std::array::TryFromSliceError;
 use std::num::TryFromIntError;

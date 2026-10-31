@@ -5,7 +5,7 @@ use crate::test_scenes::{commands, paint, paint_damage};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 
 fn bounds_of(view: &View, tag: &'static str) -> Result<Rect, TestError> {
     view.bounds_of(tag).ok_or(TestError::Missing(tag))
@@ -35,7 +35,7 @@ fn snapshot(view: &View, tag: &'static str) -> Result<(Rect, Vec<Rect>), TestErr
 fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
     let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
             ui.text(
                 "Mon 5 Oct e\u{301} office",
@@ -131,7 +131,7 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
 -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
     let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("static label", Modifier::new(), |ui| {
             ui.text(
                 "Mon 5 Oct office",
@@ -184,7 +184,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
         geometry: PixelGeometry::Rgb,
     };
     let size = Size::new(400.dp(), 80.dp());
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.canvas(
             Size::new(400.dp(), 80.dp()),
             Modifier::new(),

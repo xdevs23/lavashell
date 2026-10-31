@@ -166,7 +166,7 @@ fn child() -> Result<(), TestError> {
         ..PreferenceOverrides::default()
     });
     let reader = Rc::new(RefCell::new(PreferenceReader::new(
-        lavashell_test_platform::facts(),
+        lavashell_test_fixtures::facts(),
     )));
     reader.borrow().view.provide_preferences(&source.values());
     let source = Rc::new(RefCell::new(source));

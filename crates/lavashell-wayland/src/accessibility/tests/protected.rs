@@ -5,7 +5,7 @@ use lavashell_core::prelude::{
     Density, Dp, DpExt, InputEvent, Key, Modifier, ProtectedText, Size, TextFieldOptions,
     TextMeasurer, TextStyle, View, Viewport,
 };
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 
 struct Metrics;
 
@@ -21,7 +21,7 @@ fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> R
 {
     let secret = ProtectedText::new();
     let private = secret.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.protected_input(
             private.clone(),
             TextFieldOptions::default(),
