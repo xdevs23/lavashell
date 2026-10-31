@@ -26,8 +26,5 @@ lru.workspace = true
 num-traits.workspace = true
 thiserror.workspace = true
 
-[target.'cfg(target_os = "android")'.dependencies]
-ndk.workspace = true
-
 [dev-dependencies]
 lavashell-test-fixtures.workspace = true

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#[cfg(target_os = "android")]
-mod android;
 mod buffer_format;
 mod cache_budget;
 mod completion;
@@ -52,6 +50,7 @@ use skia_safe::gpu::{self, SurfaceOrigin, SyncCpu};
 use skia_safe::{Canvas, ColorType, Surface};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct VulkanRenderer {
     context: SkiaContext,
@@ -215,6 +214,28 @@ impl VulkanRenderer {
         draw: impl FnOnce(&Canvas),
     ) -> Result<FrameOutcome, Error> {
         self.draw_timed_in(SurfaceId::UNSPECIFIED, target, size, 0, draw)
+    }
+
+    #[must_use]
+    pub fn supports_presentation_time(&self) -> bool {
+        self.device.contains(ash::google::display_timing::NAME)
+    }
+
+    /// Draws a frame whose buffer has the presentation time `time` on the clock of `VK_GOOGLE_display_timing`, from 1
+    /// to `i64::MAX` nanoseconds. For the frames after this one, see `SurfaceTiming`.
+    ///
+    /// # Errors
+    /// Fails when the device lacks `VK_GOOGLE_display_timing`, the time is out of range, or the frame fails as
+    /// `draw` does.
+    pub fn draw_at(
+        &mut self,
+        target: &mut SurfaceTarget,
+        size: (u32, u32),
+        time: Duration,
+        draw: impl FnOnce(&Canvas),
+    ) -> Result<FrameOutcome, Error> {
+        let time = wsi::PresentationTime::new(time, self.supports_presentation_time())?;
+        self.draw_frame(target, size, (SurfaceId::UNSPECIFIED, 0), Some(time), draw)
     }
 
     /// # Errors

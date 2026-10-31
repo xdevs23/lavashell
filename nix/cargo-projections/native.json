@@ -3851,7 +3851,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "ea847b79082886ddf76d8d61d9980e3ef1d3a89995ac29650d5e8f13203e307d"
+        "seedHash": "831dfb790f1b99876be176c45fa24196d2606cd219be322029142359a0bbd956"
       }
     }
   },
@@ -5001,7 +5001,6 @@
           "lavashell-vulkan",
           "log",
           "lru",
-          "ndk",
           "num-traits",
           "skia-safe",
           "thiserror 2.0.21"

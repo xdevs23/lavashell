@@ -7,12 +7,9 @@ pub enum PresentationPolicy {
     Explicit,
 }
 
-/// Whether one native Surface has presented a frame with an explicit presentation time. Every acquisition of the
-/// Surface and every clone of this value share the same policy.
-/// After one frame with an explicit time, every later frame of the Surface needs one too, also after the Surface is
-/// detached and attached again.
-/// `Automatic` is valid only while the Surface has never presented with an explicit time. A Surface with an unknown
-/// history therefore starts with `Explicit`.
+/// Whether one surface has presented a frame with an explicit presentation time. Every clone of this value shares the
+/// same policy. After one frame with an explicit time, every later frame of the surface needs one too.
+/// `Automatic` is valid only while the surface has never presented with an explicit time.
 #[derive(Clone)]
 pub struct SurfaceTiming(Rc<Cell<PresentationPolicy>>);
 

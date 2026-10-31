@@ -90,7 +90,10 @@ fn reattaching_a_retained_window_rejects_untimed_draws_before_acquiring() -> Res
         )?,
         FrameOutcome::Shown
     );
-    assert_eq!(surface.presentations(), vec![Some(5_000)]);
+    assert_eq!(
+        surface.presentations(),
+        vec![Some(Duration::from_nanos(5_000))]
+    );
 
     let retained = renderer.detach().ok_or(Error::Detached)?;
     assert_eq!(surface.references(), 2);
@@ -114,7 +117,10 @@ fn reattaching_a_retained_window_rejects_untimed_draws_before_acquiring() -> Res
         )?,
         FrameOutcome::Shown
     );
-    assert_eq!(surface.presentations(), vec![Some(19_000)]);
+    assert_eq!(
+        surface.presentations(),
+        vec![Some(Duration::from_micros(19))]
+    );
 
     surface.clear_events();
     assert!(renderer.detach().is_some());
@@ -220,7 +226,10 @@ fn pending_acquisition_does_not_latch_policy_or_reuse_its_timestamp() -> Result<
         )?,
         FrameOutcome::Shown
     );
-    assert_eq!(surface.presentations(), vec![None, Some(19_000)]);
+    assert_eq!(
+        surface.presentations(),
+        vec![None, Some(Duration::from_micros(19))]
+    );
     assert_untimed_rejected(&mut renderer, &surface);
     Ok(())
 }
