@@ -6,7 +6,7 @@ use super::{
 };
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
-use lavashell_renderer::SurfaceAlpha;
+use lavashell_renderer::{PresentationPolicy, SurfaceAlpha, SurfaceTiming};
 use std::sync::Arc;
 
 /// The view and the settings of a new native surface, apart from its role.
@@ -52,8 +52,11 @@ impl Platform {
         } else {
             SurfaceAlpha::Opaque
         };
-        let mut target =
-            (self.gpu.wayland_target(window.clone(), alpha)).map_err(Error::CreateTarget)?;
+        let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
+        let mut target = self
+            .gpu
+            .surface_target(window.clone(), alpha, timing)
+            .map_err(Error::CreateTarget)?;
         target.request_output(spec.output);
         if let Some(metadata) = spec.hdr_metadata {
             target

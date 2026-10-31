@@ -9,6 +9,7 @@ use super::{
 };
 use crate::Error;
 use crate::logical::extent;
+use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceSource;
 use lavashell_core::view::Proposal;
@@ -75,8 +76,8 @@ impl Platform {
             ..
         } = app;
         let protocols = SurfaceProtocols::bind(globals, &qh);
-        let mut gpu =
-            VulkanRenderer::for_wayland(&connection.backend()).map_err(Error::CreateRenderer)?;
+        let wayland = WaylandPresentation::new(connection.backend());
+        let mut gpu = VulkanRenderer::new(&wayland).map_err(Error::CreateRenderer)?;
         let paint = painter(&mut gpu, &fonts, painter_setup, gpu_timing)?;
         let outputs = OutputState::new(globals, &qh);
         let session_lock = session_lock

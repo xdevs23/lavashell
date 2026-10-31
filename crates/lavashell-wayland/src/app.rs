@@ -4,7 +4,7 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, VulkanRenderer, WaylandTarget};
+use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
@@ -136,7 +136,7 @@ struct Surface {
     id: SurfaceId,
     accessibility: Option<crate::accessibility::Bridge>,
     scene_generation: u64,
-    target: Option<WaylandTarget>,
+    target: Option<SurfaceTarget>,
     tree: SceneTree,
     damage: DamageTracker,
     lifecycle: lifecycle::Lifecycle,

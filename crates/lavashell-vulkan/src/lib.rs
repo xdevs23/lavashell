@@ -34,7 +34,7 @@ pub use imported_memory::ImportedMemory;
 pub use instance::{Instance, InstanceRequest};
 pub use physical::{Features, HeapBudget, PhysicalDevice};
 pub use submission::{Submission, SyncFdSignal};
-pub use surface::{Presentation, Surface, Window, WindowSystem};
+pub use surface::{Presentation, Surface, Window};
 pub use swapchain::{
     Acquisition, Chromaticity, Fit, MasteringDisplay, Presented, Swapchain, SwapchainRequest,
 };

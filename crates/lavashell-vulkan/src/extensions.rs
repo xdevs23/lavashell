@@ -58,10 +58,10 @@ mod tests {
     #[test]
     fn the_first_missing_extension_is_reported() {
         let extensions = offered(&[ash::khr::surface::NAME]);
-        let required = [ash::khr::surface::NAME, ash::khr::wayland_surface::NAME];
+        let required = [ash::khr::surface::NAME, ash::khr::swapchain::NAME];
         assert!(matches!(
             extensions.require(&required),
-            Err(Error::MissingExtension(name)) if name == ash::khr::wayland_surface::NAME
+            Err(Error::MissingExtension(name)) if name == ash::khr::swapchain::NAME
         ));
         assert!(extensions.require(&required[..1]).is_ok());
     }
