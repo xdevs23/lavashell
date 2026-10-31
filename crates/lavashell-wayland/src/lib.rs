@@ -17,6 +17,7 @@ mod test_bus;
 #[cfg(test)]
 mod test_error;
 mod text_transfer;
+mod wayland_presentation;
 
 use smithay_client_toolkit as sctk;
 

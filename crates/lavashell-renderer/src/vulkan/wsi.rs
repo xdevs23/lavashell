@@ -60,8 +60,8 @@ struct Chain {
     working: Option<Surface>,
 }
 
-/// The swapchain presentation to the surface of one window, the same on every platform. Create a target through the
-/// `VulkanRenderer` method for the window system of the window, such as `VulkanRenderer::wayland_target`.
+/// The swapchain presentation to the surface of one window, the same on every platform. Create a target through
+/// `VulkanRenderer::surface_target`.
 pub struct SurfaceTarget {
     surface: Arc<lavashell_vulkan::Surface>,
     chain: Option<Chain>,
