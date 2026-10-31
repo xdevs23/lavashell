@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::failure::Failures;
 use crate::test_error::TestError;
+use crate::text::Shaper;
 use crate::text_cache::ShapedParagraph;
 use crate::{
     BlendSpace,
@@ -53,14 +55,14 @@ fn field(
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    tree.show(view.frame(viewport, painter).without_failures()?)?;
+    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
     view.input(InputEvent::Key {
         key: Key::Tab,
         shift: false,
     });
     view.input(InputEvent::Text(value.into()));
     secret.set_revealed(true);
-    tree.show(view.frame(viewport, painter).without_failures()?)?;
+    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
     let private = find(&tree).ok_or(TestError::Missing("private text draw"))?;
     Ok((view, tree, secret, private))
 }
@@ -103,8 +105,8 @@ fn carets(geometry: &TextGeometry) -> Vec<(usize, Rect)> {
 
 fn counts(painter: &mut Painter) -> (usize, i32, usize, usize, usize) {
     (
-        painter.paragraphs.len(),
-        painter.fonts.paragraph_cache_mut().count(),
+        painter.shaper.paragraphs().len(),
+        painter.shaper.skia_cache_count(),
         painter.resources.tiles.borrow().images().count(),
         painter.images.len(),
         painter.packet_cache.stats.cache_bytes,
@@ -115,7 +117,7 @@ fn counts(painter: &mut Painter) -> (usize, i32, usize, usize, usize) {
 fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<(), TestError> {
     let mut painter = new_painter()?;
     let (_, _, secret, private) = field(&mut painter, "iWé💡e\u{301}אבג")?;
-    let ordinary = painter.measure(
+    let ordinary = painter.shaper.measure(
         "ordinary",
         &TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled(),
         260.dp(),
@@ -147,7 +149,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
     let mut tree = SceneTree::default();
     tree.show(SceneUpdate { changes })?;
     for _ in 0..3 {
-        let geometry = painter.private_geometry(&private, &style, 260.dp());
+        let geometry = painter.shaper.private_geometry(&private, &style, 260.dp());
         assert!(geometry.word_starts.is_none());
         assert!(
             geometry
@@ -174,7 +176,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
             (after.1, after.2, after.3, after.4),
             (before.1, before.2, before.3, before.4)
         );
-        assert_eq!(painter.private_text.fonts.paragraph_cache_mut().count(), 0);
+        assert_eq!(painter.shaper.private_skia_cache_count(), 0);
     }
     assert!(painter.packet_cache.stats.uncached_leaves >= 3);
     let debug = format!("{:?}", find(&tree));
@@ -228,7 +230,7 @@ fn private_pixels_match_ordinary_font_and_coverage_policy_without_storing_tiles(
                 let expected = pixels(&mut reference, &[ordinary])?;
                 assert!(actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1));
                 assert_eq!(painter.resources.tiles.borrow().images().count(), 0);
-                assert_eq!(painter.private_text.fonts.paragraph_cache_mut().count(), 0);
+                assert_eq!(painter.shaper.private_skia_cache_count(), 0);
             }
         }
     }
@@ -248,10 +250,10 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
     );
     let (mut view, mut tree, secret, private) = field(&mut painter, "iWé office")?;
     let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
-    let first = painter.private_geometry(&private, &style, 260.dp());
+    let first = painter.shaper.private_geometry(&private, &style, 260.dp());
     let size = Size::new(300.dp(), 48.dp());
     let viewport = Viewport::new(size, Density::ONE);
-    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
+    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
     assert!(!view.needs_frame());
     painter.set_text_rendering(
         TextRendering {
@@ -261,14 +263,14 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
         TextDestination::default(),
     );
     assert!(view.needs_frame());
-    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
-    let second = painter.private_geometry(&private, &style, 260.dp());
+    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
+    let second = painter.shaper.private_geometry(&private, &style, 260.dp());
     assert_ne!(carets(&first), carets(&second));
     assert!(!view.needs_frame());
     secret.set_revealed(false);
     secret.clear();
     assert!(view.needs_frame());
-    tree.show(view.frame(viewport, &mut painter).without_failures()?)?;
+    tree.show((view.frame(viewport, &mut painter.shaper)).without_failures()?)?;
     assert!(find(&tree).is_none());
     assert!(
         view.accessibility()
@@ -276,7 +278,7 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
             .values()
             .all(|node| node.value.is_none())
     );
-    assert_eq!(painter.private_text.fonts.paragraph_cache_mut().count(), 0);
+    assert_eq!(painter.shaper.private_skia_cache_count(), 0);
     Ok(())
 }
 
@@ -286,13 +288,9 @@ fn long_private_runs_clip_transient_tiles_on_the_original_sampling_grid() -> Res
     let (_, _, _, private) = field(&mut painter, &"W".repeat(4096))?;
     let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
     let mut paragraph = ShapedParagraph::new(private.expose(|value| {
-        painter.private_text.paragraph(
-            &painter.registry,
-            painter.text_rendering(),
-            value,
-            &style,
-            100_000.dp(),
-        )
+        painter
+            .shaper
+            .private_paragraph(painter.text_rendering(), value, &style, 100_000.dp())
     })?);
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((300, 48)).ok_or(TestError::RasterSurface)?;
@@ -336,7 +334,7 @@ fn long_private_runs_clip_transient_tiles_on_the_original_sampling_grid() -> Res
 fn the_smallest_private_width_is_shaped_from_the_value_outside_the_shared_caches()
 -> Result<(), TestError> {
     let mut painter = new_painter()?;
-    let mut reference = new_painter()?;
+    let mut reference = Shaper::new(&crate::test_font::test_font()?, Failures::default())?;
     let style = TextStyle {
         max_lines: Some(1),
         ..TextStyle::new("probe", 13.sp(), Color::WHITE)
@@ -348,13 +346,13 @@ fn the_smallest_private_width_is_shaped_from_the_value_outside_the_shared_caches
         let width = reference.measure(value, &style, Dp::INFINITY).width;
         let before = counts(&mut painter);
         assert_eq!(
-            painter.private_min_width(&private, &style),
+            painter.shaper.private_min_width(&private, &style),
             width.min(ellipsis)
         );
         assert_eq!(counts(&mut painter), before);
     }
     assert!(reference.measure("i", &style, Dp::INFINITY).width < ellipsis);
-    assert_eq!(painter.private_text.fonts.paragraph_cache_mut().count(), 0);
+    assert_eq!(painter.shaper.private_skia_cache_count(), 0);
     Ok(())
 }
 
@@ -385,7 +383,7 @@ fn field_beside_text(secret: &ProtectedText) -> View {
 fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
 -> Result<(), TestError> {
     let mut painter = new_painter()?;
-    let mut reference = new_painter()?;
+    let mut reference = Shaper::new(&crate::test_font::test_font()?, Failures::default())?;
     let style = TextStyle {
         max_lines: Some(1),
         ..TextStyle::new("probe", 13.sp(), Color::WHITE)
@@ -399,19 +397,20 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
         let (_, _, secret, private) = field(&mut painter, &value)?;
         let intrinsic = reference.measure(&value, &style, width);
         let masked = reference.measure(&secret.masked('•'), &style, width);
-        let before = painter.paragraphs.len();
-        assert_eq!(painter.private_measure(&private, &style, width), intrinsic);
+        let shaper = &mut painter.shaper;
+        let before = shaper.paragraphs().len();
+        assert_eq!(shaper.private_measure(&private, &style, width), intrinsic);
         assert_eq!(
-            painter.private_geometry(&private, &style, width).size.width,
+            shaper.private_geometry(&private, &style, width).size.width,
             width
         );
-        assert_eq!(painter.paragraphs.len(), before);
+        assert_eq!(shaper.paragraphs().len(), before);
         let mut view = field_beside_text(&secret);
         let mut tree = SceneTree::default();
         let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
         for revealed in [true, false, true] {
             secret.set_revealed(revealed);
-            (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
+            (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
             let field = view
                 .bounds_of("field")
                 .ok_or(TestError::Missing("field node"))?;
@@ -430,7 +429,7 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
                 "intrinsic field displaced its sibling outside the row"
             );
         }
-        assert_eq!(painter.private_text.fonts.paragraph_cache_mut().count(), 0);
+        assert_eq!(painter.shaper.private_skia_cache_count(), 0);
     }
     let (wide, width) = ("W".repeat(128), 600.dp());
     assert!(reference.measure(&wide, &style, Dp::INFINITY).width > width);
@@ -441,7 +440,7 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
     let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
     for revealed in [true, false] {
         secret.set_revealed(revealed);
-        (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
+        (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
         let field = view
             .bounds_of("field")
             .ok_or(TestError::Missing("field node"))?;

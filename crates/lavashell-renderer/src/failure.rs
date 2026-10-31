@@ -160,8 +160,9 @@ impl From<DrawFailure> for FailedDraw {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct Failures(RefCell<BTreeMap<DrawFailure, u64>>);
+/// Counts of failures per kind. Clones share the same counts.
+#[derive(Clone, Default)]
+pub(crate) struct Failures(Rc<RefCell<BTreeMap<DrawFailure, u64>>>);
 
 impl Failures {
     /// Counts the failure in `failed` and logs it, with its cause if it has one. A failure is logged as a warning

@@ -37,10 +37,10 @@ fn scene(bytes: Vec<u8>) -> Result<Vec<DrawCommand>, TestError> {
             );
         });
     });
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut shaper = crate::text::Shaper::new(&Fonts::new(), crate::failure::Failures::default())?;
     let frame = view.frame(
         Viewport::new(Size::new(8.dp(), 8.dp()), Density::ONE),
-        &mut painter,
+        &mut shaper,
     );
     crate::test_scenes::leaf_commands(frame.without_failures()?)
 }

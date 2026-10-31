@@ -6,12 +6,10 @@ mod brush;
 mod configuration;
 #[cfg(test)]
 mod destination_tests;
-mod geometry;
 mod image;
 pub(crate) mod opacity;
 #[cfg(test)]
 mod opacity_tests;
-mod paragraph;
 mod private;
 mod scene_tree;
 #[cfg(test)]
@@ -19,12 +17,14 @@ mod scene_tree_tests;
 mod skia_geometry;
 #[cfg(test)]
 mod skia_geometry_tests;
+mod sources;
 mod stream;
 
 use crate::destination::Destination;
-use crate::failure::{DrawFailure, FailedDraw};
+use crate::failure::{DrawFailure, FailedDraw, Failures};
 use crate::plan::Leaf;
 use crate::scalar::scalar;
+use crate::text::{ParagraphInput, Shaper};
 use brush::brush_paint;
 pub(crate) use brush::{color4f, solid};
 use lavashell_core::prelude::*;
@@ -33,7 +33,6 @@ pub(crate) use skia_geometry::{
     skpath, skpath_through,
 };
 pub use skia_geometry::{skpoint, skrect};
-use skia_safe::textlayout::{FontCollection, Paragraph};
 use skia_safe::{Canvas, PaintStyle};
 use std::collections::HashMap;
 pub use stream::{
@@ -50,13 +49,9 @@ pub struct Painter {
     pub(crate) gpu_timing: crate::gpu_timing::GpuTiming,
     pub(crate) frame: u64,
     opacity: opacity::Opacity,
-    pub(crate) failures: crate::failure::Failures,
-    pub(crate) fonts: FontCollection,
-    source_fonts: paragraph::Sources,
-    pub(crate) registry: crate::Fonts,
-    private_text: private::Private,
-    pub(crate) paragraphs: crate::text_cache::TextCache,
-    pub(crate) text_configuration: State<crate::text::Configuration>,
+    pub(crate) failures: Failures,
+    pub(crate) shaper: Shaper,
+    source_fonts: sources::Sources,
     pub(crate) paint_configuration: configuration::Configuration,
     pub(crate) text_rasterizers: crate::text::Rasterizers,
     pub(crate) text_scopes: crate::text::Scopes,
@@ -72,6 +67,7 @@ impl Painter {
     pub fn new(registry: &crate::Fonts, range: crate::UniformRange) -> Result<Self, crate::Error> {
         let room = crate::field::FieldRoom::new(range);
         let resources = crate::resources::PaintResources::new(&room)?;
+        let failures = Failures::default();
         Ok(Self {
             blend_space: crate::BlendSpace::default(),
             effect_registry: crate::effect_registry::EffectRegistry::new(&room)?,
@@ -81,13 +77,9 @@ impl Painter {
             gpu_timing: crate::gpu_timing::GpuTiming::default(),
             frame: 0,
             opacity: opacity::Opacity::new()?,
-            failures: crate::failure::Failures::default(),
-            fonts: registry.collection()?,
-            source_fonts: paragraph::Sources::new(registry)?,
-            registry: registry.clone(),
-            private_text: private::Private::new(registry)?,
-            paragraphs: crate::text_cache::TextCache::default(),
-            text_configuration: State::new(crate::text::Configuration::default()),
+            shaper: Shaper::new(registry, failures.clone())?,
+            failures,
+            source_fonts: sources::Sources::new(registry)?,
             paint_configuration: configuration::Configuration::default(),
             text_rasterizers: crate::text::Rasterizers::new()?,
             text_scopes: crate::text::Scopes::default(),
@@ -101,19 +93,9 @@ impl Painter {
         self
     }
 
-    pub(crate) fn paragraph_input<'t>(
-        &self,
-        text: &'t str,
-        style: &'t TextStyle<Dp>,
-        width: Dp,
-    ) -> Result<paragraph::ParagraphInput<'t>, DrawFailure> {
-        paragraph::ParagraphInput::new(
-            text,
-            style,
-            width,
-            self.text_configuration.get().rendering,
-            self.fonts.clone(),
-        )
+    /// The shaper that measures text for views and shapes the text painted by this painter.
+    pub fn shaper(&mut self) -> &mut Shaper {
+        &mut self.shaper
     }
 
     pub(crate) fn source_paragraph_input<'t>(
@@ -122,28 +104,15 @@ impl Painter {
         style: &'t TextStyle<Dp>,
         width: Dp,
         rendering: crate::text::TextRendering,
-    ) -> Result<paragraph::ParagraphInput<'t>, DrawFailure> {
-        self.text_configuration.track();
-        paragraph::ParagraphInput::new(
+    ) -> Result<ParagraphInput<'t>, DrawFailure> {
+        self.shaper.observe_rendering();
+        ParagraphInput::new(
             text,
             style,
             width,
             rendering,
             self.source_fonts.collection(rendering),
         )
-    }
-
-    pub(crate) fn prepare_paragraph(
-        &mut self,
-        text: &str,
-        style: &TextStyle<Dp>,
-        width: Dp,
-    ) -> Result<&mut Paragraph, DrawFailure> {
-        let input = self.paragraph_input(text, style, width)?;
-        Ok(&mut input
-            .cached(&mut self.paragraphs, &self.registry)
-            .shaped
-            .paragraph)
     }
 
     #[cfg(test)]
@@ -153,12 +122,9 @@ impl Painter {
         style: &TextStyle<Dp>,
         width: Dp,
         rendering: crate::text::TextRendering,
-    ) -> Result<&mut Paragraph, DrawFailure> {
+    ) -> Result<&mut skia_safe::textlayout::Paragraph, DrawFailure> {
         let input = self.source_paragraph_input(text, style, width, rendering)?;
-        Ok(&mut input
-            .cached(&mut self.paragraphs, &self.registry)
-            .shaped
-            .paragraph)
+        Ok(&mut self.shaper.cached(input).shaped.paragraph)
     }
 
     /// Paints the draw commands of `leaf`. Each effect is identified by the key of the leaf and by the position of
@@ -180,7 +146,7 @@ impl Painter {
         let text_scope = self.text_scopes.enter(
             canvas,
             self.text_rasterizers
-                .reads_destination(self.text_configuration.peek().rendering),
+                .reads_destination(self.shaper.configuration().rendering),
         );
         let mut destination = leaf.destination;
         let mut enclosing = Vec::new();
@@ -371,11 +337,11 @@ mod text_tests {
 
     #[test]
     fn shaped_carets_use_graphemes_and_keep_both_sides_of_soft_wraps() -> Result<(), TestError> {
-        let mut painter = Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
         let mut style = TextStyle::new("sans-serif", 20.sp(), Color::WHITE).resolve_unscaled();
         style.max_lines = None;
         let value = "e\u{301} 🙂 words that wrap onto several rows";
-        let geometry = painter.geometry(value, &style, 110.dp());
+        let geometry = shaper.geometry(value, &style, 110.dp());
         assert!(
             !geometry.carets.iter().any(|caret| caret.index == 1),
             "combining mark must share its cluster"

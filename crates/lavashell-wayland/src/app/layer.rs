@@ -190,7 +190,7 @@ impl Platform {
         view: &mut View,
     ) -> Result<LayerContext, Error> {
         let proposal = content_proposal(options.current_layout());
-        let content = view.size_that_fits(proposal, &mut self.paint);
+        let content = view.size_that_fits(proposal, self.paint.shaper());
         Ok(LayerContext {
             content: content.map_err(Error::MeasureView)?,
         })

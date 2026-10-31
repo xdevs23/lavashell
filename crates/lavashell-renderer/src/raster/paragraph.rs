@@ -104,7 +104,7 @@ mod tests {
                     });
                     let frame = view.frame(
                         Viewport::new(Size::new(240.dp(), 40.dp()), Density::ONE),
-                        &mut painter,
+                        &mut painter.shaper,
                     );
                     let commands = crate::test_scenes::leaf_commands(frame.without_failures()?)?;
                     let info = skia_safe::ImageInfo::new(

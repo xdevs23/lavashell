@@ -17,7 +17,7 @@ let window = NativeWindow::new(window_of_surface(env, &surface)?, timing);
 renderer.attach(window, SurfaceAlpha::Opaque)?;
 
 // In the frame callback of the host:
-let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), renderer.painter(), frame)?;
+let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), renderer.painter().shaper(), frame)?;
 for failure in failures {
     log::error!("{}", lavashell::core::error::message_chain(failure));
 }

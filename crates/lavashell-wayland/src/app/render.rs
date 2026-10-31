@@ -174,7 +174,7 @@ impl Platform {
         let mut changed = false;
         if wanted == Wanted::View {
             let mut frame = |view: &mut View, tree: &mut SceneTree| {
-                view.show_frame_at(tree, viewport, &mut self.paint, start.timing)
+                view.show_frame_at(tree, viewport, self.paint.shaper(), start.timing)
             };
             changed = surface.view.needs_visual_frame();
             surface.show(&mut frame)?;
@@ -196,7 +196,7 @@ impl Platform {
         // applies them with the buffer of this frame.
         if let Some(Role::Layer(layer)) = surface.lifecycle.role_mut() {
             if changed && let Some(proposal) = layer.content_proposal() {
-                let content = (surface.view.size_that_fits(proposal, &mut self.paint))
+                let content = (surface.view.size_that_fits(proposal, self.paint.shaper()))
                     .map_err(Error::MeasureView)?;
                 layer.content_measured(content);
             }
