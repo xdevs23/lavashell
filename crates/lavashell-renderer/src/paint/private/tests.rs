@@ -9,10 +9,8 @@ use crate::{
     text::{Hinting, PixelGeometry, TextAntialiasing, TextDestination, TextRendering},
 };
 use lavashell_core::protected_text::ProtectedText;
-use lavashell_core::scene::tree::{
-    Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
-};
-use lavashell_test_fixtures::WithoutFailures;
+use lavashell_core::scene::tree::{Change, Content, Group, Node, Packet, SceneNodeId, SceneTree};
+use lavashell_test_fixtures::{WithoutFailures, show_all};
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -148,7 +146,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
         },
     ];
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     let scene = tree.snapshot();
     for _ in 0..3 {
         let geometry = painter.shaper.private_geometry(&private, &style, 260.dp());

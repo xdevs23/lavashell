@@ -4,6 +4,7 @@ use crate::test_scenes::insert;
 use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
+use lavashell_test_fixtures::show_all;
 use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
 use std::{sync::Arc, time::Duration};
 
@@ -83,7 +84,7 @@ fn group(opacity: f64, clip: Option<RoundedRect>) -> Node {
 
 fn tree(changes: Vec<Change>) -> Result<SceneTree, TestError> {
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     Ok(tree)
 }
 

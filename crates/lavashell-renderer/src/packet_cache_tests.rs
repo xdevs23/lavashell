@@ -6,6 +6,7 @@ use crate::{BlendSpace, Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_effect_quality::{EffectId, VariantId};
+use lavashell_test_fixtures::show_all;
 use skia_safe::{AlphaType, Canvas, ColorType, ImageInfo};
 use std::{sync::Arc, time::Duration};
 
@@ -71,11 +72,14 @@ fn scene(
         clip: clip.map(Slot::Value),
     };
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter([
-        insert(1, None, 0, leaf(stripes())),
-        insert(2, None, 1, Node::Group(group)),
-        insert(3, Some(2), 0, leaf(commands)),
-    ]))?;
+    show_all(
+        &mut tree,
+        [
+            insert(1, None, 0, leaf(stripes())),
+            insert(2, None, 1, Node::Group(group)),
+            insert(3, Some(2), 0, leaf(commands)),
+        ],
+    )?;
     Ok(tree)
 }
 
@@ -227,10 +231,10 @@ fn a_card_whose_height_alone_scales_paints_directly() -> Result<(), TestError> {
     }
     assert_eq!(cached.render_stats().cache_hits, 1);
     let squeezed = Affine::scale(1.0, 0.75).translated(at(12.0, 8.0));
-    tree.show(SceneUpdate::from_iter([Change::SetSlot {
+    tree.show_change(Change::SetSlot {
         id: SceneNodeId(2),
         slot: SlotChange::Transform(Slot::Value(squeezed)),
-    }]))?;
+    })?;
     let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     direct.set_packet_caching(crate::PacketCaching::Disabled);
     assert_eq!(paint(&mut cached, &tree)?, paint(&mut direct, &tree)?);
@@ -271,10 +275,10 @@ fn a_card_image_stands_in_under_a_clip_cutting_it_only_with_hard_edges() -> Resu
     let first = paint(&mut cached, &tree)?;
     assert_eq!(paint(&mut cached, &tree)?, first);
     for (clip, hits) in [(cutting(8.0), 0), (cutting(0.0), 1)] {
-        tree.show(SceneUpdate::from_iter([Change::SetSlot {
+        tree.show_change(Change::SetSlot {
             id: SceneNodeId(2),
             slot: SlotChange::Clip(Some(Slot::Value(clip))),
-        }]))?;
+        })?;
         let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
         direct.set_packet_caching(crate::PacketCaching::Disabled);
         assert!(

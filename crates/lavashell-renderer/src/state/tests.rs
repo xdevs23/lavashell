@@ -8,8 +8,9 @@ use lavashell_core::prelude::{
     Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelSize, Presented, Rect,
     SceneTree, Size, StreamId, StreamImage,
 };
-use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
+use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceChange;
+use lavashell_test_fixtures::show_all;
 use lavashell_vulkan::HeadlessWindow;
 use skia_safe::IPoint;
 use std::cell::RefCell;
@@ -310,20 +311,23 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
         brush: Brush::Solid(Color::WHITE),
     };
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter([
-        insert(
-            1,
-            None,
-            0,
-            Node::Leaf(Content::Packet(Packet::new([background].into()))),
-        ),
-        insert(
-            2,
-            None,
-            1,
-            Node::Leaf(Content::Packet(stream_packet(image(1)))),
-        ),
-    ]))?;
+    show_all(
+        &mut tree,
+        [
+            insert(
+                1,
+                None,
+                0,
+                Node::Leaf(Content::Packet(Packet::new([background].into()))),
+            ),
+            insert(
+                2,
+                None,
+                1,
+                Node::Leaf(Content::Packet(stream_packet(image(1)))),
+            ),
+        ],
+    )?;
     let mut red = state.gpu.offscreen((16, 12))?;
     let _chained_canvas = red.canvas().clear(skia_safe::Color::RED);
     (state.streams.0).bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));
@@ -334,10 +338,10 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
     let mut blue = state.gpu.offscreen((16, 12))?;
     let _chained_canvas = blue.canvas().clear(skia_safe::Color::BLUE);
     (state.streams.0).bind(&image(2), blue.image_snapshot().into(), IPoint::new(0, 0));
-    tree.show(SceneUpdate::from_iter([Change::SetContent {
+    tree.show_change(Change::SetContent {
         id: SceneNodeId(2),
         content: Content::Packet(stream_packet(image(2))),
-    }]))?;
+    })?;
     let drawn = state.draw(SURFACE, frame(2, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [0, 0, 255, 255]);

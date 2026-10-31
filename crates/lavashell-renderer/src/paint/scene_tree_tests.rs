@@ -12,6 +12,7 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::*;
+use lavashell_test_fixtures::show_all;
 use skia_safe::Canvas;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
@@ -76,7 +77,7 @@ fn group(transform: Affine, opacity: f64, clip: Option<RoundedRect>) -> Node {
 
 fn tree(changes: impl IntoIterator<Item = Change>) -> Result<SceneTree, TestError> {
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     Ok(tree)
 }
 
@@ -240,17 +241,14 @@ fn a_graft_paints_the_namespace_that_it_shows_in_place() -> Result<(), TestError
     let place = Affine::rotate(0.2).translated(Point::new(30.dp(), 20.dp()));
     let mut grafted = SceneTree::default();
     let guest = grafted.create_namespace();
-    grafted.apply(
-        guest,
-        SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),
-    )?;
+    grafted.apply_change(guest, insert(1, None, 0, leaf(shapes())))?;
     let graft = Node::Leaf(Content::Graft(guest));
-    grafted.apply(
-        SceneTree::ROOT,
-        SceneUpdate::from_iter([
+    show_all(
+        &mut grafted,
+        [
             insert(1, None, 0, group(place, 0.7, None)),
             insert(2, Some(1), 0, graft),
-        ]),
+        ],
     )?;
     assert_eq!(
         painted(&grafted, Density::ONE)?,
@@ -313,7 +311,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
             id: SceneNodeId(1),
             slot: SlotChange::Transform(Slot::Value(at(x, y))),
         };
-        scene.show(SceneUpdate::from_iter([moved]))?;
+        scene.show_change(moved)?;
         assert_eq!(
             paint(&mut painter, &scene),
             painted(&scene, Density::ONE)?,
@@ -362,15 +360,12 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
     painter.effect_quality(planned.clone());
     let mut scene = SceneTree::default();
     let guest = scene.create_namespace();
-    scene.apply(
-        guest,
-        SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),
-    )?;
+    scene.apply_change(guest, insert(1, None, 0, leaf(shapes())))?;
     let root = [
         insert(1, None, 0, leaf(shapes())),
         insert(2, None, 1, Node::Leaf(Content::Graft(guest))),
     ];
-    scene.show(SceneUpdate::from_iter(root))?;
+    show_all(&mut scene, root)?;
     let budget = FrameBudget {
         surface: SurfaceId(3),
         gpu_time: Some(Duration::from_millis(1)),
@@ -422,7 +417,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
             id: SceneNodeId(2),
             slot: SlotChange::Transform(Slot::Value(at(f64::from(sequence)))),
         };
-        scene.show(SceneUpdate::from_iter([moved]))?;
+        scene.show_change(moved)?;
         let damage = presented.damage(scene.at(Duration::ZERO), viewport);
         painter.paint_surface(
             retained.canvas(),

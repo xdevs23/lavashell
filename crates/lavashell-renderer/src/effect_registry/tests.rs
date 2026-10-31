@@ -6,8 +6,9 @@ use crate::test_error::TestError;
 use crate::test_scenes::{insert, paint};
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::{Content, Group, Node, Packet, SceneTree, SceneUpdate};
+use lavashell_core::scene::tree::{Content, Group, Node, Packet, SceneTree};
 use lavashell_effect_quality::*;
+use lavashell_test_fixtures::show_all;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 type Recorded = Rc<RefCell<Vec<(DrawId, Option<u64>)>>>;
@@ -264,7 +265,7 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
         insert(4, None, 2, leaf(packet(vec![leaves[1].clone()]))),
     ];
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     assert_eq!(
         painter.plan_scene_effects(
             tree.at(Duration::ZERO),

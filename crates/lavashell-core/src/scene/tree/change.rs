@@ -7,16 +7,6 @@ use crate::scene::Affine;
 use crate::shape::RoundedRect;
 use std::sync::Arc;
 
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SceneUpdate {
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "crate::encoding::sequence")
-    )]
-    pub changes: Vec<Change>,
-}
-
 /// One change to the nodes of a namespace. A `parent` of `None` means the top level of the namespace. `index` is a
 /// position among the children of that parent.
 #[derive(Clone)]
@@ -79,32 +69,13 @@ pub enum ApplyError {
     AlreadyGrafted(NamespaceId),
 }
 
-impl FromIterator<Change> for SceneUpdate {
-    fn from_iter<I: IntoIterator<Item = Change>>(changes: I) -> Self {
-        Self {
-            changes: changes.into_iter().collect(),
-        }
-    }
-}
-
 impl SceneTree {
-    /// Applies the changes of `update` to `namespace` in order and checks each change before it is made. An error
-    /// stops the update. The changes before the error stay applied.
+    /// Applies `change` to `namespace` after checking that it fits the tree.
     ///
     /// # Errors
     ///
-    /// Fails when the namespace is unknown, or with the first change that does not fit the tree.
-    pub fn apply(&mut self, namespace: NamespaceId, update: SceneUpdate) -> Result<(), ApplyError> {
-        if !self.namespaces.0.contains_key(&namespace) {
-            return Err(ApplyError::UnknownNamespace(namespace));
-        }
-        update
-            .changes
-            .into_iter()
-            .try_for_each(|change| self.change(namespace, change))
-    }
-
-    pub(super) fn change(
+    /// Fails when the namespace is unknown or the change does not fit the tree.
+    pub fn apply_change(
         &mut self,
         namespace: NamespaceId,
         change: Change,
