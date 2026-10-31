@@ -394,7 +394,8 @@ fn the_next_frame_returns_the_failures_of_a_frame_whose_update_fails() -> TestRe
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
     let mut tree = SceneTree::default();
     (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
-    // The ids from 3 on are free after the first frame. Taking them makes the update that adds a row fail.
+    // The ids from 3 on are free after the first frame. Inserting nodes with those ids makes the update that adds a
+    // row fail.
     let planted = (3..64).map(|id| Change::Insert {
         id: SceneNodeId(id),
         parent: None,
@@ -406,7 +407,7 @@ fn the_next_frame_returns_the_failures_of_a_frame_whose_update_fails() -> TestRe
     broken.set(true);
     assert!(matches!(
         view.show_frame(&mut tree, viewport, &mut Metrics),
-        Err(FrameError::Apply(_))
+        Err(FrameError::Sink(_))
     ));
     let failures = view.show_frame(&mut tree, viewport, &mut Metrics)?;
     let causes: Vec<_> = (failures.into_iter())

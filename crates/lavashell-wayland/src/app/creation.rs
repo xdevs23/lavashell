@@ -2,7 +2,7 @@
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{
     DamageTracker, Density, FrameClock, HdrMetadata, OutputRequest, Platform, PresentationTracker,
-    Role, SceneTree, Surface, View, shape, wl_surface,
+    Role, SceneBuilder, Surface, View, shape, wl_surface,
 };
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
@@ -77,7 +77,7 @@ impl Platform {
             accessibility: Some(accessibility),
             scene_generation: 0,
             target: Some(target),
-            tree: SceneTree::default(),
+            builder: SceneBuilder::default(),
             damage: DamageTracker::default(),
             role: Some(role),
             wl,

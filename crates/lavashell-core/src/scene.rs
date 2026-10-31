@@ -25,6 +25,14 @@ mod drawing;
 
 pub use drawing::Drawing;
 
+mod builder;
+#[cfg(test)]
+mod builder_tests;
+#[cfg(test)]
+pub(crate) mod test_sink;
+
+pub use builder::{ChangeSink, SceneBuilder, SinkId};
+
 pub mod tree;
 
 mod transform;

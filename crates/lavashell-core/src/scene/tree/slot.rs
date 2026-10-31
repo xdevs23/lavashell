@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Presence, PresenceMap, SceneTree};
+use super::{Namespaces, NodeKey, Presence, PresenceMap, SceneTree};
 use crate::animation::{Animatable, Playing};
 use crate::geometry::{Axis, Point};
 use crate::scene::Affine;
 use crate::shape::RoundedRect;
 use crate::units::Dp;
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 #[derive(Clone, PartialEq)]
@@ -253,7 +254,18 @@ impl SceneTree {
     /// animation is paused or at rest. From that time on, a consumer presents the tree on every frame.
     #[must_use]
     pub fn next_change(&self, now: Duration) -> Option<Duration> {
-        (self.moving.iter())
+        self.namespaces.next_change(&self.moving, now)
+    }
+}
+
+impl Namespaces {
+    /// The earliest time, at or after `now`, at which one of the `moving` groups changes.
+    pub(super) fn next_change(
+        &self,
+        moving: &BTreeSet<NodeKey>,
+        now: Duration,
+    ) -> Option<Duration> {
+        (moving.iter())
             .filter_map(|key| self.group(*key)?.next_change(now))
             .min()
     }

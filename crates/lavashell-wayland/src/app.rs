@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
 use lavashell_core::prelude::*;
+use lavashell_core::scene::SceneBuilder;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
@@ -136,7 +137,7 @@ struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
     scene_generation: u64,
     target: Option<SurfaceTarget>,
-    tree: SceneTree,
+    builder: SceneBuilder,
     damage: DamageTracker,
     /// The role of the native surface until it retires.
     role: Option<Role>,
@@ -174,40 +175,39 @@ impl Surface {
 
     fn moving(&self, now: Duration) -> bool {
         let shown = self.clock.predict(now);
-        self.tree
+        self.builder
             .next_change(shown)
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to apply the next frame of `view` to the scene tree, and logs each component that failed in it
-    /// as an error. When the tree fails to apply an update, the view empties the tree and sends the whole scene with
-    /// the next frame of the view. If the tree showed a scene before, that failure is logged and the frame ends
-    /// without an error.
-    /// If the tree was empty, the failure ends the frame with an error.
+    /// Runs `frame` to send the next frame of `view` to the scene builder, and logs each component that failed in it
+    /// as an error. When a change does not fit the scene, the builder restarts and the view sends the whole scene with
+    /// the next frame. If the builder had a scene before, the failure is logged and the frame ends without error. If
+    /// the builder was empty, the failure ends the frame with an error.
     fn show(
         &mut self,
         view: &mut View,
-        frame: impl FnOnce(&mut View, &mut SceneTree) -> Result<Failures, FrameError>,
+        frame: impl FnOnce(&mut View, &mut SceneBuilder) -> Result<Failures, FrameError>,
     ) -> Result<(), crate::Error> {
-        let showed_nothing = self.tree.is_empty();
-        match frame(view, &mut self.tree) {
+        let showed_nothing = self.builder.is_empty();
+        match frame(view, &mut self.builder) {
             Ok(failures) => {
                 crate::failures::log_failures(failures);
                 Ok(())
             }
-            Err(FrameError::Apply(error)) if !showed_nothing => {
-                self.restart_tree(error);
+            Err(FrameError::Mirror(error) | FrameError::Sink(error)) if !showed_nothing => {
+                self.repaint_after_builder_restart(error);
                 Ok(())
             }
             Err(error) => Err(crate::Error::ShowScene(error)),
         }
     }
 
-    /// Handles an update that the tree failed to apply. The view has emptied the tree, so the damage tracker is
-    /// invalidated and the next presentation paints the whole surface.
-    fn restart_tree(&mut self, error: ApplyError) {
+    /// Invalidates the damage tracker after a change did not fit the scene, so the next presentation paints the whole
+    /// surface. The builder has restarted by then.
+    fn repaint_after_builder_restart(&mut self, error: ApplyError) {
         log::warn!(
-            "a surface could not apply a scene update and shows the whole scene next: {error}"
+            "a change did not fit the scene, so the surface shows the whole scene next: {error}"
         );
         self.damage.invalidate();
     }
@@ -218,7 +218,7 @@ impl Surface {
             now,
             shown,
             view.next_deadline(),
-            self.tree.next_change(shown),
+            self.builder.next_change(shown),
         )
     }
 }
@@ -253,7 +253,7 @@ impl Surface {
         }
         self.window = None;
         // The retired surface remains in `surfaces`, so a drag completion or a drop that arrives later still finds it.
-        self.tree = SceneTree::default();
+        self.builder = SceneBuilder::default();
         self.damage.invalidate();
         self.shape = None;
         self.drag_region = None;

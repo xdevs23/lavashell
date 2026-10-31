@@ -178,6 +178,8 @@ mod exits;
 
 #[path = "tests/groups.rs"]
 mod groups;
+#[path = "tests/sink.rs"]
+mod sink;
 
 #[path = "tests/field_lines.rs"]
 mod field_lines;
