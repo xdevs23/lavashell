@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Event;
 use accesskit::{ActionHandler, ActivationHandler, DeactivationHandler, TreeUpdate};
+use lavashell_core::surface::SurfaceId;
 use sctk::reexports::calloop::channel::Sender;
 use smithay_client_toolkit as sctk;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -13,13 +14,13 @@ pub(super) fn lock_snapshot(snapshot: &SharedSnapshot) -> MutexGuard<'_, Option<
 }
 
 pub(super) struct Activation {
-    surface: usize,
+    surface: SurfaceId,
     events: Sender<Event>,
     snapshot: SharedSnapshot,
 }
 
 impl Activation {
-    pub(super) fn new(surface: usize, events: Sender<Event>, snapshot: SharedSnapshot) -> Self {
+    pub(super) fn new(surface: SurfaceId, events: Sender<Event>, snapshot: SharedSnapshot) -> Self {
         Self {
             surface,
             events,
@@ -40,12 +41,12 @@ impl ActivationHandler for Activation {
 }
 
 pub(super) struct Actions {
-    surface: usize,
+    surface: SurfaceId,
     events: Sender<Event>,
 }
 
 impl Actions {
-    pub(super) fn new(surface: usize, events: Sender<Event>) -> Self {
+    pub(super) fn new(surface: SurfaceId, events: Sender<Event>) -> Self {
         Self { surface, events }
     }
 }
@@ -63,12 +64,12 @@ impl ActionHandler for Actions {
 }
 
 pub(super) struct Deactivation {
-    surface: usize,
+    surface: SurfaceId,
     events: Sender<Event>,
 }
 
 impl Deactivation {
-    pub(super) fn new(surface: usize, events: Sender<Event>) -> Self {
+    pub(super) fn new(surface: SurfaceId, events: Sender<Event>) -> Self {
         Self { surface, events }
     }
 }

@@ -2738,6 +2738,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-platform"
+version = "0.1.0"
+dependencies = [
+ "lavashell-core",
+]
+
+[[package]]
 name = "lavashell-renderer"
 version = "0.1.0"
 dependencies = [
@@ -2754,6 +2761,16 @@ dependencies = [
  "num-traits",
  "raw-window-handle",
  "skia-safe",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "lavashell-runtime"
+version = "0.1.0"
+dependencies = [
+ "lavashell-core",
+ "lavashell-platform",
+ "lavashell-test-platform",
  "thiserror 2.0.21",
 ]
 
@@ -2815,7 +2832,9 @@ dependencies = [
  "lavashell-build-script",
  "lavashell-core",
  "lavashell-effect-quality",
+ "lavashell-platform",
  "lavashell-renderer",
+ "lavashell-runtime",
  "lavashell-test-platform",
  "log",
  "num-traits",

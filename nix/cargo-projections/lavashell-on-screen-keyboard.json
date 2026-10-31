@@ -2093,6 +2093,13 @@
       },
       {
         "dependencies": [
+          "lavashell-core"
+        ],
+        "name": "lavashell-platform",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "i_overlay",
           "inventory",
@@ -2109,6 +2116,16 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-renderer",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-test-platform",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-runtime",
         "version": "0.1.0"
       },
       {
@@ -2143,7 +2160,9 @@
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-platform",
           "lavashell-renderer",
+          "lavashell-runtime",
           "lavashell-test-platform",
           "log",
           "num-traits",

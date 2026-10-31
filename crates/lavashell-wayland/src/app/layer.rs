@@ -2,8 +2,8 @@
 use super::creation::SurfaceSpec;
 use super::{
     Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
-    State, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, wl_output, wl_surface, zwlr_layer_shell_v1,
-    zwlr_layer_surface_v1,
+    State, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, physical_size, wl_output,
+    wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
 };
 use crate::Error;
 use crate::logical::{extent, whole};
@@ -14,7 +14,7 @@ use zwlr_layer_surface_v1::Anchor;
 
 #[derive(Clone, Copy)]
 pub(super) struct Content {
-    pub size: (u32, u32),
+    pub size: Size,
     pub input: bool,
 }
 
@@ -116,7 +116,7 @@ impl Runtime {
         self.content.is_some_and(|content| content.input)
     }
 
-    pub fn content_current(&self, size: (u32, u32)) -> bool {
+    pub fn content_current(&self, size: Size) -> bool {
         self.content.is_some_and(|content| content.size == size)
     }
 
@@ -190,10 +190,8 @@ impl Platform {
         view: &mut View,
     ) -> Result<LayerContext, Error> {
         let proposal = content_proposal(options.current_layout());
-        let content = view.size_that_fits(proposal, &mut self.paint);
-        Ok(LayerContext {
-            content: content.map_err(Error::MeasureView)?,
-        })
+        let content = lavashell_runtime::measure_content(view, proposal, &mut self.paint)?;
+        Ok(LayerContext { content })
     }
 
     /// Gives `wl` the layer role on `output` and commits `wl`, so that the compositor sends the first configure event.
@@ -203,7 +201,7 @@ impl Platform {
         output: Option<&wl_output::WlOutput>,
         options: &LayerSurface,
         context: LayerContext,
-        id: usize,
+        id: SurfaceId,
     ) -> Result<Role, Error> {
         let shell = self.protocols.layers.as_ref().ok_or(Error::NoLayerShell)?;
         let layout = ProtocolLayout::new(options.current_layout(), context)?;
@@ -215,21 +213,24 @@ impl Platform {
     }
 
     pub(super) fn update_layers(&mut self) -> Result<(), Error> {
-        for surface in &mut self.surfaces {
-            if !surface.lifecycle.is_open() {
+        for (&id, surface) in &mut self.surfaces {
+            let Some(viewport) = self.surface_records.open_viewport(id) else {
                 continue;
-            }
+            };
+            let Some(view) = self.surface_records.open_view_mut(id) else {
+                continue;
+            };
             let content_current = match &surface.target {
-                Some(target) if !surface.needs_visual_frame() => {
-                    let contents = target.contents(surface.physical_size()?);
+                Some(target) if !surface.needs_visual_frame(view) => {
+                    let contents = target.contents(physical_size(viewport)?);
                     contents.map_err(Error::ReadSurfaceContents)? == SurfaceContents::Current
                 }
                 _ => false,
             };
-            let Some(Role::Layer(layer)) = surface.lifecycle.role_mut() else {
+            let Some(Role::Layer(layer)) = &mut surface.role else {
                 continue;
             };
-            layer.update_transaction(&surface.wl, &mut surface.view, content_current);
+            layer.update_transaction(&surface.wl, view, content_current);
         }
         Ok(())
     }
@@ -255,7 +256,7 @@ fn create(
     options: &LayerSurface,
     layout: ProtocolLayout,
     qh: &QueueHandle<Platform>,
-    id: usize,
+    id: SurfaceId,
 ) -> ZwlrLayerSurfaceV1 {
     let layer = match options.level {
         LayerLevel::Background => zwlr_layer_shell_v1::Layer::Background,

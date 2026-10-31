@@ -2,7 +2,7 @@
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{
     DamageTracker, Density, FrameClock, HdrMetadata, OutputRequest, Platform, PresentationTracker,
-    Role, SceneTree, Surface, View, lifecycle::Lifecycle, shape, wl_surface,
+    Role, SceneTree, Surface, View, shape, wl_surface,
 };
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
@@ -23,15 +23,16 @@ pub(super) struct SurfaceSpec {
 }
 
 impl Platform {
-    /// Creates a native surface at the index `surfaces.len()` and calls `role` to create the role of its Wayland
-    /// surface.
+    /// Opens the record of a surface with its view in the runtime, creates the native surface under the id of that
+    /// record, and calls `role` to create the role of its Wayland surface.
     pub(super) fn create_surface(
         &mut self,
         spec: SurfaceSpec,
-        role: impl FnOnce(&mut Self, &wl_surface::WlSurface, usize) -> Result<Role, Error>,
+        role: impl FnOnce(&mut Self, &wl_surface::WlSurface, SurfaceId) -> Result<Role, Error>,
     ) -> Result<(), Error> {
-        let id = self.surfaces.len();
-        let surface_id = SurfaceId(u64::try_from(id).map_err(Error::NumberSurface)?);
+        let supplied_facts = self.view_configuration.apply(&spec.view, self.start);
+        let size = crate::logical::size(spec.size);
+        let id = self.surface_records.open(spec.view, size, Density::ONE)?;
         let wl = self.compositor.create_surface(&self.qh);
         let window = Arc::new(OwnedWlSurface::new(wl.clone(), self.connection.backend()));
         let protocols = &self.protocols;
@@ -43,7 +44,10 @@ impl Platform {
             .filter(|_| spec.background_blur)
             .map(|manager| manager.get_background_effect(&wl, &self.qh, ()));
         if spec.background_blur && background.is_none() {
-            log::warn!("the compositor offers no background blur for surface {id}");
+            log::warn!(
+                "the compositor offers no background blur for surface {}",
+                id.0
+            );
         }
         // The Vulkan target is created before the role. A failure of the target then leaves a Wayland surface without
         // a role, which is safe to destroy.
@@ -61,29 +65,24 @@ impl Platform {
                 .map_err(Error::SetHdrMetadata)?;
         }
         let role = role(self, &wl, id)?;
-        let supplied_facts = self.view_configuration.apply(&spec.view, self.start);
         let accessibility = crate::accessibility::Bridge::new(
             id,
             spec.accessible_name,
             self.accessibility_events.clone(),
         );
-        self.surfaces.push(Surface {
-            id: surface_id,
+        let surface = Surface {
             accessibility: Some(accessibility),
             scene_generation: 0,
             target: Some(target),
             tree: SceneTree::default(),
             damage: DamageTracker::default(),
-            lifecycle: Lifecycle::Waiting(role),
+            role: Some(role),
             wl,
             window: Some(window),
             wp_viewport,
             fractional,
-            view: spec.view,
             supplied_facts,
             pointer_owner: None,
-            size: spec.size,
-            density: Density::ONE,
             frame_request: None,
             frame_callback: None,
             feedback: Vec::new(),
@@ -94,7 +93,8 @@ impl Platform {
             blur_size: None,
             shape: spec.shape.map(shape::SurfaceShape::new),
             drag_region: spec.drag_region,
-        });
+        };
+        let _replaced_surface = self.surfaces.insert(id, surface);
         Ok(())
     }
 }

@@ -16,18 +16,18 @@ impl Platform {
         done: crate::clipboard::DragCompletion,
         result: Result<lavashell_core::transfer::DragAction, Error>,
     ) {
-        let Some(surface) = (self.surfaces.iter_mut()).find(|surface| &surface.wl == origin) else {
+        let id = self.find_surface(origin);
+        let result = match id {
+            Some(id) if self.surface_records.is_open(id) => result,
+            _ => Err(Cancellation::SurfaceClosed.into()),
+        };
+        let Some(view) = id.and_then(|id| self.surface_records.view_mut(id)) else {
             log::warn!(
                 "a drag ended after its source surface was removed, so its result is not reported"
             );
             return;
         };
-        let result = if surface.lifecycle.is_open() {
-            result
-        } else {
-            Err(Cancellation::SurfaceClosed.into())
-        };
-        done(result, &mut surface.view);
+        done(result, view);
     }
 
     pub(crate) fn dispatch_drag_event(
@@ -35,32 +35,29 @@ impl Platform {
         event: DragEvent,
         device: u32,
     ) -> Option<DropAcceptance> {
-        let surface = self.surfaces.get_mut(event.surface())?;
-        if !surface.lifecycle.is_open() {
-            return None;
-        }
+        let view = self.surface_records.open_view_mut(event.surface())?;
         if !matches!(&event, DragEvent::Enter(_) | DragEvent::Motion(_)) {
             if let Some(adapter) = &mut self.config.text_transfers
                 && adapter.owns(&event)
             {
-                return adapter.drag(&event, device, &surface.view);
+                return adapter.drag(&event, device, view);
             }
             return self
                 .config
                 .drag_observer
                 .as_mut()
-                .and_then(|callback| callback(event, &mut surface.view));
+                .and_then(|callback| callback(event, view));
         }
         let accepted = self
             .config
             .drag_observer
             .as_mut()
-            .and_then(|callback| callback(event.clone(), &mut surface.view));
+            .and_then(|callback| callback(event.clone(), view));
         if let Some(adapter) = &mut self.config.text_transfers {
             if accepted.is_some() {
                 adapter.application_accepted(&event);
             } else {
-                return adapter.drag(&event, device, &surface.view);
+                return adapter.drag(&event, device, view);
             }
         }
         accepted
@@ -78,21 +75,21 @@ impl Platform {
     }
 
     pub(crate) fn dispatch_drop_event(&mut self, mut event: DropEvent) -> bool {
-        let Some(surface) = self.surfaces.get_mut(event.surface) else {
-            return false;
-        };
-        if !surface.lifecycle.is_open() {
+        if !self.surface_records.is_open(event.surface) {
             event.data = Err(Cancellation::SurfaceClosed.into());
         }
+        let Some(view) = self.surface_records.view_mut(event.surface) else {
+            return false;
+        };
         if let Some(adapter) = &mut self.config.text_transfers
             && adapter.has_pending(event.id)
         {
-            return adapter.receive(event, &mut surface.view);
+            return adapter.receive(event, view);
         }
         self.config
             .drop_observer
             .as_mut()
-            .is_some_and(|callback| callback(event, &mut surface.view))
+            .is_some_and(|callback| callback(event, view))
     }
 
     pub(crate) fn dispatch_drag_source(
@@ -100,10 +97,7 @@ impl Platform {
         gesture: DragGesture,
         device: u32,
     ) -> Option<DragRequest> {
-        let surface = self.surfaces.get_mut(gesture.surface)?;
-        if !surface.lifecycle.is_open() {
-            return None;
-        }
+        let view = self.surface_records.open_view_mut(gesture.surface)?;
         let fallback = DragGesture {
             surface: gesture.surface,
             origin: gesture.origin,
@@ -112,48 +106,45 @@ impl Platform {
         self.config
             .drag_source_observer
             .as_mut()
-            .and_then(|callback| callback(gesture, &mut surface.view))
+            .and_then(|callback| callback(gesture, view))
             .or_else(|| {
                 self.config
                     .text_transfers
                     .as_ref()
-                    .and_then(|adapter| adapter.source(&fallback, device, &surface.view))
+                    .and_then(|adapter| adapter.source(&fallback, device, view))
             })
     }
 
-    pub(crate) fn surface_index(&self, id: SurfaceId) -> Option<usize> {
-        self.surfaces.iter().position(|surface| surface.id == id)
+    pub(crate) fn has_surface(&self, surface: SurfaceId) -> bool {
+        self.surfaces.contains_key(&surface)
     }
 
-    pub(crate) fn surface_id(&self, index: usize) -> Option<SurfaceId> {
-        self.surfaces.get(index).map(|surface| surface.id)
+    pub(crate) fn clipboard_view(&mut self, surface: SurfaceId) -> Option<&mut View> {
+        self.surface_records.open_view_mut(surface)
     }
 
-    pub(crate) fn clipboard_view(&mut self, index: usize) -> Option<&mut View> {
-        self.surfaces
-            .get_mut(index)
-            .filter(|surface| surface.lifecycle.is_open())
-            .map(|surface| &mut surface.view)
-    }
-
-    pub(crate) fn clipboard_surface_for(&self, index: usize) -> Option<wl_surface::WlSurface> {
-        self.surfaces
-            .get(index)
-            .filter(|surface| surface.lifecycle.is_open())
-            .map(|surface| surface.wl.clone())
+    pub(crate) fn clipboard_surface_for(
+        &self,
+        surface: SurfaceId,
+    ) -> Option<wl_surface::WlSurface> {
+        if !self.surface_records.is_open(surface) {
+            return None;
+        }
+        self.surfaces.get(&surface).map(|native| native.wl.clone())
     }
 
     pub(crate) fn clipboard_view_for(
         &mut self,
         surface: &wl_surface::WlSurface,
     ) -> Option<&mut View> {
-        self.surfaces
-            .iter_mut()
-            .find(|current| &current.wl == surface && current.lifecycle.is_open())
-            .map(|surface| &mut surface.view)
+        let id = self.find_surface(surface)?;
+        self.surface_records.open_view_mut(id)
     }
 
-    pub(crate) fn clipboard_input_device(&self, surface: usize) -> Result<wl_seat::WlSeat, Error> {
+    pub(crate) fn clipboard_input_device(
+        &self,
+        surface: SurfaceId,
+    ) -> Result<wl_seat::WlSeat, Error> {
         let mut devices = self
             .devices
             .iter()
@@ -165,14 +156,13 @@ impl Platform {
         Ok(first.seat.clone())
     }
 
-    pub(crate) fn transfer_surface_index(&self, surface: &wl_surface::WlSurface) -> Option<usize> {
-        self.surfaces
-            .iter()
-            .position(|current| &current.wl == surface && current.lifecycle.is_open())
+    /// The id of the open surface `surface`.
+    pub(crate) fn transfer_surface(&self, surface: &wl_surface::WlSurface) -> Option<SurfaceId> {
+        (self.find_surface(surface)).filter(|&id| self.surface_records.is_open(id))
     }
 
     pub(crate) fn transfer_surface_live(&self, surface: &wl_surface::WlSurface) -> bool {
-        self.transfer_surface_index(surface).is_some()
+        self.transfer_surface(surface).is_some()
     }
 
     pub(crate) fn transfer_pointer_device(

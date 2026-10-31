@@ -6,6 +6,7 @@ use super::{
 };
 use crate::app::Platform;
 use crate::{Cancellation, Error};
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{ReceivedData, TransferData};
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit as sctk;
@@ -29,11 +30,13 @@ impl Platform {
                     formats,
                     done,
                 } => {
-                    let read = (self.surface_index(surface))
-                        .ok_or(Error::from(Cancellation::SurfaceClosed))
-                        .and_then(|index| Ok((index, self.clipboard_input_device(index)?)));
-                    match read {
-                        Ok((index, seat)) => self.read_selection(index, &seat, &formats, done),
+                    let seat = if self.has_surface(surface) {
+                        self.clipboard_input_device(surface)
+                    } else {
+                        Err(Cancellation::SurfaceClosed.into())
+                    };
+                    match seat {
+                        Ok(seat) => self.read_selection(surface, &seat, &formats, done),
                         Err(error) => done(Err(error)),
                     }
                 }
@@ -60,7 +63,7 @@ impl Platform {
 
     pub(crate) fn read_selection(
         &mut self,
-        surface: usize,
+        surface: SurfaceId,
         seat: &WlSeat,
         formats: &[String],
         done: ReadCompletion,

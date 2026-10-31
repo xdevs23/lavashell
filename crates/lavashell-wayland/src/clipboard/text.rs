@@ -3,6 +3,7 @@ use super::pipes::Scope;
 use crate::Error;
 use crate::app::Platform;
 use crate::text_transfer::{TEXT_FORMATS, text_data};
+use lavashell_core::surface::SurfaceId;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit as sctk;
 
@@ -17,10 +18,7 @@ impl Platform {
         }
     }
 
-    pub(crate) fn cut_text(&mut self, surface: usize) {
-        let Some(id) = self.surface_id(surface) else {
-            return;
-        };
+    pub(crate) fn cut_text(&mut self, surface: SurfaceId) {
         let Some(source) = self
             .clipboard_view(surface)
             .and_then(|view| view.focus().and_then(|id| view.text_selection_source(id)))
@@ -37,7 +35,7 @@ impl Platform {
         self.clipboard
             .queue
             .set_data(data, move |result| match result {
-                Ok(()) => actions.dispatch(id, move |view| {
+                Ok(()) => actions.dispatch(surface, move |view| {
                     if !view.complete_text_move(&source) {
                         log::debug!("the cut text stays in its field, which changed meanwhile");
                     }
@@ -46,7 +44,7 @@ impl Platform {
             });
     }
 
-    pub(crate) fn paste_selection(&mut self, surface: usize, seat: &WlSeat) {
+    pub(crate) fn paste_selection(&mut self, surface: SurfaceId, seat: &WlSeat) {
         let Some(target) = self.clipboard_view(surface).and_then(|view| {
             view.editing_target()
                 .and_then(|id| view.text_paste_target(id))

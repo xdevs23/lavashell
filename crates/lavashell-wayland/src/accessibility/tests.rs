@@ -449,10 +449,14 @@ fn worker_requests_wake_idle_event_loop_and_activation_always_returns_full_tree(
     let full = mapping::tree(&tree(), &mut ids::Ids::default(), "");
     let snapshot = Arc::new(Mutex::new(Some(full.clone())));
     let worker = std::thread::spawn(move || {
-        let mut activation = handlers::Activation::new(7, sender.clone(), snapshot);
+        let mut activation = handlers::Activation::new(SurfaceId(7), sender.clone(), snapshot);
         assert_eq!(activation.request_initial_tree(), Some(full.clone()));
         assert_eq!(activation.request_initial_tree(), Some(full));
-        handlers::Actions::new(7, sender).do_action(request(Action::Click, NativeId(2), None));
+        handlers::Actions::new(SurfaceId(7), sender).do_action(request(
+            Action::Click,
+            NativeId(2),
+            None,
+        ));
     });
     let mut events = Vec::new();
     while events.len() < 3 {
@@ -461,9 +465,9 @@ fn worker_requests_wake_idle_event_loop_and_activation_always_returns_full_tree(
     if let Err(panic) = worker.join() {
         std::panic::resume_unwind(panic);
     }
-    assert!(matches!(events[0], Event::Activate(7)));
-    assert!(matches!(events[1], Event::Activate(7)));
-    assert!(matches!(events[2], Event::Action(7, _)));
+    assert!(matches!(events[0], Event::Activate(SurfaceId(7))));
+    assert!(matches!(events[1], Event::Activate(SurfaceId(7))));
+    assert!(matches!(events[2], Event::Action(SurfaceId(7), _)));
     loop_.handle().remove(requests);
     Ok(())
 }

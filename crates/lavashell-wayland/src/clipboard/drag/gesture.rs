@@ -90,7 +90,7 @@ impl Platform {
             return false;
         };
         let device = device.device.inner().id().protocol_id();
-        let gesture = (self.transfer_surface_index(&grab.surface)).map(|surface| DragGesture {
+        let gesture = (self.transfer_surface(&grab.surface)).map(|surface| DragGesture {
             surface,
             origin: grab.origin,
             position: at,
