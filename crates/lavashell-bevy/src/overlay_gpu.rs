@@ -6,8 +6,7 @@ use crate::texture_types::{vulkan_format, vulkan_usage};
 use crate::timings::{OverlayImageTrace, OverlayTiming, TimingRecords};
 use crate::vulkan_host::{image_of, shared_device, signal_on_queue};
 use crate::{
-    Error, ExtractedOverlay, OverlayCamera, OverlayFrame, extract_overlay, lock,
-    prepare_overlay_targets,
+    Error, ExtractedOverlay, OverlayCamera, OverlayFrame, extract_overlay, prepare_overlay_targets,
 };
 use ash::vk;
 use bevy::{
@@ -205,7 +204,6 @@ impl ViewNode for OverlayNode {
         let started = Instant::now();
         let (texture_before, view_before) = (texture.id(), target.main_texture_view().id());
         let GpuOverlay { gpu, painter, .. } = &mut *overlay;
-        let tree = lock(&frame.tree);
         // SAFETY: `draw` needs promises about the state of an image of the host and about the order of the queue,
         // because no type of wgpu proves them. The embedded API of lavashell-renderer has no safe draw into a borrowed
         // image. The image is the main texture of the view, which exists for the whole frame. The submission just
@@ -215,10 +213,9 @@ impl ViewNode for OverlayNode {
         // expects.
         let drawn = unsafe {
             gpu.draw(image, |canvas| {
-                painter.paint_scene(canvas, tree.at(shown.presentation), shown.density);
+                painter.paint_scene(canvas, frame.snapshot.at(shown.presentation), shown.density);
             })
         };
-        drop(tree);
         match drawn {
             Ok(()) => {
                 let image = OverlayImageTrace {

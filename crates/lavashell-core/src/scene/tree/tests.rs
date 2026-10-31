@@ -55,8 +55,12 @@ impl PaintVisitor<'_> for Recorder {
 }
 
 fn seen(tree: &SceneTree) -> Vec<Seen> {
+    seen_in(tree.at(Duration::ZERO))
+}
+
+fn seen_in(scene: Presented<'_>) -> Vec<Seen> {
     let mut recorder = Recorder(Vec::new());
-    tree.at(Duration::ZERO).paint_order().walk(&mut recorder);
+    scene.paint_order().walk(&mut recorder);
     recorder.0
 }
 
@@ -258,4 +262,54 @@ fn every_packet_gets_a_generation_larger_than_those_made_before_it() {
     let first = packet();
     let second = packet();
     assert!(second.generation() > first.generation());
+}
+
+#[test]
+fn a_snapshot_keeps_showing_its_moment_while_the_tree_changes() -> TestResult {
+    let mut tree = nested()?;
+    let snapshot = tree.snapshot();
+    let changes = [
+        Change::Move {
+            id: SceneNodeId(5),
+            parent: Some(SceneNodeId(3)),
+            index: 0,
+        },
+        Change::Remove { id: SceneNodeId(2) },
+        insert(6, Some(1), 0, leaf()),
+        Change::SetSlot {
+            id: SceneNodeId(1),
+            slot: SlotChange::Opacity(Slot::Value(0.5)),
+        },
+    ];
+    tree.show(SceneUpdate::from_iter(changes))?;
+    assert_eq!(seen(&tree), [Gr(1), L(6), Gr(3), L(5), L(4), Exit, Exit]);
+    let shown = seen_in(snapshot.at(Duration::ZERO));
+    assert_eq!(shown, [Gr(1), L(2), Gr(3), L(4), Exit, Exit, L(5)]);
+    let half_opaque = |scene: Presented<'_>| scene.commands().contains(&DrawCommand::Opacity(0.5));
+    assert!(half_opaque(tree.at(Duration::ZERO)));
+    assert!(!half_opaque(snapshot.at(Duration::ZERO)));
+    Ok(())
+}
+
+#[test]
+fn snapshots_share_the_nodes_that_the_tree_did_not_change_between_them() -> TestResult {
+    let mut tree = nested()?;
+    let before = tree.snapshot();
+    let replaced = Change::SetContent {
+        id: SceneNodeId(4),
+        content: Content::Packet(packet()),
+    };
+    tree.show(SceneUpdate::from_iter([replaced]))?;
+    let after = tree.snapshot();
+    let packets = |snapshot: &SceneSnapshot| -> Vec<*const Packet> {
+        (snapshot.at(Duration::ZERO).paint_order().leaves())
+            .map(|leaf| std::ptr::from_ref(leaf.packet))
+            .collect()
+    };
+    let shared: Vec<bool> = (packets(&before).into_iter())
+        .zip(packets(&after))
+        .map(|(old, new)| old == new)
+        .collect();
+    assert_eq!(shared, [true, false, true]);
+    Ok(())
 }
