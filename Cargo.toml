@@ -2,6 +2,7 @@
 [workspace]
 members = [
     "crates/lavashell-core",
+    "crates/lavashell-actor",
     "crates/lavashell-effect-quality",
     "crates/lavashell-components",
     "crates/lavashell-materials",
@@ -59,6 +60,7 @@ disallowed_methods = "deny"
 [workspace.dependencies]
 lavashell-materials = { path = "crates/lavashell-materials" }
 lavashell-keyboard = { path = "crates/lavashell-keyboard" }
+lavashell-actor = { path = "crates/lavashell-actor" }
 lavashell-effect-quality = { path = "crates/lavashell-effect-quality" }
 lavashell-core = { path = "crates/lavashell-core" }
 lavashell-components = { path = "crates/lavashell-components" }

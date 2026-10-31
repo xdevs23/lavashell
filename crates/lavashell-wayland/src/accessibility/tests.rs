@@ -447,7 +447,8 @@ fn worker_requests_wake_idle_event_loop_and_activation_always_returns_full_tree(
             channel::Event::Closed => assert_eq!(events.len(), 3, "the worker ended early"),
         })?;
     let full = mapping::tree(&tree(), &mut ids::Ids::default(), "");
-    let snapshot = Arc::new(Mutex::new(Some(full.clone())));
+    let snapshot = Arc::new(Latest::new());
+    snapshot.publish(full.clone());
     let worker = std::thread::spawn(move || {
         let mut activation = handlers::Activation::new(7, sender.clone(), snapshot);
         assert_eq!(activation.request_initial_tree(), Some(full.clone()));

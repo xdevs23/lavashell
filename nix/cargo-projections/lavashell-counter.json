@@ -78,6 +78,31 @@
             },
             {
               "manifest": {
+                "features": {},
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "package": {
+                  "autobenches": false,
+                  "autobins": false,
+                  "autoexamples": false,
+                  "autotests": false,
+                  "build": false,
+                  "edition": "2024",
+                  "name": "lavashell-actor",
+                  "version": "0.0.0"
+                }
+              },
+              "member": "crates/lavashell-actor",
+              "targets": [
+                {
+                  "main": false,
+                  "path": "src/lib.rs"
+                }
+              ]
+            },
+            {
+              "manifest": {
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
@@ -760,6 +785,12 @@
                     ],
                     "package": "icu_locale_core",
                     "version": "=2.3.0"
+                  },
+                  "lavashell-actor": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-actor",
+                    "path": "../lavashell-actor"
                   },
                   "lavashell-core": {
                     "default-features": false,
@@ -2303,6 +2334,10 @@
                 "version": "0.0.0"
               },
               {
+                "name": "lavashell-actor",
+                "version": "0.0.0"
+              },
+              {
                 "dependencies": [
                   "lavashell-core",
                   "thiserror"
@@ -2424,6 +2459,7 @@
                   "env_logger",
                   "futures-lite",
                   "icu_locale_core",
+                  "lavashell-actor",
                   "lavashell-build-script",
                   "lavashell-core",
                   "lavashell-effect-quality",
@@ -3687,6 +3723,7 @@
             "workspace": {
               "members": [
                 "crates/lavashell",
+                "crates/lavashell-actor",
                 "crates/lavashell-build-script",
                 "crates/lavashell-components",
                 "crates/lavashell-core",
@@ -3714,7 +3751,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "8f952cbb2d4a338f407619fd019e05ec01dd976633f8eaea6ff09845d16fab38"
+        "seedHash": "ea97a768be84f9616b131fd39beaee219bddb95a83f119f7c732bf6d9e90c865"
       }
     }
   },
@@ -4745,6 +4782,10 @@
         "version": "0.1.0"
       },
       {
+        "name": "lavashell-actor",
+        "version": "0.1.0"
+      },
+      {
         "dependencies": [
           "jni",
           "lavashell-core",
@@ -4896,6 +4937,7 @@
           "env_logger",
           "futures-lite",
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-effect-quality",

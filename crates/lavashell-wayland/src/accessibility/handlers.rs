@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Event;
 use accesskit::{ActionHandler, ActivationHandler, DeactivationHandler, TreeUpdate};
+use lavashell_actor::Latest;
 use sctk::reexports::calloop::channel::Sender;
 use smithay_client_toolkit as sctk;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::Arc;
 
-pub(super) type SharedSnapshot = Arc<Mutex<Option<TreeUpdate>>>;
-
-/// Ignores lock poisoning, because the snapshot is replaced as a whole and is valid after a panic.
-pub(super) fn lock_snapshot(snapshot: &SharedSnapshot) -> MutexGuard<'_, Option<TreeUpdate>> {
-    snapshot.lock().unwrap_or_else(PoisonError::into_inner)
-}
+pub(super) type SharedSnapshot = Arc<Latest<TreeUpdate>>;
 
 pub(super) struct Activation {
     surface: usize,
@@ -30,7 +26,7 @@ impl Activation {
 
 impl ActivationHandler for Activation {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
-        let snapshot = lock_snapshot(&self.snapshot).clone();
+        let snapshot = self.snapshot.read().map(Arc::unwrap_or_clone);
         // A channel event wakes calloop even when no visual frame or scene frame is due.
         if self.events.send(Event::Activate(self.surface)).is_err() {
             log::debug!("an accessibility request arrived after the app closed");
