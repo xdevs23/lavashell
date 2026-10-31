@@ -6,6 +6,9 @@ mod commands;
 mod damage;
 #[cfg(test)]
 mod damage_tests;
+mod effect;
+#[cfg(test)]
+mod effect_tests;
 #[cfg(all(test, feature = "serde"))]
 mod encoding_tests;
 mod order;
@@ -24,6 +27,7 @@ mod trie_tests;
 mod update;
 
 pub use damage::DamageTracker;
+pub use effect::{ChangeEffect, ChangeField, ChangeKey};
 pub use order::{PaintOrder, PaintVisitor, PlacedLeaf, Presented};
 pub(crate) use presence::PresenceVectors;
 pub(crate) use presence::Stretch;

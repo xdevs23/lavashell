@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::NativeSpec;
 use super::{
-    App, BTreeMap, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts,
-    GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState, Painter,
-    PainterSetup, Platform, QueueHandle, RegistryState, Request, Role, SeatDevices, SeatState, Shm,
-    SurfaceProtocols, SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window,
+    App, BTreeMap, Choreographers, ClipboardState, CompositorState, Connection, Duration,
+    EventQueue, Fonts, GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState,
+    Painter, PainterSetup, Platform, QueueHandle, RegistryState, Request, Role, SeatDevices,
+    SeatState, Shm, SurfaceProtocols, SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window,
     WindowDecorations, XdgShell, accessibility, focus_grab, output_layers, preferences,
     presentation, scene, session_lock, wl_surface,
 };
@@ -112,6 +112,7 @@ impl Platform {
             watches: BTreeMap::new(),
             surface_records,
             surface_requests: Vec::new(),
+            choreographers: Choreographers::default(),
             surfaces: BTreeMap::new(),
             gpu,
             paint,
