@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    FrameOutcome, SurfaceAlpha, SurfaceId, SurfaceTarget, SurfaceTiming, VulkanRenderer,
-    hardware_buffer, presentation, wsi,
+    FrameOutcome, PresentationBackend, SurfaceAlpha, SurfaceId, SurfaceTarget, SurfaceTiming,
+    VulkanRenderer, hardware_buffer, wsi,
 };
 use crate::Error;
 use ash::khr::android_surface;
@@ -14,18 +14,14 @@ use std::sync::Arc;
 
 struct Android;
 
-impl presentation::Presentation for Android {
+impl PresentationBackend for Android {
     fn surface_extension(&self) -> Option<&'static CStr> {
         Some(android_surface::NAME)
     }
 
-    /// The swapchain extensions, plus the extensions needed to sample hardware buffers from other processes.
-    fn device_extensions(&self) -> Vec<&'static CStr> {
-        [
-            presentation::SWAPCHAIN_EXTENSIONS.as_slice(),
-            hardware_buffer::EXTENSIONS.as_slice(),
-        ]
-        .concat()
+    /// The extensions needed to sample hardware buffers from other processes.
+    fn additional_device_extensions(&self) -> Vec<&'static CStr> {
+        hardware_buffer::EXTENSIONS.to_vec()
     }
 
     /// Sampler YCbCr conversion, through which hardware buffers in YCbCr formats are sampled.
@@ -43,6 +39,12 @@ impl presentation::Presentation for Android {
         // The Vulkan specification requires every queue family on AOSP to present to any native window
         // (https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#platformQuerySupport_android).
         Ok(lavashell_vulkan::Presentation::Supported)
+    }
+
+    /// The identity transform, because the AOSP compositor rotates the buffer for the display. Canvas and touch
+    /// coordinates are therefore in the space of the host Surface.
+    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
+        Some(vk::SurfaceTransformFlagsKHR::IDENTITY)
     }
 }
 
@@ -102,7 +104,7 @@ impl VulkanRenderer {
     /// Fails when no Vulkan device meets the requirements of the renderer, or when Vulkan or Skia cannot create the
     /// renderer.
     pub fn for_android() -> Result<Self, Error> {
-        Self::create(&Android)
+        Self::new(&Android)
     }
 
     /// A target that presents to `window`, an `ANativeWindow` such as the Surface of a `SurfaceView` or the input
@@ -119,14 +121,6 @@ impl VulkanRenderer {
         alpha: SurfaceAlpha,
         timing: SurfaceTiming,
     ) -> Result<SurfaceTarget, Error> {
-        // The swapchain uses the identity transform, and the AOSP compositor rotates the buffer for the display.
-        // Canvas and touch coordinates are therefore in the space of the host Surface.
-        SurfaceTarget::new(
-            self.device.clone(),
-            Arc::new(AndroidWindow(window)),
-            alpha,
-            Some(vk::SurfaceTransformFlagsKHR::IDENTITY),
-            timing,
-        )
+        self.surface_target(Arc::new(AndroidWindow(window)), alpha, timing)
     }
 }

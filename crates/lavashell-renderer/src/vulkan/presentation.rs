@@ -1,27 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use ash::vk;
 use lavashell_vulkan::{Features, PhysicalDevice, Surface};
 use std::ffi::CStr;
 
 /// The device extensions that a swapchain uses to present frames, to send HDR metadata with them and to time them.
-pub(super) const SWAPCHAIN_EXTENSIONS: [&CStr; 3] = [
+const SWAPCHAIN_EXTENSIONS: [&CStr; 3] = [
     ash::khr::swapchain::NAME,
     ash::ext::hdr_metadata::NAME,
     ash::google::display_timing::NAME,
 ];
 
-/// The platform on which the renderer presents its frames, with a window system or offscreen only.
-pub(super) trait Presentation {
-    /// The instance extension that creates the surfaces of this platform, or `None` for a renderer that draws
-    /// offscreen only.
+/// The presentation backend on which the renderer presents frames, with a window system or offscreen only.
+pub trait PresentationBackend {
+    /// The instance extension that creates surfaces for this backend, or `None` for a renderer that draws offscreen
+    /// only.
     fn surface_extension(&self) -> Option<&'static CStr>;
 
-    /// The device extensions that the renderer enables on this platform where the device offers them.
-    fn device_extensions(&self) -> Vec<&'static CStr>;
+    /// The device extensions that the renderer enables for this backend, beyond the swapchain extensions, where the
+    /// device offers them.
+    fn additional_device_extensions(&self) -> Vec<&'static CStr> {
+        Vec::new()
+    }
 
-    /// The device features that the renderer enables on this platform where the device offers them.
+    /// The device features that the renderer enables for this backend where the device offers them.
     fn features(&self) -> Features;
 
-    /// Whether the queue family `family` of `physical` can present to the surfaces of this platform.
+    /// Whether the queue family `family` of `physical` can present to surfaces created for this backend.
     ///
     /// # Errors
     /// Fails when the query to the driver fails.
@@ -30,17 +34,17 @@ pub(super) trait Presentation {
         physical: &PhysicalDevice<'_>,
         family: u32,
     ) -> Result<lavashell_vulkan::Presentation, lavashell_vulkan::Error>;
+
+    /// The transform used by every swapchain on this backend. Returns `None` when each swapchain uses the transform
+    /// returned by its surface.
+    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR>;
 }
 
 pub(super) struct Headless;
 
-impl Presentation for Headless {
+impl PresentationBackend for Headless {
     fn surface_extension(&self) -> Option<&'static CStr> {
         None
-    }
-
-    fn device_extensions(&self) -> Vec<&'static CStr> {
-        Vec::new()
     }
 
     fn features(&self) -> Features {
@@ -54,6 +58,21 @@ impl Presentation for Headless {
     ) -> Result<lavashell_vulkan::Presentation, lavashell_vulkan::Error> {
         Ok(lavashell_vulkan::Presentation::Supported)
     }
+
+    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
+        None
+    }
+}
+
+/// The device extensions that the renderer enables for `backend` where the device offers them: the swapchain
+/// extensions for a backend with surfaces, plus the additional extensions of `backend`.
+pub(super) fn device_extensions(backend: &impl PresentationBackend) -> Vec<&'static CStr> {
+    let swapchain = if backend.surface_extension().is_some() {
+        SWAPCHAIN_EXTENSIONS.as_slice()
+    } else {
+        &[]
+    };
+    [swapchain, backend.additional_device_extensions().as_slice()].concat()
 }
 
 /// The instance extensions needed by surfaces that `surface_extension` creates, plus the extension for extended
@@ -82,20 +101,17 @@ mod tests {
     }
 
     #[test]
-    fn presentation_only_enables_its_own_window_system() {
-        for platform in [
-            ash::khr::wayland_surface::NAME,
-            ash::khr::android_surface::NAME,
-        ] {
+    fn presentation_only_enables_its_own_surface_extension() {
+        for surface_extension in [ash::ext::headless_surface::NAME, ash::khr::display::NAME] {
             assert_eq!(
-                instance_extensions(Some(platform), false),
-                [ash::khr::surface::NAME, platform],
+                instance_extensions(Some(surface_extension), false),
+                [ash::khr::surface::NAME, surface_extension],
             );
             assert_eq!(
-                instance_extensions(Some(platform), true),
+                instance_extensions(Some(surface_extension), true),
                 [
                     ash::khr::surface::NAME,
-                    platform,
+                    surface_extension,
                     ash::ext::swapchain_colorspace::NAME
                 ],
             );

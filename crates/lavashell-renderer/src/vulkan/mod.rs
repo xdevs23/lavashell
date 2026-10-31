@@ -18,8 +18,6 @@ mod scene_mailbox;
 mod skia_handoff;
 mod surface_timing;
 mod timestamps;
-#[cfg(target_os = "linux")]
-mod wayland;
 mod wsi;
 
 pub use completion::Completion;
@@ -32,14 +30,13 @@ pub use hardware_buffer::{
 };
 pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status};
 pub use offscreen::OffscreenSurface;
+pub use presentation::PresentationBackend;
 pub use scene::{PendingScene, SceneCompletion, SceneImage, SceneSource};
 pub use scene_mailbox::{CompletedScene, SceneMailbox};
 pub(crate) use skia_handoff::SkiaFormat;
 pub use surface_timing::{PresentationPolicy, SurfaceTiming};
 pub use timestamps::GpuProfiler;
 pub(crate) use timestamps::{Collected, GpuSample, SampleKind, SampleTag};
-#[cfg(target_os = "linux")]
-pub use wayland::WaylandTarget;
 pub use wsi::{FrameOutcome, SurfaceAlpha, SurfaceContents, SurfaceTarget};
 
 #[cfg(test)]
@@ -49,7 +46,9 @@ use crate::Error;
 use ash::vk;
 use completion::drop_completed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_vulkan::{Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest};
+use lavashell_vulkan::{
+    Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest, Window,
+};
 use skia_handoff::{Glyphs, SkiaContext};
 use skia_safe::gpu::{self, SurfaceOrigin, SyncCpu};
 use skia_safe::{Canvas, ColorType, Surface};
@@ -65,6 +64,7 @@ pub struct VulkanRenderer {
     frame_profiler: Option<Rc<std::cell::RefCell<GpuProfiler>>>,
     failures: crate::failure::Failures,
     imported: Rc<std::cell::RefCell<external::Imports>>,
+    transform: Option<vk::SurfaceTransformFlagsKHR>,
 }
 
 impl VulkanRenderer {
@@ -74,19 +74,24 @@ impl VulkanRenderer {
     /// Fails when no Vulkan device meets the requirements of the renderer, or when Vulkan or Skia cannot create the
     /// renderer.
     pub fn headless() -> Result<Self, Error> {
-        Self::create(&presentation::Headless)
+        Self::new(&presentation::Headless)
     }
 
-    fn create(platform: &impl presentation::Presentation) -> Result<Self, Error> {
+    /// A renderer whose device presents to surfaces created for `backend`.
+    ///
+    /// # Errors
+    /// Fails when no Vulkan device meets the requirements of the renderer and `backend`, or when Vulkan or Skia cannot
+    /// create the renderer.
+    pub fn new(backend: &impl PresentationBackend) -> Result<Self, Error> {
         let available = Instance::available_extensions().map_err(Error::InstanceExtensions)?;
         let extended = available.contains(ash::ext::swapchain_colorspace::NAME);
-        let extensions = presentation::instance_extensions(platform.surface_extension(), extended);
+        let extensions = presentation::instance_extensions(backend.surface_extension(), extended);
         let request = InstanceRequest {
             api_version: vk::API_VERSION_1_1,
             extensions: &extensions,
         };
         let instance = Instance::create(&request).map_err(Error::Instance)?;
-        let device = create_device(&instance, platform)?;
+        let device = create_device(&instance, backend)?;
         let physical = device.physical_device();
         let device_name = physical.name().map_err(Error::PhysicalDevice)?;
         let cache_bytes = cache_budget::limit(&physical, 0)?;
@@ -104,7 +109,24 @@ impl VulkanRenderer {
             frame_profiler: None,
             failures: crate::failure::Failures::default(),
             imported: Rc::new(std::cell::RefCell::new(external::Imports::default())),
+            transform: backend.transform(),
         })
+    }
+
+    /// A target that presents to `window`, a window on the presentation backend for which this renderer was created.
+    /// The target has a reference to `window`, so the window is not dropped before the target. `timing` records the
+    /// frame timing for `window`, see `SurfaceTiming`.
+    ///
+    /// # Errors
+    /// Fails when the renderer was created for another presentation backend than `window`, or when the device cannot
+    /// present to the surface created for `window`.
+    pub fn surface_target(
+        &self,
+        window: Arc<dyn Window>,
+        alpha: SurfaceAlpha,
+        timing: SurfaceTiming,
+    ) -> Result<SurfaceTarget, Error> {
+        SurfaceTarget::new(self.device.clone(), window, alpha, self.transform, timing)
     }
 
     /// Creates a painter for the device of this renderer. The painter uses the uniform buffer range of the device,
@@ -264,14 +286,14 @@ impl Drop for VulkanRenderer {
 
 fn create_device(
     instance: &Arc<Instance>,
-    platform: &impl presentation::Presentation,
+    backend: &impl PresentationBackend,
 ) -> Result<Arc<Device>, Error> {
-    let picked = driver::pick_device(instance, platform)?;
+    let picked = driver::pick_device(instance, backend)?;
     let extensions = std::iter::once(ash::khr::external_memory_fd::NAME)
-        .chain(platform.device_extensions())
+        .chain(presentation::device_extensions(backend))
         .filter(|name| picked.extensions.contains(name))
         .collect::<Vec<_>>();
-    let wanted = platform.features();
+    let wanted = backend.features();
     let offered = (picked.physical.features()).map_err(Error::PhysicalDevice)?;
     let request = DeviceRequest {
         queue_family: picked.family,

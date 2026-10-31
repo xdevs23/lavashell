@@ -13,5 +13,4 @@ workspace = true
 ash = { workspace = true, features = ["debug"] }
 log.workspace = true
 num-traits.workspace = true
-raw-window-handle = { workspace = true, features = ["std"] }
 thiserror.workspace = true

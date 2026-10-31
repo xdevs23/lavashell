@@ -2243,7 +2243,6 @@
           "lru",
           "ndk",
           "num-traits",
-          "raw-window-handle",
           "skia-safe",
           "thiserror 2.0.21"
         ],
@@ -2264,7 +2263,6 @@
           "ash",
           "log",
           "num-traits",
-          "raw-window-handle",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-vulkan",
@@ -2275,6 +2273,7 @@
           "accesskit",
           "accesskit_consumer",
           "accesskit_unix",
+          "ash",
           "calloop",
           "env_logger",
           "futures-lite",
@@ -2284,10 +2283,10 @@
           "lavashell-effect-quality",
           "lavashell-renderer",
           "lavashell-test-platform",
+          "lavashell-vulkan",
           "log",
           "num-traits",
           "quote",
-          "raw-window-handle",
           "rustix",
           "serde",
           "smithay-client-toolkit",
@@ -2388,7 +2387,6 @@
           "log",
           "ndk-sys",
           "num_enum",
-          "raw-window-handle",
           "thiserror 1.0.69"
         ],
         "name": "ndk",
@@ -2677,12 +2675,6 @@
         "name": "rand_core",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "version": "0.10.1"
-      },
-      {
-        "checksum": "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539",
-        "name": "raw-window-handle",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "version": "0.6.2"
       },
       {
         "checksum": "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d",
@@ -3301,7 +3293,6 @@
         "dependencies": [
           "cc",
           "downcast-rs",
-          "raw-window-handle",
           "rustix",
           "scoped-tls",
           "smallvec",

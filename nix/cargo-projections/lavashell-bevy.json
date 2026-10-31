@@ -9254,7 +9254,6 @@
           "lru",
           "ndk",
           "num-traits",
-          "raw-window-handle",
           "skia-safe",
           "thiserror 2.0.21"
         ],
@@ -9275,7 +9274,6 @@
           "ash",
           "log",
           "num-traits",
-          "raw-window-handle",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-vulkan",
@@ -9452,7 +9450,6 @@
           "log",
           "ndk-sys",
           "num_enum",
-          "raw-window-handle",
           "thiserror 1.0.69"
         ],
         "name": "ndk",

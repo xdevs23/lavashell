@@ -161,12 +161,6 @@ pub enum Error {
     },
     #[error("a shader float does not hold the count {0} exactly")]
     InexactShaderCount(usize),
-    #[cfg(target_os = "linux")]
-    #[error("the display offers no handle")]
-    DisplayHandle(#[source] raw_window_handle::HandleError),
-    #[cfg(target_os = "linux")]
-    #[error("the display does not belong to Wayland")]
-    DisplayNotWayland,
     #[error("cannot list the Vulkan instance extensions")]
     InstanceExtensions(#[source] lavashell_vulkan::Error),
     #[error("cannot create the Vulkan instance")]
