@@ -1,89 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    Connection, Dispatch, Duration, FrameMetrics, FrameTime, GlobalList, Instant, Platform,
-    PresentedFrame, QueueHandle, sctk,
+    Connection, Dispatch, Duration, FrameReport, FrameStage, FrameTime, GlobalList, Instant,
+    Platform, PresentedFrame, QueueHandle, sctk,
 };
-use lavashell_core::view::ViewStats;
-use lavashell_renderer::{GpuFrameTime, RenderStats};
+use lavashell_core::frame::{PresentationFlag, PresentationFlags};
+use lavashell_core::surface::SurfaceId;
 use sctk::reexports::protocols::wp::presentation_time::client::{
     wp_presentation::{self, WpPresentation},
     wp_presentation_feedback::{self, WpPresentationFeedback},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum FrameStage {
-    Submitted,
-    Presented,
-    Discarded,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct FrameReport {
-    pub surface: usize,
-    pub timing: FrameTime,
-    pub stage: FrameStage,
-    /// The time of the presentation, measured from the start of the app. For a discarded frame, or when the clock
-    /// of the compositor cannot be converted to the clock of the app, the time at which the feedback arrived.
-    pub observed: Duration,
-    /// `None` when only the arrival time of the feedback is known. A report without this time cannot be used to
-    /// measure display timing or the error of an animation.
-    pub presentation_time: Option<Duration>,
-    pub metrics: Option<FrameMetrics>,
-    pub flags: Option<PresentationFlags>,
-    pub submission: Option<Submission>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Submission {
-    /// The wall-clock time spent on composition, painting and submission, including time in which the thread was
-    /// preempted.
-    pub render_cost: Duration,
-    /// The CPU time of the calling thread within the same span, without the time of other threads or of the GPU.
-    pub cpu_time: Duration,
-    pub view: ViewStats,
-    pub render: RenderStats,
-    /// The generation of the scene image drawn beneath the view.
-    pub scene: Option<u64>,
-    /// When GPU timing is enabled on the app, the GPU time of the most recent earlier frame of the surface that was
-    /// measured since the last report.
-    pub gpu: Option<GpuFrameTime>,
-}
-
-/// How the compositor presented a frame.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PresentationFlags(wp_presentation_feedback::Kind);
-
-impl PresentationFlags {
-    /// The presentation was synchronized to the vertical retrace of the display.
-    #[must_use]
-    pub fn vsync(self) -> bool {
-        self.0.contains(wp_presentation_feedback::Kind::Vsync)
-    }
-
-    /// The timestamp comes from the clock of the display hardware.
-    #[must_use]
-    pub fn hardware_clock(self) -> bool {
-        self.0.contains(wp_presentation_feedback::Kind::HwClock)
-    }
-
-    /// The display hardware signalled that the presentation completed.
-    #[must_use]
-    pub fn hardware_completion(self) -> bool {
-        self.0
-            .contains(wp_presentation_feedback::Kind::HwCompletion)
-    }
-
-    /// The display scanned the buffer out without a copy.
-    #[must_use]
-    pub fn zero_copy(self) -> bool {
-        self.0.contains(wp_presentation_feedback::Kind::ZeroCopy)
-    }
-}
-
-impl From<wp_presentation_feedback::Kind> for PresentationFlags {
-    fn from(kind: wp_presentation_feedback::Kind) -> Self {
-        Self(kind)
-    }
+fn presentation_flags(kind: wp_presentation_feedback::Kind) -> PresentationFlags {
+    use wp_presentation_feedback::Kind;
+    [
+        (Kind::Vsync, PresentationFlag::Vsync),
+        (Kind::HwClock, PresentationFlag::HardwareClock),
+        (Kind::HwCompletion, PresentationFlag::HardwareCompletion),
+        (Kind::ZeroCopy, PresentationFlag::ZeroCopy),
+    ]
+    .into_iter()
+    .filter(|(wire, _)| kind.contains(*wire))
+    .map(|(_, flag)| flag)
+    .collect()
 }
 
 pub(super) struct Presentation {
@@ -123,7 +61,7 @@ fn midpoint(earlier: Duration, later: Duration) -> Duration {
 }
 
 pub(super) struct Feedback {
-    pub surface: usize,
+    pub surface: SurfaceId,
     pub timing: FrameTime,
 }
 
@@ -163,9 +101,13 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if !matches!(event, wp_presentation_feedback::Event::SyncOutput { .. })
-            && let Some(surface) = state.surfaces.get_mut(data.surface)
-        {
+        if matches!(event, wp_presentation_feedback::Event::SyncOutput { .. }) {
+            return;
+        }
+        let mut feedback_surface = state
+            .surface_index(data.surface)
+            .and_then(|index| state.surfaces.get_mut(index));
+        if let Some(surface) = feedback_surface.as_deref_mut() {
             surface.feedback.retain(|feedback| feedback != proxy);
         }
         match event {
@@ -185,7 +127,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
                     .and_then(|presentation| presentation.observed(absolute, state.start));
                 let interval = (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh)));
                 let mut metrics = None;
-                if let Some(surface) = state.surfaces.get_mut(data.surface) {
+                if let Some(surface) = feedback_surface {
                     if let Some(time) = observed {
                         surface
                             .clock
@@ -211,9 +153,9 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
                         observed: observed.unwrap_or_else(|| state.start.elapsed()),
                         presentation_time: observed,
                         metrics,
-                        flags: Some(
-                            wp_presentation_feedback::Kind::from_bits_truncate(flags.into()).into(),
-                        ),
+                        flags: Some(presentation_flags(
+                            wp_presentation_feedback::Kind::from_bits_truncate(flags.into()),
+                        )),
                         submission: None,
                     });
                 }
@@ -234,5 +176,31 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wp_presentation_feedback::Kind;
+
+    fn flags_of(kind: Kind) -> [bool; 4] {
+        let flags = presentation_flags(kind);
+        [
+            flags.contains(PresentationFlag::Vsync),
+            flags.contains(PresentationFlag::HardwareClock),
+            flags.contains(PresentationFlag::HardwareCompletion),
+            flags.contains(PresentationFlag::ZeroCopy),
+        ]
+    }
+
+    #[test]
+    fn each_feedback_kind_sets_only_its_own_flag() {
+        assert_eq!(flags_of(Kind::Vsync), [true, false, false, false]);
+        assert_eq!(flags_of(Kind::HwClock), [false, true, false, false]);
+        assert_eq!(flags_of(Kind::HwCompletion), [false, false, true, false]);
+        assert_eq!(flags_of(Kind::ZeroCopy), [false, false, false, true]);
+        assert_eq!(flags_of(Kind::empty()), [false; 4]);
+        assert_eq!(flags_of(Kind::all()), [true; 4]);
     }
 }

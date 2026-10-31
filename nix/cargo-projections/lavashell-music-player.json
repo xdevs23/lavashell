@@ -2180,6 +2180,7 @@
           "clap",
           "csv",
           "lavashell",
+          "lavashell-core",
           "lavashell-lucide",
           "serde",
           "thiserror 2.0.21"
@@ -2289,7 +2290,6 @@
           "quote",
           "raw-window-handle",
           "rustix",
-          "serde",
           "smithay-client-toolkit",
           "sys-locale",
           "thiserror 2.0.21",

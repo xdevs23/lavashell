@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use lavashell::{
-    prelude::*,
-    wayland::{self, PresentationFlags},
-};
+use lavashell::{core::frame::PresentationFlag, prelude::*, wayland};
 use serde::Serialize;
 use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 
@@ -76,7 +73,7 @@ fn write_frame_reports(path: &OsStr, reports: &[FrameReport]) -> Result<(), Erro
 
 #[derive(Serialize)]
 struct FrameRow {
-    surface: usize,
+    surface: u64,
     sequence: u64,
     stage: FrameStage,
     now_ns: u128,
@@ -112,15 +109,14 @@ struct FrameRow {
 
 impl From<&FrameReport> for FrameRow {
     fn from(report: &FrameReport) -> Self {
-        let flag =
-            |pick: fn(PresentationFlags) -> bool| report.flags.map(|flags| u8::from(pick(flags)));
+        let has = |flag| report.flags.map(|flags| u8::from(flags.contains(flag)));
         let metrics = report.metrics;
         let submission = report.submission;
         let view = submission.map(|s| s.view);
         let render = submission.map(|s| s.render);
         let gpu = submission.and_then(|s| s.gpu);
         Self {
-            surface: report.surface,
+            surface: report.surface.0,
             sequence: report.timing.sequence,
             stage: report.stage,
             now_ns: report.timing.now.as_nanos(),
@@ -128,10 +124,10 @@ impl From<&FrameReport> for FrameRow {
             observed_ns: report.observed.as_nanos(),
             refresh_ns: report.timing.refresh.map(|r| r.as_nanos()),
             mapped_timestamp: u8::from(report.presentation_time.is_some()),
-            vsync: flag(PresentationFlags::vsync),
-            hardware_clock: flag(PresentationFlags::hardware_clock),
-            hardware_completion: flag(PresentationFlags::hardware_completion),
-            zero_copy: flag(PresentationFlags::zero_copy),
+            vsync: has(PresentationFlag::Vsync),
+            hardware_clock: has(PresentationFlag::HardwareClock),
+            hardware_completion: has(PresentationFlag::HardwareCompletion),
+            zero_copy: has(PresentationFlag::ZeroCopy),
             animation_delta_ns: metrics.map(|m| m.animation_step.as_nanos()),
             display_delta_ns: metrics.map(|m| m.display_step.as_nanos()),
             animation_error_ns: metrics.map(|m| m.animation_error_ns),

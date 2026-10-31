@@ -4,10 +4,10 @@ use super::shape::{ShapeUpdate, SurfaceShape};
 use super::view_actions::PendingAction;
 use super::{
     Density, Dp, Duration, FrameCallbackData, FrameOutcome, FrameReport, FrameStage, FrameTime,
-    Instant, Platform, Rect, Role, SceneTree, Submission, View, Viewport, layer, presentation,
-    sctk,
+    Instant, Platform, Rect, Role, SceneTree, View, Viewport, layer, presentation, sctk,
 };
 use crate::Error;
+use lavashell_core::frame::Submission;
 use lavashell_renderer::effect_registry::QualityChange;
 use lavashell_renderer::vulkan::{CompletedScene, SceneImage};
 use lavashell_renderer::{SurfaceContents, SurfaceTarget};
@@ -291,7 +291,7 @@ impl Platform {
                     }
                     if let Some(presentation) = &self.presentation {
                         let feedback = presentation::Feedback {
-                            surface: index,
+                            surface: surface.id,
                             timing,
                         };
                         let proxy = presentation.proxy.feedback(&surface.wl, &self.qh, feedback);
@@ -366,7 +366,7 @@ impl Platform {
             && let Some(now) = thread_cpu_time()
         {
             observer(FrameReport {
-                surface: index,
+                surface: surface.id,
                 timing: start.timing,
                 stage: FrameStage::Submitted,
                 observed: self.start.elapsed(),

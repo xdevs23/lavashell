@@ -6,6 +6,7 @@ use crate::resources::{HeldImages, ImageCache};
 use crate::scalar::scalars;
 use crate::vulkan::SceneImage;
 use crate::{Error, Painter, StreamFrames};
+use lavashell_core::frame::RenderStats;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{NodeKey, Packet, PacketGeneration, Presented};
 use lavashell_core::surface::SurfaceId;
@@ -31,16 +32,6 @@ pub struct SurfaceFrame<'a> {
     pub scene: Option<&'a SceneImage>,
     /// An outline in physical pixels that clips the drawing, applied after the damaged pixels are cleared.
     pub shape: Option<&'a skia_safe::Path>,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RenderStats {
-    pub cache_hits: u64,
-    pub cache_misses: u64,
-    pub uncached_leaves: u64,
-    pub skipped_leaves: u64,
-    pub cache_bytes: usize,
-    pub damaged_pixels: u64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

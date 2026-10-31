@@ -19,7 +19,6 @@ num-traits.workspace = true
 env_logger.workspace = true
 thiserror.workspace = true
 raw-window-handle.workspace = true
-serde.workspace = true
 wayland-backend.workspace = true
 wayland-scanner.workspace = true
 rustix = { workspace = true, features = ["fs", "pipe", "time"] }

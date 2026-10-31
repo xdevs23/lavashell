@@ -24,7 +24,7 @@ pub mod prelude {
     pub use lavashell_renderer::{Fonts, Painter, VulkanRenderer};
     #[cfg(target_os = "linux")]
     pub use lavashell_wayland::{
-        App, Clipboard, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, FrameReport,
-        FrameStage, LayerLevel, LayerSurface, TransferId, ViewActions, Window, WindowShape,
+        App, Clipboard, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, LayerLevel,
+        LayerSurface, TransferId, ViewActions, Window, WindowShape,
     };
 }
