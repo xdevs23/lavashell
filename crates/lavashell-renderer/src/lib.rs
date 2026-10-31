@@ -31,9 +31,8 @@ pub use error::{ContextState, Error, SkslDiagnostic};
 pub use failure::DrawFailure;
 pub use field::{FieldRoom, UniformRange};
 pub use fonts::Fonts;
-pub use gpu_timing::GpuFrameTime;
 pub use image::{decode_image, encoded_image, raster_png};
-pub use packet_cache::{PacketCaching, RenderStats, SurfaceFrame};
+pub use packet_cache::{PacketCaching, SurfaceFrame};
 pub use paint::{
     BufferAlpha, BufferFlag, HardwareBufferDescription, Painter, StreamFrames, StreamPixels,
     StreamRejection, UnsampledFormat, skpoint, skrect,

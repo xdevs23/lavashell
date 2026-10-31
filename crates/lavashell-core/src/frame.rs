@@ -7,8 +7,13 @@ use crate::numbers::duration_from_nanos;
 use std::time::Duration;
 
 mod metrics;
+mod report;
 
 pub use metrics::{FrameMetrics, PresentationTracker, PresentedFrame};
+pub use report::{
+    FrameReport, FrameStage, GpuFrameTime, PresentationFlag, PresentationFlags, RenderStats,
+    Submission,
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameTime {
