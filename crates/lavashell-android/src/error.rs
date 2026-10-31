@@ -3,7 +3,7 @@ use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
 use lavashell_core::error::message_chain;
-use lavashell_renderer::{Error as RendererError, FrameOutcome};
+use lavashell_renderer::{Error as RendererError, FenceCopyError, FrameOutcome, MultipleFailures};
 
 /// A failure in the AOSP host integration. Each variant is named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
@@ -61,8 +61,6 @@ pub enum Error {
     PollAcquireFence(#[source] rustix::io::Errno),
     #[error("the Vulkan device cannot import the frames of streams")]
     Importer(#[source] RendererError),
-    #[error("a frame of the stream is still latched after the frame latched before was returned")]
-    StillLatched,
     #[error("cannot read how the Vulkan device samples the buffer of a frame of a stream")]
     BufferProperties(#[source] PropertiesError),
     #[cfg(target_os = "android")]
@@ -74,8 +72,8 @@ pub enum Error {
     WrapImport(#[source] RendererError),
     #[error("cannot hand the frames of streams back to their producers")]
     HandBack(#[source] ReleaseError),
-    #[error("cannot copy the release fence of a frame of a stream")]
-    CopyReleaseFence(#[source] std::io::Error),
+    #[error(transparent)]
+    CopyReleaseFence(#[from] FenceCopyError),
     #[error("cannot submit the completion of the GPU work that reads the frames of streams")]
     SubmitCompletion(#[source] RendererError),
     #[error("cannot read the completion of the GPU work that reads the frames of streams")]
@@ -112,10 +110,22 @@ impl Error {
     /// Combines this failure and `next`, a later failure in the same call, into `Several` in that order.
     #[must_use]
     pub(crate) fn then(self, next: Self) -> Self {
-        let mut failures = Failures::default();
-        failures.push(self);
-        failures.push(next);
-        Self::Several(failures.0)
+        let mut failures = self.into_failures();
+        failures.extend(next.into_failures());
+        Self::several(failures)
+    }
+}
+
+impl MultipleFailures for Error {
+    fn several(failures: Vec<Self>) -> Self {
+        Self::Several(failures)
+    }
+
+    fn into_failures(self) -> Vec<Self> {
+        match self {
+            Self::Several(failures) => failures,
+            failure => vec![failure],
+        }
     }
 }
 
@@ -123,30 +133,4 @@ impl Error {
 fn in_order(failures: &[Error]) -> String {
     let chains: Vec<_> = failures.iter().map(message_chain).collect();
     chains.join("; after that, ")
-}
-
-/// Collects the failures of a call that continues after a failure.
-#[derive(Default)]
-pub(crate) struct Failures(Vec<Error>);
-
-impl Failures {
-    pub fn add(&mut self, result: Result<(), Error>) {
-        if let Err(error) = result {
-            self.push(error);
-        }
-    }
-
-    pub fn push(&mut self, error: Error) {
-        match error {
-            Error::Several(errors) => self.0.extend(errors),
-            error => self.0.push(error),
-        }
-    }
-
-    pub fn into_result(mut self) -> Result<(), Error> {
-        if self.0.len() > 1 {
-            return Err(Error::Several(self.0));
-        }
-        self.0.pop().map_or(Ok(()), Err)
-    }
 }

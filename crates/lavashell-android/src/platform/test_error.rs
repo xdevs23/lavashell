@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, Latch};
+use crate::Error;
 use lavashell_core::scene::tree::ApplyError;
-use lavashell_renderer::FrameOutcome;
+use lavashell_renderer::{FrameOutcome, Latch};
 use log::SetLoggerError;
 
 /// A failure of a test or of the platform that the tests simulate.

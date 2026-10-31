@@ -23,13 +23,14 @@ mod scalar;
 mod silhouette;
 pub mod source_filters;
 mod state;
+mod stream;
 pub mod text;
 mod text_alignment;
 mod text_cache;
 pub mod vulkan;
 
 pub use compositing::BlendSpace;
-pub use error::{ContextState, Error, SkslDiagnostic};
+pub use error::{ContextState, Error, FailureList, MultipleFailures, SkslDiagnostic};
 pub use failure::DrawFailure;
 pub use field::{FieldRoom, UniformRange};
 pub use fonts::Fonts;
@@ -44,6 +45,10 @@ pub use skia_safe as skia;
 pub use state::{
     Attach, DrawError, Drawn, PainterSetup, PresentFrame, RendererSetup, RendererState, StateError,
     SurfaceControl,
+};
+pub use stream::{
+    BufferQueue, Completions, FenceCopyError, FrameImporter, FrameSource, Latch, LatchAccess,
+    LatchedFrames, ProducedFrame, Stream, Taken,
 };
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,

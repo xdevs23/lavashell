@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::error::{Error, Failures};
-use crate::latched_frames::{Latch, LatchedFrames};
+use crate::buffer_importer::HardwareBufferImporter;
+use crate::error::Error;
 use crate::native_window::NativeWindow;
 use crate::platform::{AospPresentation, SurfaceTarget, VulkanRenderer, surface_target};
 use crate::surface_stream::SurfaceStream;
 use lavashell_core::prelude::{Density, OutputInfo, OutputRequest, Presented};
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceAlpha, skia};
+use lavashell_renderer::{
+    FailureList, Fonts, FrameOutcome, Latch, LatchedFrames, Painter, Stream, SurfaceAlpha, skia,
+};
 use std::time::Duration;
 
 struct Attachment {
@@ -21,7 +23,7 @@ pub struct AndroidRenderer {
     gpu: VulkanRenderer,
     // Declared last, so that the latched frames are dropped after `painter` and `gpu`. By then the GPU is idle and
     // Skia has released the images of the frames.
-    streams: LatchedFrames,
+    streams: LatchedFrames<HardwareBufferImporter>,
 }
 
 impl AndroidRenderer {
@@ -34,7 +36,7 @@ impl AndroidRenderer {
         Ok(Self {
             attachment: None,
             painter,
-            streams: LatchedFrames::new(&gpu)?,
+            streams: LatchedFrames::new(HardwareBufferImporter::new(&gpu)?),
             gpu,
         })
     }
@@ -58,7 +60,7 @@ impl AndroidRenderer {
     /// Fails when AOSP cannot return the frame or the id of a buffer freed by the producer, or when Vulkan cannot read
     /// the buffer of the frame or the completion of the renders that drew earlier frames. After such a failure, drop
     /// the stream and give the producer a new one. After the loss of the Vulkan device, recreate the renderer.
-    pub fn latch(&mut self, stream: &mut SurfaceStream) -> Result<Latch, Error> {
+    pub fn latch(&mut self, stream: &mut Stream<SurfaceStream>) -> Result<Latch, Error> {
         self.streams.latch(&self.painter, stream)
     }
 
@@ -73,7 +75,7 @@ impl AndroidRenderer {
         &self,
         buffer: &crate::platform::ndk::hardware_buffer::HardwareBuffer,
     ) -> Result<lavashell_renderer::ForeignFormat, Error> {
-        self.streams.buffer_format(buffer)
+        self.streams.importer().buffer_format(buffer)
     }
 
     /// Replaces the surface that the renderer presents to with `window`. The renderer is the only producer connected to
@@ -180,7 +182,7 @@ impl AndroidRenderer {
         clear: skia::Color,
         presentation_time: Option<Duration>,
     ) -> Result<FrameOutcome, Error> {
-        let mut failures = Failures::default();
+        let mut failures = FailureList::default();
         failures.add(self.streams.import(&mut self.gpu, &self.painter, tree));
         let (painter, frames) = (&mut self.painter, self.streams.frames());
         let drawn = Self::draw(

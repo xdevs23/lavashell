@@ -63,8 +63,9 @@ Surface with an unknown history.
 ## Frames from another app
 
 ```rust,ignore
-use lavashell::android::{Latch, surface_of_window};
+use lavashell::android::surface_of_window;
 use lavashell::prelude::*;
+use lavashell::renderer::{Latch, Stream};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -72,15 +73,15 @@ let sizes = BufferSizes {
     default: PixelSize::new(1770, 960),
     max: PixelSize::new(2124, 1152),
 };
-let mut stream = SurfaceStream::new(sizes, StreamFormat::Rgba8888)?;
+let mut stream = Stream::new(SurfaceStream::new(sizes, StreamFormat::Rgba8888)?);
 let arrived = Arc::new(AtomicBool::new(false));
 let wake = arrived.clone();
-stream.on_frame(move || wake.store(true, Ordering::Release));
-let surface = surface_of_window(env, stream.native_window())?;
+stream.source_mut().on_frame(move || wake.store(true, Ordering::Release));
+let surface = surface_of_window(env, stream.source().native_window())?;
 let mut latest: Option<StreamImage> = None;
 
 // On the rendering thread, before the View is laid out:
-if arrived.swap(false, Ordering::Acquire) || stream.waits_for_producer() {
+if arrived.swap(false, Ordering::Acquire) || stream.source().waits_for_producer() {
     if let Latch::Frame(image) = renderer.latch(&mut stream)? {
         latest = Some(image);
     }

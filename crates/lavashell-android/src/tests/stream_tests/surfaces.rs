@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::platform::{Buffer, StreamEvent as Event};
-use crate::surface_stream::{BufferSizes, StreamFormat, SurfaceStream};
 use std::sync::{Mutex, PoisonError};
 
 /// Buffers smaller than the simulated surface in both lengths, with a default size that is smaller still.
@@ -25,12 +24,12 @@ fn runs(count: &Mutex<u32>) -> u32 {
 #[test]
 fn a_resized_stream_shows_the_old_surface_until_the_new_one_delivers() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let earlier = producer(&stream)?;
-    let earlier_window = stream.native_window().clone();
+    let earlier_window = stream.source().native_window().clone();
     earlier.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
-    stream.resize(SMALLER)?;
+    stream.source_mut().resize(SMALLER)?;
     let resized = producer(&stream)?;
     assert_eq!(
         (earlier.default_size(), resized.default_size()),
@@ -47,7 +46,7 @@ fn a_resized_stream_shows_the_old_surface_until_the_new_one_delivers() -> Result
     assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, RED);
 
     resized.queue(Buffer::new(10, SMALLER.default, skia::Color::BLUE));
-    stream.release_window(&earlier_window);
+    stream.source_mut().release_window(&earlier_window);
     drop(earlier_window);
     let delivered = latched(&mut renderer, &mut stream)?;
     assert_eq!(
@@ -80,7 +79,7 @@ fn a_resized_stream_shows_the_old_surface_until_the_new_one_delivers() -> Result
 #[test]
 fn a_removed_buffer_or_a_dropped_stream_drops_its_imports_and_its_frame() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     for id in [1, 2] {
         producer.queue(Buffer::new(id, SURFACE_SIZE, skia::Color::RED));
@@ -131,11 +130,11 @@ fn a_removed_buffer_or_a_dropped_stream_drops_its_imports_and_its_frame() -> Res
 #[test]
 fn every_surface_of_a_stream_wakes_the_host_and_a_crop_sets_drawn_size() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let (woken, wake) = counting_wake();
-    stream.on_frame(wake);
+    stream.source_mut().on_frame(wake);
     let earlier = producer(&stream)?;
-    stream.resize(SURFACE_SIZES)?;
+    stream.source_mut().resize(SURFACE_SIZES)?;
     let resized = producer(&stream)?;
     let mut cropped = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     let (left, top, right) = (SIDE / 8, SIDE / 4, SIDE * 3 / 4);
@@ -152,14 +151,14 @@ fn every_surface_of_a_stream_wakes_the_host_and_a_crop_sets_drawn_size() -> Resu
 
 #[test]
 fn a_second_wake_replaces_the_first_on_every_surface_of_a_stream() -> Result<(), TestError> {
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let (first, first_wake) = counting_wake();
-    stream.on_frame(first_wake);
+    stream.source_mut().on_frame(first_wake);
     let earlier = producer(&stream)?;
-    stream.resize(SURFACE_SIZES)?;
+    stream.source_mut().resize(SURFACE_SIZES)?;
     let resized = producer(&stream)?;
     let (second, second_wake) = counting_wake();
-    stream.on_frame(second_wake);
+    stream.source_mut().on_frame(second_wake);
     earlier.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     resized.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::RED));
     assert_eq!((runs(&first), runs(&second)), (0, 2));

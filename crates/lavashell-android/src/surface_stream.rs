@@ -4,8 +4,10 @@ use crate::fenced_image::{AcquiredImage, WriteProgress, acquire_next};
 use crate::platform::ndk::hardware_buffer::{HardwareBufferRef, HardwareBufferUsage};
 use crate::platform::ndk::media::image_reader::{AcquireResult, ImageFormat, ImageReader};
 use crate::platform::ndk::native_window::NativeWindow;
-use lavashell_core::prelude::{PixelSize, StreamId, StreamImage};
-use lavashell_renderer::{StreamRejection, skia};
+use lavashell_core::prelude::PixelSize;
+use lavashell_renderer::{
+    BufferQueue, FrameSource, LatchAccess, ProducedFrame, StreamRejection, Taken, skia,
+};
 use std::os::fd::{BorrowedFd, OwnedFd};
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -39,8 +41,8 @@ type Wake = Arc<dyn Fn() + Send + Sync>;
 type WakeSlot = Arc<Mutex<Option<Wake>>>;
 
 /// The consumer end of a Surface drawn into by another process, such as an app drawing a window. Pass the
-/// Surface of `native_window` to the producer. On the render thread, latch the newest frame with
-/// `AndroidRenderer::latch` and draw the returned image with `Drawing::stream_image`.
+/// Surface of `native_window` to the producer. Wrap the stream in a `Stream`, latch its newest frame with
+/// `AndroidRenderer::latch` on the render thread and draw the returned image with `Drawing::stream_image`.
 ///
 /// The producer never waits for the host. While no latch is called, a newly queued frame replaces the frame
 /// waiting in the reader. A hidden window needs no latch. The newest frame waits for the first latch after
@@ -54,7 +56,6 @@ type WakeSlot = Arc<Mutex<Option<Wake>>>;
 /// converted to RGB with the YCbCr model and range that the driver reports as suggested for each buffer. Without that
 /// support, the latch releases a buffer in any other format and records a draw failure.
 pub struct SurfaceStream {
-    id: StreamId,
     format: StreamFormat,
     wake: WakeSlot,
     // Declared before the readers, so that the waiting frame is dropped before the reader that delivered it.
@@ -62,7 +63,6 @@ pub struct SurfaceStream {
     shown: Reader,
     newest: Option<Reader>,
     retiring: Vec<Reader>,
-    latest: Option<StreamImage>,
 }
 
 impl SurfaceStream {
@@ -73,14 +73,12 @@ impl SurfaceStream {
         let wake = WakeSlot::default();
         let shown = Reader::new(sizes, format, &wake)?;
         Ok(Self {
-            id: StreamId::next(),
             format,
             shown,
             wake,
             unwritten: None,
             newest: None,
             retiring: Vec::new(),
-            latest: None,
         })
     }
 
@@ -112,12 +110,6 @@ impl SurfaceStream {
         self.unwritten
             .as_ref()
             .and_then(|frame| frame.image.acquire_fence())
-    }
-
-    /// The size in pixels of the frame latched last, after the crop of the buffer.
-    #[must_use]
-    pub fn drawn_size(&self) -> Option<PixelSize> {
-        self.latest.map(|image| image.size)
     }
 
     /// Creates a new Surface for the producer. The stream shows the frames of the previous Surface until the new
@@ -160,75 +152,68 @@ impl SurfaceStream {
     fn producing(&self) -> &Reader {
         self.newest.as_ref().unwrap_or(&self.shown)
     }
+}
 
-    pub(crate) fn id(&self) -> StreamId {
-        self.id
+impl FrameSource for SurfaceStream {
+    type Frame = QueuedFrame;
+    type Error = Error;
+
+    /// Acquires the newest frame queued on the newest Surface, or on the shown Surface while the newest Surface has
+    /// none. Returns the frame once the producer has finished writing it. Until then, the frame waits in the stream
+    /// and the result is `Taken::Nothing`. The frames queued before that frame return to the producer behind their
+    /// acquire fences.
+    fn take_newest(&mut self, _: &LatchAccess) -> Result<Taken<QueuedFrame>, Error> {
+        let taken = match &self.newest {
+            Some(newest) => match newest.take()? {
+                Taken::Nothing => self.shown.take()?,
+                taken => taken,
+            },
+            None => self.shown.take()?,
+        };
+        match taken {
+            Taken::Frame(frame) => {
+                if let Some(replaced) = self.unwritten.replace(frame) {
+                    replaced.release(None);
+                }
+            }
+            Taken::Rejected(rejection) => return Ok(Taken::Rejected(rejection)),
+            Taken::Nothing => {}
+        }
+        let Some(frame) = self.unwritten.take() else {
+            return Ok(Taken::Nothing);
+        };
+        match frame.image.write_progress()? {
+            WriteProgress::Finished => Ok(Taken::Frame(frame)),
+            WriteProgress::Ongoing => {
+                self.unwritten = Some(frame);
+                Ok(Taken::Nothing)
+            }
+        }
     }
 
-    /// The ids of the buffers freed by the producers since the last call. An item is an error when the id of a freed
-    /// buffer cannot be read.
-    pub(crate) fn removed(&self) -> impl Iterator<Item = Result<BufferId, Error>> {
+    /// A frame of the newest Surface makes that Surface the shown one, and the Surface shown before is retired.
+    fn record_latch(&mut self, _: &LatchAccess, frame: &QueuedFrame) {
+        if let Some(newest) = self.newest.take_if(|newest| frame.reader.is_from(newest)) {
+            let replaced = std::mem::replace(&mut self.shown, newest);
+            self.retire(replaced);
+        }
+    }
+
+    fn take_removed_buffers(
+        &mut self,
+        _: &LatchAccess,
+    ) -> impl Iterator<Item = Result<BufferId, Error>> {
         std::iter::once(&self.shown)
             .chain(&self.newest)
             .chain(&self.retiring)
             .flat_map(|reader| reader.removed.try_iter())
             .map(|removal| removal.map_err(Error::RemovedBufferId))
     }
-
-    /// Acquires the newest frame queued on the newest Surface, or on the shown Surface while the newest Surface has
-    /// none. Returns the frame once the producer has finished writing it. Until then, the frame waits in the stream
-    /// and the result is `Acquired::Nothing`. The frames queued before that frame return to the producer behind their
-    /// acquire fences.
-    pub(crate) fn take(&mut self) -> Result<Acquired, Error> {
-        let acquired = match &self.newest {
-            Some(newest) => match newest.take()? {
-                Acquired::Nothing => self.shown.take()?,
-                acquired => acquired,
-            },
-            None => self.shown.take()?,
-        };
-        match acquired {
-            Acquired::Frame(frame) => {
-                if let Some(replaced) = self.unwritten.replace(frame) {
-                    replaced.release(None);
-                }
-            }
-            Acquired::Rejected(rejection) => return Ok(Acquired::Rejected(rejection)),
-            Acquired::Nothing => {}
-        }
-        let Some(frame) = self.unwritten.take() else {
-            return Ok(Acquired::Nothing);
-        };
-        match frame.image.write_progress()? {
-            WriteProgress::Finished => Ok(Acquired::Frame(frame)),
-            WriteProgress::Ongoing => {
-                self.unwritten = Some(frame);
-                Ok(Acquired::Nothing)
-            }
-        }
-    }
-
-    /// Records `frame` as latched and returns the image that draws it. A frame of the newest Surface makes that
-    /// Surface the shown one, and the Surface shown before is retired.
-    pub(crate) fn record_latch(&mut self, frame: &QueuedFrame) -> StreamImage {
-        if let Some(newest) = self.newest.take_if(|newest| frame.reader.is_from(newest)) {
-            let replaced = std::mem::replace(&mut self.shown, newest);
-            self.retire(replaced);
-        }
-        let generation = self.latest.map_or(1, |image| image.generation + 1);
-        let image = StreamImage {
-            stream: self.id,
-            generation,
-            size: frame.size,
-        };
-        self.latest = Some(image);
-        image
-    }
 }
 
 /// The id of a hardware buffer, unique in the system.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct BufferId(u64);
+pub struct BufferId(u64);
 
 struct Reader {
     images: ImageReader,
@@ -241,15 +226,17 @@ struct Reader {
 }
 
 #[derive(Clone)]
-pub(crate) struct ReaderToken(Weak<()>);
+pub struct ReaderToken(Weak<()>);
 
 impl ReaderToken {
-    pub fn is_alive(&self) -> bool {
-        self.0.strong_count() > 0
-    }
-
     fn is_from(&self, reader: &Reader) -> bool {
         Weak::ptr_eq(&self.0, &Rc::downgrade(&reader.life))
+    }
+}
+
+impl BufferQueue for ReaderToken {
+    fn exists(&self) -> bool {
+        self.0.strong_count() > 0
     }
 }
 
@@ -324,9 +311,9 @@ impl Reader {
         }
     }
 
-    fn take(&self) -> Result<Acquired, Error> {
+    fn take(&self) -> Result<Taken<QueuedFrame>, Error> {
         let Some(acquired) = self.newest()? else {
-            return Ok(Acquired::Nothing);
+            return Ok(Taken::Nothing);
         };
         let buffer = acquired.hardware_buffer().map_err(Error::FrameBuffer)?;
         let description = buffer.describe();
@@ -339,18 +326,18 @@ impl Reader {
             }
             _ => {
                 acquired.return_after(None);
-                return Ok(Acquired::Rejected(StreamRejection::TooLarge));
+                return Ok(Taken::Rejected(StreamRejection::TooLarge));
             }
         };
         let crop = acquired.crop_rect().map_err(Error::FrameCrop)?;
         let crop = skia::IRect::new(crop.left, crop.top, crop.right, crop.bottom);
         let Some(crop) = skia::IRect::intersect(&crop, &bounds) else {
             acquired.return_after(None);
-            return Ok(Acquired::Rejected(StreamRejection::CropOutside));
+            return Ok(Taken::Rejected(StreamRejection::CropOutside));
         };
         let length = |pixels: i32| u32::try_from(pixels).map_err(Error::CropLength);
         let cropped = PixelSize::new(length(crop.width())?, length(crop.height())?);
-        Ok(Acquired::Frame(QueuedFrame {
+        Ok(Taken::Frame(QueuedFrame {
             id: BufferId(buffer.id().map_err(Error::BufferId)?),
             buffer: buffer.acquire(),
             origin: skia::IPoint::new(crop.left, crop.top),
@@ -361,30 +348,41 @@ impl Reader {
     }
 }
 
-pub(crate) enum Acquired {
-    /// The producer has not queued a frame since the last latch, or the producer is still writing the queued frame.
-    Nothing,
-    Frame(QueuedFrame),
-    /// The reader returned the newest frame to the producer without drawing it.
-    Rejected(StreamRejection),
-}
-
 /// A frame acquired from a reader.
-pub(crate) struct QueuedFrame {
+pub struct QueuedFrame {
     image: AcquiredImage,
-    pub buffer: HardwareBufferRef,
-    pub id: BufferId,
+    pub(crate) buffer: HardwareBufferRef,
+    id: BufferId,
     /// The top left corner of the crop of the buffer. `size` is the size of that crop.
-    pub origin: skia::IPoint,
-    pub size: PixelSize,
-    pub reader: ReaderToken,
+    origin: skia::IPoint,
+    size: PixelSize,
+    reader: ReaderToken,
 }
 
-impl QueuedFrame {
-    pub(crate) fn release(self, after: Option<OwnedFd>) {
+impl ProducedFrame for QueuedFrame {
+    type BufferKey = BufferId;
+    type Queue = ReaderToken;
+
+    fn buffer_key(&self) -> BufferId {
+        self.id
+    }
+
+    fn queue(&self) -> &ReaderToken {
+        &self.reader
+    }
+
+    fn origin(&self) -> skia::IPoint {
+        self.origin
+    }
+
+    fn size(&self) -> PixelSize {
+        self.size
+    }
+
+    fn release(self, after: Option<OwnedFd>) {
         // A deleted reader has already closed the images acquired from it, and a fence passed to such an
         // image would never be closed. In that case, dropping `self` closes `after` and the acquire fence.
-        if self.reader.is_alive() {
+        if self.reader.exists() {
             self.image.return_after(after);
         }
     }
