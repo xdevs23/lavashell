@@ -2,12 +2,12 @@
 use super::render::NextRender;
 use super::scene::SceneRuntime;
 use super::{
-    App, AppConfig, Clipboard, Connection, Dp, Duration, EventLoop, Fonts, FrameReport, FrameTime,
+    App, AppConfig, Clipboard, Connection, Duration, EventLoop, Fonts, FrameReport, FrameTime,
     HostKey, InputEvent, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform, PlatformFacts,
-    Request, RunEnd, Size, SurfaceId, Ui, View, Viewport, Window, registry_queue_init,
-    session_lock,
+    Request, RunEnd, SurfaceId, Ui, View, Viewport, Window, registry_queue_init, session_lock,
 };
 use crate::Error;
+use crate::logical::{whole_size, window_size};
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before
@@ -262,20 +262,13 @@ impl App {
         window: Window,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), Error> {
-        let positive =
-            |length: Dp| crate::logical::extent(length, 0).is_some_and(|whole| whole > 0);
-        let valid = |size: Size| {
-            crate::logical::extent(size.width, 0)
-                .and(crate::logical::extent(size.height, 0))
-                .is_some()
-        };
-        if let Some(size) = window
-            .size
-            .filter(|size| !positive(size.width) || !positive(size.height))
-        {
+        if let Some(size) = window.size.filter(|&size| window_size(size).is_none()) {
             return Err(Error::WindowSize(size));
         }
-        if let Some(minimum) = window.min_size.filter(|minimum| !valid(*minimum)) {
+        if let Some(minimum) = window
+            .min_size
+            .filter(|&minimum| whole_size(minimum).is_none())
+        {
             return Err(Error::MinimumWindowSize(minimum));
         }
         self.requests.push(Request::Window(

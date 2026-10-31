@@ -2545,6 +2545,7 @@ dependencies = [
  "lavashell-keyboard",
  "lavashell-materials",
  "lavashell-renderer",
+ "lavashell-runtime",
  "lavashell-wayland",
 ]
 

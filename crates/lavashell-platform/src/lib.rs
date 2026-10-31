@@ -7,4 +7,4 @@ mod output;
 mod surface;
 
 pub use output::{OutputEvent, OutputId};
-pub use surface::{SurfaceEvent, SurfaceRequest};
+pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};

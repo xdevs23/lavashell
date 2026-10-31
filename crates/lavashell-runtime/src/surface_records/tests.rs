@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_core::prelude::{Modifier, TextStyle};
+use crate::test_text::NoText;
+use lavashell_core::prelude::Modifier;
 use lavashell_core::units::{DpExt, NumberError};
 use lavashell_core::view::FrameError;
 use std::rc::Rc;
@@ -18,14 +19,6 @@ enum TestError {
 }
 
 type TestResult = Result<(), TestError>;
-
-struct NoText;
-
-impl TextMeasurer for NoText {
-    fn measure(&mut self, _: &str, _: &TextStyle<Dp>, _: Dp) -> Size {
-        Size::ZERO
-    }
-}
 
 fn empty_view() -> View {
     View::new(lavashell_test_fixtures::facts(), |_| {})
@@ -160,21 +153,4 @@ fn an_unknown_surface_has_no_record() {
     assert_eq!(records.handle(SurfaceId(3), SurfaceEvent::Closed), None);
     assert!(records.view_mut(SurfaceId(3)).is_none());
     assert!(!records.any_open());
-}
-
-#[test]
-fn a_window_opens_at_its_requested_size_or_else_at_the_size_its_view_fits() -> TestResult {
-    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
-        ui.spacer(120.dp(), 30.dp(), Modifier::new());
-    });
-    let requested = Size::new(400.dp(), 300.dp());
-    assert_eq!(
-        initial_size(Some(requested), &mut view, &mut NoText)?,
-        requested
-    );
-    assert_eq!(
-        initial_size(None, &mut view, &mut NoText)?,
-        Size::new(120.dp(), 30.dp())
-    );
-    Ok(())
 }

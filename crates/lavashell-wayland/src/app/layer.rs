@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::creation::SurfaceSpec;
+use super::creation::NativeSpec;
 use super::{
     Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
     State, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, physical_size, wl_output,
@@ -9,6 +9,7 @@ use crate::Error;
 use crate::logical::{extent, whole};
 use crate::surface::{AxisPlacement, ExclusiveZone, Extent, Keyboard, LayerLayout};
 use lavashell_core::view::Proposal;
+use lavashell_platform::Appearance;
 use lavashell_renderer::SurfaceContents;
 use zwlr_layer_surface_v1::Anchor;
 
@@ -161,7 +162,7 @@ impl Runtime {
     }
 }
 
-impl SurfaceSpec {
+impl NativeSpec {
     pub(super) fn layer(
         options: &LayerSurface,
         view: View,
@@ -170,10 +171,12 @@ impl SurfaceSpec {
         Ok(Self {
             view,
             size: initial_size(options, context)?,
-            transparent: true,
-            output: options.output,
-            hdr_metadata: options.hdr_metadata,
-            background_blur: options.background_blur,
+            appearance: Appearance {
+                transparent: true,
+                output: options.output,
+                hdr_metadata: options.hdr_metadata,
+                background_blur: options.background_blur,
+            },
             shape: options.shape.clone(),
             drag_region: None,
             accessible_name: options.namespace.clone(),

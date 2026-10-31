@@ -3,7 +3,7 @@
 //! the `?` operator.
 
 use crate::failure::FailedDraw;
-use crate::{DrawFailure, Error, SkslDiagnostic, StreamRejection};
+use crate::{DrawFailure, Error, InputSizeError, OutlineError, SkslDiagnostic, StreamRejection};
 use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
@@ -28,6 +28,10 @@ pub(crate) enum TestError {
     Failed(#[from] FrameFailure),
     #[error(transparent)]
     Points(#[from] PointsError),
+    #[error(transparent)]
+    Outline(#[from] OutlineError),
+    #[error(transparent)]
+    InputSize(#[from] InputSizeError),
     #[error(transparent)]
     Vulkan(#[from] lavashell_vulkan::Error),
     #[error("the stream frame is rejected: {0}")]

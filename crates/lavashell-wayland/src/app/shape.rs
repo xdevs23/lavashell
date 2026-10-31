@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use crate::shape::{ShapeGeometry, WindowShape};
 use lavashell_core::geometry::Size;
 use lavashell_core::reactive::{Phase, Scope};
 use lavashell_core::units::Density;
+use lavashell_renderer::skia::{IRect, Path};
+use lavashell_renderer::{clip_path, input_cells, outline_path};
+use lavashell_runtime::WindowShape;
 use sctk::compositor::{CompositorState, Region};
 use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit as sctk;
 
 pub(super) struct SurfaceShape {
-    outline: WindowShape,
+    shape: WindowShape,
     key: Option<(Size, Density)>,
-    geometry: Option<ShapeGeometry>,
+    clip: Option<Path>,
+    input_cells: Vec<IRect>,
     scope: Scope,
 }
 
@@ -22,11 +25,12 @@ pub(super) enum ShapeUpdate {
 }
 
 impl SurfaceShape {
-    pub fn new(outline: WindowShape) -> Self {
+    pub fn new(shape: WindowShape) -> Self {
         Self {
-            outline,
+            shape,
             key: None,
-            geometry: None,
+            clip: None,
+            input_cells: Vec::new(),
             scope: Scope::default(),
         }
     }
@@ -41,12 +45,14 @@ impl SurfaceShape {
         if self.key == Some((size, density)) && !self.needs_frame() {
             return Ok(ShapeUpdate::Unchanged);
         }
-        let geometry = self
-            .scope
-            .track(Phase::Layout, || self.outline.compile(size, density))?;
-        self.geometry = Some(geometry);
+        let outline = self.scope.track(Phase::Layout, || self.shape.outline(size));
+        let path =
+            outline_path(&outline.map_err(Error::ShapeContour)?).map_err(Error::ShapePath)?;
+        let cells = input_cells(&path, size).map_err(Error::ShapeInput)?;
+        self.clip = Some(clip_path(&path, density).map_err(Error::ShapePath)?);
+        self.input_cells = cells;
         self.key = Some((size, density));
-        let region = if self.outline.accept_input {
+        let region = if self.shape.accepts_input() {
             self.region(compositor)?
         } else {
             Region::new(compositor).map_err(Error::CreateRegion)?
@@ -61,29 +67,18 @@ impl SurfaceShape {
     }
 
     pub fn accepts_input(&self) -> bool {
-        self.outline.accept_input
-            && self
-                .geometry
-                .as_ref()
-                .is_some_and(|geometry| !geometry.input_cells.is_empty())
+        self.shape.accepts_input() && !self.input_cells.is_empty()
     }
 
-    pub fn path(&self) -> Option<&lavashell_renderer::skia::Path> {
-        self.outline
-            .clip_paint
-            .then(|| self.geometry.as_ref().map(|geometry| &geometry.path))
-            .flatten()
+    pub fn path(&self) -> Option<&Path> {
+        self.clip.as_ref().filter(|_| self.shape.clips_paint())
     }
 
     /// A Wayland region made of the input cells inside the shape. The region is empty until `update` first
-    /// computes the geometry of the shape.
+    /// computes the input cells of the shape.
     pub fn region(&self, compositor: &CompositorState) -> Result<Region, Error> {
         let region = Region::new(compositor).map_err(Error::CreateRegion)?;
-        for cells in self
-            .geometry
-            .iter()
-            .flat_map(|geometry| &geometry.input_cells)
-        {
+        for cells in &self.input_cells {
             region.add(cells.left, cells.top, cells.width(), cells.height());
         }
         Ok(region)

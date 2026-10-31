@@ -9,7 +9,6 @@ mod logical;
 #[cfg(test)]
 mod preference_reader;
 mod preferences;
-mod shape;
 mod single_precision;
 mod surface;
 #[cfg(test)]
@@ -29,8 +28,6 @@ pub use clipboard::{
 pub use error::{Cancellation, Error};
 pub use focus_grab::FocusGrab;
 pub use lavashell_core::output::MonitorInfo;
-pub use shape::WindowShape;
 pub use surface::{
     AxisPlacement, ExclusiveZone, Extent, LayerLayout, LayerLevel, LayerMargins, LayerSurface,
-    Window,
 };

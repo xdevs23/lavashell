@@ -48,6 +48,12 @@
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
                   },
+                  "lavashell-runtime": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-runtime",
+                    "path": "../lavashell-runtime"
+                  },
                   "lavashell-wayland": {
                     "default-features": false,
                     "features": [],
@@ -2438,6 +2444,7 @@
                   "lavashell-keyboard",
                   "lavashell-materials",
                   "lavashell-renderer",
+                  "lavashell-runtime",
                   "lavashell-wayland"
                 ],
                 "name": "lavashell",
@@ -3874,7 +3881,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "21630d1e6b406bc39d8a698e549808e6e6ad752364548f53476893cced828e61"
+        "seedHash": "b4664b39de9fbfa3b6eb4acc4855d5c294b0217dfd8ece31ee9d88bf00368b69"
       }
     }
   },
@@ -4899,6 +4906,7 @@
           "lavashell-keyboard",
           "lavashell-materials",
           "lavashell-renderer",
+          "lavashell-runtime",
           "lavashell-wayland"
         ],
         "name": "lavashell",

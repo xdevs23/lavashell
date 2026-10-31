@@ -11,6 +11,7 @@ mod field;
 mod fonts;
 mod gpu_timing;
 mod image;
+mod input_region;
 mod packet_cache;
 pub mod paint;
 mod plan;
@@ -32,9 +33,11 @@ pub use failure::DrawFailure;
 pub use field::{FieldRoom, UniformRange};
 pub use fonts::Fonts;
 pub use image::{decode_image, encoded_image, raster_png};
+pub use input_region::{InputSizeError, input_cells};
 pub use packet_cache::{PacketCaching, SurfaceFrame};
 pub use paint::{
-    Painter, StreamFrames, StreamPixels, StreamRejection, UnsampledFormat, skpoint, skrect,
+    OutlineError, Painter, StreamFrames, StreamPixels, StreamRejection, UnsampledFormat, clip_path,
+    outline_path, skpoint, skrect,
 };
 pub use skia_safe as skia;
 pub use vulkan::{
