@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    GroupValues, NamespaceId, NodeKey, PacketGeneration, PaintVisitor, PlacedLeaf, Presented, Rect,
-    SceneTree,
+    GroupValues, NamespaceId, Namespaces, NodeKey, PacketGeneration, PaintVisitor, PlacedLeaf,
+    Presented, Rect,
 };
 use crate::geometry::Viewport;
 use crate::retained::Extent;
@@ -46,7 +46,7 @@ struct Enclosing {
 
 /// The walk over one presentation of a tree, which compares every node with its record from the presentation before.
 struct Pass<'a> {
-    tree: &'a SceneTree,
+    scene: &'a Namespaces,
     records: &'a mut HashMap<NodeKey, Record>,
     presentation: u64,
     viewport: Rect,
@@ -70,7 +70,7 @@ impl DamageTracker {
         let presentation = self.presentation;
         let area = Rect::from_size(viewport.size);
         let mut pass = Pass {
-            tree: scene.tree,
+            scene: scene.namespaces,
             records: &mut self.records,
             presentation,
             viewport: area,
@@ -108,13 +108,13 @@ impl Pass<'_> {
     fn changed(&self, key: NodeKey, painted: &PaintedNode) -> bool {
         self.scope.changed
             || (self.records.get(&key))
-                .is_none_or(|old| old.placed != self.tree.placed(key) || old.painted != *painted)
+                .is_none_or(|old| old.placed != self.scene.placed(key) || old.painted != *painted)
     }
 
     /// Records how `key` paints. When `changed`, adds the old and the new output of `key` to the damage.
     fn visit(&mut self, key: NodeKey, painted: PaintedNode, changed: bool) {
         let record = Record {
-            placed: self.tree.placed(key),
+            placed: self.scene.placed(key),
             painted,
             presentation: self.presentation,
         };

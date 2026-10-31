@@ -87,7 +87,7 @@ pub mod prelude {
     pub use crate::scene::{
         Affine, Brush, DrawCommand, DrawContext, Drawing, FontSize, FontWeight, Icon, IconPath,
         ParagraphDirection, Segment, TEXT_STYLE, TextAlignment, TextSpan, TextStyle,
-        tree::{DamageTracker, Presented, SceneTree, SceneUpdate},
+        tree::{DamageTracker, Presented, SceneSnapshot, SceneTree, SceneUpdate},
     };
     pub use crate::scroll::{ScrollState, ScrollView, Scrolling};
     pub use crate::shape::{Corners, Polygon, Radius, RoundedRect, Shape, UnionMember};
