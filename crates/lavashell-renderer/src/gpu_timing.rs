@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Painter;
 use crate::vulkan::{Collected, GpuProfiler, GpuSample, SampleKind};
+use lavashell_core::frame::GpuFrameTime;
 use lavashell_core::surface::SurfaceId;
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc, time::Duration};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GpuFrameTime {
-    pub sequence: u64,
-    pub elapsed: Duration,
-}
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 #[derive(Default)]
 pub(crate) struct GpuTiming {
@@ -81,6 +76,7 @@ mod tests {
     use crate::vulkan::SampleTag;
     use lavashell_core::scene::tree::SceneTree;
     use lavashell_effect_quality::{DrawId, DrawTimeKey, EffectId, VariantId};
+    use std::time::Duration;
 
     fn frame(surface: u64, sequence: u64) -> GpuSample {
         GpuSample {

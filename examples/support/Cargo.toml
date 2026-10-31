@@ -16,6 +16,7 @@ testing = []
 clap.workspace = true
 csv.workspace = true
 lavashell.workspace = true
+lavashell-core = { workspace = true, features = ["serde"] }
 lavashell-lucide.workspace = true
 serde.workspace = true
 thiserror.workspace = true
