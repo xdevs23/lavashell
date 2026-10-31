@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::release::ReleaseTracker;
 use super::{
-    BufferQueue, FrameImporter, FrameSource, Latch, LatchAccess, ProducedFrame, Stream, Taken,
+    BufferQueue, FrameDevice, FrameImporter, FrameSource, Latch, LatchAccess, ProducedFrame,
+    Stream, StreamBackend, Taken,
 };
 use crate::error::FailureList;
 use crate::{Painter, Sampling, StreamFrames};
@@ -59,11 +60,6 @@ impl<I: FrameImporter> LatchedFrames<I> {
             importer,
             releases: ReleaseTracker::default(),
         }
-    }
-
-    #[must_use]
-    pub fn frames(&self) -> &StreamFrames {
-        &self.frames
     }
 
     #[must_use]
@@ -141,7 +137,7 @@ impl<I: FrameImporter> LatchedFrames<I> {
     ///
     /// # Errors
     /// Fails when a frame that failed to import cannot be released.
-    pub fn import(
+    fn import(
         &mut self,
         gpu: &mut I::Gpu,
         painter: &Painter,
@@ -206,7 +202,7 @@ impl<I: FrameImporter> LatchedFrames<I> {
     /// # Errors
     /// Fails when the importer cannot hand the imports back, submit or read the completion of GPU work, or destroy
     /// the imports. Every step runs after a failure of another step.
-    pub fn release(&mut self, gpu: &mut I::Gpu) -> Result<(), I::Error> {
+    fn release(&mut self, gpu: &mut I::Gpu) -> Result<(), I::Error> {
         let imports = (self.latched.values())
             .filter_map(|latched| latched.import.clone())
             .collect::<Vec<_>>();
@@ -239,5 +235,29 @@ impl<I: FrameImporter> LatchedFrames<I> {
             }
             exists
         });
+    }
+}
+
+impl<I: FrameImporter> StreamBackend for LatchedFrames<I> {
+    type Gpu = I::Gpu;
+    type Error = I::Error;
+
+    fn draw<T>(
+        &mut self,
+        gpu: &mut Self::Gpu,
+        painter: &mut Painter,
+        tree: Presented<'_>,
+        draw: impl FnOnce(FrameDevice<'_, Self::Gpu>) -> T,
+    ) -> (T, Result<(), I::Error>) {
+        let mut failures = FailureList::default();
+        failures.add(self.import(gpu, painter, tree));
+        // A stream that failed to import draws nothing. The other streams draw as usual.
+        let drawn = draw(FrameDevice {
+            gpu,
+            painter,
+            streams: &self.frames,
+        });
+        failures.add(self.release(gpu));
+        (drawn, failures.into_result())
     }
 }

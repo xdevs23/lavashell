@@ -2,28 +2,24 @@
 use crate::buffer_importer::HardwareBufferImporter;
 use crate::error::Error;
 use crate::native_window::NativeWindow;
-use crate::platform::{AospPresentation, SurfaceTarget, VulkanRenderer, surface_target};
+use crate::platform::{AospPresentation, RendererState, attach_window};
 use crate::surface_stream::SurfaceStream;
-use lavashell_core::prelude::{Density, OutputInfo, OutputRequest, Presented};
+use lavashell_core::prelude::{FrameTime, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
+use lavashell_core::surface::SurfaceId;
+use lavashell_renderer::text::Shaper;
 use lavashell_renderer::{
-    FailureList, Fonts, FrameOutcome, Latch, LatchedFrames, Painter, Stream, SurfaceAlpha, skia,
+    Fonts, FrameOutcome, Latch, LatchedFrames, PresentFrame, RendererSetup, StateError, Stream,
+    SurfaceAlpha,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-struct Attachment {
-    target: SurfaceTarget,
-    window: NativeWindow,
-}
+/// The one surface of the renderer state, which the attached native window presents.
+const SURFACE: SurfaceId = SurfaceId::UNSPECIFIED;
 
 /// A Vulkan renderer for AOSP that draws into one Surface at a time and can attach to another Surface later. Every
 /// call on it must come from the same thread.
 pub struct AndroidRenderer {
-    attachment: Option<Attachment>,
-    painter: Painter,
-    gpu: VulkanRenderer,
-    // Declared last, so that the latched frames are dropped after `painter` and `gpu`. By then the GPU is idle and
-    // Skia has released the images of the frames.
-    streams: LatchedFrames<HardwareBufferImporter>,
+    state: RendererState<NativeWindow, LatchedFrames<HardwareBufferImporter>>,
 }
 
 impl AndroidRenderer {
@@ -31,14 +27,18 @@ impl AndroidRenderer {
     /// Fails when no Vulkan device suits the renderer, the device cannot import the frames of streams, or the painter
     /// cannot start.
     pub fn new(fonts: &Fonts) -> Result<Self, Error> {
-        let gpu = VulkanRenderer::new(&AospPresentation).map_err(Error::CreateRenderer)?;
-        let painter = gpu.painter(fonts).map_err(Error::CreatePainter)?;
-        Ok(Self {
-            attachment: None,
-            painter,
-            streams: LatchedFrames::new(HardwareBufferImporter::new(&gpu)?),
-            gpu,
-        })
+        let setup = RendererSetup {
+            fonts: fonts.clone(),
+            painter: None,
+            scene: None,
+            gpu_timing: false,
+            full_redraw: false,
+            start: Instant::now(),
+        };
+        let state = RendererState::with_streams(&AospPresentation, setup, |gpu| {
+            HardwareBufferImporter::new(gpu).map(LatchedFrames::new)
+        })?;
+        Ok(Self { state })
     }
 
     /// Latches the newest frame queued by the producer on `stream` and releases the frame latched before. The released
@@ -61,7 +61,7 @@ impl AndroidRenderer {
     /// the buffer of the frame or the completion of the renders that drew earlier frames. After such a failure, drop
     /// the stream and give the producer a new one. After the loss of the Vulkan device, recreate the renderer.
     pub fn latch(&mut self, stream: &mut Stream<SurfaceStream>) -> Result<Latch, Error> {
-        self.streams.latch(&self.painter, stream)
+        self.state.latch(stream)
     }
 
     /// The format reported for `buffer` by the Vulkan device used by the renderer. It includes the suggested YCbCr
@@ -75,7 +75,7 @@ impl AndroidRenderer {
         &self,
         buffer: &crate::platform::ndk::hardware_buffer::HardwareBuffer,
     ) -> Result<lavashell_renderer::ForeignFormat, Error> {
-        self.streams.importer().buffer_format(buffer)
+        self.state.streams().importer().buffer_format(buffer)
     }
 
     /// Replaces the surface that the renderer presents to with `window`. The renderer is the only producer connected to
@@ -84,16 +84,14 @@ impl AndroidRenderer {
     /// # Errors
     /// Fails when the device cannot present to the window. The renderer is then detached.
     pub fn attach(&mut self, window: NativeWindow, alpha: SurfaceAlpha) -> Result<(), Error> {
-        self.attachment = None;
-        let target = surface_target(&self.gpu, &window, alpha).map_err(Error::Attach)?;
-        self.attachment = Some(Attachment { target, window });
-        Ok(())
+        drop(self.detach());
+        attach_window(&mut self.state, SURFACE, window, alpha).map_err(Error::Attach)
     }
 
     /// Finishes the queued GPU work and releases the surface. Call it before the consumer of the surface closes. The
     /// returned `NativeWindow` contains the timing history, so that a later `attach` continues that history.
     pub fn detach(&mut self) -> Option<NativeWindow> {
-        self.attachment.take().map(|attachment| attachment.window)
+        self.state.retire(SURFACE)
     }
 
     /// The width and the height of the consumer of the attached window in pixels, or `None` while the renderer is
@@ -102,54 +100,56 @@ impl AndroidRenderer {
     /// # Errors
     /// Fails as `NativeWindow::size` does.
     pub fn size(&self) -> Result<Option<(u32, u32)>, Error> {
-        self.attachment
-            .as_ref()
-            .map(|a| a.window.size())
+        self.state
+            .control(SURFACE)
+            .map(NativeWindow::size)
             .transpose()
     }
 
     #[must_use]
     pub fn device_name(&self) -> &str {
-        &self.gpu.device_name
+        self.state.device_name()
     }
 
     #[must_use]
     pub fn supports_presentation_time(&self) -> bool {
-        self.gpu.supports_presentation_time()
+        self.state.supports_presentation_time()
     }
 
-    pub fn painter(&mut self) -> &mut Painter {
-        &mut self.painter
+    /// The shaper that measures the text of views and shapes the text painted by the renderer.
+    pub fn shaper(&mut self) -> &mut Shaper {
+        self.state.shaper()
     }
 
     #[must_use]
     pub fn output(&self) -> Option<OutputInfo> {
-        self.attachment.as_ref().and_then(|a| a.target.output())
+        self.state.output(SURFACE)
     }
 
     /// # Errors
     /// Fails when no native window is attached.
     pub fn request_output(&mut self, request: OutputRequest) -> Result<(), Error> {
-        let attachment = self.attachment.as_mut().ok_or(Error::Detached)?;
-        attachment.target.request_output(request);
-        Ok(())
+        (self.state.request_output(SURFACE, request)).map_err(Error::RequestOutput)
     }
 
-    /// Paints a complete frame of `tree`, converting dp to pixels with `density`. A detached renderer or a surface of
-    /// zero size returns `FrameOutcome::Pending` without submitting GPU work.
+    /// Paints `snapshot` as it shows at the presentation time of `time`, into `viewport`. A detached renderer or a
+    /// window of zero size returns `FrameOutcome::Pending` without submitting GPU work. The buffer size of `viewport`
+    /// must be the size of the window, as `size` reports it. The frame repaints only the area that differs from the
+    /// pixels left in the buffer, so `snapshot` draws the background of the frame.
     ///
     /// # Errors
-    /// Fails when the frame cannot be drawn, or when the frames of streams cannot be imported or returned to their
-    /// producers. When the frame is drawn but one of its streams fails, the error is `Error::StreamsOfDrawnFrame`,
-    /// which contains the outcome of the frame. After the loss of the Vulkan device, recreate the renderer. After
-    /// another failure of the streams, drop the streams drawn by the render.
+    /// Fails with `Error::ViewportSize` when the buffer size of `viewport` differs from the size of the window. Fails
+    /// when the frame cannot be drawn, or when the frames of streams cannot be imported or returned to the streams
+    /// that produced them. When the frame is drawn but one of its streams fails, the error is
+    /// `Error::StreamsOfDrawnFrame`, which contains the outcome of the frame. After the loss of the Vulkan device,
+    /// recreate the renderer. After another failure of the streams, drop the streams drawn by the render.
     pub fn render(
         &mut self,
-        tree: Presented<'_>,
-        density: Density,
-        clear: skia::Color,
+        snapshot: &SceneSnapshot,
+        time: FrameTime,
+        viewport: Viewport,
     ) -> Result<FrameOutcome, Error> {
-        self.render_frame(tree, density, clear, None)
+        self.render_frame(snapshot, time, viewport, None)
     }
 
     /// Paints like `render` and sets `presentation_time_ns` as the timestamp of the buffer, in nanoseconds from 1 to
@@ -162,70 +162,43 @@ impl AndroidRenderer {
     /// Fails as `render` does.
     pub fn render_at(
         &mut self,
-        tree: Presented<'_>,
-        density: Density,
-        clear: skia::Color,
+        snapshot: &SceneSnapshot,
+        time: FrameTime,
+        viewport: Viewport,
         presentation_time_ns: u64,
     ) -> Result<FrameOutcome, Error> {
-        self.render_frame(
-            tree,
-            density,
-            clear,
-            Some(Duration::from_nanos(presentation_time_ns)),
-        )
+        let present_at = Duration::from_nanos(presentation_time_ns);
+        self.render_frame(snapshot, time, viewport, Some(present_at))
     }
 
     fn render_frame(
         &mut self,
-        tree: Presented<'_>,
-        density: Density,
-        clear: skia::Color,
-        presentation_time: Option<Duration>,
+        snapshot: &SceneSnapshot,
+        time: FrameTime,
+        viewport: Viewport,
+        present_at: Option<Duration>,
     ) -> Result<FrameOutcome, Error> {
-        let mut failures = FailureList::default();
-        failures.add(self.streams.import(&mut self.gpu, &self.painter, tree));
-        let (painter, frames) = (&mut self.painter, self.streams.frames());
-        let drawn = Self::draw(
-            &mut self.gpu,
-            &mut self.attachment,
-            presentation_time,
-            |canvas| painter.paint_scene_with_streams(canvas.clear(clear), tree, density, frames),
-        );
-        // A stream that failed to import draws nothing. The other streams draw as usual.
-        failures.add(self.streams.release(&mut self.gpu));
-        match (drawn, failures.into_result()) {
-            (Ok(frame), Ok(())) => Ok(frame),
-            (Ok(outcome), Err(streams)) => Err(Error::StreamsOfDrawnFrame {
-                outcome,
-                streams: Box::new(streams),
-            }),
-            (Err(failure), Ok(())) => Err(failure),
-            (Err(drawing), Err(streams)) => Err(drawing.then(streams)),
-        }
-    }
-
-    /// Draws Skia operations in physical pixels.
-    ///
-    /// # Errors
-    /// Fails when the frame cannot be drawn.
-    pub fn draw_canvas(&mut self, draw: impl FnOnce(&skia::Canvas)) -> Result<FrameOutcome, Error> {
-        Self::draw(&mut self.gpu, &mut self.attachment, None, draw)
-    }
-
-    fn draw(
-        gpu: &mut VulkanRenderer,
-        attachment: &mut Option<Attachment>,
-        presentation_time: Option<Duration>,
-        draw: impl FnOnce(&skia::Canvas),
-    ) -> Result<FrameOutcome, Error> {
-        let Some(attachment) = attachment else {
+        let Some(window) = self.state.control(SURFACE) else {
             return Ok(FrameOutcome::Pending);
         };
-        let size = attachment.window.size()?;
-        let drawn = match presentation_time {
-            Some(time) => gpu.draw_at(&mut attachment.target, size, time, draw),
-            None => gpu.draw(&mut attachment.target, size, draw),
+        let window = window.size()?;
+        if window.0 == 0 || window.1 == 0 {
+            return Ok(FrameOutcome::Pending);
+        }
+        let viewport_pixels = (viewport.size.buffer_size(viewport.density))
+            .map_err(|cause| Error::State(StateError::BufferSize(cause)))?;
+        if viewport_pixels != window {
+            return Err(Error::ViewportSize {
+                viewport: viewport_pixels,
+                window,
+            });
+        }
+        let frame = PresentFrame {
+            time,
+            viewport,
+            present_at,
         };
-        drawn.map_err(Error::Draw)
+        let drawn = self.state.draw(SURFACE, frame, snapshot)?;
+        Ok(drawn.outcome)
     }
 }

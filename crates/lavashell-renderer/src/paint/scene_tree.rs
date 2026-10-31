@@ -10,18 +10,9 @@ use skia_safe::{Canvas, IRect};
 
 impl Painter {
     pub fn paint_scene(&mut self, canvas: &Canvas, tree: Presented<'_>, density: Density) {
-        self.paint_scene_with_streams(canvas, tree, density, &StreamFrames::default());
-    }
-
-    pub fn paint_scene_with_streams(
-        &mut self,
-        canvas: &Canvas,
-        tree: Presented<'_>,
-        density: Density,
-        streams: &StreamFrames,
-    ) {
         let plan = self.plan(canvas, tree, density, None);
-        self.paint_tree(canvas, &plan, Area::Everything, density, streams);
+        let streams = StreamFrames::default();
+        self.paint_tree(canvas, &plan, Area::Everything, density, &streams);
     }
 
     pub(crate) fn paint_tree(

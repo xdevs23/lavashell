@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
-use crate::{Error, Fonts, Painter, SurfaceFrame};
+use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::{Density, Dp, Rect};
 use lavashell_core::scene::tree::SceneTree;
 
@@ -23,6 +23,7 @@ fn paint(painter: &mut Painter, canvas: &Canvas, scene: &SceneImage) -> Result<(
             clear: skia_safe::Color::TRANSPARENT,
             scene: Some(scene),
             shape: None,
+            streams: &StreamFrames::default(),
         },
     )
 }

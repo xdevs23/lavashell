@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::plan::Area;
 use crate::test_error::TestError;
 use crate::{Painter, StreamFrames};
 use lavashell_core::prelude::*;
@@ -67,6 +68,18 @@ impl Painter {
         self.paint_scene_with_streams(canvas, tree.at(Duration::ZERO), density, streams);
         Ok(())
     }
+
+    /// Paints the whole of `tree` as `paint_scene` does, with the frames of `streams`.
+    pub(crate) fn paint_scene_with_streams(
+        &mut self,
+        canvas: &Canvas,
+        tree: Presented<'_>,
+        density: Density,
+        streams: &StreamFrames,
+    ) {
+        let plan = self.plan(canvas, tree, density, None);
+        self.paint_tree(canvas, &plan, Area::Everything, density, streams);
+    }
 }
 
 pub(crate) fn paint_damage(
@@ -83,6 +96,7 @@ pub(crate) fn paint_damage(
         clear,
         scene: None,
         shape: None,
+        streams: &StreamFrames::default(),
     };
     painter.paint_surface(canvas, frame)?;
     Ok(())

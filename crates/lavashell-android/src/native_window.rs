@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use crate::platform::ndk;
-use lavashell_renderer::SurfaceTiming;
+use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl, SurfaceTiming};
+use std::convert::Infallible;
 
 /// The producer end of a buffer queue, together with the timing history of the Surface of that queue. A `NativeWindow`
 /// does not extend the lifetime of the consumer of a `SurfaceView`. Detach the renderer before the callback of the host
@@ -35,4 +36,17 @@ impl NativeWindow {
             _ => Err(Error::WindowSize { width, height }),
         }
     }
+}
+
+/// `PresentFrame` sets the presentation time, so a native window sends nothing for each frame.
+impl SurfaceControl for NativeWindow {
+    type Error = Infallible;
+
+    fn prepare(&mut self, _: &PresentFrame) -> Result<(), Infallible> {
+        Ok(())
+    }
+
+    fn before_present(&mut self, _: &PresentFrame) {}
+
+    fn after_present(&mut self, _: FrameOutcome) {}
 }

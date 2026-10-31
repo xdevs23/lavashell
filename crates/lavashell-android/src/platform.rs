@@ -4,9 +4,9 @@
 //! defines the names used by this crate and accepts the calls that this crate makes.
 
 pub(crate) use crate::hardware_buffer::{HardwareBufferMemory, PropertiesError};
-pub(crate) use crate::presentation::{AospPresentation, surface_target};
+pub(crate) use crate::presentation::{AospPresentation, attach_window};
 pub(crate) use ::ndk;
 pub(crate) use lavashell_renderer::{
-    Completion, Error as ReleaseError, ForeignImport, ForeignImporter, SampledMemory, Sampling,
-    SurfaceTarget, VulkanRenderer,
+    Completion, Error as ReleaseError, ForeignImport, ForeignImporter, RendererState,
+    SampledMemory, Sampling, VulkanRenderer,
 };

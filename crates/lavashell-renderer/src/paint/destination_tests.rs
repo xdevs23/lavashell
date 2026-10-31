@@ -5,7 +5,7 @@ use crate::scalar::scalar;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
 use crate::test_surfaces::{self, ChannelRounding};
-use crate::{Fonts, Painter, SurfaceFrame};
+use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::Extent;
 use lavashell_core::scene::tree::{
@@ -147,6 +147,7 @@ fn paint_damage(
         clear: skia_safe::Color::BLACK,
         scene: None,
         shape: None,
+        streams: &StreamFrames::default(),
     };
     painter.paint_surface(target.canvas(), frame)?;
     Ok(())

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::{Error, Fonts, Painter, SurfaceFrame};
+use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
@@ -185,6 +185,7 @@ fn paint(
             clear: skia_safe::Color::WHITE,
             scene: None,
             shape: None,
+            streams: &StreamFrames::default(),
         };
         painter.paint_surface(surface.canvas(), frame)?;
     }

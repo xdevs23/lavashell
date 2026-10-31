@@ -3,9 +3,12 @@ use crate::hardware_buffer::HardwareBufferMemory;
 use crate::native_window::NativeWindow;
 use ash::khr::android_surface;
 use ash::vk;
+use lavashell_core::prelude::OutputRequest;
+use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
 use lavashell_renderer::{
-    Error, ForeignMemory, PresentationBackend, SurfaceAlpha, SurfaceTarget, VulkanRenderer,
+    Attach, ForeignMemory, PresentationBackend, RendererState, StateError, StreamBackend,
+    SurfaceAlpha, VulkanRenderer,
 };
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
 use std::ffi::CStr;
@@ -53,14 +56,23 @@ impl PresentationBackend for AospPresentation {
 /// An `ANativeWindow`, from which Vulkan creates a surface through `VK_KHR_android_surface`.
 struct AndroidWindow(ndk::native_window::NativeWindow);
 
-/// The target through which `gpu` presents to `window`.
-pub(crate) fn surface_target(
-    gpu: &VulkanRenderer,
-    window: &NativeWindow,
+/// Attaches `window` to `state` as `surface`, with the window as the control of the surface.
+pub(crate) fn attach_window<S: StreamBackend<Gpu = VulkanRenderer>>(
+    state: &mut RendererState<NativeWindow, S>,
+    surface: SurfaceId,
+    window: NativeWindow,
     alpha: SurfaceAlpha,
-) -> Result<SurfaceTarget, Error> {
-    let vulkan_window = Arc::new(AndroidWindow(window.window.clone()));
-    gpu.surface_target(vulkan_window, alpha, window.timing.clone())
+) -> Result<(), StateError> {
+    state.attach(Attach {
+        surface,
+        window: Arc::new(AndroidWindow(window.window.clone())),
+        alpha,
+        timing: window.timing.clone(),
+        output: OutputRequest::default(),
+        hdr_metadata: None,
+        gpu_budget: None,
+        control: window,
+    })
 }
 
 // SAFETY: A `Surface` destroys the handle that `create_surface` returns and cannot check it, so the trait is unsafe.

@@ -205,6 +205,7 @@ impl Platform {
         let frame = PresentFrame {
             time: timing,
             viewport,
+            present_at: None,
         };
         let snapshot = surface.builder.snapshot();
         let drawn = (self.renderer.draw(id, frame, &snapshot)).map_err(Error::Draw)?;

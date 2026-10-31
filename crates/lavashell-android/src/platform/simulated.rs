@@ -6,6 +6,7 @@ mod image;
 mod importer;
 pub mod ndk;
 mod reader;
+mod state;
 mod test_error;
 
 pub(crate) use image::{HardwareBufferFormat, HardwareBufferUsage};
@@ -22,6 +23,7 @@ use lavashell_renderer::{
 };
 use reader::Queue;
 pub(crate) use reader::{Buffer, Event as StreamEvent, MEDIA, Producer, Writing};
+pub(crate) use state::{RendererState, attach_window};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -249,7 +251,7 @@ impl Drop for SurfaceTarget {
 /// The presentation backend used by the AOSP renderer. The simulated renderer accepts it and ignores it.
 pub(crate) struct AospPresentation;
 
-pub(crate) fn surface_target(
+fn surface_target(
     gpu: &VulkanRenderer,
     window: &crate::NativeWindow,
     _: SurfaceAlpha,
@@ -301,25 +303,6 @@ impl VulkanRenderer {
     pub fn foreign_importer(&self) -> Result<ForeignImporter, RendererError> {
         self.gpu.reachable()?;
         Ok(ForeignImporter::new(&self.gpu))
-    }
-
-    pub fn draw(
-        &mut self,
-        target: &mut SurfaceTarget,
-        size: (u32, u32),
-        draw: impl FnOnce(&skia::Canvas),
-    ) -> Result<FrameOutcome, RendererError> {
-        self.present(target, size, None, draw)
-    }
-
-    pub fn draw_at(
-        &mut self,
-        target: &mut SurfaceTarget,
-        size: (u32, u32),
-        time: Duration,
-        draw: impl FnOnce(&skia::Canvas),
-    ) -> Result<FrameOutcome, RendererError> {
-        self.present(target, size, Some(time), draw)
     }
 
     /// Applies the timestamp rule of the renderer: once a frame on a window had an explicit timestamp, every later

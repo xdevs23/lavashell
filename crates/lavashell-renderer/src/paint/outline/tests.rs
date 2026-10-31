@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
-use crate::{Fonts, Painter, SurfaceFrame, UniformRange, input_cells};
+use crate::{Fonts, Painter, StreamFrames, SurfaceFrame, UniformRange, input_cells};
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::prelude::{Brush, Color, Corners, DpExt, DrawCommand, Rect, SceneTree};
 use num_traits::ToPrimitive;
@@ -139,6 +139,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
                 shape: Some(&clip),
+                streams: &StreamFrames::default(),
             },
         )?;
         assert_eq!(pixel(&mut surface, density, 0.dp(), 0.dp())?, [0; 4]);
@@ -159,6 +160,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
                     clear: skia_safe::Color::TRANSPARENT,
                     scene: None,
                     shape: Some(&clip),
+                    streams: &StreamFrames::default(),
                 },
             )?;
             assert_eq!(pixel(&mut surface, density, 3.dp(), 10.dp())?, edge);

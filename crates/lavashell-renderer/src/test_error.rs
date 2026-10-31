@@ -21,6 +21,8 @@ pub(crate) enum TestError {
     #[error(transparent)]
     StateDraw(#[from] crate::DrawError<std::convert::Infallible>),
     #[error(transparent)]
+    StartWithStreams(#[from] crate::StartError<Error>),
+    #[error(transparent)]
     Draw(#[from] FailedDraw),
     #[error(transparent)]
     DrawFailure(#[from] DrawFailure),

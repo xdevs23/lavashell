@@ -438,6 +438,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
                 shape: None,
+                streams: &StreamFrames::default(),
             },
         )?;
         assert_eq!(

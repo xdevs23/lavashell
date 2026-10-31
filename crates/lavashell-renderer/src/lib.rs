@@ -43,12 +43,12 @@ pub use paint::{
 };
 pub use skia_safe as skia;
 pub use state::{
-    Attach, DrawError, Drawn, PainterSetup, PresentFrame, RendererSetup, RendererState, StateError,
-    SurfaceControl,
+    Attach, DrawError, Drawn, FrameError, PainterSetup, PresentFrame, RendererSetup, RendererState,
+    StartError, StateError, SurfaceControl,
 };
 pub use stream::{
-    BufferQueue, Completions, FenceCopyError, FrameImporter, FrameSource, Latch, LatchAccess,
-    LatchedFrames, ProducedFrame, Stream, Taken,
+    BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,
+    LatchAccess, LatchedFrames, NoStreams, ProducedFrame, Stream, StreamBackend, Taken,
 };
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
