@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::drag::TransferId;
+use super::{ClipboardShortcut, clipboard_shortcut};
 use crate::test_error::TestError;
 use crate::text_transfer::*;
 use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
@@ -23,6 +24,10 @@ impl TextMeasurer for Metrics {
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
 
 fn editor() -> Result<(View, State<String>, NodeId), TestError> {
+    editor_with(Modifier::new())
+}
+
+fn editor_with(modifier: Modifier) -> Result<(View, State<String>, NodeId), TestError> {
     let text = State::new("abc def".to_string());
     let value = text.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -30,7 +35,8 @@ fn editor() -> Result<(View, State<String>, NodeId), TestError> {
         ui.text_area(
             value.get(),
             TextFieldOptions::default(),
-            Modifier::new()
+            modifier
+                .clone()
                 .accessible_name("field")
                 .size(140.dp(), 60.dp()),
             move |text| value.set(text),
@@ -290,5 +296,64 @@ fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result
             .is_some()
     );
     assert_eq!(text.get(), "abc def");
+    Ok(())
+}
+
+fn focus_field(view: &mut View) {
+    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
+    view.input(InputEvent::Release(Point::new(11.dp(), 5.dp())));
+}
+
+fn select_all(view: &mut View) {
+    view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
+}
+
+fn read_only(semantics: &mut Semantics) {
+    semantics.state.form.read_only = true;
+}
+
+#[test]
+fn a_cut_needs_selected_text_in_the_focused_field() -> Result<(), TestError> {
+    let cut = Key::Character('x');
+    let (mut view, _, _) = editor()?;
+    assert!(clipboard_shortcut(&mut view, cut).is_none());
+    focus_field(&mut view);
+    assert!(clipboard_shortcut(&mut view, cut).is_none());
+    select_all(&mut view);
+    assert!(matches!(
+        clipboard_shortcut(&mut view, cut),
+        Some(ClipboardShortcut::Cut(source, _)) if source.text() == "abc def"
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_read_only_field_copies_but_does_not_cut() -> Result<(), TestError> {
+    let (mut view, _, id) = editor_with(Modifier::new().semantics_with(read_only))?;
+    focus_field(&mut view);
+    select_all(&mut view);
+    let source = view
+        .text_selection_source(id)
+        .ok_or(TestError::MissingField)?;
+    assert_eq!(source.text(), "abc def");
+    assert!(!source.can_move());
+    assert!(clipboard_shortcut(&mut view, Key::Character('x')).is_none());
+    assert!(matches!(
+        clipboard_shortcut(&mut view, Key::Character('c')),
+        Some(ClipboardShortcut::Copy(text)) if text == "abc def"
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_paste_needs_an_editable_focused_field() -> Result<(), TestError> {
+    let paste = Key::Character('v');
+    let (mut view, _, _) = editor()?;
+    assert!(clipboard_shortcut(&mut view, paste).is_none());
+    focus_field(&mut view);
+    assert!(matches!(
+        clipboard_shortcut(&mut view, paste),
+        Some(ClipboardShortcut::Paste)
+    ));
     Ok(())
 }

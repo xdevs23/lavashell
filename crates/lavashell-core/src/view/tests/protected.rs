@@ -61,8 +61,7 @@ fn protected_unicode_editing_only_shapes_masks_and_blocks_exports() -> TestResul
         ..Shortcut::key(Key::Character('a'))
     }));
     let id = view.focus().required("a focused node")?;
-    assert!(view.copy_selection(false).is_none());
-    assert!(view.copy_selection(true).is_none());
+    assert!(view.copy_selection().is_none());
     assert!(view.editing_target().is_none());
     assert!(view.text_paste_target(id).is_none());
     assert!(view.text_selection_source(id).is_none());
@@ -219,7 +218,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
         .required("a private text")?;
     private.expose(|value| assert_eq!(value, "ié💡"));
     assert_eq!(secret.masked('•'), "•••");
-    assert!(view.copy_selection(false).is_none());
+    assert!(view.copy_selection().is_none());
     assert!(view.editing_target().is_none());
     secret.set_revealed(false);
     scene.show(view.frame(WINDOW, &mut PrivateMetrics).without_failures()?)?;
@@ -296,7 +295,7 @@ fn protected_field_with_key_handler_edits_text_and_space_in_a_retained_scope() -
     scene.show(view.frame(window, &mut Metrics).without_failures()?)?;
     assert_eq!(accepted.get(), 1);
     assert!(!format!("{:?}", scene.commands()).contains("wadswads"));
-    assert!(view.copy_selection(false).is_none());
+    assert!(view.copy_selection().is_none());
     secret.take().expose(|value| assert_eq!(value, "wadswads "));
     Ok(())
 }

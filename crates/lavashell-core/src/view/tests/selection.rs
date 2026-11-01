@@ -111,6 +111,23 @@ pub(super) fn point(column: usize) -> Point {
 }
 
 #[test]
+fn copy_leaves_the_selected_text_in_the_field_and_a_move_removes_it() -> TestResult {
+    let mut scene = Scene::default();
+    let (mut view, state, changes) = editor(&mut scene, "abc def", false)?;
+    let id = select(&mut view, 0, 3)?;
+    assert_eq!(view.copy_selection().as_deref(), Some("abc"));
+    assert_eq!(state.get(), "abc def");
+    assert_eq!(changes.get(), 0);
+    let source = view
+        .text_selection_source(id)
+        .required("a selection source")?;
+    assert!(view.complete_text_move(&source));
+    assert_eq!(state.get(), " def");
+    assert_eq!(changes.get(), 1);
+    Ok(())
+}
+
+#[test]
 fn selected_text_press_is_pending_until_threshold_and_click_collapses_on_release() -> TestResult {
     let mut scene = Scene::default();
     let (mut view, state, changes) = editor(&mut scene, "abc def", false)?;
@@ -119,7 +136,7 @@ fn selected_text_press_is_pending_until_threshold_and_click_collapses_on_release
     assert_eq!(view.edits[&id].selection(), 0..3);
     view.input(InputEvent::Move(Point::new(13.dp(), 5.dp())));
     assert!(view.edits[&id].drop_caret().is_none());
-    assert_eq!(view.copy_selection(false).as_deref(), Some("abc"));
+    assert_eq!(view.copy_selection().as_deref(), Some("abc"));
     view.input(InputEvent::Release(Point::new(13.dp(), 5.dp())));
     assert_eq!(view.edits[&id].selection(), 1..1);
     assert_eq!(state.get(), "abc def");
@@ -234,18 +251,12 @@ fn plain_text_inherits_selection_copies_and_exposes_only_selection_actions() -> 
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Shaped)?;
     let id = select(&mut view, 0, 4)?;
-    assert_eq!(view.copy_selection(false).as_deref(), Some("read"));
+    assert_eq!(view.copy_selection().as_deref(), Some("read"));
     assert_eq!(view.editing_target(), None);
     view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
-    assert_eq!(
-        view.copy_selection(false).as_deref(),
-        Some("read only text")
-    );
+    assert_eq!(view.copy_selection().as_deref(), Some("read only text"));
     view.input(InputEvent::Text("replacement".to_string()));
-    assert_eq!(
-        view.copy_selection(false).as_deref(),
-        Some("read only text")
-    );
+    assert_eq!(view.copy_selection().as_deref(), Some("read only text"));
     advance_with(&mut scene, &mut view, WINDOW, &mut Shaped)?;
     let node = &view.accessibility.nodes[&id];
     assert!(node.state.semantics.form.read_only);
@@ -262,7 +273,7 @@ fn plain_text_inherits_selection_copies_and_exposes_only_selection_actions() -> 
         }),
         Ok(ActionOutcome::Performed)
     );
-    assert_eq!(view.copy_selection(false).as_deref(), Some("only"));
+    assert_eq!(view.copy_selection().as_deref(), Some("only"));
     let excluded = view
         .nodes
         .iter()
@@ -331,7 +342,7 @@ fn pointer_selection_of_centered_plain_text_repaints_retained_geometry() -> Test
     view.input(InputEvent::Press(Point::new(1.dp(), 35.dp())));
     view.input(InputEvent::Move(Point::new(31.dp(), 35.dp())));
     view.input(InputEvent::Release(Point::new(31.dp(), 35.dp())));
-    assert_eq!(view.copy_selection(false).as_deref(), Some("abc"));
+    assert_eq!(view.copy_selection().as_deref(), Some("abc"));
     scene.show(view.frame(window, &mut Shaped).without_failures()?)?;
     assert_eq!(view.stats().root_compositions, before.root_compositions);
     assert!(view.stats().painted_components > before.painted_components);
