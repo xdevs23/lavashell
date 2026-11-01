@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
     DrawCommand, Drawing, FieldGeometry, Hit, Inherited, NodeKind, Point, Rect, TextMeasurer,
-    TextStyle, Transform, View, field,
+    TextStyle, TextTarget, Transform, View, field,
 };
 use crate::ui::IconStyle;
 
 impl View {
-    /// Paints the node at `index` in `rect` inside the clips of `inside`, with text and icons in the content colors
-    /// of `inside`.
+    /// Paints the content of the node at `index` in `rect` inside the clips of `inside`, with text and icons in the
+    /// content colors of `inside`. `bounds` is the rectangle of the whole node, under the same `transform` as `rect`.
     pub(super) fn paint_kind(
         &mut self,
         index: usize,
+        bounds: Rect,
         rect: Rect,
         transform: Transform,
         inside: Inherited,
@@ -26,10 +27,11 @@ impl View {
                 let focused = self.is_focused(id);
                 if self.text_selectable(index) {
                     if node.enabled {
+                        let content = transform.rect(rect);
                         self.hits.push(Hit {
-                            input: Some(index),
+                            input: Some(TextTarget::new(index, content)),
                             group: self.moving.current,
-                            ..Hit::new(id, node.focusable, transform.rect(rect), clips.to_vec())
+                            ..Hit::new(id, node.focusable, content, clips.to_vec())
                         });
                     }
                     let (caret_width, device_pixel) = (self.caret_width(), self.device_pixel());
@@ -91,9 +93,9 @@ impl View {
                     && !self.accessibility_semantics(index).state.form.read_only;
                 if node.enabled {
                     self.hits.push(Hit {
-                        input: Some(index),
+                        input: Some(TextTarget::new(index, transform.rect(rect))),
                         group: self.moving.current,
-                        ..Hit::new(id, node.focusable, transform.rect(rect), clips.to_vec())
+                        ..Hit::new(id, node.focusable, transform.rect(bounds), clips.to_vec())
                     });
                 }
                 let (caret_width, device_pixel) = (self.caret_width(), self.device_pixel());

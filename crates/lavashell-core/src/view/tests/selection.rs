@@ -82,11 +82,26 @@ pub(super) fn editor(
     Ok((view, state, changes))
 }
 
-fn field_id(view: &View) -> Result<NodeId, TestError> {
+pub(super) fn field_id(view: &View) -> Result<NodeId, TestError> {
     let field = (view.nodes.iter())
         .find(|node| node.tag.as_deref() == Some("field"))
         .required("a node tagged field")?;
     Ok(field.id)
+}
+
+/// Adds a text field tagged "field" that contains "abc" after the elements of `placement`. The
+/// field is 120 by 52 dp, with a background and 16 dp of padding around its text.
+pub(super) fn padded_field(ui: &mut Ui, placement: Modifier) {
+    ui.text_input(
+        "abc".to_string(),
+        TextFieldOptions::default(),
+        placement
+            .tag("field")
+            .size(120.dp(), 52.dp())
+            .background(Color::WHITE)
+            .padding(16.dp()),
+        |_| {},
+    );
 }
 
 /// Focuses the text area tagged "field" and selects `start..end` in it by setting its focus, anchor
@@ -404,5 +419,24 @@ fn disabled_drag_source_clears_its_insertion_marker_on_release() -> TestResult {
     view.input(InputEvent::Release(point(7)));
     assert!(view.edits[&id].drop_caret().is_none());
     assert_eq!(state.get(), "abc def");
+    Ok(())
+}
+
+#[test]
+fn a_tap_on_the_padding_of_a_field_places_the_caret_at_the_nearest_position() -> TestResult {
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), |ui| {
+        padded_field(ui, Modifier::new());
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Shaped)?;
+    let id = field_id(&view)?;
+    let selection_after_tap = |view: &mut View, x: Dp| {
+        tap_at(view, Point::new(x, 26.dp()));
+        view.edits[&id].selection()
+    };
+    assert_eq!(selection_after_tap(&mut view, 4.dp()), 0..0);
+    assert_eq!(view.focus(), Some(id));
+    assert_eq!(selection_after_tap(&mut view, 110.dp()), 3..3);
+    assert_eq!(selection_after_tap(&mut view, 27.dp()), 1..1);
     Ok(())
 }

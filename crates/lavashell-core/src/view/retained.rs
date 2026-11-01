@@ -4,7 +4,7 @@ use super::output::{GroupId, Painted, placed_at};
 use super::paint::Inherited;
 use super::{
     Affine, BTreeMap, BTreeSet, Constraints, Dp, FocusSource, Hit, HitClip, Key, Layout, Measuring,
-    NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer, Transform, View, Visibility,
+    NodeId, Phase, Point, Rect, Scale, Size, TextMeasurer, TextTarget, Transform, View, Visibility,
     accessibility, collect_descendants, index_of, paint, scroll_followers,
 };
 use crate::style::ContentColors;
@@ -365,8 +365,11 @@ impl View {
             return;
         };
         let moved = painting.moved(placed);
-        for hit in (painting.hits.iter_mut()).filter(|hit| hit.input.is_some()) {
-            hit.input = self.nodes.iter().position(|n| n.id == hit.id);
+        for hit in &mut painting.hits {
+            if let Some(target) = hit.input {
+                let index = self.nodes.iter().position(|n| n.id == hit.id);
+                hit.input = index.map(|index| TextTarget { index, ..target });
+            }
         }
         for (node, rect) in &painting.geometry {
             if let Some(i) = self.nodes.iter().position(|n| n.id == *node) {
@@ -409,6 +412,7 @@ impl View {
             });
             self.hits.push(Hit {
                 rect: moved.rect(hit.rect),
+                input: hit.input.map(|target| target.mapped(moved)),
                 clips: clips.iter().copied().chain(inner).collect(),
                 group: hit.group.or(around),
                 ..hit.clone()
