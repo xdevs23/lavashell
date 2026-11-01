@@ -6,7 +6,7 @@ use crate::plan::{Area, Plan, Planned, PlannedGroup};
 use crate::scalar::scalar;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Presented;
-use skia_safe::Canvas;
+use skia_safe::{Canvas, IRect};
 
 impl Painter {
     pub fn paint_scene(&mut self, canvas: &Canvas, tree: Presented<'_>, density: Density) {
@@ -68,12 +68,11 @@ impl Painter {
     ) {
         for step in steps {
             let (saved, inside) = match step {
-                Planned::Leaf(leaf) if area.repaints(leaf.device_extent) => {
-                    self.paint_leaf(canvas, leaf, streams, pass);
-                    continue;
-                }
-                Planned::Leaf(_) => {
-                    self.packet_cache.stats.skipped_leaves += 1;
+                Planned::Leaf(leaf) => {
+                    match area.repainted(leaf.device_extent) {
+                        Some(extent) => self.paint_leaf(canvas, leaf, extent, streams, pass),
+                        None => self.packet_cache.stats.skipped_leaves += 1,
+                    }
                     continue;
                 }
                 Planned::Group { group, steps } => {
@@ -111,8 +110,9 @@ impl Painter {
         self.text_scopes
             .open(group.destination == Destination::Surface);
         if group.destination == Destination::Layer {
-            // The layer has the size of the clip, so it contains the same pixels in every pass.
-            super::clip_device(canvas, group.device_extent);
+            // The layer has the size of the clip, so it contains the same pixels in every pass. The leaves of a group
+            // without an extent paint nothing, so the layer clips to an empty rectangle.
+            super::clip_device(canvas, group.device_extent.unwrap_or(IRect::new_empty()));
         }
         (self.opacity).save(canvas, alpha, None, group.reads_parent, &self.failures);
         Ok(())

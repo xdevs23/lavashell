@@ -299,11 +299,12 @@ impl Painter {
         Ok(())
     }
 
-    /// `pass` is the number of the pass that planned `leaf`.
+    /// `extent` is the device pixels of `leaf`. `pass` is the number of the pass that planned `leaf`.
     pub(crate) fn paint_leaf(
         &mut self,
         canvas: &Canvas,
         leaf: &Leaf<'_>,
+        extent: IRect,
         streams: &StreamFrames,
         pass: u64,
     ) {
@@ -315,12 +316,12 @@ impl Painter {
             }
             Cached::No => {
                 self.packet_cache.stats.uncached_leaves += 1;
-                self.paint_commands(canvas, leaf, streams);
+                self.paint_commands(canvas, leaf, extent, streams);
                 return;
             }
             Cached::Fill { key, pixels, bytes } => (*key, *pixels, *bytes),
         };
-        self.paint_commands(canvas, leaf, streams);
+        self.paint_commands(canvas, leaf, extent, streams);
         self.packet_cache.make_room(canvas, key, bytes, pass);
         match canvas.snapshot_surface(Some(pixels)) {
             Some(image) => self.packet_cache.insert(key, image, bytes),

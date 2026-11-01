@@ -38,11 +38,11 @@ pub(crate) enum Area {
 }
 
 impl Area {
-    /// Whether painting `extent` changes pixels that the pass repaints.
-    pub fn repaints(self, extent: Option<IRect>) -> bool {
-        extent.is_some_and(|extent| match self {
+    /// Returns `extent` when painting it changes pixels that the pass repaints.
+    pub fn repainted(self, extent: Option<IRect>) -> Option<IRect> {
+        extent.filter(|extent| match self {
             Self::Everything => true,
-            Self::Pixels(area) => IRect::intersects(&extent, &area),
+            Self::Pixels(area) => IRect::intersects(extent, &area),
         })
     }
 }
@@ -412,5 +412,16 @@ mod tests {
             Some(bounds),
         );
         assert_eq!(pixels, Some(bounds));
+    }
+
+    #[test]
+    fn a_pass_repaints_an_extent_only_where_the_extent_meets_the_area_of_the_pass() {
+        let extent = IRect::new(10, 10, 20, 20);
+        let meeting = Area::Pixels(IRect::new(15, 15, 30, 30));
+        let adjacent = Area::Pixels(IRect::new(20, 10, 30, 20));
+        assert_eq!(Area::Everything.repainted(Some(extent)), Some(extent));
+        assert_eq!(meeting.repainted(Some(extent)), Some(extent));
+        assert_eq!(adjacent.repainted(Some(extent)), None);
+        assert_eq!(Area::Everything.repainted(None), None);
     }
 }

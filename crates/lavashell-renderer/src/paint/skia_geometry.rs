@@ -125,10 +125,10 @@ pub(crate) fn max_image_side(canvas: &Canvas) -> i32 {
     })
 }
 
-/// Clips `canvas` to the device pixels `pixels`, or to no pixels when `pixels` is None.
-pub(crate) fn clip_device(canvas: &Canvas, pixels: Option<IRect>) {
+/// Clips `canvas` to the device pixels `pixels`.
+pub(crate) fn clip_device(canvas: &Canvas, pixels: IRect) {
     let matrix = canvas.local_to_device();
     let _chained_canvas = canvas.reset_matrix();
-    let _chained_canvas = canvas.clip_irect(pixels.unwrap_or_default(), None);
+    let _chained_canvas = canvas.clip_irect(pixels, None);
     let _chained_canvas = canvas.set_matrix(&matrix);
 }

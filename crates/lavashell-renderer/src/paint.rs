@@ -33,7 +33,7 @@ pub(crate) use skia_geometry::{
     skpath, skpath_through,
 };
 pub use skia_geometry::{skpoint, skrect};
-use skia_safe::{Canvas, PaintStyle};
+use skia_safe::{Canvas, IRect, PaintStyle};
 use std::collections::HashMap;
 pub use stream::{StreamFrames, StreamPixels, StreamRejection, UnsampledFormat};
 
@@ -124,12 +124,13 @@ impl Painter {
         Ok(&mut self.shaper.cached(input).shaped.paragraph)
     }
 
-    /// Paints the draw commands of `leaf`. Each effect is identified by the key of the leaf and by the position of
-    /// the effect among the effects of the leaf.
+    /// Paints the draw commands of `leaf`, whose device pixels are `extent`. Each effect is identified by the key of
+    /// the leaf and by the position of the effect among the effects of the leaf.
     pub(crate) fn paint_commands(
         &mut self,
         canvas: &Canvas,
         leaf: &Leaf<'_>,
+        extent: IRect,
         streams: &StreamFrames,
     ) {
         let commands = leaf.packet.commands();
@@ -138,7 +139,7 @@ impl Painter {
         let saved = canvas.save();
         if leaf.analysis.layers && !leaf.analysis.has_effects() {
             // Layers inside the packet have the size of the clip, so they contain the same pixels in every pass.
-            clip_device(canvas, leaf.device_extent);
+            clip_device(canvas, extent);
         }
         let text_scope = self.text_scopes.enter(
             canvas,

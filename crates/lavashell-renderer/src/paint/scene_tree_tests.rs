@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::destination::Destination;
 use crate::effect_registry::{
     DrawTarget, EffectBackend, EffectRegistry, EffectRequest, QualityChange,
 };
+use crate::plan::Area;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
 use crate::test_surfaces::{pixels, surface};
-use crate::{Fonts, Painter, SurfaceFrame};
+use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_core::surface::SurfaceId;
@@ -254,6 +256,37 @@ fn a_graft_paints_the_namespace_that_it_shows_in_place() -> Result<(), TestError
         painted(&grafted, Density::ONE)?,
         painted(&grouped(group(place, 0.7, None), shapes())?, Density::ONE)?
     );
+    Ok(())
+}
+
+#[test]
+fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
+    let nothing = vec![DrawCommand::Save, DrawCommand::Restore];
+    let scene = grouped(group(Affine::IDENTITY, 0.5, None), nothing)?;
+    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut target = surface(WIDTH, HEIGHT)?;
+    let _chained_canvas = target.canvas().clear(skia_safe::Color::WHITE);
+    let before = pixels(&mut target);
+    let plan = painter.plan(
+        target.canvas(),
+        scene.at(Duration::ZERO),
+        Density::ONE,
+        None,
+    );
+    let [crate::plan::Planned::Group { group: planned, .. }] = plan.steps.as_slice() else {
+        return Err(TestError::Missing("group"));
+    };
+    assert_eq!(planned.destination, Destination::Layer);
+    assert_eq!(planned.device_extent, None);
+    let streams = StreamFrames::default();
+    painter.paint_tree(
+        target.canvas(),
+        &plan,
+        Area::Everything,
+        Density::ONE,
+        &streams,
+    );
+    assert_eq!(pixels(&mut target), before);
     Ok(())
 }
 
