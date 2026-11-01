@@ -159,6 +159,61 @@ fn scrolling_a_small_path_through_a_clip_reuses_its_complete_tile() -> Result<()
 }
 
 #[test]
+fn an_icon_moved_by_whole_pixels_reuses_the_tiles_of_its_paths() -> Result<(), TestError> {
+    use lavashell_core::prelude::{
+        Density, Dp, DrawContext, Drawing, Icon, IconPath, Point, Rect as UiRect, Segment, Size,
+        Viewport,
+    };
+    const fn at(x: f64, y: f64) -> Point {
+        Point::new(Dp::new(x), Dp::new(y))
+    }
+    static CROSS: Icon = Icon {
+        grid: Size::new(Dp::new(10.0), Dp::new(10.0)),
+        paths: &[
+            IconPath {
+                start: at(1.0, 1.0),
+                segments: &[Segment::Line(at(9.0, 9.0))],
+                closed: false,
+                stroke: Some(1.0),
+            },
+            IconPath {
+                start: at(9.0, 1.0),
+                segments: &[Segment::Line(at(1.0, 9.0))],
+                closed: false,
+                stroke: Some(1.0),
+            },
+        ],
+    };
+    let mut painter =
+        crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?
+            .with_raster_paths(true);
+    let mut surface =
+        skia_safe::surfaces::raster_n32_premul((64, 64)).ok_or(TestError::RasterSurface)?;
+    let context = DrawContext::new(Viewport::new(Size::new(64.dp(), 64.dp()), Density::ONE));
+    for corner in [at(0.0, 0.0), at(3.0, 17.0), at(40.0, 5.0), at(21.0, 42.0)] {
+        let mut commands = Vec::new();
+        Drawing::new(
+            &mut commands,
+            UiRect::new(0.dp(), 0.dp(), 64.dp(), 64.dp()),
+            &context,
+        )
+        .icon(
+            &CROSS,
+            UiRect::new(corner.x, corner.y, 20.dp(), 20.dp()),
+            lavashell_core::prelude::Color::WHITE,
+            false,
+        );
+        painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
+        assert_eq!(
+            painter.resources.tiles.borrow().images().count(),
+            CROSS.paths.len(),
+            "{corner:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn floating_point_tiles_keep_hdr_headroom() -> Result<(), TestError> {
     let mut cache = RasterCache::new(true);
     let space = crate::color::working_color_space().ok_or(crate::Error::WorkingColorSpace)?;

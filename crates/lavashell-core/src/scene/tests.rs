@@ -237,60 +237,62 @@ fn an_icon_scales_its_grid_into_the_middle_of_its_box_with_its_strokes() {
     assert_eq!(
         shapes(white, false),
         [
+            DrawCommand::Save,
+            DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(at(30.0, 40.0))),
             path(
-                at(30.0, 40.0),
-                &[at(50.0, 40.0), at(40.0, 60.0)],
+                at(0.0, 0.0),
+                &[at(10.0, 0.0), at(5.0, 10.0)],
                 true,
                 white,
-                Some(2.dp())
+                Some(1.dp())
             ),
+            path(at(0.0, 10.0), &[at(10.0, 10.0)], false, white, Some(1.dp())),
             path(
-                at(30.0, 60.0),
-                &[at(50.0, 60.0)],
-                false,
-                white,
-                Some(2.dp())
-            ),
-            path(
-                at(38.0, 48.0),
-                &[at(42.0, 48.0), at(42.0, 52.0)],
+                at(4.0, 4.0),
+                &[at(6.0, 4.0), at(6.0, 6.0)],
                 true,
                 white,
                 None
             ),
+            DrawCommand::Restore,
         ]
     );
 }
 
 #[test]
-fn a_filled_icon_fills_its_closed_paths_under_their_strokes() -> TestResult {
-    let kinds = shapes(Color::WHITE, true)
+fn a_filled_icon_fills_its_closed_paths_under_their_strokes() {
+    let kinds: Vec<_> = shapes(Color::WHITE, true)
         .into_iter()
-        .map(|command| match command {
-            DrawCommand::Path { closed, stroke, .. } => Ok((closed, stroke.is_some())),
-            _ => Err(TestError::Absent("a path command")),
+        .filter_map(|command| match command {
+            DrawCommand::Path { closed, stroke, .. } => Some((closed, stroke.is_some())),
+            _ => None,
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect();
     assert_eq!(
         kinds,
         [(true, false), (true, true), (false, true), (true, false)]
     );
-    Ok(())
 }
 
 #[test]
 fn a_translucent_icon_paints_opaque_paths_inside_one_opacity_layer() {
-    let commands = shapes(Color::WHITE.with_alpha(0.5), false);
-    assert_eq!(
-        commands.first(),
-        Some(&DrawCommand::OpacityLayer {
+    let paths: Vec<_> = shapes(Color::WHITE, false)
+        .into_iter()
+        .filter(|command| matches!(command, DrawCommand::Path { .. }))
+        .collect();
+    let opening = vec![
+        DrawCommand::Save,
+        DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(at(30.0, 40.0))),
+        DrawCommand::OpacityLayer {
             alpha: 0.5,
-            bounds: Rect::new(19.dp(), 39.dp(), 42.dp(), 22.dp()),
-        })
+            bounds: Rect::new(-0.5.dp(), -0.5.dp(), 11.dp(), 11.dp()),
+        },
+    ];
+    let closing = vec![DrawCommand::Restore; 2];
+    assert_eq!(
+        shapes(Color::WHITE.with_alpha(0.5), false),
+        [opening, paths, closing].concat()
     );
-    assert_eq!(commands.last(), Some(&DrawCommand::Restore));
-    let inner = &commands[1..commands.len() - 1];
-    assert_eq!(inner, shapes(Color::WHITE, false));
 }
 
 #[test]
@@ -314,61 +316,66 @@ fn an_icon_without_an_area_paints_nothing_and_a_path_off_its_grid_is_left_out() 
         }],
     };
     let square = Rect::new(10.dp(), 20.dp(), 40.dp(), 20.dp());
-    for icon in [&FLAT, &STRAY] {
+    let sliver = Rect::new(10.dp(), 20.dp(), 0.dp(), 20.dp());
+    let translucent = Color::WHITE.with_alpha(0.5);
+    for (icon, square, color) in [
+        (&FLAT, square, Color::WHITE),
+        (&STRAY, square, Color::WHITE),
+        (&SHAPES, sliver, translucent),
+    ] {
         let mut commands = Vec::new();
-        icon.paint(square, Color::WHITE, true, &mut commands);
+        icon.paint(square, color, true, &mut commands);
         assert!(commands.is_empty(), "{icon:?}: {commands:?}");
     }
 }
 
 #[test]
-fn an_icon_places_the_control_points_of_its_curves_like_its_other_points() {
+fn an_icon_paints_the_same_curves_wherever_its_square_lies() {
+    const CURVE: &[Segment] = &[
+        Segment::Quadratic {
+            control: at(5.0, 0.0),
+            to: at(10.0, 5.0),
+        },
+        Segment::Cubic {
+            first_control: at(10.0, 8.0),
+            second_control: at(8.0, 10.0),
+            to: at(5.0, 10.0),
+        },
+    ];
     static CURVES: Icon = Icon {
         grid: Size::new(Dp::new(10.0), Dp::new(10.0)),
         paths: &[IconPath {
             start: at(0.0, 0.0),
-            segments: &[
-                Segment::Quadratic {
-                    control: at(5.0, 0.0),
-                    to: at(10.0, 5.0),
-                },
-                Segment::Cubic {
-                    first_control: at(10.0, 8.0),
-                    second_control: at(8.0, 10.0),
-                    to: at(5.0, 10.0),
-                },
-            ],
+            segments: CURVE,
             closed: false,
             stroke: Some(1.0),
         }],
     };
-    let mut commands = Vec::new();
-    CURVES.paint(
-        Rect::new(10.dp(), 20.dp(), 20.dp(), 20.dp()),
-        Color::WHITE,
-        false,
-        &mut commands,
-    );
-    assert_eq!(
-        commands,
-        [DrawCommand::Path {
-            start: at(10.0, 20.0),
-            segments: vec![
-                Segment::Quadratic {
-                    control: at(20.0, 20.0),
-                    to: at(30.0, 30.0),
-                },
-                Segment::Cubic {
-                    first_control: at(30.0, 36.0),
-                    second_control: at(26.0, 40.0),
-                    to: at(20.0, 40.0),
-                },
-            ],
-            closed: false,
-            brush: Color::WHITE.into(),
-            stroke: Some(2.dp()),
-        }]
-    );
+    let curve = DrawCommand::Path {
+        start: at(0.0, 0.0),
+        segments: CURVE.to_vec(),
+        closed: false,
+        brush: Color::WHITE.into(),
+        stroke: Some(1.dp()),
+    };
+    for corner in [at(10.0, 20.0), at(37.5, 81.25)] {
+        let mut commands = Vec::new();
+        CURVES.paint(
+            Rect::new(corner.x, corner.y, 20.dp(), 20.dp()),
+            Color::WHITE,
+            false,
+            &mut commands,
+        );
+        assert_eq!(
+            commands,
+            [
+                DrawCommand::Save,
+                DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(corner)),
+                curve.clone(),
+                DrawCommand::Restore,
+            ]
+        );
+    }
 }
 
 #[test]

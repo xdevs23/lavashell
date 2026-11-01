@@ -27,6 +27,35 @@ fn circle() -> Packet {
     }]))
 }
 
+fn layer_around_scaled_path(scale: f64) -> Packet {
+    Packet::new(Arc::from([
+        DrawCommand::OpacityLayer {
+            alpha: 0.5,
+            bounds: Rect::new(0.dp(), 0.dp(), 24.dp(), 24.dp()),
+        },
+        DrawCommand::Save,
+        DrawCommand::Transform(Affine::scale(scale, scale)),
+        DrawCommand::Path {
+            start: Point::new(1.dp(), 1.dp()),
+            segments: vec![Segment::Line(Point::new(9.dp(), 9.dp()))],
+            closed: false,
+            brush: Color::WHITE.into(),
+            stroke: Some(1.dp()),
+        },
+        DrawCommand::Restore,
+        DrawCommand::Restore,
+    ]))
+}
+
+#[test]
+fn a_layer_around_a_transform_expands_only_when_the_transformed_path_leaves_the_layer_bounds() {
+    let (registry, mut analyses) = (EffectRegistry::empty(), Analyses::default());
+    let inside = analyses.get(SurfaceId(1), &layer_around_scaled_path(2.0), &registry);
+    assert!(!inside.expands_group(0));
+    let past = analyses.get(SurfaceId(2), &layer_around_scaled_path(3.0), &registry);
+    assert!(past.expands_group(0));
+}
+
 #[test]
 fn an_effect_registered_after_an_analysis_is_seen_by_the_next_one() -> Result<(), TestError> {
     let (mut registry, mut analyses, packet) =
