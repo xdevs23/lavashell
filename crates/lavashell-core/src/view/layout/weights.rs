@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Measuring;
+use super::pass::MeasuredParts;
 use crate::geometry::{Axis, Constraints, Size, Span};
-use crate::ui::{Arrangement, Flow, MainLength, Node, NodeKind, Weight};
+use crate::ui::{Arrangement, Flow, MainLength, ModifierElement, Node, NodeKind, Weight};
 use crate::units::{Dp, Positive};
 use crate::view::TextMeasurer;
 use crate::view::parents::Parents;
@@ -83,19 +84,55 @@ pub(in crate::view) fn fill_decided_by(
 /// Whether the node at `node` fills the length that its parent proposes along `axis`. An overlay fills through its
 /// children in the flow for which `shown` is true.
 fn fills(nodes: &[Node], node: usize, axis: Axis, shown: &mut impl FnMut(usize) -> bool) -> bool {
+    let own = |node: &Node| match node.main_length(axis) {
+        MainLength::Fills => Some(true),
+        MainLength::Set => Some(false),
+        MainLength::Content => None,
+    };
+    fills_by(nodes, node, &own, shown)
+}
+
+/// Whether the node at `node` is as long along `axis` as any share handed to it: its modifier fills along `axis` before
+/// any element that sets or bounds that length, or it is an overlay without such an element that fills through its
+/// children in the flow for which `shown` is true.
+fn fills_share(
+    nodes: &[Node],
+    node: usize,
+    axis: Axis,
+    shown: &mut impl FnMut(usize) -> bool,
+) -> bool {
+    let own = |node: &Node| {
+        (node.modifier.iter()).find_map(|element| match (axis, element) {
+            (Axis::Horizontal, ModifierElement::FillWidth)
+            | (Axis::Vertical, ModifierElement::FillHeight) => Some(true),
+            (Axis::Horizontal, ModifierElement::Width(_))
+            | (Axis::Vertical, ModifierElement::Height(_))
+            | (_, ModifierElement::MeasurementLimit(_)) => Some(false),
+            (_, ModifierElement::MaxSize(most)) => axis.length(*most).is_finite().then_some(false),
+            _ => None,
+        })
+    };
+    fills_by(nodes, node, &own, shown)
+}
+
+/// Whether the node at `node` fills, where `own` tells from the modifier of a node whether that node fills, or returns
+/// `None` where the modifier does not decide. An overlay whose modifier does not decide fills through its children in
+/// the flow for which `shown` is true.
+fn fills_by(
+    nodes: &[Node],
+    node: usize,
+    own: &impl Fn(&Node) -> Option<bool>,
+    shown: &mut impl FnMut(usize) -> bool,
+) -> bool {
     let node = &nodes[node];
-    match node.main_length(axis) {
-        MainLength::Fills => true,
-        MainLength::Set => false,
-        MainLength::Content => {
-            matches!(node.kind, NodeKind::Container(Arrangement::Overlay))
-                && (node.children.iter()).any(|&child| {
-                    matches!(nodes[child].flow, Flow::In(_))
-                        && fills(nodes, child, axis, &mut *shown)
-                        && shown(child)
-                })
-        }
-    }
+    own(node).unwrap_or_else(|| {
+        matches!(node.kind, NodeKind::Container(Arrangement::Overlay))
+            && (node.children.iter()).any(|&child| {
+                matches!(nodes[child].flow, Flow::In(_))
+                    && fills_by(nodes, child, own, &mut *shown)
+                    && shown(child)
+            })
+    })
 }
 
 /// The weighted children of a stack, each with its position in the stack, its node index and its weight, and the sum
@@ -118,6 +155,31 @@ impl WeightedChildren {
         }
         needed
     }
+
+    /// The smallest length to share at which each child gets the length at the same position in `lengths`, or `None`
+    /// for a stack without children with a weight.
+    fn needed_for(&self, lengths: impl Iterator<Item = Dp>) -> Option<Dp> {
+        (self.members.iter().zip(lengths))
+            .map(|(&(.., weight), length)| self.needed(length, weight))
+            .reduce(Dp::max)
+    }
+}
+
+/// A child with a weight measured at its smallest length along the main axis of a stack.
+#[derive(Clone, Copy)]
+enum Smallest {
+    Size(Size),
+    /// The length along the main axis alone.
+    Length(Dp),
+}
+
+impl Smallest {
+    fn length(self, axis: Axis) -> Dp {
+        match self {
+            Self::Size(size) => axis.length(size),
+            Self::Length(length) => length,
+        }
+    }
 }
 
 impl<T: TextMeasurer> Measuring<'_, T> {
@@ -133,65 +195,125 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         !fills_through_children(nodes, container, child) || fills(nodes, child, axis, &mut shown)
     }
 
-    /// Measures the children with a weight at their shares of the length that `fixed` leaves along the main axis of
+    /// Measures each child with a weight at the share handed to it from the length left by `fixed` along `axis` of
     /// `c`, and stores the sizes in `sizes`. Returns the smallest length to share at which every child with a weight
-    /// gets its measured length, or `None` for a stack without children with a weight. Where the main axis allows more
-    /// than it proposes, the children share at least the length that they need at their smallest.
+    /// gets the length it was measured at, or `None` for a stack without children with a weight. Where the main axis
+    /// allows more than it proposes, the children share at least the length that they need at their smallest.
     pub(super) fn measure_shares(
         &mut self,
         weighted: &WeightedChildren,
         sizes: &mut [Size],
         c: Constraints,
         fixed: Dp,
-        vertical: bool,
+        axis: Axis,
     ) -> Option<Dp> {
-        let main = if vertical { c.height } else { c.width };
-        let length = |size: Size| if vertical { size.height } else { size.width };
-        let weighted_constraints = |span: Span| {
-            if vertical {
-                Constraints {
-                    width: c.width.loosened(),
-                    height: span,
-                }
-            } else {
-                Constraints {
-                    width: span,
-                    height: c.height.loosened(),
-                }
-            }
+        let main = axis.span(c);
+        let loose = Constraints {
+            width: c.width.loosened(),
+            height: c.height.loosened(),
         };
         let mut available = (main.proposed() - fixed).max(Dp::ZERO);
-        if main.allows_more() {
-            let at_smallest = self.measure_weighted(weighted, sizes, length, |_| {
-                weighted_constraints(Span::offering(Dp::ZERO))
-            });
-            let bounded = main.clamp(fixed + at_smallest.unwrap_or_default()) - fixed;
+        let smallest = (main.allows_more()).then(|| self.measure_smallest(weighted, loose, axis));
+        if let Some(found) = &smallest {
+            let needed = weighted.needed_for(found.iter().map(|child| child.length(axis)));
+            let bounded = main.clamp(fixed + needed.unwrap_or_default()) - fixed;
             available = available.max(bounded);
         }
-        self.measure_weighted(weighted, sizes, length, |weight| {
-            let share = weighted.share(available, weight);
-            weighted_constraints(match weight {
-                Weight::Fill(_) => Span::exact(share),
-                Weight::UpTo(_) => Span::up_to(share),
-            })
-        })
+        let smallest = smallest.as_deref();
+        self.measure_at_shares(weighted, sizes, loose, available, axis, smallest)
     }
 
-    /// Measures each weighted child under the constraints returned by `constraints` for its weight, and stores the
-    /// sizes in `sizes`. Returns the smallest length to share at which every weighted child gets the `length` of its
-    /// measured size, or `None` for a stack without weighted children.
-    fn measure_weighted(
+    /// Measures each child with a weight at its smallest length along `axis`, with `loose` across it. A row in a probe
+    /// measures the width of a child alone, at an unbounded height, where no read of a size connects the child with a
+    /// node inside the row.
+    fn measure_smallest(
+        &mut self,
+        weighted: &WeightedChildren,
+        loose: Constraints,
+        axis: Axis,
+    ) -> Vec<Smallest> {
+        let at_smallest_length = axis.with_span(loose, Span::offering(Dp::ZERO));
+        let width_alone = Constraints {
+            width: Span::offering(Dp::ZERO),
+            height: Span::offering(Dp::INFINITY),
+        };
+        (weighted.members.iter())
+            .map(|&(_, child, _)| {
+                if axis == Axis::Horizontal
+                    && !self.graph.has_read_within_parent(child)
+                    && let Some(width) = self.measure_width_alone(child, width_alone)
+                {
+                    Smallest::Length(width)
+                } else {
+                    Smallest::Size(self.measure(child, 0, at_smallest_length))
+                }
+            })
+            .collect()
+    }
+
+    /// Finds the size of each child with a weight at the share handed to it from `available` along `axis`, with
+    /// `loose` across it, and stores the sizes in `sizes`. `smallest` contains the children measured at their smallest
+    /// length, if they were. Returns the smallest length to share at which every child gets the length found.
+    fn measure_at_shares(
         &mut self,
         weighted: &WeightedChildren,
         sizes: &mut [Size],
-        length: impl Fn(Size) -> Dp,
-        constraints: impl Fn(Weight) -> Constraints,
+        loose: Constraints,
+        available: Dp,
+        axis: Axis,
+        smallest: Option<&[Smallest]>,
     ) -> Option<Dp> {
-        (weighted.members.iter())
-            .map(|&(p, child, weight)| {
-                sizes[p] = self.measure(child, 0, constraints(weight));
-                weighted.needed(length(sizes[p]), weight)
-            })
-            .reduce(Dp::max)
+        for (m, &(p, child, weight)) in weighted.members.iter().enumerate() {
+            let share = weighted.share(available, weight);
+            let at_smallest = smallest.and_then(|found| found.get(m).copied());
+            let known = self.size_at_share(child, weight, axis, share, at_smallest);
+            sizes[p] = known.unwrap_or_else(|| {
+                let span = match weight {
+                    Weight::Fill(_) => Span::exact(share),
+                    Weight::UpTo(_) => Span::up_to(share),
+                };
+                self.measure(child, 0, axis.with_span(loose, span))
+            });
+        }
+        let lengths = (weighted.members.iter()).map(|&(p, ..)| axis.length(sizes[p]));
+        weighted.needed_for(lengths)
+    }
+
+    /// The size of `child` at `share` along `axis` where a probe knows it without measuring the child at that share,
+    /// from `smallest`, the child measured at its smallest length if it was. A frame places the nodes inside the child
+    /// from the layout that the measurement finds. A read of a size that connects the child with a node inside the
+    /// parent reads the layouts found by each measurement, and a read from outside reads those found at the share.
+    fn size_at_share(
+        &mut self,
+        child: usize,
+        weight: Weight,
+        axis: Axis,
+        share: Dp,
+        smallest: Option<Smallest>,
+    ) -> Option<Size> {
+        let parts = self.pass.probe_parts()?;
+        if self.graph.has_read_within_parent(child) {
+            return None;
+        }
+        // A child that takes the whole share is as long as the share. In a column, it has the width measured at its
+        // smallest length. A row measured for the width alone does not need the height of the child.
+        let known = match (axis, parts, smallest) {
+            (Axis::Vertical, _, Some(Smallest::Size(size)))
+                if !self.graph.holds_read_source(child) =>
+            {
+                axis.with_length(size, share)
+            }
+            (Axis::Horizontal, MeasuredParts::WidthOnly, _) => Size::new(share, Dp::ZERO),
+            _ => return None,
+        };
+        self.takes_whole_share(child, weight, axis).then_some(known)
+    }
+
+    /// Whether `child` with `weight` is as long along `axis` as the share handed to it, with the conditions of the
+    /// nodes inside it resolved.
+    fn takes_whole_share(&mut self, child: usize, weight: Weight, axis: Axis) -> bool {
+        let nodes = self.nodes;
+        let mut shown = |node| self.resolve_conditions(node);
+        matches!(weight, Weight::Fill(_)) || fills_share(nodes, child, axis, &mut shown)
     }
 }

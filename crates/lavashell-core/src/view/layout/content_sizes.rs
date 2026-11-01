@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Constraints, MeasuredSizes, Measuring, Pass, Span, TextMeasurer};
+use super::{Constraints, Measuring, Pass, Span, TextMeasurer};
 use crate::ui::ContentSizes;
 use crate::units::Dp;
 use crate::view::collect_descendants;
@@ -40,7 +40,7 @@ impl<T: TextMeasurer> Measuring<'_, T> {
             .map(|&node| (node, self.layout[node].clone(), self.filled[node]))
             .collect();
         let measured = self.measured.len();
-        let pass = std::mem::replace(&mut self.pass, Pass::Probe(MeasuredSizes::default()));
+        let pass = std::mem::replace(&mut self.pass, Pass::probe());
         let outer = self.natural_width_of.replace(index);
         let width = self.measure(index, 0, open()).width;
         self.natural_width_of = outer;
@@ -69,12 +69,7 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         Measuring {
             layout: self.layout.clone(),
             filled: self.filled.clone(),
-            ..Measuring::new(
-                self.nodes,
-                self.graph,
-                Pass::Probe(MeasuredSizes::default()),
-                self.text,
-            )
+            ..Measuring::new(self.nodes, self.graph, Pass::probe(), self.text)
         }
     }
 }

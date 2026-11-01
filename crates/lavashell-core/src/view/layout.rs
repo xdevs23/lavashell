@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod children;
 mod content_sizes;
+mod pass;
 mod placement;
 mod weights;
 
@@ -8,13 +9,14 @@ use super::failure::Failed;
 use super::frame_error::{ComponentError, NodeName};
 use super::graph::Graph;
 use super::{
-    BTreeMap, Constraints, Deferred, Dp, IconSize, ModifierElement, Node, NodeKind, NodeRef, Phase,
-    Point, Rect, Size, Span, TextMeasurer, View, retained,
+    Constraints, Deferred, Dp, IconSize, ModifierElement, Node, NodeKind, NodeRef, Phase, Point,
+    Rect, Size, Span, TextMeasurer, View,
 };
 use crate::protected_text::ProtectedInput;
 use crate::scene::TextStyle;
 use crate::ui::{ContentSizes, FieldContent, Measured};
 use crate::units::{NonNegativeDp, NumberError};
+use pass::Pass;
 pub(super) use weights::{fill_decided_by, fills_through_children, weight};
 
 /// The layout of a node, in the coordinates of the content of its parent.
@@ -114,8 +116,7 @@ impl View {
         if self.nodes.is_empty() {
             self.compose_root();
         }
-        let probe = Pass::Probe(MeasuredSizes::default());
-        let mut measuring = Measuring::new(&self.nodes, &self.graph, probe, text);
+        let mut measuring = Measuring::new(&self.nodes, &self.graph, Pass::probe(), text);
         Ok(measuring.measure(0, 0, constraints))
     }
 
@@ -168,44 +169,6 @@ impl View {
             }
         }
         failed
-    }
-}
-
-enum Pass<'a> {
-    /// A measurement for a frame, with the layouts cached for components by earlier frames. The frame reuses a cached
-    /// layout where it is still valid. Otherwise the frame measures the component again inside the scope of the
-    /// component, which records the values read by the layout of the component.
-    Frame(&'a retained::Retained),
-    Probe(MeasuredSizes),
-}
-
-impl Pass<'_> {
-    fn measured(&self, index: usize, c: Constraints) -> Option<Size> {
-        match self {
-            Self::Frame(_) => None,
-            Self::Probe(sizes) => sizes.get(index, c),
-        }
-    }
-
-    fn record(&mut self, index: usize, c: Constraints, size: Size) {
-        if let Self::Probe(sizes) = self {
-            sizes.insert(index, c, size);
-        }
-    }
-}
-
-/// The sizes measured for each node during one probe, with the constraints they were measured
-/// under.
-#[derive(Default)]
-struct MeasuredSizes(BTreeMap<usize, Vec<(Constraints, Size)>>);
-
-impl MeasuredSizes {
-    fn get(&self, index: usize, c: Constraints) -> Option<Size> {
-        (self.0.get(&index)?.iter()).find_map(|(measured, size)| (*measured == c).then_some(*size))
-    }
-
-    fn insert(&mut self, index: usize, c: Constraints, size: Size) {
-        self.0.entry(index).or_default().push((c, size));
     }
 }
 
@@ -337,14 +300,14 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
             let desired = match &nodes[index].kind {
                 NodeKind::Text(value, style) => {
                     let width = self.text_width(c.width, |text| text.min_width(value, style));
-                    self.text.measure(value, style, width)
+                    self.measure_text(index, width, |text| text.measure(value, style, width))
                 }
                 NodeKind::TextInput {
                     content,
                     placeholder,
                     style,
                     ..
-                } => self.measure_field(content, placeholder, style, c.width),
+                } => self.measure_field(index, content, placeholder, style, c.width),
                 NodeKind::Spacer(s) | NodeKind::Canvas { size: s, .. } => *s,
                 NodeKind::Icon { size, .. } => {
                     let length = match size {
@@ -372,9 +335,10 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
         size
     }
 
-    /// The size of a field that shows `content`, or `placeholder` where the content is empty.
+    /// The size of the field at `index`, which shows `content`, or `placeholder` where the content is empty.
     fn measure_field(
         &mut self,
+        index: usize,
         content: &FieldContent,
         placeholder: &str,
         style: &TextStyle<Dp>,
@@ -383,7 +347,9 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
         let style = &content.line_style(style);
         if let Some(private) = content.protected().and_then(ProtectedInput::presentation) {
             let width = self.text_width(width, |text| text.private_min_width(&private, style));
-            self.text.private_measure(&private, style, width)
+            self.measure_text(index, width, |text| {
+                text.private_measure(&private, style, width)
+            })
         } else {
             let value = content.shown();
             let shown = if value.is_empty() {
@@ -392,7 +358,7 @@ impl<'a, T: TextMeasurer> Measuring<'a, T> {
                 &value
             };
             let width = self.text_width(width, |text| text.min_width(shown, style));
-            self.text.measure(shown, style, width)
+            self.measure_text(index, width, |text| text.measure(shown, style, width))
         }
     }
 
