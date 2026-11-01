@@ -15,6 +15,7 @@ import os
 import subprocess
 import tempfile
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from flake_evaluation import locked_nixpkgs
@@ -46,6 +47,25 @@ def evaluate(root, nixpkgs, expression):
     if result.returncode:
         raise SystemExit(result.stderr)
     return json.loads(result.stdout)
+
+
+@dataclass(frozen=True)
+class Layer:
+    directory: str
+    package: str
+    engine: bool
+
+
+def package_name(directory):
+    return tomllib.loads((directory / "Cargo.toml").read_text())["package"]["name"]
+
+
+def classify_layers(root, nixpkgs, names):
+    engines = evaluate(root, nixpkgs, f"""
+      pkgs.lib.genAttrs [ {" ".join(json.dumps(path) for path in names)} ]
+        (path: sources.needsEngine (root + "/${{path}}"))
+    """)
+    return [Layer(directory, package, engines[directory]) for directory, package in names.items()]
 
 
 def write(path, data):
@@ -100,7 +120,7 @@ def graph(args, directory, package, renderer, frozen=False):
 def dependency_plan(args, root, directory, engine, destination):
     seed_path = destination / "seed"
     seed = workspace(root, args.nixpkgs, directory, engine, seed_path)
-    package = tomllib.loads((root / directory / "Cargo.toml").read_text())["package"]["name"]
+    package = package_name(root / directory)
     renderer = any(tomllib.loads(crate["manifest"])["package"]["name"] == "lavashell-renderer"
                    for crate in seed["crates"])
     expected, seed_lock = graph(args, seed_path, package, renderer, frozen=True)
@@ -192,54 +212,50 @@ def main():
     args.nixpkgs = args.nixpkgs or locked_nixpkgs()
     root = Path(__file__).resolve().parents[1]
     original = tomllib.loads((root / "Cargo.lock").read_text())
+    examples = [f"examples/{path.parent.parent.name}" for path in sorted(root.glob("examples/*/src/main.rs"))]
+    names = {path: package_name(root / path) for path in examples + PACKAGED_CRATES}
+    if args.package:
+        unknown = set(args.package) - set(names.values()) - {"lavashell-example-support"}
+        if unknown:
+            parser.error(f"unknown packages: {sorted(unknown)}")
+        names = {path: name for path, name in names.items() if name in args.package}
     output = root / "nix/cargo-projections"
     output.mkdir(exist_ok=True)
     native = output / "native.json"
     if not native.exists():
         write(native, {"lock": original})
-    examples = [f"examples/{path.parent.parent.name}" for path in sorted(root.glob("examples/*/src/main.rs"))]
-    catalog = evaluate(root, args.nixpkgs, f"""
-      map (path: let directory = root + "/${{path}}";
-                     manifest = builtins.fromTOML (builtins.readFile (directory + "/Cargo.toml"));
-                 in {{ directory = path; package = manifest.package.name;
-                      engine = sources.needsEngine directory; }})
-        [ {" ".join(json.dumps(path) for path in examples + PACKAGED_CRATES)} ]
-    """)
-    if args.package:
-        unknown = set(args.package) - {entry["package"] for entry in catalog} - {"lavashell-example-support"}
-        if unknown:
-            parser.error(f"unknown packages: {sorted(unknown)}")
-        catalog = [entry for entry in catalog if entry["package"] in args.package]
     with tempfile.TemporaryDirectory() as temporary:
         directory = Path(temporary)
         workspace(root, args.nixpkgs, "examples/support", False, directory / "native")
         _, native_lock = graph(args, directory / "native", "lavashell-example-support", True)
         native_metadata = prepare_metadata(json.loads(native.read_text()), False, args.target) | {"lock": native_lock}
         write(native, native_metadata)
+        # The classification uses the lock in native.json, so it runs after the write above.
+        catalog = classify_layers(root, args.nixpkgs, names)
         store_dependency_plan(args, native_metadata, "registry", dependency_plan(
             args, root, "examples/support", False, directory / "native-layer",
         ))
         write(native, native_metadata)
         for entry in catalog:
-            filename = output / f"{entry['package']}.json"
+            filename = output / f"{entry.package}.json"
             previous = json.loads(filename.read_text()) if filename.exists() else {"normalLock": original}
-            metadata = prepare_metadata(previous, entry["engine"], args.target)
-            if entry["engine"]:
+            metadata = prepare_metadata(previous, entry.engine, args.target)
+            if entry.engine:
                 metadata.setdefault("features", {})
                 metadata.setdefault("engineLock", original)
-            if not entry["engine"]:
+            if not entry.engine:
                 if not filename.exists():
                     write(filename, {"normalLock": original})
-                normal = directory / entry["package"] / "normal"
-                data = workspace(root, args.nixpkgs, entry["directory"], False, normal)
-                _, normalized = graph(args, normal, entry["package"], any(
+                normal = directory / entry.package / "normal"
+                data = workspace(root, args.nixpkgs, entry.directory, False, normal)
+                _, normalized = graph(args, normal, entry.package, any(
                     tomllib.loads(crate["manifest"])["package"]["name"] == "lavashell-renderer"
                     for crate in data["crates"]
                 ))
                 metadata["normalLock"] = normalized
                 write(filename, metadata)
                 store_dependency_plan(args, metadata, "registry", dependency_plan(
-                    args, root, entry["directory"], False, directory / entry["package"] / "registry-layer",
+                    args, root, entry.directory, False, directory / entry.package / "registry-layer",
                 ))
                 write(filename, metadata)
                 continue
@@ -247,32 +263,32 @@ def main():
             native_names = evaluate(root, args.nixpkgs, "sources.nativeNames")
             metadata["engineLock"] = engine_seed_lock(original, metadata["engineLock"], native_names)
             write(filename, metadata)
-            normal = directory / entry["package"] / "normal"
-            data = workspace(root, args.nixpkgs, entry["directory"], False, normal)
+            normal = directory / entry.package / "normal"
+            data = workspace(root, args.nixpkgs, entry.directory, False, normal)
             renderer = any(tomllib.loads(crate["manifest"])["package"]["name"] == "lavashell-renderer"
                            for crate in data["crates"])
-            normal_graph, metadata["normalLock"] = graph(args, normal, entry["package"], renderer)
+            normal_graph, metadata["normalLock"] = graph(args, normal, entry.package, renderer)
             write(filename, metadata)
             for attempt in itertools.count():
-                engine = directory / entry["package"] / f"engine-{attempt}"
-                workspace(root, args.nixpkgs, entry["directory"], True, engine)
-                engine_graph, metadata["engineLock"] = graph(args, engine, entry["package"], False)
+                engine = directory / entry.package / f"engine-{attempt}"
+                workspace(root, args.nixpkgs, entry.directory, True, engine)
+                engine_graph, metadata["engineLock"] = graph(args, engine, entry.package, False)
                 extra = activations(engine_graph, normal_graph)
                 if not extra:
                     metadata["externalUnits"] = plan.external_units(engine_graph)
                     plan.verify(metadata["externalUnits"], normal_graph)
                     write(filename, metadata)
                     store_dependency_plan(args, metadata, "engine", dependency_plan(
-                        args, root, entry["directory"], True, directory / entry["package"] / "engine-layer",
+                        args, root, entry.directory, True, directory / entry.package / "engine-layer",
                     ))
                     write(filename, metadata)
-                    print(f"{entry['package']}: {len(metadata['externalUnits'])} matching external units")
+                    print(f"{entry.package}: {len(metadata['externalUnits'])} matching external units")
                     break
                 before = copy.deepcopy(metadata["features"])
                 for kind, dependencies in extra.items():
                     metadata["features"].setdefault(kind, {}).update(dependencies)
                 if metadata["features"] == before:
-                    raise ValueError(f"shared features did not change for {entry['package']}")
+                    raise ValueError(f"shared features did not change for {entry.package}")
                 write(filename, metadata)
     print("Projection locks refreshed; no compilation performed")
 

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 
+import contextlib
 import copy
 import importlib.util
+import io
 import json
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 def module(name, filename):
@@ -61,6 +63,19 @@ def fixture():
     return seed, graph, metadata, selection
 
 
+def run_refresh(root, *arguments, graph, evaluate):
+    (root / "nix").mkdir()
+    (root / "Cargo.lock").write_text("version = 4\n")
+    with patch.object(refresh, "__file__", str(root / "nix/refresh-cargo-projections.py")), \
+            patch("sys.argv", ["refresh-cargo-projections.py", "--nixpkgs", "unused", *arguments]), \
+            patch.object(refresh, "PACKAGED_CRATES", []), \
+            patch.object(refresh, "workspace"), \
+            patch.object(refresh, "graph", graph), \
+            patch.object(refresh, "dependency_plan", return_value={}), \
+            patch.object(refresh, "evaluate", evaluate):
+        refresh.main()
+
+
 class DependencyWorkspace(unittest.TestCase):
     def test_metadata_request_uses_the_selected_target_and_retains_frozen_dependencies(self):
         seed, graph, metadata, selection = fixture()
@@ -85,6 +100,36 @@ class DependencyWorkspace(unittest.TestCase):
             self.assertIn("--offline", command)
             self.assertIn("--frozen", command)
             self.assertNotIn("--no-deps", command)
+
+    def test_layers_are_classified_from_the_native_lock_written_by_the_same_run(self):
+        added = {"name": "added", "version": "1.0.0", "source": projection.CRATES_IO}
+        refreshed_lock = {"version": 4, "package": [added]}
+        classified_with = []
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native = root / "nix/cargo-projections/native.json"
+
+            def read_native_lock(*_):
+                classified_with.append(json.loads(native.read_text())["lock"])
+                return {}
+
+            run_refresh(root, graph=Mock(return_value=({}, refreshed_lock)), evaluate=read_native_lock)
+        self.assertEqual(classified_with, [refreshed_lock])
+
+    def test_a_misspelled_package_is_rejected_before_the_refresh_writes_or_runs_cargo(self):
+        graph, evaluate = Mock(), Mock()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            example = root / "examples/demo"
+            (example / "src").mkdir(parents=True)
+            (example / "src/main.rs").write_text("fn main() {}\n")
+            (example / "Cargo.toml").write_text(projection.manifest_text({"package": {"name": "demo"}}))
+            with contextlib.redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit):
+                run_refresh(root, "--package", "dmeo", graph=graph, evaluate=evaluate)
+            self.assertFalse((root / "nix/cargo-projections").exists())
+        self.assertIn("dmeo", stderr.getvalue())
+        graph.assert_not_called()
+        evaluate.assert_not_called()
 
     def test_native_closure_fixture_changes_lavashell_manifest_and_lock_edge_only(self):
         with tempfile.TemporaryDirectory() as temporary:
