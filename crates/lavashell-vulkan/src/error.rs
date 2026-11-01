@@ -100,10 +100,8 @@ pub enum Error {
     CreateQueryPool(#[source] vk::Result),
     #[error("cannot read the results of queries")]
     QueryResults(#[source] vk::Result),
-    #[error("the window offers no handle")]
-    WindowHandle(#[source] raw_window_handle::HandleError),
-    #[error("surfaces are created from the raw handles of Wayland windows only")]
-    UnsupportedWindowSystem,
+    #[error("the native window is already destroyed")]
+    DestroyedWindow,
     #[error("cannot create a surface")]
     CreateSurface(#[source] vk::Result),
     #[error("cannot query the surface")]

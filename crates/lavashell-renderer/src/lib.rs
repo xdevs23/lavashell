@@ -39,11 +39,10 @@ pub use paint::{
     StreamRejection, UnsampledFormat, skpoint, skrect,
 };
 pub use skia_safe as skia;
-#[cfg(target_os = "linux")]
-pub use vulkan::WaylandTarget;
 pub use vulkan::{
-    BorrowedImage, EmbeddedVulkanRenderer, ExternalImage, FrameOutcome, PresentationPolicy,
-    ReadySignal, SurfaceAlpha, SurfaceContents, SurfaceTarget, SurfaceTiming, VulkanRenderer,
+    BorrowedImage, EmbeddedVulkanRenderer, ExternalImage, FrameOutcome, PresentationBackend,
+    PresentationPolicy, ReadySignal, SurfaceAlpha, SurfaceContents, SurfaceTarget, SurfaceTiming,
+    VulkanRenderer,
 };
 #[cfg(target_os = "android")]
 pub use vulkan::{

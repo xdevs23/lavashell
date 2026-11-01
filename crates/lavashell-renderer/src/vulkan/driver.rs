@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::presentation::Presentation;
+use super::PresentationBackend;
 use crate::Error;
 use ash::vk;
 use lavashell_vulkan::{ExtensionSet, Extensions, Instance, PhysicalDevice};
@@ -37,17 +37,18 @@ pub(super) fn largest_device_local_heap(physical: &PhysicalDevice<'_>) -> Option
 }
 
 /// The device with the highest `Precedence` among the devices that support Vulkan 1.1 and have a graphics queue that
-/// can present to `platform`. Where `platform` has a window system, the device also needs the swapchain extension.
+/// can present to surfaces created for the presentation backend `backend`. Where `backend` has a window system, the
+/// device also needs the swapchain extension.
 pub(super) fn pick_device<'i>(
     instance: &'i Arc<Instance>,
-    platform: &impl Presentation,
+    backend: &impl PresentationBackend,
 ) -> Result<PickedDevice<'i>, Error> {
     let mut candidates = Vec::new();
     for physical in instance
         .physical_devices()
         .map_err(Error::PhysicalDevices)?
     {
-        candidates.extend(candidate(physical, platform)?);
+        candidates.extend(candidate(physical, backend)?);
     }
     candidates
         .into_iter()
@@ -58,21 +59,21 @@ pub(super) fn pick_device<'i>(
 
 fn candidate<'i>(
     physical: PhysicalDevice<'i>,
-    platform: &impl Presentation,
+    backend: &impl PresentationBackend,
 ) -> Result<Option<(Precedence, PickedDevice<'i>)>, Error> {
     let properties = physical.properties();
     if properties.api_version < vk::API_VERSION_1_1 {
         return Ok(None);
     }
     let extensions = physical.extensions().map_err(Error::PhysicalDevice)?;
-    if platform.surface_extension().is_some() && !extensions.contains(ash::khr::swapchain::NAME) {
+    if backend.surface_extension().is_some() && !extensions.contains(ash::khr::swapchain::NAME) {
         return Ok(None);
     }
     for (family, queues) in (0..).zip(physical.queue_families()) {
         if !queues.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             continue;
         }
-        let presentation = platform
+        let presentation = backend
             .supports(&physical, family)
             .map_err(Error::PhysicalDevice)?;
         if presentation == lavashell_vulkan::Presentation::Supported {

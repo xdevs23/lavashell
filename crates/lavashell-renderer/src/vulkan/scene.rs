@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Scene images rendered by a host engine and drawn as the base layer under the UI. Submitting a scene depends neither
-//! on the effect quality of the UI nor on Wayland frame callbacks.
+//! on the effect quality of the UI nor on the frame callbacks sent by a window system.
 
 use super::{CompletedScene, Completion, Status, VulkanRenderer};
 use crate::Error;
