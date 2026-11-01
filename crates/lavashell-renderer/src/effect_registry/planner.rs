@@ -149,7 +149,7 @@ impl Painter {
         self.effect_planner.draw_times.forget_surface(surface);
         self.gpu_timing.forget(surface);
         self.paint_configuration.forget(surface);
-        self.paragraphs.forget_surface(surface);
+        self.shaper.forget_surface(surface);
         self.resources.forget_surface(surface);
         self.analyses.forget_surface(surface);
         self.packet_cache.forget_surface(surface);

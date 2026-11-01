@@ -42,6 +42,7 @@ fn text_measured_after_a_paint_leaves_its_paragraphs_in_the_cache() -> Result<()
     let style = TextStyle::new("sans-serif", 14.sp(), Color::WHITE).resolve_unscaled();
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter
+        .shaper
         .paragraph_input("Brightness", &style, rect.width)?
         .key();
     let label = DrawCommand::Text {
@@ -50,19 +51,20 @@ fn text_measured_after_a_paint_leaves_its_paragraphs_in_the_cache() -> Result<()
         style: style.clone(),
     };
     paint(&mut painter, std::slice::from_ref(&label))?;
-    let one_line = painter.measure("Brightness", &style, Dp::INFINITY).width;
+    let shaper = &mut painter.shaper;
+    let one_line = shaper.measure("Brightness", &style, Dp::INFINITY).width;
     for width in 0_u16..600 {
         let width = Dp::new(300.0 + f64::from(width));
-        assert_eq!(painter.measure("Brightness", &style, width).width, one_line);
+        assert_eq!(shaper.measure("Brightness", &style, width).width, one_line);
     }
-    let cached_label = painter.paragraphs.existing(label_key)?;
+    let cached_label = shaper.paragraphs().existing(label_key)?;
     assert_f32_eq(cached_label.max_width(), scalar(rect.width.get())?);
 
-    let grown = painter.paragraphs.len();
+    let grown = shaper.paragraphs().len();
     paint(&mut painter, &[])?;
     paint(&mut painter, &[])?;
-    assert!(painter.measure("Contrast", &style, rect.width).width < rect.width);
-    assert!(painter.paragraphs.len() < grown);
+    assert!(painter.shaper.measure("Contrast", &style, rect.width).width < rect.width);
+    assert!(painter.shaper.paragraphs().len() < grown);
     Ok(())
 }
 
@@ -72,6 +74,7 @@ fn text_measured_after_three_surfaces_paint_keeps_the_first_paragraph() -> Resul
     let style = TextStyle::new("sans-serif", 14.sp(), Color::WHITE).resolve_unscaled();
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter
+        .shaper
         .paragraph_input("Brightness", &style, rect.width)?
         .key();
     let label = DrawCommand::Text {
@@ -88,12 +91,13 @@ fn text_measured_after_three_surfaces_paint_keeps_the_first_paragraph() -> Resul
         };
         paint(&mut painter, commands)?;
     }
-    let one_line = painter.measure("Contrast", &style, Dp::INFINITY).width;
+    let shaper = &mut painter.shaper;
+    let one_line = shaper.measure("Contrast", &style, Dp::INFINITY).width;
     for width in 0_u16..600 {
         let width = Dp::new(300.0 + f64::from(width));
-        assert_eq!(painter.measure("Contrast", &style, width).width, one_line);
+        assert_eq!(shaper.measure("Contrast", &style, width).width, one_line);
     }
-    let cached_label = painter.paragraphs.existing(label_key)?;
+    let cached_label = shaper.paragraphs().existing(label_key)?;
     assert_f32_eq(cached_label.max_width(), scalar(rect.width.get())?);
     Ok(())
 }

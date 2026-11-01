@@ -46,8 +46,8 @@ impl Harness {
         };
         self.demo.step(timing).map_err(Error::Motion)?;
         let viewport = Viewport::new(WINDOW, Density::ONE);
-        let painter = &mut self.capture.painter;
-        let shown = (self.view).show_frame_at(&mut self.tree, viewport, painter, timing);
+        let shaper = self.capture.painter.shaper();
+        let shown = (self.view).show_frame_at(&mut self.tree, viewport, shaper, timing);
         without_failures(shown).map_err(Error::Example)
     }
 

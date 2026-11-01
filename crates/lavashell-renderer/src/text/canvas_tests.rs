@@ -52,7 +52,7 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
     let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
+    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
     view.update_accessibility();
     let bounds = [
         view.bounds_of("root canvas"),
@@ -73,7 +73,7 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
         view.needs_frame(),
         "canvas-only View did not observe renderer policy"
     );
-    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
+    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
     view.update_accessibility();
     assert_eq!(
         [
@@ -93,7 +93,7 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
     assert!(!view.needs_frame());
     painter.set_text_rendering(TextRendering::default(), target);
     assert!(view.needs_frame());
-    (view.show_frame(&mut tree, viewport, &mut painter)).without_failures()?;
+    (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
     view.update_accessibility();
     assert!(!view.needs_frame());
     Ok(())

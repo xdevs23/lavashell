@@ -233,7 +233,7 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
         let _chained_canvas = transient.canvas().clear(skia_safe::Color::new(background));
         // Draws the masks once more directly through the rasterizer, inside `RasterCache::without_storage`, which
         // neither reuses nor stores pixels. Masks drawn this way must give the same pixels as the cached masks.
-        let configuration = painter.text_configuration.peek();
+        let configuration = painter.shaper.configuration();
         let DrawCommand::Text { style, .. } = &command else {
             return Err(TestError::Missing("text command"));
         };
@@ -255,7 +255,7 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
             280.dp(),
             provider.source_rendering(&input),
         )?;
-        let cached = source_input.cached(&mut painter.paragraphs, &painter.registry);
+        let cached = painter.shaper.cached(source_input);
         // Centers the paragraph vertically by its shaped height, as `Painter::paint_text` does.
         let origin = (
             7.25,

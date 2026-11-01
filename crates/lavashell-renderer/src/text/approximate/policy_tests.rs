@@ -67,14 +67,9 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
     let mut painter = new_painter(PixelGeometry::Rgb)?;
     let value = "Headphones p e\u{301} office אבג";
     let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
-    let ordinary_input = painter.paragraph_input(value, &style, 280.dp())?;
+    let ordinary_input = painter.shaper.paragraph_input(value, &style, 280.dp())?;
     let ordinary = ordinary_input.key();
-    let policies = font_policies(
-        &mut ordinary_input
-            .cached(&mut painter.paragraphs, &painter.registry)
-            .shaped
-            .paragraph,
-    );
+    let policies = font_policies(&mut painter.shaper.cached(ordinary_input).shaped.paragraph);
     assert!(
         policies
             .iter()
@@ -84,14 +79,14 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
     let input = RasterInput {
         canvas: surface.canvas(),
         policy: painter.text_rendering(),
-        destination: painter.text_configuration.peek().destination,
+        destination: painter.shaper.configuration().destination,
         opaque_scope: true,
         style: &style,
         foreground: crate::paint::color4f(style.color)?,
     };
     let source = ApproximateCoverage::new()?.source_rendering(&input);
     assert_eq!(source.antialiasing, TextAntialiasing::Subpixel);
-    let count = painter.fonts.paragraph_cache_mut().count();
+    let count = painter.shaper.skia_cache_count();
     for ((hinting, native_hinting, fractional_positioning), iteration) in [
         (Hinting::Slight, skia_safe::FontHinting::Slight, true),
         (Hinting::Full, skia_safe::FontHinting::Full, false),
@@ -115,12 +110,7 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
             source,
         )?;
         assert_ne!(source_input.key(), ordinary);
-        let actual = font_policies(
-            &mut source_input
-                .cached(&mut painter.paragraphs, &painter.registry)
-                .shaped
-                .paragraph,
-        );
+        let actual = font_policies(&mut painter.shaper.cached(source_input).shaped.paragraph);
         assert!(actual.iter().all(|policy| {
             *policy
                 == (
@@ -129,9 +119,9 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
                     fractional_positioning,
                 )
         }));
-        assert_eq!(painter.fonts.paragraph_cache_mut().count(), count);
+        assert_eq!(painter.shaper.skia_cache_count(), count);
         assert_eq!(
-            font_policies(painter.paragraphs.existing(ordinary)?),
+            font_policies(painter.shaper.paragraphs().existing(ordinary)?),
             policies
         );
     }
@@ -147,8 +137,8 @@ fn lcd_source_warmup_preserves_default_wrapping_and_shaped_carets() -> Result<()
         style.max_lines = None;
         let value = "Headphones p e\u{301} office\nabc אבג";
         for width in [280.dp(), 79.dp(), 280.dp()] {
-            let expected = reference.geometry(value, &style, width);
-            assert_geometry(&painter.geometry(value, &style, width), &expected);
+            let expected = reference.shaper.geometry(value, &style, width);
+            assert_geometry(&painter.shaper.geometry(value, &style, width), &expected);
             let paragraph = painter.prepare_source_paragraph(
                 value,
                 &style,
@@ -163,10 +153,10 @@ fn lcd_source_warmup_preserves_default_wrapping_and_shaped_carets() -> Result<()
                     .iter()
                     .all(|policy| { policy.0 == skia_safe::font::Edging::SubpixelAntiAlias })
             );
-            assert_geometry(&painter.geometry(value, &style, width), &expected);
+            assert_geometry(&painter.shaper.geometry(value, &style, width), &expected);
             assert_eq!(
-                painter.measure(value, &style, width),
-                reference.measure(value, &style, width)
+                painter.shaper.measure(value, &style, width),
+                reference.shaper.measure(value, &style, width)
             );
         }
     }

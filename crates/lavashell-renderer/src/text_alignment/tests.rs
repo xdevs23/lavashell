@@ -50,14 +50,14 @@ fn wrapping_alignment_updates_geometry_pixels_and_cached_paragraphs() -> Result<
     let text = "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau.";
     let mut style = TextStyle::new("probe", 10.sp(), Color::WHITE).resolve_unscaled();
     style.max_lines = None;
-    let start_geometry = painter.geometry(text, &style, 296.dp());
+    let start_geometry = painter.shaper.geometry(text, &style, 296.dp());
     assert!(start_geometry.lines.len() > 1);
     let start = pixels(&mut painter, &style, text)?;
-    let size = painter.measure(text, &style, 296.dp());
+    let size = painter.shaper.measure(text, &style, 296.dp());
     style.alignment = TextAlignment::Center;
-    let centered = painter.geometry(text, &style, 296.dp());
+    let centered = painter.shaper.geometry(text, &style, 296.dp());
     assert_eq!(centered.lines, start_geometry.lines);
-    assert_eq!(painter.measure(text, &style, 296.dp()), size);
+    assert_eq!(painter.shaper.measure(text, &style, 296.dp()), size);
     for line in &centered.lines {
         let end = line.start + text[line.clone()].trim_end().len();
         let ranges = centered.selection(line.start..end);
@@ -80,16 +80,16 @@ fn logical_start_follows_rtl_direction_and_reverses_without_stale_cache() -> Res
     let mut painter = new_painter()?;
     let mut style = TextStyle::new("probe", 16.sp(), Color::WHITE).resolve_unscaled();
     let text = "אבג 123";
-    let ltr = painter.geometry(text, &style, 296.dp());
+    let ltr = painter.shaper.geometry(text, &style, 296.dp());
     let before = pixels(&mut painter, &style, text)?;
     style.direction = ParagraphDirection::RightToLeft;
-    let rtl = painter.geometry(text, &style, 296.dp());
+    let rtl = painter.shaper.geometry(text, &style, 296.dp());
     let bounds = rtl.selection(0..text.len());
     let right = bounds.iter().map(|r| r.x + r.width).fold(Dp::ZERO, Dp::max);
     assert!((right - 296.dp()).abs() < 2.dp());
     assert_ne!(pixels(&mut painter, &style, text)?, before);
     style.alignment = TextAlignment::End;
-    let end = painter.geometry(text, &style, 296.dp());
+    let end = painter.shaper.geometry(text, &style, 296.dp());
     assert!(
         end.selection(0..text.len())
             .iter()

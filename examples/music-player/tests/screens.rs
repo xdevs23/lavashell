@@ -21,7 +21,8 @@ fn show(
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    without_failures(view.show_frame(tree, viewport, &mut capture.painter)).map_err(Error::Example)
+    without_failures(view.show_frame(tree, viewport, capture.painter.shaper()))
+        .map_err(Error::Example)
 }
 
 #[test]
@@ -164,7 +165,7 @@ fn compact_and_scrolled(
     assert!(current.y >= area.y && current.y + current.height < WINDOW.height - PLAYER_HEIGHT);
     let r = control(&scrolled, "play-toggle")?;
     scrolled.input(InputEvent::Move(Point::new(r.x + 10.dp(), r.y + 10.dp())));
-    let tree = scene(&mut scrolled, window, &mut capture.painter)?;
+    let tree = scene(&mut scrolled, window, capture.painter.shaper())?;
     assert!(
         (tree.at(Duration::ZERO).leaf_commands())
             .any(|c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::Play)))
@@ -186,7 +187,7 @@ fn empty_states(
         m.section = music::Section::Favorites;
     });
     capture.save(view, window, directory.join("music-empty-favorites.png"))?;
-    let tree = scene(view, window, &mut capture.painter)?;
+    let tree = scene(view, window, capture.painter.shaper())?;
     let commands: Vec<_> = tree.at(Duration::ZERO).leaf_commands().collect();
     assert!(commands.iter().any(
         |c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::CollectionEmpty))
@@ -198,7 +199,7 @@ fn empty_states(
     model.set(music::Model::default());
     model.update(|m| m.query = "not-in-the-sample-collection".into());
     capture.save(view, window, directory.join("music-empty-search.png"))?;
-    let tree = scene(view, window, &mut capture.painter)?;
+    let tree = scene(view, window, capture.painter.shaper())?;
     assert!(tree.at(Duration::ZERO).leaf_commands().any(
         |c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::SearchEmpty))
     ));

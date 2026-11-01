@@ -227,7 +227,7 @@ fn a_text_color_change_reuses_the_paragraph_and_the_mask() -> Result<(), TestErr
     warmed.paint_as_leaf(target.canvas(), &[text(Color::WHITE)], Density::ONE)?;
     let cached = |painter: &mut crate::Painter| {
         let tiles = painter.resources.tiles.get_mut().images().count();
-        (painter.paragraphs.len(), tiles)
+        (painter.shaper.paragraphs().len(), tiles)
     };
     let before = cached(&mut warmed);
     for color in [Color::rgb(0x00a9_dd75), Color::rgb(0x006a_3fd0)] {

@@ -14,7 +14,8 @@ fn show(
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    without_failures(view.show_frame(tree, viewport, &mut capture.painter)).map_err(Error::Example)
+    without_failures(view.show_frame(tree, viewport, capture.painter.shaper()))
+        .map_err(Error::Example)
 }
 
 #[test]
@@ -158,7 +159,7 @@ fn keyboard_reaches_motion(
             shift: false,
         });
     }
-    let tree = scene(view, window, &mut capture.painter)?;
+    let tree = scene(view, window, capture.painter.shaper())?;
     let motion = control(view, "motion")?;
     let visible_focus = tree.at(Duration::ZERO).leaf_commands().any(|command| {
         matches!(command, DrawCommand::Stroke { shape, stroke }
