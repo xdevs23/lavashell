@@ -10,6 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
+lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-effect-quality.workspace = true
 lavashell-renderer.workspace = true

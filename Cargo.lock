@@ -2549,6 +2549,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-actor"
+version = "0.1.0"
+
+[[package]]
 name = "lavashell-android"
 version = "0.1.0"
 dependencies = [
@@ -2812,6 +2816,7 @@ dependencies = [
  "env_logger",
  "futures-lite",
  "icu_locale_core",
+ "lavashell-actor",
  "lavashell-build-script",
  "lavashell-core",
  "lavashell-effect-quality",

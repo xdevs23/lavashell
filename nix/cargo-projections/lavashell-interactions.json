@@ -3134,6 +3134,10 @@
         "version": "0.1.0"
       },
       {
+        "name": "lavashell-actor",
+        "version": "0.1.0"
+      },
+      {
         "dependencies": [
           "jni",
           "lavashell-core",
@@ -3302,6 +3306,7 @@
           "env_logger",
           "futures-lite",
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-effect-quality",

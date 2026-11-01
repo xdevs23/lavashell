@@ -14,11 +14,12 @@ mod text;
 
 use accesskit::TreeUpdate;
 use accesskit_unix::Adapter;
-use handlers::{Actions, Activation, Deactivation, SharedSnapshot, lock_snapshot};
+use handlers::{Actions, Activation, Deactivation, SharedSnapshot};
+use lavashell_actor::Latest;
 use lavashell_core::accessibility::{AccessibilityTree, ActionRequest};
 use sctk::reexports::calloop::channel::Sender;
 use smithay_client_toolkit as sctk;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub(crate) enum Event {
     Activate(usize),
@@ -38,7 +39,7 @@ pub(crate) struct Bridge {
 
 impl Bridge {
     pub(crate) fn new(surface: usize, title: String, events: Sender<Event>) -> Self {
-        let shared = Arc::new(Mutex::new(None));
+        let shared = Arc::new(Latest::new());
         let adapter = Adapter::new(
             Activation::new(surface, events.clone(), shared.clone()),
             Actions::new(surface, events.clone()),
@@ -66,7 +67,7 @@ impl Bridge {
         let full = mapping::tree(tree, &mut self.ids, &self.title);
         // The activation handler runs on an AccessKit thread and reads only this snapshot. The application callbacks
         // run on the UI thread, which receives the activation through the event channel.
-        *lock_snapshot(&self.shared) = Some(full.clone());
+        self.shared.publish(full.clone());
         let update = if force {
             full.clone()
         } else {
@@ -90,7 +91,7 @@ impl Bridge {
 
     pub(crate) fn deactivate(&mut self) {
         self.active = false;
-        *lock_snapshot(&self.shared) = None;
+        self.shared.clear();
         self.previous = None;
         self.revision = None;
     }
