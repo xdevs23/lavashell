@@ -6,7 +6,7 @@ impl Platform {
         let Some(seat) = self.keyboard_seat(keyboard) else {
             return;
         };
-        let Some(index) = seat.focus else { return };
+        let Some(surface) = seat.focus else { return };
         let shift = seat.modifiers.shift;
         let key = match event.keysym {
             Keysym::Tab | Keysym::ISO_Left_Tab => Some(Key::Tab),
@@ -53,7 +53,7 @@ impl Platform {
         };
         let seat = seat.seat.clone();
         let input = if let Some(filter) = &mut self.config.input_filter {
-            filter(index, input)
+            filter(surface, input)
         } else {
             Some(input)
         };
@@ -67,22 +67,26 @@ impl Platform {
             ..
         }) = &input
         {
-            let field = self.surfaces[index].view.editing_target().is_some();
+            let field = (self.surface_records.open_view(surface))
+                .is_some_and(|view| view.editing_target().is_some());
             if field && *key == Key::Character('v') {
-                self.paste_selection(index, &seat);
+                self.paste_selection(surface, &seat);
                 return;
             }
             if *key == Key::Character('x') {
-                self.cut_text(index);
+                self.cut_text(surface);
                 return;
             }
             if *key == Key::Character('c')
-                && let Some(text) = self.surfaces[index].view.copy_selection(false)
+                && let Some(view) = self.surface_records.open_view_mut(surface)
+                && let Some(text) = view.copy_selection(false)
             {
                 self.copy_text(&text);
                 return;
             }
         }
-        self.surfaces[index].view.input(input);
+        if let Some(view) = self.surface_records.open_view_mut(surface) {
+            view.input(input);
+        }
     }
 }

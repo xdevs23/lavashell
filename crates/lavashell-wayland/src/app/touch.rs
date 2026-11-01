@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    Connection, InputEvent, Platform, Point, PointerKind, QueueHandle, SeatDevices, TouchId,
-    TouchSample, sctk, wl_seat, wl_surface, wl_touch,
+    Connection, InputEvent, Platform, Point, PointerKind, QueueHandle, SeatDevices, SurfaceId,
+    TouchId, TouchSample, sctk, wl_seat, wl_surface, wl_touch,
 };
 use sctk::seat::touch::TouchHandler;
 use std::collections::BTreeMap;
@@ -16,7 +16,7 @@ pub(super) struct TouchPoints {
 /// A touch point that is down: the surface on which it went down and its last reported position. The position is
 /// stored here because the `up` event of the protocol has no position.
 struct Down {
-    surface: usize,
+    surface: SurfaceId,
     at: Point,
 }
 
@@ -43,21 +43,21 @@ impl TouchPoints {
         }
     }
 
-    fn down(&mut self, point: i32, surface: usize, at: Point) -> (usize, InputEvent) {
+    fn down(&mut self, point: i32, surface: SurfaceId, at: Point) -> (SurfaceId, InputEvent) {
         if self.points.insert(point, Down { surface, at }).is_some() {
             log::debug!("touch point {point} went down again before it went up");
         }
         (surface, InputEvent::TouchDown(self.sample(point, at)))
     }
 
-    fn motion(&mut self, point: i32, at: Point) -> Option<(usize, InputEvent)> {
+    fn motion(&mut self, point: i32, at: Point) -> Option<(SurfaceId, InputEvent)> {
         let down = self.points.get_mut(&point)?;
         down.at = at;
         let surface = down.surface;
         Some((surface, InputEvent::TouchMove(self.sample(point, at))))
     }
 
-    fn up(&mut self, point: i32) -> Option<(usize, InputEvent)> {
+    fn up(&mut self, point: i32) -> Option<(SurfaceId, InputEvent)> {
         let down = self.points.remove(&point)?;
         Some((
             down.surface,
@@ -67,7 +67,7 @@ impl TouchPoints {
 
     /// Removes every touch point and returns a cancel event for each, together with the surface that receives the
     /// event.
-    pub(super) fn cancel(&mut self) -> Vec<(usize, InputEvent)> {
+    pub(super) fn cancel(&mut self) -> Vec<(SurfaceId, InputEvent)> {
         let points = std::mem::take(&mut self.points);
         (points.into_iter())
             .map(|(point, down)| (down.surface, InputEvent::TouchCancel(self.id(point))))
@@ -80,9 +80,11 @@ impl Platform {
         (self.devices.iter_mut()).find(|seat| seat.touch.as_ref() == Some(touch))
     }
 
-    fn touch_input(&mut self, input: Option<(usize, InputEvent)>) {
-        if let Some((surface, input)) = input {
-            self.surfaces[surface].view.input(input);
+    fn touch_input(&mut self, input: Option<(SurfaceId, InputEvent)>) {
+        if let Some((surface, input)) = input
+            && let Some(view) = self.surface_records.open_view_mut(surface)
+        {
+            view.input(input);
         }
     }
 
@@ -111,7 +113,7 @@ impl TouchHandler for Platform {
         id: i32,
         position: (f64, f64),
     ) {
-        let Some(surface) = self.index(&surface) else {
+        let Some(surface) = self.find_surface(&surface) else {
             return;
         };
         let at = crate::logical::point(position.0, position.1);

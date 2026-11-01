@@ -19,7 +19,7 @@ impl Platform {
         x: f64,
         y: f64,
     ) {
-        let Some(index) = self.transfer_surface_index(surface) else {
+        let Some(id) = self.transfer_surface(surface) else {
             return;
         };
         let Some(offer) = self
@@ -33,7 +33,7 @@ impl Platform {
         };
         let info = DragOfferInfo {
             id: TransferId(self.clipboard.id()),
-            surface: index,
+            surface: id,
             position: crate::logical::point(x, y),
             mime_types: offer.with_mime_types(<[String]>::to_vec),
             actions: portable_actions(offer.source_actions),

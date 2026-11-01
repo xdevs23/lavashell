@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Creates a group of layer surfaces for each output that the compositor announces, and closes the group when the
-//! compositor removes the output. Each surface has the same index in the list of surfaces for its whole life.
+//! compositor removes the output.
 
 use super::creation::SurfaceSpec;
-use super::{App, LayerSurface, Platform, Size, State, View, ZwlrLayerShellV1, wl_output};
+use super::{
+    App, LayerSurface, Platform, Size, State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1,
+    wl_output,
+};
 use crate::Error;
 use std::{cell::RefCell, rc::Rc};
 
@@ -22,7 +25,7 @@ pub(super) struct Configuration(pub Factory);
 struct Group {
     output: wl_output::WlOutput,
     info: State<MonitorInfo>,
-    surfaces: Vec<usize>,
+    surfaces: Vec<SurfaceId>,
 }
 
 pub(super) struct Runtime {
@@ -118,8 +121,8 @@ impl Platform {
         for (options, mut view) in requests {
             let context = self.layer_context(&options, &mut view)?;
             let spec = SurfaceSpec::layer(&options, view, context)?;
-            surfaces.push(self.surfaces.len());
             self.create_surface(spec, |platform, wl, id| {
+                surfaces.push(id);
                 platform.layer_role(wl, Some(&output), &options, context, id)
             })?;
         }
@@ -143,7 +146,7 @@ impl Platform {
             .position(|group| &group.output == output)
         {
             for id in runtime.groups.remove(index).surfaces {
-                self.surfaces[id].lifecycle.close();
+                self.surface_event(id, SurfaceEvent::Closed);
             }
         }
     }

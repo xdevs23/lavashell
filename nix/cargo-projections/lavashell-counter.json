@@ -504,6 +504,39 @@
             {
               "manifest": {
                 "dependencies": {
+                  "lavashell-core": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-core",
+                    "path": "../lavashell-core"
+                  }
+                },
+                "features": {},
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "package": {
+                  "autobenches": false,
+                  "autobins": false,
+                  "autoexamples": false,
+                  "autotests": false,
+                  "build": false,
+                  "edition": "2024",
+                  "name": "lavashell-platform",
+                  "version": "0.0.0"
+                }
+              },
+              "member": "crates/lavashell-platform",
+              "targets": [
+                {
+                  "main": false,
+                  "path": "src/lib.rs"
+                }
+              ]
+            },
+            {
+              "manifest": {
+                "dependencies": {
                   "ash": {
                     "default-features": false,
                     "features": [
@@ -616,6 +649,54 @@
                 }
               },
               "member": "crates/lavashell-renderer",
+              "targets": [
+                {
+                  "main": false,
+                  "path": "src/lib.rs"
+                }
+              ]
+            },
+            {
+              "manifest": {
+                "dependencies": {
+                  "lavashell-core": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-core",
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-platform": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-platform",
+                    "path": "../lavashell-platform"
+                  },
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
+                  }
+                },
+                "features": {},
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "package": {
+                  "autobenches": false,
+                  "autobins": false,
+                  "autoexamples": false,
+                  "autotests": false,
+                  "build": false,
+                  "edition": "2024",
+                  "name": "lavashell-runtime",
+                  "version": "0.0.0"
+                }
+              },
+              "member": "crates/lavashell-runtime",
               "targets": [
                 {
                   "main": false,
@@ -796,6 +877,12 @@
                     "package": "lavashell-effect-quality",
                     "path": "../lavashell-effect-quality"
                   },
+                  "lavashell-platform": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-platform",
+                    "path": "../lavashell-platform"
+                  },
                   "lavashell-renderer": {
                     "default-features": false,
                     "features": [
@@ -804,6 +891,12 @@
                     ],
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
+                  },
+                  "lavashell-runtime": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-runtime",
+                    "path": "../lavashell-runtime"
                   },
                   "lavashell-vulkan": {
                     "default-features": false,
@@ -2411,6 +2504,13 @@
               },
               {
                 "dependencies": [
+                  "lavashell-core"
+                ],
+                "name": "lavashell-platform",
+                "version": "0.0.0"
+              },
+              {
+                "dependencies": [
                   "ash",
                   "i_overlay",
                   "inventory",
@@ -2424,6 +2524,15 @@
                   "thiserror"
                 ],
                 "name": "lavashell-renderer",
+                "version": "0.0.0"
+              },
+              {
+                "dependencies": [
+                  "lavashell-core",
+                  "lavashell-platform",
+                  "thiserror"
+                ],
+                "name": "lavashell-runtime",
                 "version": "0.0.0"
               },
               {
@@ -2449,7 +2558,9 @@
                   "lavashell-build-script",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-platform",
                   "lavashell-renderer",
+                  "lavashell-runtime",
                   "lavashell-vulkan",
                   "log",
                   "num-traits",
@@ -3710,7 +3821,9 @@
                 "crates/lavashell-keyboard",
                 "crates/lavashell-lucide",
                 "crates/lavashell-materials",
+                "crates/lavashell-platform",
                 "crates/lavashell-renderer",
+                "crates/lavashell-runtime",
                 "crates/lavashell-vulkan",
                 "crates/lavashell-wayland",
                 "examples/counter",
@@ -3730,7 +3843,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "87a93fb49ecb126551405c8d0f446e0f1c732ff3c6080caab3c15a3df4824c94"
+        "seedHash": "358c6566529b31260dbd63f9357f40faf13940910c9741114ffaf7b597b86529"
       }
     }
   },
@@ -4869,6 +4982,13 @@
       },
       {
         "dependencies": [
+          "lavashell-core"
+        ],
+        "name": "lavashell-platform",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "i_overlay",
           "inventory",
@@ -4884,6 +5004,16 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-renderer",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-test-platform",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-runtime",
         "version": "0.1.0"
       },
       {
@@ -4919,7 +5049,9 @@
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-platform",
           "lavashell-renderer",
+          "lavashell-runtime",
           "lavashell-test-platform",
           "lavashell-vulkan",
           "log",

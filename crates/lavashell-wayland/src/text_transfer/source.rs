@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    DragAction, DragActions, DragGesture, DragRequest, HashMap, TextDropTarget, TransferId, View,
-    text_data,
+    DragAction, DragActions, DragGesture, DragRequest, HashMap, SurfaceId, TextDropTarget,
+    TransferId, View, text_data,
 };
 use lavashell_core::prelude::{NodeId, TextSelectionSource};
 use std::{cell::RefCell, rc::Rc};
@@ -29,7 +29,7 @@ pub(super) enum LocalMove {
 
 struct LocalSource {
     device: u32,
-    surface: usize,
+    surface: SurfaceId,
     source: TextSelectionSource,
     submitted: bool,
     finished: bool,
@@ -96,7 +96,7 @@ impl NativeSources {
     pub fn receive(
         &self,
         id: TransferId,
-        surface: usize,
+        surface: SurfaceId,
         target: &TextDropTarget,
         text: &str,
         view: &mut View,
@@ -119,7 +119,7 @@ impl NativeSources {
         }
     }
 
-    pub fn ambiguous(&self, device: u32, surface: usize, target: NodeId) -> bool {
+    pub fn ambiguous(&self, device: u32, surface: SurfaceId, target: NodeId) -> bool {
         self.0.borrow().active.iter().any(|source| {
             let source = source.borrow();
             source.device == device

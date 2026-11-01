@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::{Rect, Size};
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
 use lavashell_renderer::Error as RendererError;
@@ -28,8 +29,10 @@ pub enum Error {
     WindowSize(Size),
     #[error("the minimum window size {0:?} is not finite or does not fit the protocol")]
     MinimumWindowSize(Size),
-    #[error("the app has no surface to show")]
+    #[error("the app did not request any surface")]
     NoSurfaces,
+    #[error(transparent)]
+    Runtime(#[from] lavashell_runtime::Error),
     #[error("the connection to the compositor could not be opened")]
     Connect(#[source] ConnectError),
     #[error("the globals of the compositor could not be read")]
@@ -92,10 +95,8 @@ pub enum Error {
     ReserveLayerExtent(#[source] TryFromIntError),
     #[error("the layer margin {0:?} does not fit the protocol")]
     LayerMargin(FiniteDp),
-    #[error("a new surface has a number too large for a surface id")]
-    NumberSurface(#[source] TryFromIntError),
-    #[error("the size of a surface does not fit the protocol")]
-    SurfaceSize(#[source] TryFromIntError),
+    #[error("the size {0:?} of a surface does not fit the protocol")]
+    SurfaceSize(Size),
     #[error("the buffer scale of a surface does not fit the protocol")]
     BufferScale(#[source] TryFromIntError),
     #[error("no buffer of whole pixels covers the size of a surface")]
@@ -110,8 +111,6 @@ pub enum Error {
     ShapeScalar(f64),
     #[error("a surface could not show a frame of its view")]
     ShowScene(#[source] FrameError),
-    #[error("the content of a surface could not be measured")]
-    MeasureView(#[source] NumberError),
     #[error("a frame could not be drawn")]
     Draw(#[source] RendererError),
     #[error("the contents of a drawn surface could not be checked")]
@@ -120,6 +119,8 @@ pub enum Error {
     Paint(#[source] RendererError),
     #[error("a drawn surface has no Vulkan target")]
     SurfaceWithoutTarget,
+    #[error("surface {0:?} is not open")]
+    SurfaceNotOpen(SurfaceId),
     #[error("the scene images that the GPU is done with could not be released")]
     ReleaseSceneImports(#[source] RendererError),
     #[error("the completion of a scene could not be read")]

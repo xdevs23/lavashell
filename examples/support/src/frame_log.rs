@@ -76,7 +76,7 @@ fn write_frame_reports(path: &OsStr, reports: &[FrameReport]) -> Result<(), Erro
 
 #[derive(Serialize)]
 struct FrameRow {
-    surface: usize,
+    surface: u64,
     sequence: u64,
     stage: FrameStage,
     now_ns: u128,
@@ -120,7 +120,7 @@ impl From<&FrameReport> for FrameRow {
         let render = submission.map(|s| s.render);
         let gpu = submission.and_then(|s| s.gpu);
         Self {
-            surface: report.surface,
+            surface: report.surface.0,
             sequence: report.timing.sequence,
             stage: report.stage,
             now_ns: report.timing.now.as_nanos(),

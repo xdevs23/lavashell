@@ -2,6 +2,7 @@
 use crate::{App, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId};
 use lavashell_core::{
     prelude::{TextDropTarget, View},
+    surface::SurfaceId,
     transfer::{DragAction, DragActions, DropAcceptance, Representation, TransferData},
 };
 use std::{collections::HashMap, sync::Arc};
@@ -20,13 +21,13 @@ pub(crate) struct TextTransfers {
 }
 
 struct Accepted {
-    surface: usize,
+    surface: SurfaceId,
     device: u32,
     choice: DropAcceptance,
 }
 
 struct Pending {
-    surface: usize,
+    surface: SurfaceId,
     device: u32,
     choice: DropAcceptance,
     target: Option<TextDropTarget>,

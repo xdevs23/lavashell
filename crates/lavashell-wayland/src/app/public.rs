@@ -4,7 +4,8 @@ use super::scene::SceneRuntime;
 use super::{
     App, AppConfig, Clipboard, Connection, Dp, Duration, EventLoop, Fonts, FrameReport, FrameTime,
     HostKey, InputEvent, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform, PlatformFacts,
-    Request, Size, SurfaceId, Ui, View, Viewport, Window, registry_queue_init, session_lock,
+    Request, RunEnd, Size, SurfaceId, Ui, View, Viewport, Window, registry_queue_init,
+    session_lock,
 };
 use crate::Error;
 
@@ -16,7 +17,7 @@ impl App {
     #[must_use]
     pub fn input_filter(
         mut self,
-        filter: impl FnMut(usize, InputEvent) -> Option<InputEvent> + 'static,
+        filter: impl FnMut(SurfaceId, InputEvent) -> Option<InputEvent> + 'static,
     ) -> Self {
         self.config.input_filter = Some(Box::new(filter));
         self
@@ -45,7 +46,7 @@ impl App {
     }
 
     /// Returns the handle through which the app runs actions on its views. Each action selects its surface by the
-    /// native surface index assigned when the surface was created, which never changes.
+    /// id assigned when the surface was created, which no other surface gets.
     #[must_use]
     pub fn view_actions(&self) -> super::ViewActions {
         self.config.view_actions.clone()
@@ -134,7 +135,7 @@ impl App {
 
     #[must_use]
     pub fn exit_when(mut self, predicate: impl FnMut() -> bool + 'static) -> Self {
-        self.should_exit = Some(Box::new(predicate));
+        self.run_end.exit_when(predicate);
         self
     }
 
@@ -184,7 +185,7 @@ impl App {
             output_layers: None,
             fonts: Fonts::default(),
             session_lock: None,
-            should_exit: None,
+            run_end: RunEnd::default(),
             clipboard: Clipboard::default(),
             painter_setup: None,
             scene: None,
@@ -208,7 +209,7 @@ impl App {
 
     #[must_use]
     pub fn exit_after(mut self, duration: Duration) -> Self {
-        self.config.exit_after = Some(duration);
+        self.run_end.exit_after(duration);
         self
     }
 
@@ -243,7 +244,10 @@ impl App {
     }
 
     #[must_use]
-    pub fn output_observer(mut self, observer: impl FnMut(usize, OutputInfo) + 'static) -> Self {
+    pub fn output_observer(
+        mut self,
+        observer: impl FnMut(SurfaceId, OutputInfo) + 'static,
+    ) -> Self {
         self.config.output_observer = Some(Box::new(observer));
         self
     }
@@ -310,7 +314,6 @@ impl App {
         let qh = queue.handle();
         let mut event_loop: EventLoop<Platform> =
             EventLoop::try_new().map_err(Error::CreateEventLoop)?;
-        let mut should_exit = self.should_exit.take();
         let mut platform =
             Platform::new(&connection, &globals, qh, queue, self, event_loop.handle())?;
         loop {
@@ -323,7 +326,7 @@ impl App {
             }
             let next = platform.render()?;
             platform.update_focus_grabs();
-            if platform.finished() || should_exit.as_mut().is_some_and(|predicate| predicate()) {
+            if platform.finished() {
                 break;
             }
             platform.watch_readable_sources()?;
@@ -345,13 +348,13 @@ impl Platform {
     /// before this wait handled it. The loop then waits for the frame callback of the surface that was drawn.
     fn timeout(&self) -> Option<Duration> {
         let elapsed = self.start.elapsed();
-        let exit = (self.config.exit_after).map(|limit| limit.saturating_sub(elapsed));
+        let exit = self.run_end.exit_in(elapsed);
         let scene = (self.scene.as_ref())
             .and_then(SceneRuntime::wake)
             .filter(|deadline| *deadline > elapsed);
-        let surfaces = (self.surfaces.iter())
-            .filter(|surface| surface.lifecycle.is_open())
-            .filter_map(|surface| surface.wakes(elapsed));
+        let surfaces = (self.surfaces.iter()).filter_map(|(&id, surface)| {
+            surface.wakes(self.surface_records.open_view(id)?, elapsed)
+        });
         let wakes = scene
             .into_iter()
             .chain(surfaces)
@@ -359,14 +362,11 @@ impl Platform {
         exit.into_iter().chain(wakes).min()
     }
 
-    /// Whether every surface has closed, or the time to exit after has passed.
-    fn finished(&self) -> bool {
-        let all_closed = self.session_lock.is_none()
-            && self.output_layers.is_none()
-            && self
-                .surfaces
-                .iter()
-                .all(|surface| !surface.lifecycle.is_open());
-        all_closed || (self.config.exit_after).is_some_and(|limit| self.start.elapsed() >= limit)
+    /// Whether the run ends now. The session lock and the per-output layers count as open until they end.
+    fn finished(&mut self) -> bool {
+        let anything_open = self.session_lock.is_some()
+            || self.output_layers.is_some()
+            || self.surface_records.any_open();
+        (self.run_end).finished(self.start.elapsed(), anything_open)
     }
 }

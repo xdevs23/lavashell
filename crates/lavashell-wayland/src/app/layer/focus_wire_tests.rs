@@ -53,13 +53,13 @@ fn private_wire_old_extent_blocks_acquisition_and_committed_empty_input_releases
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
     assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
-    wire.size = (321, 101);
+    wire.size = crate::logical::size((321, 101));
     assert!(wire.focus(&mut layer)?.is_empty());
     assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
     assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
     let grab = wire.focus(&mut layer)?[0].2[0];
-    wire.size = (321, 141);
+    wire.size = crate::logical::size((321, 141));
     wire.input = false;
     assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
