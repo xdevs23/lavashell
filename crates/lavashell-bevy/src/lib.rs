@@ -18,19 +18,16 @@ use bevy::{prelude::*, render::MainWorld, render::extract_component::ExtractComp
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::*;
 use lavashell_core::view::FrameError;
-use std::{
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
-    time::Duration,
-};
+use std::time::Duration;
 
 /// Marks a camera whose resolved image receives the Lavashell overlay.
 #[derive(Component, Clone, ExtractComponent)]
 pub struct OverlayCamera;
 
-/// The scene tree that the overlay paints, shared with the render world.
+/// The scene tree painted by the overlay. The render world paints a snapshot of the tree.
 #[derive(Resource, Default)]
 pub struct OverlayFrame {
-    tree: Arc<Mutex<SceneTree>>,
+    tree: SceneTree,
     pub sequence: u64,
     /// Set by `show_frame_at`. An app that renders without `show_frame_at` calls `View::record_presentation` with the
     /// presentation time of the render instead, so that input events hit the content that the overlay showed then.
@@ -51,7 +48,7 @@ impl OverlayFrame {
         text: &mut impl TextMeasurer,
         timing: FrameTime,
     ) -> Result<(), FrameError> {
-        let failures = view.show_frame_at(&mut lock(&self.tree), viewport, text, timing)?;
+        let failures = view.show_frame_at(&mut self.tree, viewport, text, timing)?;
         for failure in failures {
             log::error!("{}", message_chain(failure));
         }
@@ -75,7 +72,7 @@ pub struct OverlayShown {
 struct ExtractedOverlay {
     sequence: u64,
     shown: Option<OverlayShown>,
-    tree: Arc<Mutex<SceneTree>>,
+    snapshot: SceneSnapshot,
 }
 
 fn extract_overlay(main: Res<MainWorld>, mut commands: Commands) {
@@ -85,14 +82,8 @@ fn extract_overlay(main: Res<MainWorld>, mut commands: Commands) {
     commands.insert_resource(ExtractedOverlay {
         sequence: frame.sequence,
         shown: frame.shown,
-        tree: frame.tree.clone(),
+        snapshot: frame.tree.snapshot(),
     });
-}
-
-/// Locks `tree`, also after a panic poisoned the lock. A panic while the tree was locked leaves the tree intact,
-/// because painting only reads the tree.
-fn lock(tree: &Mutex<SceneTree>) -> MutexGuard<'_, SceneTree> {
-    tree.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn prepare_overlay_targets(

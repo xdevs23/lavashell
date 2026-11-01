@@ -5,6 +5,7 @@ use super::{
 };
 use crate::scene::Affine;
 use crate::shape::RoundedRect;
+use std::sync::Arc;
 
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -94,7 +95,7 @@ impl SceneTree {
     ///
     /// Fails when the namespace is unknown, or with the first change that does not fit the tree.
     pub fn apply(&mut self, namespace: NamespaceId, update: SceneUpdate) -> Result<(), ApplyError> {
-        if !self.namespaces.contains_key(&namespace) {
+        if !self.namespaces.0.contains_key(&namespace) {
             return Err(ApplyError::UnknownNamespace(namespace));
         }
         update
@@ -132,7 +133,7 @@ impl SceneTree {
     ) -> Result<(), ApplyError> {
         let key = NodeKey::new(namespace, id);
         let target = self.namespace(namespace)?;
-        if target.nodes.contains_key(&id) {
+        if target.node(id).is_some() {
             return Err(ApplyError::DuplicateNode(id));
         }
         check_index(index, target.children(parent)?.len())?;
@@ -145,7 +146,7 @@ impl SceneTree {
                 self.track_motion(key, group.moves());
                 StoredKind::Group {
                     group,
-                    children: Vec::new(),
+                    children: Arc::default(),
                 }
             }
             Node::Leaf(content) => StoredKind::Leaf(content),
@@ -163,7 +164,7 @@ impl SceneTree {
         let placed = self.place();
         let target = self.namespace_mut(key.namespace)?;
         target.children_mut(parent)?.insert(index, key.node);
-        let _replaced_in_nodes = target.nodes.insert(
+        target.insert_node(
             key.node,
             StoredNode {
                 parent,
@@ -182,10 +183,10 @@ impl SceneTree {
         while let Some(id) = below.pop() {
             let key = NodeKey::new(namespace, id);
             let _was_present_in_moving = self.moving.remove(&key);
-            let entry = self.namespace_mut(namespace)?.nodes.remove(&id);
-            match entry.map(|entry| entry.kind) {
-                Some(StoredKind::Group { children, .. }) => below.extend(children),
-                Some(StoredKind::Leaf(Content::Graft(target))) => self.ungraft(key, target),
+            let entry = self.namespace_mut(namespace)?.remove_node(id);
+            match entry.as_deref().map(|entry| &entry.kind) {
+                Some(StoredKind::Group { children, .. }) => below.extend(children.iter()),
+                Some(StoredKind::Leaf(Content::Graft(target))) => self.ungraft(key, *target),
                 _ => {}
             }
         }
@@ -214,7 +215,7 @@ impl SceneTree {
         let target = self.namespace_mut(namespace)?;
         target.children_mut(old)?.retain(|child| *child != id);
         target.children_mut(parent)?.insert(index, id);
-        if let Some(entry) = target.nodes.get_mut(&id) {
+        if let Some(entry) = target.node_mut(id) {
             entry.parent = parent;
             entry.placed = placed;
         }
@@ -244,7 +245,7 @@ impl SceneTree {
         if let Content::Graft(target) = content {
             self.namespace_mut(target)?.grafted_at = Some(key);
         }
-        if let Some(entry) = self.namespace_mut(namespace)?.nodes.get_mut(&id) {
+        if let Some(entry) = self.namespace_mut(namespace)?.node_mut(id) {
             entry.kind = StoredKind::Leaf(content);
         }
         Ok(())
@@ -256,7 +257,7 @@ impl SceneTree {
         id: SceneNodeId,
         slot: SlotChange,
     ) -> Result<(), ApplyError> {
-        let entry = self.namespace_mut(namespace)?.nodes.get_mut(&id);
+        let entry = self.namespace_mut(namespace)?.node_mut(id);
         let StoredKind::Group { group, .. } = &mut entry.ok_or(ApplyError::UnknownNode(id))?.kind
         else {
             return Err(ApplyError::NotAGroup(id));
@@ -303,20 +304,18 @@ impl SceneTree {
     }
 
     fn ungraft(&mut self, leaf: NodeKey, target: NamespaceId) {
-        let grafted = self.namespaces.get_mut(&target);
+        let grafted = self.namespaces.0.get_mut(&target);
         if let Some(grafted) = grafted.filter(|grafted| grafted.grafted_at == Some(leaf)) {
             grafted.grafted_at = None;
         }
     }
 
     fn namespace(&self, id: NamespaceId) -> Result<&Namespace, ApplyError> {
-        self.namespaces
-            .get(&id)
-            .ok_or(ApplyError::UnknownNamespace(id))
+        (self.namespaces.0.get(&id)).ok_or(ApplyError::UnknownNamespace(id))
     }
 
     fn namespace_mut(&mut self, id: NamespaceId) -> Result<&mut Namespace, ApplyError> {
-        (self.namespaces.get_mut(&id)).ok_or(ApplyError::UnknownNamespace(id))
+        (self.namespaces.0.get_mut(&id)).ok_or(ApplyError::UnknownNamespace(id))
     }
 }
 
@@ -329,18 +328,18 @@ fn check_index(index: usize, children: usize) -> Result<(), ApplyError> {
 
 impl Namespace {
     fn entry(&self, id: SceneNodeId) -> Result<&StoredNode, ApplyError> {
-        self.nodes.get(&id).ok_or(ApplyError::UnknownNode(id))
+        self.node(id).ok_or(ApplyError::UnknownNode(id))
     }
 
     pub(super) fn children(
         &self,
         parent: Option<SceneNodeId>,
-    ) -> Result<&Vec<SceneNodeId>, ApplyError> {
+    ) -> Result<&[SceneNodeId], ApplyError> {
         let Some(parent) = parent else {
-            return Ok(&self.top);
+            return Ok(self.top.as_slice());
         };
         match &self.entry(parent)?.kind {
-            StoredKind::Group { children, .. } => Ok(children),
+            StoredKind::Group { children, .. } => Ok(children.as_slice()),
             StoredKind::Leaf(_) => Err(ApplyError::NotAGroup(parent)),
         }
     }
@@ -350,14 +349,13 @@ impl Namespace {
         parent: Option<SceneNodeId>,
     ) -> Result<&mut Vec<SceneNodeId>, ApplyError> {
         let Some(parent) = parent else {
-            return Ok(&mut self.top);
+            return Ok(Arc::make_mut(&mut self.top));
         };
         let entry = self
-            .nodes
-            .get_mut(&parent)
+            .node_mut(parent)
             .ok_or(ApplyError::UnknownNode(parent))?;
         match &mut entry.kind {
-            StoredKind::Group { children, .. } => Ok(children),
+            StoredKind::Group { children, .. } => Ok(Arc::make_mut(children)),
             StoredKind::Leaf(_) => Err(ApplyError::NotAGroup(parent)),
         }
     }

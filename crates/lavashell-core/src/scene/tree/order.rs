@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    BTreeMap, Content, DrawCommand, GroupValues, Namespace, NamespaceId, NodeKey, Packet,
-    SceneNodeId, SceneTree, StoredKind, StoredNode,
+    BTreeMap, Content, DrawCommand, GroupValues, Namespace, NamespaceId, Namespaces, NodeKey,
+    Packet, SceneNodeId, SceneTree, StoredKind, StoredNode,
 };
 use crate::scene::Affine;
 use std::time::Duration;
@@ -51,30 +51,39 @@ pub struct PaintOrder<'a> {
 
 struct Level<'a> {
     namespace: NamespaceId,
-    nodes: &'a BTreeMap<SceneNodeId, StoredNode>,
+    nodes: &'a Namespace,
     children: std::slice::Iter<'a, SceneNodeId>,
     world: Affine,
 }
 
-/// A scene tree whose animated slots are sampled at `now`. `now` is the presentation time, measured from the same
-/// epoch as the time passed to `View::frame_at`.
+/// The nodes of a scene tree or a snapshot whose animated slots are sampled at `now`. `now` is the presentation time,
+/// measured from the same epoch as the time passed to `View::frame_at`.
 #[derive(Clone, Copy)]
 pub struct Presented<'a> {
-    pub tree: &'a SceneTree,
+    pub(super) namespaces: &'a Namespaces,
     pub now: Duration,
 }
 
 impl SceneTree {
     #[must_use]
     pub fn at(&self, now: Duration) -> Presented<'_> {
-        Presented { tree: self, now }
+        self.namespaces.at(now)
+    }
+}
+
+impl Namespaces {
+    pub(super) fn at(&self, now: Duration) -> Presented<'_> {
+        Presented {
+            namespaces: self,
+            now,
+        }
     }
 }
 
 impl<'a> Presented<'a> {
     #[must_use]
     pub fn paint_order(self) -> PaintOrder<'a> {
-        PaintOrder::new(&self.tree.namespaces, self.now)
+        PaintOrder::new(&self.namespaces.0, self.now)
     }
 
     /// The commands of every leaf in paint order, without the groups around them.
@@ -127,7 +136,7 @@ impl<'a> PaintOrder<'a> {
         let entered = self.namespaces.get(&namespace)?;
         Some(Level {
             namespace,
-            nodes: &entered.nodes,
+            nodes: entered,
             children: entered.top.iter(),
             world,
         })
@@ -143,7 +152,7 @@ impl<'a> PaintOrder<'a> {
             };
             let key = NodeKey::new(level.namespace, *id);
             let nodes = level.nodes;
-            if let Some(step) = nodes.get(id).and_then(|node| self.step(key, node)) {
+            if let Some(step) = nodes.node(*id).and_then(|node| self.step(key, node)) {
                 return Some(step);
             }
         }

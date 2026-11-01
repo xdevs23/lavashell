@@ -13,10 +13,14 @@ mod presence;
 mod slot;
 #[cfg(test)]
 mod slot_tests;
+mod snapshot;
 #[cfg(test)]
 mod test_changes;
 #[cfg(test)]
 mod tests;
+mod trie;
+#[cfg(test)]
+mod trie_tests;
 mod update;
 
 pub use damage::DamageTracker;
@@ -25,6 +29,7 @@ pub(crate) use presence::PresenceVectors;
 pub(crate) use presence::Stretch;
 pub use presence::{Presence, PresenceMap, PresenceParts, ScaleOrigin};
 pub use slot::{Clamp, Group, GroupValues, Slot, SlotMotion, SlotValue, TransformMotion};
+pub use snapshot::SceneSnapshot;
 pub use update::{ApplyError, Change, SceneUpdate, SlotChange};
 
 use crate::geometry::Rect;
@@ -33,6 +38,7 @@ use crate::scene::DrawCommand;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+use trie::Trie;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NamespaceId(u64);
@@ -150,14 +156,16 @@ pub enum Node {
     Leaf(Content),
 }
 
+#[derive(Clone)]
 enum StoredKind {
     Group {
         group: Group,
-        children: Vec<SceneNodeId>,
+        children: Arc<Vec<SceneNodeId>>,
     },
     Leaf(Content),
 }
 
+#[derive(Clone)]
 struct StoredNode {
     parent: Option<SceneNodeId>,
     /// The number of the insert or move that last put the node at its place in paint order. The tree counts its
@@ -166,16 +174,20 @@ struct StoredNode {
     kind: StoredKind,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Namespace {
-    nodes: BTreeMap<SceneNodeId, StoredNode>,
-    top: Vec<SceneNodeId>,
+    nodes: Trie<StoredNode>,
+    top: Arc<Vec<SceneNodeId>>,
     grafted_at: Option<NodeKey>,
 }
 
+/// The nodes in every namespace of a tree. Snapshots taken from the tree share them until the tree changes them.
+#[derive(Clone)]
+struct Namespaces(BTreeMap<NamespaceId, Namespace>);
+
 pub struct SceneTree {
     id: TreeId,
-    namespaces: BTreeMap<NamespaceId, Namespace>,
+    namespaces: Namespaces,
     next_namespace: u64,
     placements: u64,
     moving: BTreeSet<NodeKey>,
@@ -186,7 +198,7 @@ impl Default for SceneTree {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         Self {
             id: TreeId(NEXT.fetch_add(1, Ordering::Relaxed)),
-            namespaces: BTreeMap::from([(Self::ROOT, Namespace::default())]),
+            namespaces: Namespaces(BTreeMap::from([(Self::ROOT, Namespace::default())])),
             next_namespace: Self::ROOT.0 + 1,
             placements: 0,
             moving: BTreeSet::new(),
@@ -204,7 +216,7 @@ impl SceneTree {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        (self.namespaces.values()).all(|namespace| namespace.nodes.is_empty())
+        (self.namespaces.0.values()).all(|namespace| namespace.nodes.is_empty())
     }
 
     /// The leaf of a tree made by [`SceneTree::with_leaf`].
@@ -238,42 +250,70 @@ impl SceneTree {
         self.change(Self::ROOT, change)
     }
 
+    pub(crate) fn children(
+        &self,
+        namespace: NamespaceId,
+        parent: Option<SceneNodeId>,
+    ) -> &[SceneNodeId] {
+        (self.namespaces.0.get(&namespace))
+            .and_then(|namespace| namespace.children(parent).ok())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn group(&self, key: NodeKey) -> Option<&Group> {
+        self.namespaces.group(key)
+    }
+
+    pub(crate) fn packet(&self, key: NodeKey) -> Option<&Packet> {
+        self.namespaces.packet(key)
+    }
+
+    pub fn create_namespace(&mut self) -> NamespaceId {
+        let id = NamespaceId(self.next_namespace);
+        self.next_namespace += 1;
+        let _replaced_in_namespaces = self.namespaces.0.insert(id, Namespace::default());
+        id
+    }
+}
+
+impl Namespace {
+    fn node(&self, id: SceneNodeId) -> Option<&StoredNode> {
+        self.nodes.get(id.0)
+    }
+
+    fn node_mut(&mut self, id: SceneNodeId) -> Option<&mut StoredNode> {
+        self.nodes.get_mut(id.0)
+    }
+
+    fn insert_node(&mut self, id: SceneNodeId, node: StoredNode) {
+        self.nodes.insert(id.0, node);
+    }
+
+    fn remove_node(&mut self, id: SceneNodeId) -> Option<Arc<StoredNode>> {
+        self.nodes.remove(id.0)
+    }
+}
+
+impl Namespaces {
     fn node(&self, key: NodeKey) -> Option<&StoredNode> {
-        self.namespaces.get(&key.namespace)?.nodes.get(&key.node)
+        self.0.get(&key.namespace)?.node(key.node)
     }
 
     fn placed(&self, key: NodeKey) -> Option<u64> {
         self.node(key).map(|node| node.placed)
     }
 
-    pub(crate) fn children(
-        &self,
-        namespace: NamespaceId,
-        parent: Option<SceneNodeId>,
-    ) -> &[SceneNodeId] {
-        (self.namespaces.get(&namespace))
-            .and_then(|namespace| namespace.children(parent).ok())
-            .map_or(&[], Vec::as_slice)
-    }
-
-    pub(crate) fn group(&self, key: NodeKey) -> Option<&Group> {
+    fn group(&self, key: NodeKey) -> Option<&Group> {
         match &self.node(key)?.kind {
             StoredKind::Group { group, .. } => Some(group),
             StoredKind::Leaf(_) => None,
         }
     }
 
-    pub(crate) fn packet(&self, key: NodeKey) -> Option<&Packet> {
+    fn packet(&self, key: NodeKey) -> Option<&Packet> {
         match &self.node(key)?.kind {
             StoredKind::Leaf(Content::Packet(packet)) => Some(packet),
             StoredKind::Leaf(Content::Graft(_)) | StoredKind::Group { .. } => None,
         }
-    }
-
-    pub fn create_namespace(&mut self) -> NamespaceId {
-        let id = NamespaceId(self.next_namespace);
-        self.next_namespace += 1;
-        let _replaced_in_namespaces = self.namespaces.insert(id, Namespace::default());
-        id
     }
 }
