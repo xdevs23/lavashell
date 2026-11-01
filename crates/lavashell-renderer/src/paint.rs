@@ -11,6 +11,9 @@ pub(crate) mod opacity;
 #[cfg(test)]
 mod opacity_tests;
 mod outline;
+mod parent_copy;
+#[cfg(test)]
+mod parent_copy_tests;
 mod private;
 mod scene_tree;
 #[cfg(test)]
@@ -236,6 +239,18 @@ impl Painter {
             DrawCommand::Clip { rect, corners } => {
                 let _chained_canvas = canvas.clip_rrect(rrect(*rect, *corners)?, None, true);
                 Ok(None)
+            }
+            DrawCommand::EffectLayer {
+                bounds,
+                blend,
+                blur,
+                filter,
+            } if leaf.analysis.reads_group(index)
+                && parent_copy::restores_effect_layer(*blend, *blur, filter.as_ref()) =>
+            {
+                let bounds = (!leaf.analysis.expands_group(index)).then_some(*bounds);
+                parent_copy::save_effect_layer(canvas, leaf.analysis.layer_area(index), bounds)?;
+                Ok(Some(Destination::Layer))
             }
             DrawCommand::EffectLayer {
                 bounds,

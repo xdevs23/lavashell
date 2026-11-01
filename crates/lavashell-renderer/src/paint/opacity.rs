@@ -2,9 +2,7 @@
 use crate::destination::Destination;
 use crate::error::{Error, SkslDiagnostic};
 use crate::failure::{DrawFailure, Failures};
-use skia_safe::{
-    Canvas, Data, Paint, Rect, RuntimeEffect, canvas::SaveLayerFlags, canvas::SaveLayerRec,
-};
+use skia_safe::{Canvas, Data, Paint, Rect, RuntimeEffect};
 
 pub(super) struct Opacity {
     interpolate: RuntimeEffect,
@@ -57,11 +55,7 @@ impl Opacity {
             };
             let mut paint = Paint::default();
             let _chained_paint = paint.set_blender(blender);
-            let _save_count = canvas.save_layer(
-                &SaveLayerRec::default()
-                    .paint(&paint)
-                    .flags(SaveLayerFlags::INIT_WITH_PREVIOUS),
-            );
+            super::parent_copy::save(canvas, &paint, None);
         } else {
             let _save_count = canvas.save_layer_alpha_f(bounds, alpha);
         }

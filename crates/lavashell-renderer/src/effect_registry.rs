@@ -116,9 +116,7 @@ pub trait EffectBackend {
 
     fn render(&mut self, canvas: &Canvas, request: &EffectRequest<'_>);
 
-    /// Whether the effect reads the pixels painted below it, as a backdrop blur does. An opacity group around
-    /// such an effect starts its layer with the pixels of the parent, so that the effect can read them while the
-    /// group fades.
+    /// Whether the effect reads the pixels painted below it, as a backdrop blur does.
     fn reads_destination(&self) -> bool {
         false
     }
