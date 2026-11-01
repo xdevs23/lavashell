@@ -3,6 +3,7 @@ use crate::{
     animation::{Animation, AnimationError, BindError, Motion, MotionSpec},
     geometry::{Axis, Size},
     reactive::{Derived, State},
+    rebuilt::BuiltLike,
     units::{Dp, FiniteDp, NumberError},
 };
 use std::{cell::Cell, rc::Rc};
@@ -266,12 +267,29 @@ impl ScrollState {
     }
 }
 
+impl BuiltLike for ScrollState {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        self.offset.is_built_like(&earlier.offset)
+    }
+}
+
 /// How a row or a column scrolls: with its offset remembered by the view, or with a controlled
 /// state, along the axis of the row or the column.
 #[derive(Clone)]
 pub enum Scrolling {
     Remembered(Axis),
     Controlled(ScrollState),
+}
+
+impl BuiltLike for Scrolling {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        match (self, earlier) {
+            (Self::Remembered(axis), Self::Remembered(earlier)) => axis == earlier,
+            (Self::Controlled(state), Self::Controlled(earlier)) => state.is_built_like(earlier),
+            (Self::Remembered(_), Self::Controlled(_))
+            | (Self::Controlled(_), Self::Remembered(_)) => false,
+        }
+    }
 }
 
 impl Scrolling {

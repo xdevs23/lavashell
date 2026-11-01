@@ -22,6 +22,7 @@ pub mod platform;
 pub mod preferences;
 pub mod protected_text;
 pub mod reactive;
+mod rebuilt;
 pub mod retained;
 pub mod scene;
 pub mod scroll;

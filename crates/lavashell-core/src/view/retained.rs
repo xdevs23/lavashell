@@ -76,6 +76,8 @@ struct PaintKey {
     sizes: Vec<(NodeId, Size)>,
     /// The hidden nodes. A node that becomes hidden moves the nodes next to it even when every size stays the same.
     hidden: Vec<NodeId>,
+    /// The text nodes that can be selected. A node around the component can turn the selection of text on or off.
+    selectable: Vec<NodeId>,
     interaction: InteractionKey,
     /// Where the layers of each node start. Offsets and positions move these starts also when no size changes.
     starts: Vec<(NodeId, Point)>,
@@ -328,6 +330,10 @@ impl View {
                 .filter(|i| self.layout[**i].visibility == Visibility::Hidden)
                 .map(|i| self.nodes[*i].id)
                 .collect(),
+            selectable: (indices.iter())
+                .filter(|i| self.text_selectable(**i))
+                .map(|i| self.nodes[*i].id)
+                .collect(),
             starts: (indices.iter())
                 .flat_map(|i| {
                     let id = self.nodes[*i].id;
@@ -365,10 +371,13 @@ impl View {
             return;
         };
         let moved = painting.moved(placed);
+        // A text hit points at its node. Any other hit uses the handlers of the node as composed last.
         for hit in &mut painting.hits {
+            let index = index_of(&self.nodes, hit.id);
             if let Some(target) = hit.input {
-                let index = self.nodes.iter().position(|n| n.id == hit.id);
                 hit.input = index.map(|index| TextTarget { index, ..target });
+            } else if let Some(index) = index {
+                hit.use_handlers_of(&self.nodes[index]);
             }
         }
         for (node, rect) in &painting.geometry {

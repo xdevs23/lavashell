@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::rebuilt::BuiltLike;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
@@ -155,6 +156,11 @@ impl Scope {
         self.0.dirty.get()
     }
 
+    /// Whether the last `track` of `phase`, or a `track_further` after it, read a value.
+    pub(crate) fn has_read(&self, phase: Phase) -> bool {
+        (self.0.dependencies.borrow().iter()).any(|(read, _)| *read == phase)
+    }
+
     pub fn invalidate(&self, phase: Phase) {
         self.0
             .dirty
@@ -191,6 +197,12 @@ impl Subscribers {
 }
 
 pub struct State<T>(Rc<SignalInner<T>>);
+
+impl<T> BuiltLike for State<T> {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        self.0.is_built_like(&earlier.0)
+    }
+}
 
 impl<T> Clone for State<T> {
     fn clone(&self) -> Self {

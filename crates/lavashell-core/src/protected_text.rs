@@ -5,6 +5,7 @@
 mod presentation;
 
 use crate::reactive::State;
+use crate::rebuilt::BuiltLike;
 pub use presentation::PrivateText;
 use std::{cell::RefCell, iter, ops::Range, rc::Rc};
 use zeroize::Zeroizing;
@@ -152,6 +153,12 @@ impl ProtectedText {
 pub struct ProtectedInput {
     pub(crate) text: ProtectedText,
     mask: char,
+}
+
+impl BuiltLike for ProtectedInput {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        self.text.value.is_built_like(&earlier.text.value) && self.mask == earlier.mask
+    }
 }
 
 impl ProtectedInput {

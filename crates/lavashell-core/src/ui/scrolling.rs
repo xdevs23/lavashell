@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Modifier, Node, NodeKind, Ui};
 use crate::geometry::Axis;
+use crate::rebuilt::BuiltLike;
 use crate::scene::{TEXT_STYLE, TextStyle};
 use crate::scroll::{ScrollState, Scrolling};
 use crate::units::Dp;
@@ -28,6 +29,12 @@ impl Ui {
 pub(crate) struct Scroller {
     scrolling: Scrolling,
     pub line: TextStyle<Dp>,
+}
+
+impl BuiltLike for Scroller {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        self.scrolling.is_built_like(&earlier.scrolling) && self.line == earlier.line
+    }
 }
 
 impl Node {

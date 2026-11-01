@@ -283,7 +283,7 @@ pub struct Node {
 
 /// The label of a tooltip, with the text scaling in effect where the node that shows the tooltip was
 /// composed.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Tooltip {
     pub label: String,
     pub text_scaling: TextScaling,
