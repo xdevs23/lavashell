@@ -6,7 +6,7 @@ use accesskit::{NodeId as NativeId, Role as NativeRole};
 use lavashell_core::prelude::NodeId;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
-use lavashell_test_platform::FrameFailure;
+use lavashell_test_fixtures::FrameFailure;
 use log::SetLoggerError;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
 use std::array::TryFromSliceError;

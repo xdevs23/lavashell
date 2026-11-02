@@ -5,7 +5,7 @@ use crate::test_error::TestError;
 use lavashell_core::retained::Footprint;
 use lavashell_core::{prelude::*, protected_text::ProtectedText};
 use lavashell_effect_quality::BudgetChooser;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -49,7 +49,7 @@ fn private_prefixes_are_never_held_in_effect_inputs_or_reusable_backdrop_snapsho
     let mut painter = Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let secret = ProtectedText::new();
     let state = secret.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.protected_input(
             state.clone(),
             TextFieldOptions::default(),

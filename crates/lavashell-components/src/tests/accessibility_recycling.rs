@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use lavashell_core::view::{ComponentError, CompositionError};
-use lavashell_test_platform::failure_causes;
+use lavashell_test_fixtures::failure_causes;
 
 fn collection(view: &View) -> Result<NodeId, TestError> {
     view.accessibility()
@@ -49,7 +49,7 @@ fn recycled_semantics_follow_data_identity_through_rebinding_and_sorting() -> Re
     let order = State::new((0..1000usize).collect::<Vec<_>>());
     let list = recycler.clone();
     let data = order.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let order = data.get();
         list.compose(
             ui,
@@ -122,7 +122,7 @@ fn recycled_semantics_follow_data_identity_through_rebinding_and_sorting() -> Re
 #[test]
 fn a_grid_exposes_logical_columns_and_rejects_a_vacant_final_cell() -> Result<(), TestError> {
     let list = Recycler::<usize>::new();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         list.compose(
             ui,
             RecyclerItems {
@@ -166,7 +166,7 @@ fn measured_collection_realizes_offscreen_rows_without_building_the_history()
     let list = MeasuredRecycler::new();
     list.set_keys((0..10_000usize).collect())?;
     let controlled = list.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         controlled.compose(
             ui,
             Modifier::new().fill_max_width().fill_max_height(),
@@ -222,7 +222,7 @@ fn measured_collection_realizes_offscreen_rows_without_building_the_history()
 #[test]
 fn different_holder_types_cannot_disguise_duplicate_data_identity() -> Result<(), TestError> {
     let list = Recycler::<usize>::new();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         list.compose(
             ui,
             RecyclerItems {

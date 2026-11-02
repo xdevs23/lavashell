@@ -51,7 +51,7 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
     let value = text.clone();
     let changes = Rc::new(Cell::new(0));
     let count = changes.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let value = value.clone();
         let count = count.clone();
         ui.text_area(

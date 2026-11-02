@@ -14,4 +14,4 @@ lavashell-core.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-lavashell-test-platform.workspace = true
+lavashell-test-fixtures.workspace = true

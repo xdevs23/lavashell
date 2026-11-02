@@ -3,7 +3,7 @@ use super::log_failures;
 use crate::preference_reader::NoText;
 use crate::test_error::TestError;
 use lavashell_core::prelude::*;
-use lavashell_test_platform::FrameFailure;
+use lavashell_test_fixtures::FrameFailure;
 use log::SetLoggerError;
 use std::{cell::RefCell, sync::OnceLock};
 
@@ -44,7 +44,7 @@ fn recorded(run: impl FnOnce()) -> Result<Vec<(log::Level, String)>, TestError> 
 
 #[test]
 fn each_failed_component_is_logged_as_an_error_with_its_causes() -> Result<(), TestError> {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("forecast", Modifier::new().tag("forecast"), |ui| {
             ui.fail(NumberError::OutOfRange);
         });

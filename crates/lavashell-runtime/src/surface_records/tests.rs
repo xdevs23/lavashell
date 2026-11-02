@@ -28,7 +28,7 @@ impl TextMeasurer for NoText {
 }
 
 fn empty_view() -> View {
-    View::new(lavashell_test_platform::facts(), |_| {})
+    View::new(lavashell_test_fixtures::facts(), |_| {})
 }
 
 fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, TestError> {
@@ -131,7 +131,7 @@ fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestR
     let mut records = SurfaceRecords::default();
     let held = Rc::new(10.dp());
     let captured = held.clone();
-    let view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.spacer(*captured, *captured, Modifier::new());
     });
     let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE)?;
@@ -164,7 +164,7 @@ fn an_unknown_surface_has_no_record() {
 
 #[test]
 fn a_window_opens_at_its_requested_size_or_else_at_the_size_its_view_fits() -> TestResult {
-    let mut view = View::new(lavashell_test_platform::facts(), |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.spacer(120.dp(), 30.dp(), Modifier::new());
     });
     let requested = Size::new(400.dp(), 300.dp());

@@ -8,7 +8,7 @@ use lavashell_core::scene::tree::{
     Change, Content, DamageTracker, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
 use lavashell_core::surface::SurfaceId;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use skia_safe::{AlphaType, ColorType, ImageInfo};
 use std::sync::Arc;
 use std::time::Duration;
@@ -411,7 +411,7 @@ fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(),
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut target = surface()?;
     for color in [Color::rgb(0x00ff_0000), Color::rgb(0x0000_00ff)] {
-        let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
             ui.canvas(Size::new(100.dp(), 100.dp()), Modifier::new(), move |d| {
                 d.fill(Rect::new(0.dp(), 0.dp(), 100.dp(), 100.dp()), color);
             });

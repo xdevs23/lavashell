@@ -19,7 +19,7 @@ pub(super) struct Host {
 
 impl Host {
     pub(super) fn new(settings: KeyboardSettings) -> Result<Self, TestError> {
-        Self::composed(settings, None, lavashell_test_platform::facts())
+        Self::composed(settings, None, lavashell_test_fixtures::facts())
     }
 
     /// A host on a platform with `facts`.
@@ -28,7 +28,7 @@ impl Host {
     }
 
     pub(super) fn styled(style: KeyboardStyle) -> Result<Self, TestError> {
-        Self::composed(settings(), Some(style), lavashell_test_platform::facts())
+        Self::composed(settings(), Some(style), lavashell_test_fixtures::facts())
     }
 
     fn composed(

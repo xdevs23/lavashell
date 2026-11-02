@@ -4,7 +4,7 @@ use lavashell_core::frame::FrameTime;
 use lavashell_core::numbers::count_f64;
 use lavashell_core::scene::tree::Change;
 use lavashell_core::view::{ComponentError, CompositionError};
-use lavashell_test_platform::failure_causes;
+use lavashell_test_fixtures::failure_causes;
 use std::time::Duration;
 
 const LIST: Viewport = Viewport::new(Size::new(Dp::new(100.0), Dp::new(120.0)), Density::ONE);
@@ -16,7 +16,7 @@ fn scoped_rows(
     smooth: Option<Tween>,
 ) -> View {
     let (list, log) = (recycler.clone(), composed.clone());
-    View::new(lavashell_test_platform::facts(), move |ui| {
+    View::new(lavashell_test_fixtures::facts(), move |ui| {
         let (list, log) = (list.clone(), log.clone());
         ui.scoped("list", Modifier::new(), move |ui| {
             if let Some(tween) = smooth
@@ -187,7 +187,7 @@ fn recycler_rebinds_a_bounded_pool_and_clears_old_item_memory() -> Result<(), Te
     let observed = Rc::new(RefCell::new(Vec::new()));
     let log = observed.clone();
     let list = recycler.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         log.borrow_mut().clear();
         list.compose(
             ui,
@@ -256,7 +256,7 @@ fn recycled_grid_responds_to_layout_width_and_clamps_after_data_shrinks() -> Res
     let recycler = Recycler::<usize>::new();
     let list = recycler.clone();
     let items = count.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         list.compose(
             ui,
             RecyclerItems {
@@ -366,7 +366,7 @@ fn selection_preserves_keys_and_ranges_follow_current_sort_order() {
 #[test]
 fn a_list_with_too_many_rows_to_count_exactly_fails_its_composition() -> Result<(), TestError> {
     let recycler = Recycler::<usize>::new();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         recycler.compose(
             ui,
             RecyclerItems {

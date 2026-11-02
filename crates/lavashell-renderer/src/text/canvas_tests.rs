@@ -2,7 +2,7 @@
 use super::*;
 use crate::test_error::TestError;
 use lavashell_core::prelude::*;
-use lavashell_test_platform::WithoutFailures;
+use lavashell_test_fixtures::WithoutFailures;
 use std::{cell::Cell, rc::Rc};
 
 #[test]
@@ -11,7 +11,7 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
     let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
     let counts = [Rc::new(Cell::new(0_u32)), Rc::new(Cell::new(0_u32))];
     let observers = counts.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
             let count = observers[0].clone();
             ui.canvas(

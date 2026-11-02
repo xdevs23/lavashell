@@ -7,7 +7,7 @@ fn focused_keys_bubble_and_modifiers_reach_recycled_items() -> Result<(), TestEr
     let keys = State::new(0);
     let result = selected.clone();
     let counter = keys.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(
             Modifier::new().on_key({
                 let counter = counter.clone();
@@ -62,7 +62,7 @@ fn animated_scroll_uses_presentation_time_and_recycling_remains_bounded() -> Res
     let spring = Spring::new(Duration::from_millis(170), 1.0)?;
     let recycler = Recycler::<usize>::new();
     let list = recycler.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         if let Err(error) = list.scroll.smooth(ui.motion(), spring) {
             ui.fail(error);
         }
@@ -112,7 +112,7 @@ fn animated_scroll_uses_presentation_time_and_recycling_remains_bounded() -> Res
 fn scrollbar_grip_survives_recomposition_during_pointer_capture() -> Result<(), TestError> {
     let recycler = Recycler::<usize>::new();
     let list = recycler.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.row(Modifier::new(), |ui| {
             list.compose(
                 ui,
@@ -181,7 +181,7 @@ fn focus_after_rebinding(scoped: bool) -> Result<(), TestError> {
     let events = handled.clone();
     let search = State::new(String::new());
     let field = search.clone();
-    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.column(Modifier::new(), |ui| {
             ui.text_field(
                 field.get(),

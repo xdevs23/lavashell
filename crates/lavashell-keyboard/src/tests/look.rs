@@ -48,7 +48,7 @@ fn without_a_style_the_keyboard_follows_the_color_scheme_of_the_platform() -> Re
         night.is_some() && night != day,
         "the styles paint different ink"
     );
-    let mut host = Host::on(settings(), lavashell_test_platform::facts())?;
+    let mut host = Host::on(settings(), lavashell_test_fixtures::facts())?;
     host.start(TextHints::default(), "")?;
     assert_eq!(ink(&host.scene), night);
     host.platform(|facts| facts.color_scheme = ColorScheme::Light);

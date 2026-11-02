@@ -80,7 +80,7 @@ impl RasterCache {
 mod tests {
     use crate::test_error::TestError;
     use lavashell_core::prelude::*;
-    use lavashell_test_platform::WithoutFailures;
+    use lavashell_test_fixtures::WithoutFailures;
 
     #[test]
     fn tiles_match_direct_paragraphs_at_integer_and_fractional_origins() -> Result<(), TestError> {
@@ -92,7 +92,7 @@ mod tests {
                         crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
                             .with_raster_paths(fallback);
                     painter.set_blend_space(crate::BlendSpace::Srgb);
-                    let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+                    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
                         ui.text(
                             "MON 5 Oct Lavashell 18:42",
                             Modifier::new()

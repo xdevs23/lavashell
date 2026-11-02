@@ -5,7 +5,7 @@ use icu_locale_core::subtags::language;
 use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::SceneTree;
-use lavashell_test_platform::{
+use lavashell_test_fixtures::{
     DOUBLE_TAP, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
 };
 use std::cell::{Cell, RefCell};
@@ -125,7 +125,7 @@ fn offering(layouts: Vec<&'static Layout>) -> (KeyboardSettings, PlatformFacts) 
         .map(|layout| LanguageIdentifier::from(layout.language()));
     let facts = PlatformFacts {
         locales: locales.collect(),
-        ..lavashell_test_platform::facts()
+        ..lavashell_test_fixtures::facts()
     };
     (
         KeyboardSettings {
@@ -366,7 +366,7 @@ impl Fixture {
         let secret = ProtectedText::new();
         let (value, composed) = (text.clone(), keyboard.clone());
         let protected = secret.clone();
-        let mut view = View::new(lavashell_test_platform::facts(), move |ui| {
+        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
             let value = value.clone();
             let fields = |ui: &mut Ui| {
                 ui.layout(Axis::Vertical, Modifier::new(), |ui| {

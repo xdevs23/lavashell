@@ -51,7 +51,7 @@ fn turning_automatic_capitals_off_on_the_platform_applies_on_the_next_frame()
 fn the_languages_of_the_user_choose_the_layouts_and_their_order_on_the_next_frame()
 -> Result<(), TestError> {
     let (config, facts) = offering(vec![&ENGLISH, &FRENCH, &GERMAN]);
-    let mut host = Host::on(config, lavashell_test_platform::facts())?;
+    let mut host = Host::on(config, lavashell_test_fixtures::facts())?;
     host.start(sentences(), "")?;
     assert!(
         !has(&host.view, &Role::Button, "Switch layout"),
