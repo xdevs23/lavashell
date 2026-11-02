@@ -5,8 +5,11 @@
 // On a host other than Android, the crate builds only for the tests, which run against a simulated platform.
 #![cfg(any(target_os = "android", test))]
 
+mod buffer_sampling;
 mod error;
 mod fenced_image;
+#[cfg(target_os = "android")]
+mod hardware_buffer;
 mod latched_frames;
 mod native_window;
 #[cfg_attr(not(target_os = "android"), path = "platform/simulated.rs")]
@@ -17,6 +20,8 @@ mod surface_jni;
 mod surface_stream;
 
 pub use error::Error;
+#[cfg(target_os = "android")]
+pub use hardware_buffer::PropertiesError;
 pub use latched_frames::Latch;
 pub use native_window::NativeWindow;
 pub use renderer::AndroidRenderer;

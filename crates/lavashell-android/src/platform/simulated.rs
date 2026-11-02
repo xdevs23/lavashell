@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Simulations of the renderer and of the parts of the ndk crate called by the AOSP code, for the tests. The
-//! simulations have the names and the signatures of `platform.rs`.
+//! simulations define the names of `platform.rs` that this crate uses, and accept the calls that this crate makes.
 
 mod image;
 mod importer;
@@ -10,11 +10,12 @@ mod test_error;
 
 pub(crate) use image::{HardwareBufferFormat, HardwareBufferUsage};
 pub(crate) use importer::{
-    Completion, HardwareBufferImport, HardwareBufferImporter, HardwareBufferProperties,
-    ReleaseError, Sampling,
+    Completion, ForeignImport, ForeignImporter, HardwareBufferMemory, PropertiesError,
+    ReleaseError, SampledMemory,
 };
 use lavashell_core::prelude::{OutputInfo, OutputRequest, PixelSize};
 use lavashell_renderer::Error as RendererError;
+pub(crate) use lavashell_renderer::Sampling;
 use lavashell_renderer::{
     Fonts, FrameOutcome, Painter, PresentationPolicy, SurfaceAlpha, SurfaceTiming, UniformRange,
     skia,
@@ -37,6 +38,8 @@ pub(crate) struct Gpu {
     /// Every submit of a fence for the completion of the GPU work fails.
     pub fails_completion: Cell<bool>,
     pub busy: Cell<bool>,
+    /// The device samples formats through a YCbCr conversion.
+    pub sampler_ycbcr_conversion: Cell<bool>,
 }
 
 impl Gpu {
@@ -275,9 +278,9 @@ impl VulkanRenderer {
         self.display_timing
     }
 
-    pub fn hardware_buffer_importer(&self) -> Result<HardwareBufferImporter, RendererError> {
+    pub fn foreign_importer(&self) -> Result<ForeignImporter, RendererError> {
         self.gpu.reachable()?;
-        Ok(HardwareBufferImporter::new(&self.gpu))
+        Ok(ForeignImporter::new(&self.gpu))
     }
 
     pub fn native_window_target(

@@ -61,8 +61,8 @@ impl AndroidRenderer {
         self.streams.latch(&self.painter, stream)
     }
 
-    /// The format properties that the Vulkan device of the renderer returns for `buffer`. They include the suggested
-    /// YCbCr model, range and chroma offsets, which Vulkan reports as defaults that an application may replace when it
+    /// The format reported for `buffer` by the Vulkan device used by the renderer. It includes the suggested YCbCr
+    /// model, range and chroma offsets, which Vulkan reports as defaults that an application may replace when it
     /// samples the buffer.
     ///
     /// # Errors
@@ -71,8 +71,8 @@ impl AndroidRenderer {
     pub fn buffer_format(
         &self,
         buffer: &crate::platform::ndk::hardware_buffer::HardwareBuffer,
-    ) -> Result<lavashell_renderer::vulkan::FormatProperties, Error> {
-        self.streams.format_properties(buffer)
+    ) -> Result<lavashell_renderer::ForeignFormat, Error> {
+        self.streams.buffer_format(buffer)
     }
 
     /// Replaces the surface that the renderer presents to with `window`. The renderer is the only producer connected to

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    FrameOutcome, PresentationBackend, SurfaceAlpha, SurfaceId, SurfaceTarget, SurfaceTiming,
-    VulkanRenderer, hardware_buffer, wsi,
+    FOREIGN_IMPORT_EXTENSIONS, FrameOutcome, PresentationBackend, SurfaceAlpha, SurfaceId,
+    SurfaceTarget, SurfaceTiming, VulkanRenderer, wsi,
 };
 use crate::Error;
+use ash::android::external_memory_android_hardware_buffer as hardware_buffer;
 use ash::khr::android_surface;
 use ash::vk;
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
@@ -21,7 +22,11 @@ impl PresentationBackend for Android {
 
     /// The extensions needed to sample hardware buffers from other processes.
     fn additional_device_extensions(&self) -> Vec<&'static CStr> {
-        hardware_buffer::EXTENSIONS.to_vec()
+        [
+            FOREIGN_IMPORT_EXTENSIONS.as_slice(),
+            [hardware_buffer::NAME].as_slice(),
+        ]
+        .concat()
     }
 
     /// Sampler YCbCr conversion, through which hardware buffers in YCbCr formats are sampled.

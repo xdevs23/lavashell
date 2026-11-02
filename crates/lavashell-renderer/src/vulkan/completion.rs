@@ -14,7 +14,6 @@ impl Completion {
         device.signal().map(Self).map_err(Error::SubmitCompletion)
     }
 
-    #[cfg(target_os = "android")]
     pub(super) fn of_submission(submission: Submission) -> Self {
         Self(submission)
     }
