@@ -15,7 +15,9 @@
                   },
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -148,7 +150,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -214,6 +218,18 @@
                     "package": "palette",
                     "version": "=0.7.7"
                   },
+                  "serde": {
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "package": "serde",
+                    "version": "=1.0.229"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -233,7 +249,9 @@
                     "version": "=1.9.1"
                   }
                 },
-                "features": {},
+                "features": {
+                  "serde": []
+                },
                 "lib": {
                   "path": "src/lib.rs"
                 },
@@ -261,7 +279,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   }
@@ -302,7 +322,9 @@
                   },
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -406,7 +428,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -473,7 +497,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   }
@@ -506,7 +532,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   }
@@ -563,7 +591,9 @@
                   },
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -661,7 +691,9 @@
                 "dependencies": {
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -867,7 +899,9 @@
                   },
                   "lavashell-core": {
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "serde"
+                    ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
@@ -938,18 +972,6 @@
                     ],
                     "package": "rustix",
                     "version": "=1.1.5"
-                  },
-                  "serde": {
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "default",
-                      "derive",
-                      "serde_derive",
-                      "std"
-                    ],
-                    "package": "serde",
-                    "version": "=1.0.229"
                   },
                   "smithay-client-toolkit": {
                     "default-features": false,
@@ -1070,6 +1092,14 @@
                     "features": [],
                     "package": "lavashell",
                     "path": "../../crates/lavashell"
+                  },
+                  "lavashell-core": {
+                    "default-features": false,
+                    "features": [
+                      "serde"
+                    ],
+                    "package": "lavashell-core",
+                    "path": "../../crates/lavashell-core"
                   },
                   "lavashell-lucide": {
                     "default-features": false,
@@ -2393,6 +2423,7 @@
                   "icu_locale_core",
                   "num-traits",
                   "palette",
+                  "serde",
                   "thiserror",
                   "zeroize"
                 ],
@@ -2411,6 +2442,7 @@
                   "clap",
                   "csv",
                   "lavashell",
+                  "lavashell-core",
                   "lavashell-lucide",
                   "serde",
                   "thiserror"
@@ -2512,7 +2544,6 @@
                   "num-traits",
                   "quote",
                   "rustix",
-                  "serde",
                   "smithay-client-toolkit",
                   "sys-locale",
                   "thiserror",
@@ -3788,7 +3819,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "d03c88d114feaa28e3913360bc94c1fef6017e46d717743c5e00ab65ec985fea"
+        "seedHash": "c371f58362b5b2d2d9e1a8f97f45b81f18354dc26c8278fe3c2c1f2146fefc8d"
       }
     }
   },
@@ -4879,6 +4910,7 @@
           "clap",
           "csv",
           "lavashell",
+          "lavashell-core",
           "lavashell-lucide",
           "serde",
           "thiserror 2.0.21"
@@ -4995,7 +5027,6 @@
           "num-traits",
           "quote",
           "rustix",
-          "serde",
           "smithay-client-toolkit",
           "sys-locale",
           "thiserror 2.0.21",

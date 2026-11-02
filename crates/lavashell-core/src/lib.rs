@@ -60,7 +60,8 @@ pub mod prelude {
         SourceFilter, SourceFilterId, Stroke,
     };
     pub use crate::frame::{
-        FrameClock, FrameMetrics, FrameTime, PresentationTracker, PresentedFrame,
+        FrameClock, FrameMetrics, FrameReport, FrameStage, FrameTime, PresentationTracker,
+        PresentedFrame,
     };
     pub use crate::geometry::{
         Axis, Color, Constraints, ContourPoint, FinitePoint, Insets, Length, PixelSize, PlainPoint,
