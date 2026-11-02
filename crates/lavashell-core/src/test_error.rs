@@ -6,6 +6,7 @@ use crate::animation::{
     AnimationError, BindError, ContourError, EasingError, KeyframesError, MotionError,
     PlaybackRateError, SpringError,
 };
+use crate::scene::test_sink::TestSinkError;
 use crate::scene::tree::{ApplyError, SceneUpdate};
 use crate::scroll::ScrollError;
 use crate::shape::PointsError;
@@ -47,6 +48,10 @@ pub(crate) enum TestError {
     Transfer(#[from] TransferError),
     #[error("a frame of a view could not be made")]
     Frame(#[from] FrameError),
+    #[error("a frame of a view could not be sent to the test sink")]
+    SinkFrame(#[from] FrameError<TestSinkError>),
+    #[error("the test sink failed a call")]
+    Sink(#[from] TestSinkError),
     #[error("a component of a view failed")]
     Failed(Vec<ComponentFailure>),
     #[error("a scroll could not take a distance")]
@@ -119,7 +124,10 @@ impl WithoutFailures for Result<Frame, FrameError> {
     }
 }
 
-impl WithoutFailures for Result<Failures, FrameError> {
+impl<E> WithoutFailures for Result<Failures, FrameError<E>>
+where
+    TestError: From<FrameError<E>>,
+{
     type Shown = ();
 
     fn without_failures(self) -> Result<(), TestError> {

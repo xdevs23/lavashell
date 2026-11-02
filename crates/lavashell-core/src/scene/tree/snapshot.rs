@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Namespaces, Presented, SceneTree};
+use super::{Namespaces, NodeKey, Presented, SceneTree};
+use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// The nodes of a scene tree at the moment the snapshot was taken. The snapshot shares each node with the tree until
 /// the tree changes that node. Creating a snapshot copies zero nodes.
 #[derive(Clone)]
-pub struct SceneSnapshot(Namespaces);
+pub struct SceneSnapshot {
+    namespaces: Namespaces,
+    moving: Arc<BTreeSet<NodeKey>>,
+}
 
 // A snapshot and a presentation of it are read on a different thread than the one that changes the tree it was
 // taken from.
@@ -18,7 +23,10 @@ const _: () = {
 impl SceneTree {
     #[must_use]
     pub fn snapshot(&self) -> SceneSnapshot {
-        SceneSnapshot(self.namespaces.clone())
+        SceneSnapshot {
+            namespaces: self.namespaces.clone(),
+            moving: Arc::clone(&self.moving),
+        }
     }
 }
 
@@ -27,6 +35,17 @@ impl SceneSnapshot {
     /// `View::frame_at`.
     #[must_use]
     pub fn at(&self, now: Duration) -> Presented<'_> {
-        self.0.at(now)
+        self.namespaces.at(now)
+    }
+
+    #[must_use]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.namespaces.is_empty()
+    }
+
+    /// The earliest time, at or after `now`, at which an animated group of the snapshot changes.
+    #[must_use]
+    pub(crate) fn next_change(&self, now: Duration) -> Option<Duration> {
+        self.namespaces.next_change(&self.moving, now)
     }
 }

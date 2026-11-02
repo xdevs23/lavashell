@@ -190,7 +190,7 @@ pub struct SceneTree {
     namespaces: Namespaces,
     next_namespace: u64,
     placements: u64,
-    moving: BTreeSet<NodeKey>,
+    moving: Arc<BTreeSet<NodeKey>>,
 }
 
 impl Default for SceneTree {
@@ -201,7 +201,7 @@ impl Default for SceneTree {
             namespaces: Namespaces(BTreeMap::from([(Self::ROOT, Namespace::default())])),
             next_namespace: Self::ROOT.0 + 1,
             placements: 0,
-            moving: BTreeSet::new(),
+            moving: Arc::default(),
         }
     }
 }
@@ -216,7 +216,7 @@ impl SceneTree {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        (self.namespaces.0.values()).all(|namespace| namespace.nodes.is_empty())
+        self.namespaces.is_empty()
     }
 
     /// The leaf of a tree made by [`SceneTree::with_leaf`].
@@ -295,6 +295,10 @@ impl Namespace {
 }
 
 impl Namespaces {
+    fn is_empty(&self) -> bool {
+        (self.0.values()).all(|namespace| namespace.nodes.is_empty())
+    }
+
     fn node(&self, key: NodeKey) -> Option<&StoredNode> {
         self.0.get(&key.namespace)?.node(key.node)
     }

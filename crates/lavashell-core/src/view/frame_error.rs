@@ -6,11 +6,16 @@ use crate::ui::{ModifierValue, Node, NodeId, Part, Used};
 use crate::units::NumberError;
 use std::fmt;
 
-/// The error that stops `View::frame_at` from making a frame. A failure inside a component does not cause it.
+/// The error that stops a view from making a frame. `E` is the error returned by the recipient of the changes, which
+/// is a change sink or a scene tree. A failure inside a component does not cause it.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum FrameError {
-    #[error("the update of the frame does not fit the scene shown before")]
-    Apply(#[source] ApplyError),
+pub enum FrameError<E = ApplyError> {
+    #[error("a change in the frame does not fit the scene shown before")]
+    Mirror(#[source] ApplyError),
+    #[error(
+        "the recipient of the changes failed on a change, on the end of the frame or on a restart"
+    )]
+    Sink(#[source] E),
 }
 
 /// A component that failed, with the error that failed it. The root composition fails as the root node.

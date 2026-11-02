@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{InputEvent, LoopHandle, Platform, SceneTree, View, open_surface, sctk};
+use super::{InputEvent, LoopHandle, Platform, SceneBuilder, View, open_surface, sctk};
 use crate::Error;
 use crate::accessibility::Event;
 use lavashell_core::accessibility::ActionOutcome;
@@ -50,8 +50,8 @@ impl Platform {
             // The first frame after the compositor configures the surface publishes the complete initial tree.
             return;
         }
-        let mut frame = |view: &mut View, tree: &mut SceneTree| {
-            view.show_frame(tree, viewport, self.paint.shaper())
+        let mut frame = |view: &mut View, builder: &mut SceneBuilder| {
+            view.frame_into(viewport, self.paint.shaper(), builder)
         };
         let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
         if shown {

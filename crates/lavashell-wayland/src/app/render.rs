@@ -4,8 +4,8 @@ use super::shape::{ShapeUpdate, SurfaceShape};
 use super::view_actions::PendingAction;
 use super::{
     Density, Dp, Duration, FrameCallbackData, FrameOutcome, FrameReport, FrameStage, FrameTime,
-    Instant, Platform, Rect, Role, SceneTree, Size, Submission, SurfaceId, View, Viewport, layer,
-    open_surface, physical_size, presentation, sctk,
+    Instant, Platform, Rect, Role, SceneBuilder, Size, Submission, SurfaceId, View, Viewport,
+    layer, open_surface, physical_size, presentation, sctk,
 };
 use crate::Error;
 use lavashell_renderer::effect_registry::QualityChange;
@@ -167,8 +167,8 @@ impl Platform {
         }
         let mut changed = false;
         if wanted == Wanted::View {
-            let mut frame = |view: &mut View, tree: &mut SceneTree| {
-                view.show_frame_at(tree, viewport, self.paint.shaper(), start.timing)
+            let mut frame = |view: &mut View, builder: &mut SceneBuilder| {
+                view.frame_into_at(viewport, self.paint.shaper(), start.timing, builder)
             };
             changed = view.needs_visual_frame();
             surface.show(view, &mut frame)?;
@@ -243,7 +243,8 @@ impl Platform {
         let physical = physical_size(viewport)?;
         let Viewport { size, density } = viewport;
         let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
-        let shown = surface.tree.at(timing.presentation);
+        let snapshot = surface.builder.snapshot();
+        let shown = snapshot.at(timing.presentation);
         let scene_generation = scene.map_or(0, |scene| scene.generation);
         let quality = self.paint.plan_scene_effects(
             shown,

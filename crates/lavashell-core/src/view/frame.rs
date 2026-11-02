@@ -9,12 +9,15 @@ use super::{
     NodeId, Phase, Point, SceneTree, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT,
     View, ViewHandles, Viewport, Visibility, output, paint,
 };
+use crate::scene::tree::Change;
+use crate::scene::{ChangeSink, SinkId};
+use std::convert::Infallible;
 
 impl View {
     /// Sets `viewport` as the root value of `VIEWPORT`, then composes, lays out and paints what changed. The update of
     /// the returned frame changes the scene made from every earlier update returned by `frame` and `frame_at`. After
-    /// an error, and after a frame shown with `show_frame` or `show_frame_at`, the next update builds the whole scene
-    /// from an empty scene.
+    /// an error, and after a frame shown with `show_frame` or `show_frame_at` or sent with `frame_into` or
+    /// `frame_into_at`, the next update builds the whole scene from an empty scene.
     ///
     /// A component that fails in its composition, its layout or its paint has no nodes in the tree, and the rest of the
     /// view is unchanged. The frame returns the failures since the last frame. A failed component composes again once
@@ -29,7 +32,7 @@ impl View {
         text: &mut impl TextMeasurer,
     ) -> Result<Frame, FrameError> {
         self.shown.retarget(output::Recipient::Caller);
-        self.frame_presenting(viewport, text, Presentation::New)
+        collect_update(|update| self.frame_presenting(viewport, text, Presentation::New, update))
     }
 
     /// # Errors
@@ -42,7 +45,68 @@ impl View {
         timing: FrameTime,
     ) -> Result<Frame, FrameError> {
         self.shown.retarget(output::Recipient::Caller);
-        self.timed_frame(viewport, text, timing)
+        collect_update(|update| self.timed_frame(viewport, text, timing, update))
+    }
+
+    /// Makes a frame as [`View::frame`] does, sends each change to `sink` while the view composes the frame, and then
+    /// ends the frame in `sink`. Returns the failures since the last frame. The changes update the scene that `sink`
+    /// built from earlier frames. `sink` restarts first when it did not receive the last frame, or when the last
+    /// restart of `sink` failed. An error restarts `sink` at once. The frame after a restart sends the whole scene.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a change does not fit the scene shown before, or when `sink` fails on a change, on the end of the
+    /// frame or on a restart. A failed restart replaces the error that caused it.
+    pub fn frame_into<S: ChangeSink>(
+        &mut self,
+        viewport: Viewport,
+        text: &mut impl TextMeasurer,
+        sink: &mut S,
+    ) -> Result<Failures, FrameError<S::Error>> {
+        self.stream(sink, |view, sink| {
+            view.frame_presenting(viewport, text, Presentation::New, sink)
+        })
+    }
+
+    /// Makes a frame as [`View::frame_at`] does and sends it to `sink` as [`View::frame_into`] does.
+    ///
+    /// # Errors
+    ///
+    /// Fails as [`View::frame_into`] does.
+    pub fn frame_into_at<S: ChangeSink>(
+        &mut self,
+        viewport: Viewport,
+        text: &mut impl TextMeasurer,
+        timing: FrameTime,
+        sink: &mut S,
+    ) -> Result<Failures, FrameError<S::Error>> {
+        self.stream(sink, |view, sink| {
+            view.timed_frame(viewport, text, timing, sink)
+        })
+    }
+
+    fn stream<S: ChangeSink>(
+        &mut self,
+        sink: &mut S,
+        frame: impl FnOnce(&mut Self, &mut S) -> Result<Failures, FrameError<S::Error>>,
+    ) -> Result<Failures, FrameError<S::Error>> {
+        if !self.shown.is_shown_to(output::Recipient::Sink(sink.id())) {
+            self.restart_sink(sink)?;
+        }
+        frame(self, sink).or_else(|error| {
+            self.invalidate();
+            self.restart_sink(sink)?;
+            Err(error)
+        })
+    }
+
+    /// Restarts `sink`, so that the next frame sends the whole scene to it. Until a restart succeeds, every frame into
+    /// `sink` restarts it first.
+    fn restart_sink<S: ChangeSink>(&mut self, sink: &mut S) -> Result<(), FrameError<S::Error>> {
+        self.shown.retarget(output::Recipient::Caller);
+        sink.restart().map_err(FrameError::Sink)?;
+        self.shown.retarget(output::Recipient::Sink(sink.id()));
+        Ok(())
     }
 
     /// Makes a frame as [`View::frame`] does, applies the update of the frame to `tree` and returns the failures of
@@ -59,7 +123,9 @@ impl View {
         text: &mut impl TextMeasurer,
     ) -> Result<Failures, FrameError> {
         self.show(tree, |view| {
-            view.frame_presenting(viewport, text, Presentation::New)
+            collect_update(|update| {
+                view.frame_presenting(viewport, text, Presentation::New, update)
+            })
         })
     }
 
@@ -73,7 +139,9 @@ impl View {
         text: &mut impl TextMeasurer,
         timing: FrameTime,
     ) -> Result<Failures, FrameError> {
-        self.show(tree, |view| view.timed_frame(viewport, text, timing))
+        self.show(tree, |view| {
+            collect_update(|update| view.timed_frame(viewport, text, timing, update))
+        })
     }
 
     fn show(
@@ -82,13 +150,13 @@ impl View {
         frame: impl FnOnce(&mut Self) -> Result<Frame, FrameError>,
     ) -> Result<Failures, FrameError> {
         let framed =
-            (self.reset_stale_tree(tree).map_err(FrameError::Apply)).and_then(|()| frame(self));
+            (self.reset_stale_tree(tree).map_err(FrameError::Sink)).and_then(|()| frame(self));
         let shown = match framed {
             Ok(Frame { update, failures }) => match tree.show(update) {
                 Ok(()) => Ok(failures),
                 Err(error) => {
                     self.failures.carry(failures);
-                    Err(FrameError::Apply(error))
+                    Err(FrameError::Sink(error))
                 }
             },
             Err(error) => Err(error),
@@ -108,30 +176,32 @@ impl View {
         }
         self.shown.retarget(recipient);
         let removal: SceneUpdate = (tree.children(SceneTree::ROOT, None).iter())
-            .map(|&id| crate::scene::tree::Change::Remove { id })
+            .map(|&id| Change::Remove { id })
             .collect();
         tree.show(removal)
     }
 
-    fn timed_frame(
+    fn timed_frame<S: ChangeSink>(
         &mut self,
         viewport: Viewport,
         text: &mut impl TextMeasurer,
         timing: FrameTime,
-    ) -> Result<Frame, FrameError> {
+        sink: &mut S,
+    ) -> Result<Failures, FrameError<S::Error>> {
         self.follow_reduced_motion();
         self.motion.set_device_pixel(viewport.pixel());
         self.motion.advance(timing.presentation);
         let presentation = self.followers.advance_presentation(timing.presentation);
-        self.frame_presenting(viewport, text, presentation)
+        self.frame_presenting(viewport, text, presentation, sink)
     }
 
-    pub(super) fn frame_presenting(
+    fn frame_presenting<S: ChangeSink>(
         &mut self,
         viewport: Viewport,
         text: &mut impl TextMeasurer,
         presentation: Presentation,
-    ) -> Result<Frame, FrameError> {
+        sink: &mut S,
+    ) -> Result<Failures, FrameError<S::Error>> {
         self.provide(&VIEWPORT, viewport);
         self.motion.set_device_pixel(viewport.pixel());
         self.finish_input();
@@ -190,11 +260,8 @@ impl View {
         let items = std::mem::take(&mut self.canvas).finish();
         let slots = self.followers.slots();
         // The failures of a frame whose update fails stay for the next frame.
-        let update = (self.shown.update(&items, slots)).map_err(FrameError::Apply)?;
-        Ok(Frame {
-            update,
-            failures: self.failures.take(),
-        })
+        self.shown.update(&items, slots, sink)?;
+        Ok(self.failures.take())
     }
 
     /// Composes the dirty parts of the tree and lays the tree out, and repeats both steps while a layout makes a
@@ -353,5 +420,49 @@ impl View {
             .filter(|shortcut| !hidden.contains(&shortcut.node))
             .map(|shortcut| (shortcut.shortcut, shortcut.action))
             .collect()
+    }
+}
+
+/// Runs `frame` with a sink that collects the changes of the frame into one update.
+fn collect_update(
+    frame: impl FnOnce(&mut CollectedUpdate) -> Result<Failures, FrameError<Infallible>>,
+) -> Result<Frame, FrameError> {
+    let mut collected = CollectedUpdate::default();
+    match frame(&mut collected) {
+        Ok(failures) => Ok(Frame {
+            update: collected.update,
+            failures,
+        }),
+        Err(FrameError::Mirror(error)) => Err(FrameError::Mirror(error)),
+        Err(FrameError::Sink(never)) => match never {},
+    }
+}
+
+/// The changes of one frame, collected for `View::frame` and `View::show_frame`.
+#[derive(Default)]
+struct CollectedUpdate {
+    id: SinkId,
+    update: SceneUpdate,
+}
+
+impl ChangeSink for CollectedUpdate {
+    type Error = Infallible;
+
+    fn id(&self) -> SinkId {
+        self.id
+    }
+
+    fn change(&mut self, change: Change) -> Result<(), Infallible> {
+        self.update.changes.push(change);
+        Ok(())
+    }
+
+    fn end_frame(&mut self) -> Result<(), Infallible> {
+        Ok(())
+    }
+
+    fn restart(&mut self) -> Result<(), Infallible> {
+        self.update.changes.clear();
+        Ok(())
     }
 }

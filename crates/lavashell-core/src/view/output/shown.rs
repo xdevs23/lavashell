@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{GroupId, Painted};
-use crate::scene::Affine;
 use crate::scene::tree::{
-    ApplyError, Change, Content, Group, Node, NodeKey, Packet, SceneNodeId, SceneTree, SceneUpdate,
-    Slot, SlotChange, TreeId,
+    Change, Content, Group, Node, NodeKey, Packet, SceneNodeId, SceneTree, Slot, SlotChange, TreeId,
 };
+use crate::scene::{Affine, ChangeSink, SinkId};
+use crate::view::FrameError;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -29,6 +29,8 @@ pub(in crate::view) enum Recipient {
     #[default]
     Caller,
     Tree(TreeId),
+    /// The sink passed to `View::frame_into` and `View::frame_into_at`.
+    Sink(SinkId),
 }
 
 #[derive(Default)]
@@ -70,26 +72,27 @@ impl Shown {
         self.tree = SceneTree::default();
     }
 
-    /// The changes that make the scene of the recipient match `items`. `followed` replaces the painted transforms of
-    /// the groups listed in it. After an error, the next update builds the whole scene.
-    pub fn update(
+    /// Sends each change that makes the scene in the recipient match `items` to `sink`, then ends the frame.
+    /// `followed` replaces the painted transforms of the groups listed in it. After an error, the next update builds
+    /// the whole scene.
+    pub fn update<S: ChangeSink>(
         &mut self,
         items: &[Painted],
         followed: &BTreeMap<GroupId, Slot<Affine>>,
-    ) -> Result<SceneUpdate, ApplyError> {
-        let mut changes = Vec::new();
-        (self.collect_changes(items, followed, &mut changes))
-            .inspect_err(|_| self.forget_scene())?;
-        Ok(SceneUpdate { changes })
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
+        (self.send_changes(items, followed, sink))
+            .and_then(|()| sink.end_frame().map_err(FrameError::Sink))
+            .inspect_err(|_| self.forget_scene())
     }
 
-    fn collect_changes(
+    fn send_changes<S: ChangeSink>(
         &mut self,
         items: &[Painted],
         followed: &BTreeMap<GroupId, Slot<Affine>>,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
-        self.place_children(None, None, items, &mut Counters::default(), changes)?;
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
+        self.place_children(None, None, items, &mut Counters::default(), sink)?;
         for (group, transform) in followed {
             let Some(&id) = self.ids.get(&NodeIdentity::Group(*group)) else {
                 continue;
@@ -100,47 +103,50 @@ impl Shown {
                 .is_some_and(|shown| shown.transform != *transform)
             {
                 let slot = SlotChange::Transform(transform.clone());
-                self.change(Change::SetSlot { id, slot }, changes)?;
+                self.change(Change::SetSlot { id, slot }, sink)?;
             }
         }
         Ok(())
     }
 
-    fn change(&mut self, change: Change, changes: &mut Vec<Change>) -> Result<(), ApplyError> {
-        self.tree.show_change(change.clone())?;
-        changes.push(change);
-        Ok(())
+    fn change<S: ChangeSink>(
+        &mut self,
+        change: Change,
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
+        (self.tree.show_change(change.clone())).map_err(FrameError::Mirror)?;
+        sink.change(change).map_err(FrameError::Sink)
     }
 
-    fn place_children(
+    fn place_children<S: ChangeSink>(
         &mut self,
         parent: Option<SceneNodeId>,
         enclosing: Option<GroupId>,
         items: &[Painted],
         counters: &mut Counters,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
         for (index, item) in items.iter().enumerate() {
-            self.place(parent, index, enclosing, item, counters, changes)?;
+            self.place(parent, index, enclosing, item, counters, sink)?;
         }
         let children = self.tree.children(SceneTree::ROOT, parent);
         let leftovers = children.get(items.len()..).unwrap_or_default().to_vec();
         for id in leftovers {
             self.forget(id);
-            self.change(Change::Remove { id }, changes)?;
+            self.change(Change::Remove { id }, sink)?;
         }
         Ok(())
     }
 
-    fn place(
+    fn place<S: ChangeSink>(
         &mut self,
         parent: Option<SceneNodeId>,
         index: usize,
         enclosing: Option<GroupId>,
         item: &Painted,
         counters: &mut Counters,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
         match item {
             Painted::Leaf { commands } => {
                 let identity = NodeIdentity::Leaf {
@@ -151,15 +157,15 @@ impl Shown {
                 let id = self.id(identity);
                 let Some(shown) = self.tree.packet(mirrored_key(id)) else {
                     let node = Node::Leaf(Content::Packet(Packet::new(commands.clone())));
-                    return self.insert(id, parent, index, node, changes);
+                    return self.insert(id, parent, index, node, sink);
                 };
                 let same =
                     Arc::ptr_eq(shown.commands(), commands) || shown.commands()[..] == commands[..];
                 if !same {
                     let content = Content::Packet(Packet::new(commands.clone()));
-                    self.change(Change::SetContent { id, content }, changes)?;
+                    self.change(Change::SetContent { id, content }, sink)?;
                 }
-                self.position(id, parent, index, changes)
+                self.position(id, parent, index, sink)
             }
             Painted::Scope { values, items } => {
                 let identity = NodeIdentity::Scope {
@@ -168,8 +174,8 @@ impl Shown {
                 };
                 counters.scopes += 1;
                 let id = self.id(identity);
-                self.group(id, parent, index, &(*values).into(), changes)?;
-                self.place_children(Some(id), enclosing, items, counters, changes)
+                self.group(id, parent, index, &(*values).into(), sink)?;
+                self.place_children(Some(id), enclosing, items, counters, sink)
             }
             Painted::Group {
                 id: group_id,
@@ -177,28 +183,28 @@ impl Shown {
                 items,
             } => {
                 let id = self.id(NodeIdentity::Group(*group_id));
-                self.group(id, parent, index, group, changes)?;
+                self.group(id, parent, index, group, sink)?;
                 let shown = self.items.get(&id);
                 if shown.is_some_and(|shown| Arc::ptr_eq(shown, items)) {
                     return Ok(());
                 }
                 let _items_shown_before = self.items.insert(id, items.clone());
                 let mut counters = Counters::default();
-                self.place_children(Some(id), Some(*group_id), items, &mut counters, changes)
+                self.place_children(Some(id), Some(*group_id), items, &mut counters, sink)
             }
         }
     }
 
-    fn group(
+    fn group<S: ChangeSink>(
         &mut self,
         id: SceneNodeId,
         parent: Option<SceneNodeId>,
         index: usize,
         group: &Group,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
         let Some(shown) = self.tree.group(mirrored_key(id)) else {
-            return self.insert(id, parent, index, Node::Group(group.clone()), changes);
+            return self.insert(id, parent, index, Node::Group(group.clone()), sink);
         };
         let mut slots = Vec::new();
         if shown.transform != group.transform {
@@ -211,39 +217,39 @@ impl Shown {
             slots.push(SlotChange::Clip(group.clip.clone()));
         }
         for slot in slots {
-            self.change(Change::SetSlot { id, slot }, changes)?;
+            self.change(Change::SetSlot { id, slot }, sink)?;
         }
-        self.position(id, parent, index, changes)
+        self.position(id, parent, index, sink)
     }
 
-    fn insert(
+    fn insert<S: ChangeSink>(
         &mut self,
         id: SceneNodeId,
         parent: Option<SceneNodeId>,
         index: usize,
         node: Node,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
         let insert = Change::Insert {
             id,
             parent,
             index,
             node,
         };
-        self.change(insert, changes)
+        self.change(insert, sink)
     }
 
-    fn position(
+    fn position<S: ChangeSink>(
         &mut self,
         id: SceneNodeId,
         parent: Option<SceneNodeId>,
         index: usize,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), ApplyError> {
+        sink: &mut S,
+    ) -> Result<(), FrameError<S::Error>> {
         if self.tree.children(SceneTree::ROOT, parent).get(index) == Some(&id) {
             return Ok(());
         }
-        self.change(Change::Move { id, parent, index }, changes)
+        self.change(Change::Move { id, parent, index }, sink)
     }
 
     fn id(&mut self, identity: NodeIdentity) -> SceneNodeId {

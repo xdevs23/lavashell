@@ -182,7 +182,7 @@ impl SceneTree {
         let mut below = vec![id];
         while let Some(id) = below.pop() {
             let key = NodeKey::new(namespace, id);
-            let _was_present_in_moving = self.moving.remove(&key);
+            let _was_present_in_moving = Arc::make_mut(&mut self.moving).remove(&key);
             let entry = self.namespace_mut(namespace)?.remove_node(id);
             match entry.as_deref().map(|entry| &entry.kind) {
                 Some(StoredKind::Group { children, .. }) => below.extend(children.iter()),
@@ -274,9 +274,9 @@ impl SceneTree {
 
     fn track_motion(&mut self, key: NodeKey, moves: bool) {
         if moves {
-            let _newly_inserted_in_moving = self.moving.insert(key);
+            let _newly_inserted_in_moving = Arc::make_mut(&mut self.moving).insert(key);
         } else {
-            let _was_present_in_moving = self.moving.remove(&key);
+            let _was_present_in_moving = Arc::make_mut(&mut self.moving).remove(&key);
         }
     }
 

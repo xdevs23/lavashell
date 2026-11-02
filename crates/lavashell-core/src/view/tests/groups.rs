@@ -265,7 +265,7 @@ fn a_failed_update_empties_the_tree_and_the_next_frame_shows_the_whole_scene() -
     let failed = view.show_frame(&mut tree, viewport, &mut Metrics);
     assert_eq!(
         failed,
-        Err(FrameError::Apply(ApplyError::DuplicateNode(SceneNodeId(3))))
+        Err(FrameError::Sink(ApplyError::DuplicateNode(SceneNodeId(3))))
     );
     assert!(commands(&tree).is_empty());
     (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
