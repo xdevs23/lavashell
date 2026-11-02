@@ -7,7 +7,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
-use lavashell_runtime::{RunEnd, SurfaceRecords};
+use lavashell_runtime::{OutputRecords, RunEnd, SurfaceRecords};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
@@ -60,6 +60,7 @@ mod input;
 mod key;
 mod layer;
 pub(crate) mod output_layers;
+mod outputs;
 mod owned_wl_surface;
 mod preferences;
 mod presentation;
@@ -321,6 +322,7 @@ pub(super) struct Platform {
     registry: RegistryState,
     seats: SeatState,
     outputs: OutputState,
+    output_records: OutputRecords,
     shm: Shm,
     compositor: CompositorState,
     protocols: SurfaceProtocols,
@@ -368,6 +370,7 @@ impl Platform {
             match request {
                 SurfaceRequest::Destroy(id) => {
                     self.paint.forget_effect_surface(id);
+                    self.output_records.forget(id);
                     if let Some(surface) = self.surfaces.get_mut(&id) {
                         surface.retire();
                     }

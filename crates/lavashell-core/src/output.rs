@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The color profile and the channel precision that an application requests for an output, and what the output
 //! provides. A surface profile agreed with the platform, such as HDR10, does not mean that the display shows HDR.
+//! The module also defines the geometry reported by the host for a monitor.
+
+use crate::geometry::Size;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OutputProfile {
@@ -96,6 +99,27 @@ impl HdrMetadata {
             && self.max_luminance > self.min_luminance
             && self.max_frame_average_light_level <= self.max_content_light_level
     }
+}
+
+/// A length in millimetres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Millimetres(pub f64);
+
+/// The width and the height of a monitor.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PhysicalSize {
+    pub width: Millimetres,
+    pub height: Millimetres,
+}
+
+/// The geometry of a monitor, reported by the host for an output.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MonitorInfo {
+    /// `None` when the host does not send a name for the output.
+    pub name: Option<String>,
+    pub size: Size,
+    /// `None` when the host does not report a physical size.
+    pub physical_size: Option<PhysicalSize>,
 }
 
 #[cfg(test)]

@@ -1,38 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    CompositorHandler, Connection, Density, Dispatch, Duration, ExtBackgroundEffectManagerV1,
+    CompositorHandler, Connection, Density, Dispatch, ExtBackgroundEffectManagerV1,
     ExtBackgroundEffectSurfaceV1, NativeWindow, OutputHandler, OutputState, Platform,
-    ProvidesRegistryState, Proxy, QueueHandle, RegistryState, SeatState, Shm, ShmHandler,
-    SurfaceEvent, SurfaceId, WaylandSurface, WindowConfigure, WindowHandler,
-    WpFractionalScaleManagerV1, WpFractionalScaleV1, WpViewport, WpViewporter, ZwlrLayerShellV1,
-    ZwlrLayerSurfaceV1, configure_event, delegate_noop, sctk, wl_output, wl_surface,
-    wp_fractional_scale_v1, zwlr_layer_surface_v1,
+    ProvidesRegistryState, QueueHandle, RegistryState, SeatState, Shm, ShmHandler, SurfaceEvent,
+    SurfaceId, WaylandSurface, WindowConfigure, WindowHandler, WpFractionalScaleManagerV1,
+    WpFractionalScaleV1, WpViewport, WpViewporter, ZwlrLayerShellV1, ZwlrLayerSurfaceV1,
+    configure_event, delegate_noop, sctk, wl_output, wl_surface, wp_fractional_scale_v1,
+    zwlr_layer_surface_v1,
 };
 use std::num::NonZero;
 
 /// wp-fractional-scale-v1 sends the preferred scale as the numerator of a fraction over 120.
 const FRACTIONAL_SCALE_DENOMINATOR: u32 = 120;
-/// `wl_output` sends the refresh rate of a mode in mHz.
-const MILLIHERTZ_PER_HERTZ: f64 = 1000.0;
 
 impl Platform {
     fn refresh_fallback(&mut self) {
         if self.presentation.is_some() {
             return;
         }
-        for surface in self.surfaces.values_mut() {
-            let interval = surface
-                .wl
-                .data::<sctk::compositor::SurfaceData<()>>()
-                .into_iter()
-                .flat_map(smithay_client_toolkit::compositor::SurfaceData::outputs)
-                .filter_map(|output| self.outputs.info(&output))
-                .flat_map(|info| info.modes)
-                .filter(|mode| mode.current && mode.refresh_rate > 0)
-                .map(|mode| {
-                    Duration::from_secs_f64(MILLIHERTZ_PER_HERTZ / f64::from(mode.refresh_rate))
-                })
-                .min();
+        for (id, surface) in &mut self.surfaces {
+            let interval = self.output_records.refreshes(*id).min();
             surface.clock.output_refresh(interval);
         }
     }
@@ -77,9 +64,10 @@ impl CompositorHandler for Platform {
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: &wl_output::WlOutput,
+        wl: &wl_surface::WlSurface,
+        output: &wl_output::WlOutput,
     ) {
+        self.report_surface_entered(wl, output);
         self.refresh_fallback();
     }
 
@@ -87,9 +75,10 @@ impl CompositorHandler for Platform {
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: &wl_output::WlOutput,
+        wl: &wl_surface::WlSurface,
+        output: &wl_output::WlOutput,
     ) {
+        self.report_surface_left(wl, output);
         self.refresh_fallback();
     }
 }
@@ -167,7 +156,8 @@ impl OutputHandler for Platform {
     }
 
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, output: wl_output::WlOutput) {
-        self.layers_output_changed(output.clone());
+        self.report_output(&output);
+        self.layers_output_changed(&output);
         self.lock_output_added(&output);
     }
 
@@ -177,7 +167,8 @@ impl OutputHandler for Platform {
         _: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
-        self.layers_output_changed(output);
+        self.report_output(&output);
+        self.layers_output_changed(&output);
         self.refresh_fallback();
     }
 
@@ -189,6 +180,7 @@ impl OutputHandler for Platform {
     ) {
         self.layers_output_removed(&output);
         self.lock_output_removed(&output);
+        self.remove_output(&output);
         self.refresh_fallback();
     }
 }
