@@ -12,6 +12,6 @@ rec {
   ];
   url = patch.git;
   inherit (patch) rev;
-  hash = "sha256-ysuv1X/LriNEItu9FBiDITaGwKYl0urgUOcIDPQTld4=";
+  hash = "sha256-U2pXvIddP5z2IUyGOrkgavSIZMdQOXNgMwA6Rzu6y3Q=";
   cargoSource = "git+${url}?rev=${rev}#${rev}";
 }

@@ -3884,7 +3884,7 @@ checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 [[package]]
 name = "skia-bindings"
 version = "0.153.3"
-source = "git+https://github.com/xquant23/rust-skia_rust-skia?rev=14efb6e87afe5e6fc14d9361eeaedef477cadb88#14efb6e87afe5e6fc14d9361eeaedef477cadb88"
+source = "git+https://github.com/xquant23/rust-skia_rust-skia?rev=b4de2889f3a3df03cef44e80f32413a91b36ccd0#b4de2889f3a3df03cef44e80f32413a91b36ccd0"
 dependencies = [
  "bindgen",
  "cc",
@@ -3898,7 +3898,7 @@ dependencies = [
 [[package]]
 name = "skia-safe"
 version = "0.153.3"
-source = "git+https://github.com/xquant23/rust-skia_rust-skia?rev=14efb6e87afe5e6fc14d9361eeaedef477cadb88#14efb6e87afe5e6fc14d9361eeaedef477cadb88"
+source = "git+https://github.com/xquant23/rust-skia_rust-skia?rev=b4de2889f3a3df03cef44e80f32413a91b36ccd0#b4de2889f3a3df03cef44e80f32413a91b36ccd0"
 dependencies = [
  "bitflags",
  "skia-bindings",

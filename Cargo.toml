@@ -138,11 +138,11 @@ features = ["embed-icudtl", "ganesh", "jpeg", "no-compile", "pdf", "textlayout",
 
 [patch.crates-io.skia-safe]
 git = "https://github.com/xquant23/rust-skia_rust-skia"
-rev = "14efb6e87afe5e6fc14d9361eeaedef477cadb88"
+rev = "b4de2889f3a3df03cef44e80f32413a91b36ccd0"
 
 [patch.crates-io.skia-bindings]
 git = "https://github.com/xquant23/rust-skia_rust-skia"
-rev = "14efb6e87afe5e6fc14d9361eeaedef477cadb88"
+rev = "b4de2889f3a3df03cef44e80f32413a91b36ccd0"
 
 [profile.dev]
 debug = 1
