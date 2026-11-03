@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::geometry::{Rect, Size};
+use lavashell_core::geometry::Size;
+use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
-use lavashell_renderer::Error as RendererError;
+use lavashell_renderer::{Error as RendererError, InputSizeError, OutlineError};
 use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
@@ -101,14 +102,12 @@ pub enum Error {
     BufferScale(#[source] TryFromIntError),
     #[error("no buffer of whole pixels covers the size of a surface")]
     BufferSize(#[source] NumberError),
-    #[error("the window shape needs a finite positive size, not {0:?}")]
-    ShapeSize(Size),
-    #[error("every contour of a window shape needs at least three finite points")]
-    ShapeContour,
-    #[error("the rounded window shape {0:?} with radius {1:?} is not finite")]
-    RoundedShape(Rect, Dp),
-    #[error("the number {0} of a window shape is beyond the range of Skia scalars")]
-    ShapeScalar(f64),
+    #[error("a contour of a window shape is not a valid polygon")]
+    ShapeContour(#[source] PointsError),
+    #[error("the path of a window shape could not be built")]
+    ShapePath(#[source] OutlineError),
+    #[error("the input region of a window shape could not be computed")]
+    ShapeInput(#[source] InputSizeError),
     #[error("a surface could not show a frame of its view")]
     ShowScene(#[source] FrameError),
     #[error("a frame could not be drawn")]

@@ -2,7 +2,7 @@
 //! Creates a group of layer surfaces for each output that the compositor announces, and closes the group when the
 //! compositor removes the output.
 
-use super::creation::SurfaceSpec;
+use super::creation::NativeSpec;
 use super::outputs::output_id;
 use super::{
     App, LayerSurface, Platform, State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, wl_output,
@@ -96,7 +96,7 @@ impl Platform {
         let mut surfaces = Vec::new();
         for (options, mut view) in requests {
             let context = self.layer_context(&options, &mut view)?;
-            let spec = SurfaceSpec::layer(&options, view, context)?;
+            let spec = NativeSpec::layer(&options, view, context)?;
             self.create_surface(spec, |platform, wl, surface| {
                 surfaces.push(surface);
                 platform.layer_role(wl, Some(output), &options, context, surface)

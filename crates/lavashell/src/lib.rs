@@ -22,9 +22,10 @@ pub mod prelude {
     };
     pub use lavashell_core::prelude::*;
     pub use lavashell_renderer::{Fonts, Painter, VulkanRenderer};
+    pub use lavashell_runtime::{Window, WindowShape};
     #[cfg(target_os = "linux")]
     pub use lavashell_wayland::{
         App, Clipboard, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, LayerLevel,
-        LayerSurface, TransferId, ViewActions, Window, WindowShape,
+        LayerSurface, TransferId, ViewActions,
     };
 }

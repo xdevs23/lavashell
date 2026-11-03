@@ -153,25 +153,5 @@ pub fn measure_content(
     (view.size_that_fits(proposal, text)).map_err(Error::MeasureView)
 }
 
-/// The size at which a window opens: `requested`, or else the size that `view` fits without bounds.
-///
-/// # Errors
-///
-/// Fails when the view cannot be measured.
-pub fn initial_size(
-    requested: Option<Size>,
-    view: &mut View,
-    text: &mut impl TextMeasurer,
-) -> Result<Size, Error> {
-    let unbounded = Proposal {
-        width: None,
-        height: None,
-    };
-    match requested {
-        Some(size) => Ok(size),
-        None => measure_content(view, unbounded, text),
-    }
-}
-
 #[cfg(test)]
 mod tests;

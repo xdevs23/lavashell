@@ -7,7 +7,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
-use lavashell_runtime::{OutputRecords, RunEnd, SurfaceRecords};
+use lavashell_runtime::{DragRegion, OutputRecords, RunEnd, SurfaceRecords, Window};
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
@@ -51,7 +51,7 @@ use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use crate::surface::{LayerLevel, LayerSurface, Window};
+use crate::surface::{LayerLevel, LayerSurface};
 
 mod accessibility;
 mod creation;
@@ -161,7 +161,7 @@ struct Surface {
     background: Option<ExtBackgroundEffectSurfaceV1>,
     blur_size: Option<Size>,
     shape: Option<shape::SurfaceShape>,
-    drag_region: Option<crate::surface::DragRegion>,
+    drag_region: Option<DragRegion>,
 }
 
 impl Surface {

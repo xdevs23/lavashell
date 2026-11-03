@@ -1,23 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::creation::SurfaceSpec;
+use super::creation::NativeSpec;
 use super::{
     App, BTreeMap, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts,
     GlobalList, Instant, LoopHandle, OutputRecords, OutputState, Painter, PainterSetup, Platform,
     QueueHandle, RegistryState, Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols,
-    SurfaceRecords, VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell,
+    SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell,
     accessibility, focus_grab, output_layers, preferences, presentation, scene, session_lock,
     wl_surface,
 };
 use crate::Error;
-use crate::logical::extent;
+use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
-use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceSource;
+use lavashell_platform::{Role as SurfaceRole, SurfaceSpec};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
-
-fn window_extent(size: Size) -> Option<(u32, u32)> {
-    extent(size.width, 0).zip(extent(size.height, 0))
-}
 
 impl SurfaceProtocols {
     fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Self {
@@ -155,55 +151,66 @@ impl Platform {
 
     fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
         match request {
-            Request::Window(options, mut view) => {
-                let size =
-                    lavashell_runtime::initial_size(options.size, &mut view, self.paint.shaper())?;
-                let whole = window_extent(size).filter(|&(width, height)| width > 0 && height > 0);
-                let spec = SurfaceSpec {
-                    view,
-                    size: whole.ok_or(Error::WindowSize(size))?,
-                    transparent: options.transparent || options.shape.is_some(),
-                    output: options.output,
-                    hdr_metadata: options.hdr_metadata,
-                    background_blur: options.background_blur,
-                    shape: options.shape.clone(),
-                    drag_region: options.drag_region.clone(),
-                    accessible_name: options.title.clone(),
-                };
-                self.create_surface(spec, |platform, wl, _| platform.window_role(wl, &options))
+            Request::Window(window, mut view) => {
+                let spec = window.spec(&mut view, self.paint.shaper())?;
+                let native = NativeSpec::window(window, view, &spec)?;
+                self.create_surface(native, |platform, wl, _| {
+                    platform.window_role(wl, &spec.role)
+                })
             }
             Request::Layer(options, mut view) => {
                 let context = self.layer_context(&options, &mut view)?;
-                let spec = SurfaceSpec::layer(&options, view, context)?;
+                let spec = NativeSpec::layer(&options, view, context)?;
                 self.create_surface(spec, |platform, wl, id| {
                     platform.layer_role(wl, None, &options, context, id)
                 })
             }
             Request::Lock(output, view) => self
-                .create_surface(SurfaceSpec::lock(view), |platform, wl, id| {
+                .create_surface(NativeSpec::lock(view), |platform, wl, id| {
                     platform.lock_role(wl, &output, id)
                 }),
         }
     }
 
-    fn window_role(&self, wl: &wl_surface::WlSurface, options: &Window) -> Result<Role, Error> {
+    fn window_role(&self, wl: &wl_surface::WlSurface, role: &SurfaceRole) -> Result<Role, Error> {
+        let SurfaceRole::Window {
+            title,
+            app_id,
+            min_size,
+            fullscreen,
+            draws_decorations,
+        } = role;
         let xdg = self.protocols.xdg.as_ref().ok_or(Error::NoXdgShell)?;
-        let decorations = if options.shape.is_some() {
+        let decorations = if *draws_decorations {
             WindowDecorations::ClientOnly
         } else {
             WindowDecorations::RequestServer
         };
         let window = xdg.create_window(wl.clone(), decorations, &self.qh);
-        window.set_title(&options.title);
-        window.set_app_id(&options.app_id);
-        let min_size = (options.min_size)
-            .map(|minimum| window_extent(minimum).ok_or(Error::MinimumWindowSize(minimum)))
+        window.set_title(title);
+        window.set_app_id(app_id);
+        let min_size = (*min_size)
+            .map(|minimum| whole_size(minimum).ok_or(Error::MinimumWindowSize(minimum)))
             .transpose()?;
         window.set_min_size(min_size);
-        if options.fullscreen {
+        if *fullscreen {
             window.set_fullscreen(None);
         }
         window.commit();
         Ok(Role::Window { window })
+    }
+}
+
+impl NativeSpec {
+    /// The native surface of `window` that shows `view` and opens as `spec` describes.
+    fn window(window: Window, view: View, spec: &SurfaceSpec) -> Result<Self, Error> {
+        Ok(Self {
+            view,
+            size: window_size(spec.size).ok_or(Error::WindowSize(spec.size))?,
+            appearance: spec.appearance,
+            shape: window.shape,
+            drag_region: window.drag_region,
+            accessible_name: window.title,
+        })
     }
 }

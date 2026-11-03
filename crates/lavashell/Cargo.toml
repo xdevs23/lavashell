@@ -15,6 +15,7 @@ lavashell-core.workspace = true
 lavashell-components.workspace = true
 lavashell-keyboard.workspace = true
 lavashell-renderer.workspace = true
+lavashell-runtime.workspace = true
 lavashell-materials.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

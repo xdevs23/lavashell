@@ -30,3 +30,14 @@ pub(crate) fn extent(length: Dp, minimum: u32) -> Option<u32> {
     let whole = u32::try_from(whole(length)?).ok()?;
     Some(whole.max(minimum))
 }
+
+/// The nearest whole logical pixels of a size, or `None` when a length is negative, not finite or does not fit an
+/// `i32`.
+pub(crate) fn whole_size(size: Size) -> Option<(u32, u32)> {
+    extent(size.width, 0).zip(extent(size.height, 0))
+}
+
+/// The nearest whole logical pixels of a window size, or `None` when [`whole_size`] fails or a length rounds to zero.
+pub(crate) fn window_size(size: Size) -> Option<(u32, u32)> {
+    whole_size(size).filter(|&(width, height)| width > 0 && height > 0)
+}

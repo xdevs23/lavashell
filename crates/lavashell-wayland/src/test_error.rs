@@ -97,12 +97,6 @@ pub(crate) enum TestError {
     CreatePipe(#[source] rustix::io::Errno),
     #[error("the file is not a pipe")]
     NotPipe,
-    #[error("{0} is not a density")]
-    Density(f64),
-    #[error("{0} is outside the range of its type")]
-    OutOfRange(f64),
-    #[error("the raster surface could not be created")]
-    RasterSurface,
     #[error(transparent)]
     Failed(#[from] FrameFailure),
     #[error("the scene could not be built")]

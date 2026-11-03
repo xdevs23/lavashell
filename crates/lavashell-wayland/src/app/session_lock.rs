@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::creation::SurfaceSpec;
+use super::creation::NativeSpec;
 use super::{
     Connection, Dispatch, GlobalList, OutputRequest, Platform, PlatformFacts, QueueHandle, Request,
     Role, SurfaceEvent, SurfaceId, Ui, View, configure_event, delegate_noop, sctk, wl_output,
     wl_surface,
 };
 use crate::Error;
+use lavashell_platform::Appearance;
 use sctk::reexports::client::protocol::wl_callback;
 use sctk::reexports::protocols::ext::session_lock::v1::client::{
     ext_session_lock_manager_v1::ExtSessionLockManagerV1,
@@ -154,15 +155,17 @@ impl Runtime {
     }
 }
 
-impl SurfaceSpec {
+impl NativeSpec {
     pub(super) fn lock(view: View) -> Self {
         Self {
             view,
             size: (1, 1),
-            transparent: false,
-            output: OutputRequest::default(),
-            hdr_metadata: None,
-            background_blur: false,
+            appearance: Appearance {
+                transparent: false,
+                output: OutputRequest::default(),
+                hdr_metadata: None,
+                background_blur: false,
+            },
             shape: None,
             drag_region: None,
             accessible_name: String::new(),
@@ -206,7 +209,7 @@ impl Platform {
             return Ok(());
         }
         let view = lock.views.view();
-        self.create_surface(SurfaceSpec::lock(view), |platform, wl, id| {
+        self.create_surface(NativeSpec::lock(view), |platform, wl, id| {
             platform.lock_role(wl, output, id)
         })?;
         Ok(())
