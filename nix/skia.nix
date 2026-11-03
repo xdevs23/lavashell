@@ -394,6 +394,7 @@ in
         };
         environment = {
           ANDROID_NDK = toString ndk;
+          SKIA_ANDROID_API_LEVEL = toString api;
           CLANG_PATH = "${llvm}/bin/clang";
           LIBCLANG_PATH = "${llvm}/lib";
         };
