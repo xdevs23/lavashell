@@ -2,7 +2,7 @@
 use super::material_motion::{linear, painted_fills};
 use super::*;
 use crate::retained::Extent;
-use crate::scene::tree::{Change, DamageTracker, Group, Node, SceneNodeId, SceneTree};
+use crate::scene::tree::{Change, DamageTracker, SceneTree};
 use crate::scroll::ScrollState;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -210,68 +210,5 @@ fn a_leaf_at_the_top_level_covers_what_it_paints_only() -> TestResult {
         .collect::<Vec<_>>();
     let painted = Rect::new(6.dp(), 6.dp(), 8.dp(), 8.dp());
     assert_eq!(outputs, [Some(Extent::Within(painted))]);
-    Ok(())
-}
-
-#[test]
-fn a_view_shows_the_whole_scene_to_a_tree_it_did_not_feed_last() -> TestResult {
-    let mut scene = Scene::default();
-    let mut view = View::new(crate::platform::fixture::facts(), |ui| {
-        ui.spacer(20.dp(), 20.dp(), Modifier::new().background(Color::WHITE));
-    });
-    let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let leaves = |tree: &SceneTree| tree.at(Duration::ZERO).paint_order().leaves().count();
-    let (mut first, mut second) = (SceneTree::default(), SceneTree::default());
-    (view.show_frame(&mut first, viewport, &mut Metrics)).without_failures()?;
-    advance_with(&mut scene, &mut view, viewport, &mut Metrics)?;
-    (view.show_frame(&mut second, viewport, &mut Metrics)).without_failures()?;
-    (view.show_frame(&mut first, viewport, &mut Metrics)).without_failures()?;
-    assert_eq!((leaves(&first), leaves(&second)), (1, 1));
-    Ok(())
-}
-
-#[test]
-fn a_failed_update_empties_the_tree_and_the_next_frame_shows_the_whole_scene() -> TestResult {
-    let squares = |count: State<usize>| {
-        move |ui: &mut Ui| {
-            for square in 0..count.get() {
-                ui.scoped(square, Modifier::new(), |ui| {
-                    ui.spacer(20.dp(), 20.dp(), Modifier::new().background(Color::WHITE));
-                });
-            }
-        }
-    };
-    let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let commands = |tree: &SceneTree| {
-        tree.at(Duration::ZERO)
-            .leaf_commands()
-            .cloned()
-            .collect::<Vec<_>>()
-    };
-    let count = State::new(1);
-    let mut view = View::new(crate::platform::fixture::facts(), squares(count.clone()));
-    let mut tree = SceneTree::default();
-    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
-    // The view gives the group of the second square the id 3. Inserting a node with that id first
-    // makes the next frame fail.
-    let planted = Change::Insert {
-        id: SceneNodeId(3),
-        parent: None,
-        index: 1,
-        node: Node::Group(Group::default()),
-    };
-    tree.show(SceneUpdate::from_iter([planted]))?;
-    count.set(2);
-    let failed = view.show_frame(&mut tree, viewport, &mut Metrics);
-    assert_eq!(
-        failed,
-        Err(FrameError::Sink(ApplyError::DuplicateNode(SceneNodeId(3))))
-    );
-    assert!(commands(&tree).is_empty());
-    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
-    let mut fresh = View::new(crate::platform::fixture::facts(), squares(count.clone()));
-    let mut expected = SceneTree::default();
-    (fresh.show_frame(&mut expected, viewport, &mut Metrics)).without_failures()?;
-    assert_eq!(commands(&tree), commands(&expected));
     Ok(())
 }

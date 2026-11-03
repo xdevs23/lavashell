@@ -10,11 +10,11 @@ use std::{path::Path, time::Duration};
 
 fn show(
     view: &mut View,
-    tree: &mut SceneTree,
+    builder: &mut SceneBuilder,
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    without_failures(view.show_frame(tree, viewport, capture.painter.shaper()))
+    without_failures(view.frame_into(viewport, capture.painter.shaper(), builder))
         .map_err(Error::Example)
 }
 
@@ -27,7 +27,7 @@ fn controls_change_the_material_and_render_offscreen() -> Result<(), Error> {
         ui::compose(u, &composed);
     });
     let mut capture = Capture::new()?;
-    let mut shown = SceneTree::default();
+    let mut shown = SceneBuilder::default();
     let size = capture.preferred_size(&mut view)?;
     let window = Viewport::new(size, Density::ONE);
     show(&mut view, &mut shown, window, &mut capture)?;
@@ -116,7 +116,7 @@ fn controls_change_the_material_and_render_offscreen() -> Result<(), Error> {
 /// has to follow a drag in it.
 fn compact_window(
     view: &mut View,
-    shown: &mut SceneTree,
+    shown: &mut SceneBuilder,
     demo: &Demo,
     capture: &mut Capture,
     window: Viewport,

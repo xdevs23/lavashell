@@ -57,11 +57,6 @@ impl FrameFailures {
         failures.append(&mut self.recorded);
         Failures(failures)
     }
-
-    /// Puts back the failures of a frame whose update was not applied, so that the next frame returns them.
-    pub fn carry(&mut self, failures: Failures) {
-        self.carried.extend(failures);
-    }
 }
 
 impl Extend<ComponentFailure> for FrameFailures {

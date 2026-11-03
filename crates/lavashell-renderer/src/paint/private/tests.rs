@@ -406,11 +406,11 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
         );
         assert_eq!(shaper.paragraphs().len(), before);
         let mut view = field_beside_text(&secret);
-        let mut tree = SceneTree::default();
+        let mut builder = SceneBuilder::default();
         let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
         for revealed in [true, false, true] {
             secret.set_revealed(revealed);
-            (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+            (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
             let field = view
                 .bounds_of("field")
                 .ok_or(TestError::Missing("field node"))?;
@@ -436,11 +436,11 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
     let one_line = reference.measure("W", &style, width).height;
     let (_, _, secret, _) = field(&mut painter, &wide)?;
     let mut view = field_beside_text(&secret);
-    let mut tree = SceneTree::default();
+    let mut builder = SceneBuilder::default();
     let viewport = Viewport::new(Size::new(width, 100.dp()), Density::ONE);
     for revealed in [true, false] {
         secret.set_revealed(revealed);
-        (view.show_frame(&mut tree, viewport, &mut painter.shaper)).without_failures()?;
+        (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
         let field = view
             .bounds_of("field")
             .ok_or(TestError::Missing("field node"))?;

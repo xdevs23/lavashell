@@ -17,11 +17,11 @@ const WINDOW: Size = Size::new(Dp::new(1400.0), Dp::new(1000.0));
 
 fn show(
     view: &mut View,
-    tree: &mut SceneTree,
+    builder: &mut SceneBuilder,
     viewport: Viewport,
     capture: &mut Capture,
 ) -> Result<(), Error> {
-    without_failures(view.show_frame(tree, viewport, capture.painter.shaper()))
+    without_failures(view.frame_into(viewport, capture.painter.shaper(), builder))
         .map_err(Error::Example)
 }
 
@@ -35,7 +35,7 @@ fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Erro
     let mut view = View::new(lavashell_example_support::platform(), move |ui| {
         music::music(ui, &state, icons);
     });
-    let mut shown = SceneTree::default();
+    let mut shown = SceneBuilder::default();
     let size = WINDOW;
     let window = Viewport::new(size, Density::ONE);
     capture.save(&mut view, window, directory.join("music.png"))?;
@@ -136,7 +136,7 @@ fn compact_and_scrolled(
     directory: &Path,
 ) -> Result<(), Error> {
     let window = Viewport::new(WINDOW, Density::ONE);
-    let mut shown = SceneTree::default();
+    let mut shown = SceneBuilder::default();
     model.set(music::Model::default());
     let state = model.clone();
     let mut compact = View::new(lavashell_example_support::platform(), move |ui| {
@@ -218,7 +218,7 @@ fn panel_reaches_the_library(
         music::panel(ui, &state, icons);
     });
     let bar = Viewport::new(Size::new(WINDOW.width, PLAYER_HEIGHT), Density::ONE);
-    show(&mut panel, &mut SceneTree::default(), bar, capture)?;
+    show(&mut panel, &mut SceneBuilder::default(), bar, capture)?;
     let previous = model.get().current;
     click(&mut panel, "next")?;
     assert_ne!(model.get().current, previous);

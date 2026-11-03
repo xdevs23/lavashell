@@ -42,11 +42,11 @@ impl Capture {
         viewport: Viewport,
         path: impl AsRef<Path>,
     ) -> Result<(), Error> {
-        let mut tree = SceneTree::default();
-        (view.show_frame(&mut tree, viewport, self.painter.shaper()))
+        let mut builder = SceneBuilder::default();
+        (view.frame_into(viewport, self.painter.shaper(), &mut builder))
             .map(report_failures)
             .map_err(Error::Frame)?;
-        self.paint(tree.at(view.motion().now()), viewport, path)
+        self.paint(builder.snapshot().at(view.motion().now()), viewport, path)
     }
 
     /// Paints `tree` in `viewport` into the PNG file at `path`.

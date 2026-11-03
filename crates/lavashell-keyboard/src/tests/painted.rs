@@ -32,13 +32,15 @@ pub(super) fn unions(scene: &Scene, members: usize) -> Vec<Rect> {
 }
 
 pub(super) fn leaves(scene: &Scene) -> Vec<(Affine, Vec<DrawCommand>)> {
-    (scene.tree.at(scene.now).paint_order().leaves())
+    let snapshot = scene.builder.snapshot();
+    (snapshot.at(scene.now).paint_order().leaves())
         .map(|leaf| (leaf.world, leaf.packet.commands().to_vec()))
         .collect()
 }
 
 pub(super) fn texts(scene: &Scene) -> Vec<String> {
-    (scene.tree.at(scene.now).leaf_commands())
+    let snapshot = scene.builder.snapshot();
+    (snapshot.at(scene.now).leaf_commands())
         .filter_map(|command| match command {
             DrawCommand::Text { text, .. } => Some(text.clone()),
             _ => None,

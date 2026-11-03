@@ -5,9 +5,9 @@ use super::frame_result::{Failures, Frame};
 use super::parents::ROOT;
 use super::scroll_followers::Presentation;
 use super::{
-    Action, ApplyError, BTreeSet, Constraints, FrameTime, Layout, LocalReader, LocalScope, Moving,
-    NodeId, Phase, Point, SceneTree, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT,
-    View, ViewHandles, Viewport, Visibility, output, paint,
+    Action, BTreeSet, Constraints, FrameTime, Layout, LocalReader, LocalScope, Moving, NodeId,
+    Phase, Point, SceneUpdate, Shortcut, TextMeasurer, Transform, Ui, VIEWPORT, View, ViewHandles,
+    Viewport, Visibility, output, paint,
 };
 use crate::scene::tree::Change;
 use crate::scene::{ChangeSink, SinkId};
@@ -16,8 +16,8 @@ use std::convert::Infallible;
 impl View {
     /// Sets `viewport` as the root value of `VIEWPORT`, then composes, lays out and paints what changed. The update of
     /// the returned frame changes the scene made from every earlier update returned by `frame` and `frame_at`. After
-    /// an error, and after a frame shown with `show_frame` or `show_frame_at` or sent with `frame_into` or
-    /// `frame_into_at`, the next update builds the whole scene from an empty scene.
+    /// an error, and after a frame sent with `frame_into` or `frame_into_at`, the next update builds the whole scene
+    /// from an empty scene.
     ///
     /// A component that fails in its composition, its layout or its paint has no nodes in the tree, and the rest of the
     /// view is unchanged. The frame returns the failures since the last frame. A failed component composes again once
@@ -107,78 +107,6 @@ impl View {
         sink.restart().map_err(FrameError::Sink)?;
         self.shown.retarget(output::Recipient::Sink(sink.id()));
         Ok(())
-    }
-
-    /// Makes a frame as [`View::frame`] does, applies the update of the frame to `tree` and returns the failures of
-    /// the frame. After an error, `tree` is empty, the next frame sends the whole scene to `tree`, and the next frame
-    /// returns the failures.
-    ///
-    /// # Errors
-    ///
-    /// Fails as [`View::frame`] does, or when `tree` cannot apply the update of the frame.
-    pub fn show_frame(
-        &mut self,
-        tree: &mut SceneTree,
-        viewport: Viewport,
-        text: &mut impl TextMeasurer,
-    ) -> Result<Failures, FrameError> {
-        self.show(tree, |view| {
-            collect_update(|update| {
-                view.frame_presenting(viewport, text, Presentation::New, update)
-            })
-        })
-    }
-
-    /// # Errors
-    ///
-    /// Fails as [`View::show_frame`] does.
-    pub fn show_frame_at(
-        &mut self,
-        tree: &mut SceneTree,
-        viewport: Viewport,
-        text: &mut impl TextMeasurer,
-        timing: FrameTime,
-    ) -> Result<Failures, FrameError> {
-        self.show(tree, |view| {
-            collect_update(|update| view.timed_frame(viewport, text, timing, update))
-        })
-    }
-
-    fn show(
-        &mut self,
-        tree: &mut SceneTree,
-        frame: impl FnOnce(&mut Self) -> Result<Frame, FrameError>,
-    ) -> Result<Failures, FrameError> {
-        let framed =
-            (self.reset_stale_tree(tree).map_err(FrameError::Sink)).and_then(|()| frame(self));
-        let shown = match framed {
-            Ok(Frame { update, failures }) => match tree.show(update) {
-                Ok(()) => Ok(failures),
-                Err(error) => {
-                    self.failures.carry(failures);
-                    Err(FrameError::Sink(error))
-                }
-            },
-            Err(error) => Err(error),
-        };
-        if shown.is_err() {
-            *tree = SceneTree::default();
-            self.invalidate();
-        }
-        shown
-    }
-
-    /// Empties `tree` when `tree` did not receive the last frame, so that the next update sends the whole scene to it.
-    fn reset_stale_tree(&mut self, tree: &mut SceneTree) -> Result<(), ApplyError> {
-        let recipient = output::Recipient::Tree(tree.id());
-        if self.shown.is_shown_to(recipient) {
-            return Ok(());
-        }
-        self.shown.retarget(recipient);
-        let removal: SceneUpdate = (tree.children(SceneTree::ROOT, None).iter())
-            .map(|&id| Change::Remove { id })
-            .collect();
-        tree.show(removal)
     }
 
     fn timed_frame<S: ChangeSink>(
@@ -438,7 +366,7 @@ fn collect_update(
     }
 }
 
-/// The changes of one frame, collected for `View::frame` and `View::show_frame`.
+/// The changes of one frame, collected for `View::frame` and `View::frame_at`.
 #[derive(Default)]
 struct CollectedUpdate {
     id: SinkId,

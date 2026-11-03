@@ -110,15 +110,15 @@ timer.repeat(Duration::from_millis(500), Duration::from_millis(250));
 ## Embedded hosts
 
 ```rust
-let failures = view.show_frame_at(&mut tree, Viewport::new(size, density), measurer, frame_time)?;
+let failures = view.frame_into_at(Viewport::new(size, density), measurer, frame_time, &mut builder)?;
 for failure in failures {
     log::error!("{}", lavashell::core::error::message_chain(failure));
 }
-// Paint `tree.at(frame_time.presentation)`, then:
+// Paint `builder.snapshot().at(frame_time.presentation)`, then:
 view.record_presentation(shown_at);
 ```
 
-Wake the host at `View::next_deadline` and `SceneTree::next_change`. See [frame timing](frame-timing.md).
+Wake the host at `View::next_deadline` and `SceneBuilder::next_change`. See [frame timing](frame-timing.md).
 
 Nodes created with `ui.shared` animate in the coordinates of the host.
 `View::set_viewport_origin` places the viewport in those coordinates, and the

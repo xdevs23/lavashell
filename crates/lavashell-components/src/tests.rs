@@ -45,14 +45,14 @@ static BLANK: Icon = Icon {
     paths: &[],
 };
 
-/// Makes one frame of `view` and applies the scene update to a new scene tree, which is dropped
-/// afterwards. Fails where a component fails.
+/// Makes one frame of `view` into a new scene builder, which is dropped afterwards. Fails where a
+/// component fails.
 pub(crate) fn render(
     view: &mut View,
     viewport: Viewport,
     text: &mut impl TextMeasurer,
 ) -> Result<(), FrameFailure> {
-    (view.show_frame(&mut SceneTree::default(), viewport, text)).without_failures()
+    (view.frame_into(viewport, text, &mut SceneBuilder::default())).without_failures()
 }
 
 fn composed_bounds(view: &View, tag: &str) -> Result<Rect, TestError> {

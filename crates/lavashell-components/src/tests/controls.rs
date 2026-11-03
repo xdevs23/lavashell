@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::view::{ComponentError, CompositionError};
 use lavashell_test_fixtures::failure_causes;
 
@@ -200,10 +199,11 @@ fn controls_inherit_typography_without_inventing_decorations() -> Result<(), Tes
             });
         });
     });
-    let mut tree = SceneTree::default();
+    let mut builder = SceneBuilder::default();
     let viewport = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
-    (view.show_frame(&mut tree, viewport, &mut Metrics)).without_failures()?;
-    let commands: Vec<_> = tree.at(std::time::Duration::ZERO).leaf_commands().collect();
+    (view.frame_into(viewport, &mut Metrics, &mut builder)).without_failures()?;
+    let snapshot = builder.snapshot();
+    let commands: Vec<_> = (snapshot.at(std::time::Duration::ZERO).leaf_commands()).collect();
     let text: Vec<_> = (commands.iter())
         .filter_map(|command| match command {
             DrawCommand::Text { style, .. } => Some(style),

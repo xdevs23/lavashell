@@ -24,10 +24,10 @@ use std::time::Duration;
 #[derive(Component, Clone, ExtractComponent)]
 pub struct OverlayCamera;
 
-/// The scene tree painted by the overlay. The render world paints a snapshot of the tree.
+/// The scene painted by the overlay. The render world paints the snapshot of the last frame that ended.
 #[derive(Resource, Default)]
 pub struct OverlayFrame {
-    tree: SceneTree,
+    builder: SceneBuilder,
     pub sequence: u64,
     /// Set by `show_frame_at`. An app that renders without `show_frame_at` calls `View::record_presentation` with the
     /// presentation time of the render instead, so that input events hit the content that the overlay showed then.
@@ -36,11 +36,11 @@ pub struct OverlayFrame {
 
 impl OverlayFrame {
     /// Shows a frame of `view` at the size of the overlay in dp and the density of the surface, and logs each
-    /// component that failed in it as an error. After an error, the tree is empty and the next frame shows the whole
-    /// scene.
+    /// component that failed in it as an error. After an error, the overlay shows the last frame that ended. The next
+    /// frame sends the whole scene.
     ///
     /// # Errors
-    /// Fails as `View::show_frame_at` does.
+    /// Fails as `View::frame_into_at` does.
     pub fn show_frame_at(
         &mut self,
         view: &mut View,
@@ -48,7 +48,7 @@ impl OverlayFrame {
         text: &mut impl TextMeasurer,
         timing: FrameTime,
     ) -> Result<(), FrameError> {
-        let failures = view.show_frame_at(&mut self.tree, viewport, text, timing)?;
+        let failures = view.frame_into_at(viewport, text, timing, &mut self.builder)?;
         for failure in failures {
             log::error!("{}", message_chain(failure));
         }
@@ -82,7 +82,7 @@ fn extract_overlay(main: Res<MainWorld>, mut commands: Commands) {
     commands.insert_resource(ExtractedOverlay {
         sequence: frame.sequence,
         shown: frame.shown,
-        snapshot: frame.tree.snapshot(),
+        snapshot: frame.builder.snapshot(),
     });
 }
 

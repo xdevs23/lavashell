@@ -3,6 +3,7 @@ use super::*;
 use crate::effects::{Material, Shadow, Stroke};
 use crate::input_method::{TextAction, TextHints};
 use crate::reactive::State;
+use crate::scene::tree::ApplyError;
 use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};

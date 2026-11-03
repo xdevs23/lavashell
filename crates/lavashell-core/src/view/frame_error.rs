@@ -6,8 +6,8 @@ use crate::ui::{ModifierValue, Node, NodeId, Part, Used};
 use crate::units::NumberError;
 use std::fmt;
 
-/// The error that stops a view from making a frame. `E` is the error returned by the recipient of the changes, which
-/// is a change sink or a scene tree. A failure inside a component does not cause it.
+/// The error that stops a view from making a frame. `E` is the error returned by the change sink that receives the
+/// changes. A failure inside a component does not cause it.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FrameError<E = ApplyError> {
     #[error("a change in the frame does not fit the scene shown before")]
