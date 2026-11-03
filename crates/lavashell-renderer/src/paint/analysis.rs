@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::effect_registry::EffectRegistry;
 use lavashell_core::prelude::*;
+use lavashell_core::retained::Footprint;
 use lavashell_core::scene::tree::{Packet, PacketGeneration};
 use lavashell_core::surface::SurfaceId;
 use std::collections::HashMap;
@@ -24,6 +25,14 @@ impl Scope {
     }
 }
 
+/// A scope opened by the command at `opener` and not closed yet.
+struct OpenScope {
+    opener: usize,
+    scope: Scope,
+    /// Whether a transform applies to commands inside the scope.
+    transformed: bool,
+}
+
 /// Whether `command` paints past the layout bounds of the scopes around it.
 fn expands(command: &DrawCommand) -> bool {
     match command {
@@ -31,7 +40,19 @@ fn expands(command: &DrawCommand) -> bool {
             blur.get() > Dp::ZERO
                 || (filter.as_ref()).is_some_and(|filter| filter.outset > NonNegativeDp::ZERO)
         }
-        DrawCommand::Shadow { .. } | DrawCommand::Transform(_) => true,
+        DrawCommand::Shadow { .. } => true,
+        _ => false,
+    }
+}
+
+/// Whether the commands `inside` the layer opened by `opener` paint past the layout bounds of the layer.
+fn paints_past_bounds(opener: &DrawCommand, inside: &[DrawCommand]) -> bool {
+    match opener {
+        DrawCommand::OpacityLayer { bounds, .. } | DrawCommand::EffectLayer { bounds, .. } => {
+            Footprint::analyze(inside)
+                .output
+                .is_some_and(|painted| !painted.inside(*bounds))
+        }
         _ => false,
     }
 }
@@ -80,6 +101,22 @@ impl Analysis {
     /// so the layer of such a scope gets the size of the clip around it.
     pub fn expands_group(&self, index: usize) -> bool {
         self.expanding.get(index).copied().unwrap_or(false)
+    }
+
+    fn mark_expanding(&mut self, opener: usize, command_count: usize) {
+        self.expanding.resize(command_count, false);
+        self.expanding[opener] = true;
+    }
+
+    /// Marks `scope`, which ends before `commands[end]`, as expanding when a transform inside it moves the commands
+    /// past the layout bounds of the scope.
+    fn close(&mut self, commands: &[DrawCommand], scope: &OpenScope, end: usize) {
+        if scope.transformed
+            && !self.expands_group(scope.opener)
+            && paints_past_bounds(&commands[scope.opener], &commands[scope.opener + 1..end])
+        {
+            self.mark_expanding(scope.opener, commands.len());
+        }
     }
 }
 
@@ -140,17 +177,20 @@ fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
         effects: None,
         layers: false,
     };
-    let mut scopes = Vec::new();
+    let mut scopes: Vec<OpenScope> = Vec::new();
     for (index, command) in commands.iter().enumerate() {
         let opens = Scope::of(command);
         if let Some(scope) = opens {
             analysis.layers |= !matches!(scope, Scope::Save);
-            scopes.push((index, scope));
+            scopes.push(OpenScope {
+                opener: index,
+                scope,
+                transformed: false,
+            });
         }
         if expands(command) {
-            analysis.expanding.resize(commands.len(), false);
-            for (opener, _) in &scopes {
-                analysis.expanding[*opener] = true;
+            for open in &scopes {
+                analysis.mark_expanding(open.opener, commands.len());
             }
         }
         if opens.is_some() {
@@ -158,7 +198,15 @@ fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
         }
         let reads = match command {
             DrawCommand::Restore => {
-                let _closed_scope = scopes.pop();
+                if let Some(closed) = scopes.pop() {
+                    analysis.close(commands, &closed, index);
+                }
+                false
+            }
+            DrawCommand::Transform(_) => {
+                for open in &mut scopes {
+                    open.transformed = true;
+                }
                 false
             }
             _ => match registry.identify(command) {
@@ -174,11 +222,11 @@ fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
         };
         if reads {
             let mut isolated = false;
-            for (opener, scope) in scopes.iter().rev() {
-                match scope {
+            for open in scopes.iter().rev() {
+                match open.scope {
                     Scope::Opacity => {
                         analysis.groups.resize(commands.len(), false);
-                        analysis.groups[*opener] = true;
+                        analysis.groups[open.opener] = true;
                     }
                     Scope::Isolated => {
                         isolated = true;
@@ -189,6 +237,10 @@ fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
             }
             analysis.effects.get_or_insert_default().parent |= !isolated;
         }
+    }
+    // A scope without a restore ends with the packet.
+    for open in scopes.iter().rev() {
+        analysis.close(commands, open, commands.len());
     }
     analysis
 }

@@ -19,27 +19,6 @@ pub enum Segment {
 }
 
 impl Segment {
-    /// The segment with `place` applied to each of its points.
-    #[must_use]
-    pub fn placed(self, place: impl Fn(Point) -> Point) -> Self {
-        match self {
-            Self::Line(to) => Self::Line(place(to)),
-            Self::Quadratic { control, to } => Self::Quadratic {
-                control: place(control),
-                to: place(to),
-            },
-            Self::Cubic {
-                first_control,
-                second_control,
-                to,
-            } => Self::Cubic {
-                first_control: place(first_control),
-                second_control: place(second_control),
-                to: place(to),
-            },
-        }
-    }
-
     /// The control points of the segment, then the point where it ends.
     pub fn points(self) -> impl Iterator<Item = Point> {
         let (points, count) = match self {
