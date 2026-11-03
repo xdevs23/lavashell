@@ -13,7 +13,6 @@ use smithay_client_toolkit as sctk;
 
 impl Platform {
     pub(crate) fn submit_transfers(&mut self) {
-        self.cancel_closed_transfers();
         let requests: Vec<_> = self
             .clipboard
             .queue

@@ -66,6 +66,22 @@ impl Platform {
         }
     }
 
+    /// Drops each pointer grab that started on a surface which is not open anymore.
+    pub(crate) fn cancel_closed_pointer_grabs(&mut self) {
+        let seats: Vec<_> = (self.clipboard.devices.iter())
+            .filter(|device| {
+                (device.grab.as_ref())
+                    .is_some_and(|grab| !self.transfer_surface_live(&grab.surface))
+            })
+            .map(|device| device.seat.clone())
+            .collect();
+        for device in &mut self.clipboard.devices {
+            if seats.contains(&device.seat) {
+                device.grab = None;
+            }
+        }
+    }
+
     pub(crate) fn transfer_pointer_cancel(&mut self, seat: &WlSeat) {
         if let Some(device) = self
             .clipboard
@@ -90,13 +106,16 @@ impl Platform {
             return false;
         };
         let device = device.device.inner().id().protocol_id();
-        let gesture = (self.transfer_surface(&grab.surface)).map(|surface| DragGesture {
+        let Some(surface) = self.transfer_surface(&grab.surface) else {
+            // The surface where the grab started is not open anymore, so the grab is not restored.
+            return false;
+        };
+        let gesture = DragGesture {
             surface,
             origin: grab.origin,
             position: at,
-        });
-        let Some(request) = gesture.and_then(|gesture| self.dispatch_drag_source(gesture, device))
-        else {
+        };
+        let Some(request) = self.dispatch_drag_source(gesture, device) else {
             if let Some(device) =
                 (self.clipboard.devices.iter_mut()).find(|device| device.seat == seat)
             {

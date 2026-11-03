@@ -4,6 +4,7 @@ use crate::test_text::NoText;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::{DpExt, NumberError};
 use lavashell_core::view::FrameError;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 #[derive(Debug, thiserror::Error)]
@@ -45,6 +46,13 @@ fn needs_frame(records: &SurfaceRecords, surface: SurfaceId) -> bool {
         .is_some_and(View::needs_visual_frame)
 }
 
+/// Closes `surface` and retires it once the destruction it asks for is done.
+fn close_and_retire(records: &mut SurfaceRecords, surface: SurfaceId) {
+    let destroy = records.handle(surface, SurfaceEvent::Closed);
+    assert_eq!(destroy, Some(SurfaceRequest::Destroy(surface)));
+    records.retire(surface);
+}
+
 fn configure(width: Option<Dp>) -> SurfaceEvent {
     SurfaceEvent::Configured {
         width,
@@ -56,9 +64,7 @@ fn configure(width: Option<Dp>) -> SurfaceEvent {
 fn ids_count_up_and_a_closed_id_is_not_reused() -> TestResult {
     let mut records = SurfaceRecords::default();
     let first = open(&mut records)?;
-    let destroy = records.handle(first, SurfaceEvent::Closed);
-    assert_eq!(destroy, Some(SurfaceRequest::Destroy(first)));
-    records.retire(first);
+    close_and_retire(&mut records, first);
     let second = open(&mut records)?;
     assert_eq!((first, second), (SurfaceId(0), SurfaceId(1)));
     assert!(!records.is_open(first));
@@ -134,8 +140,61 @@ fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestR
     assert!(records.open_view(surface).is_none());
     records.retire(surface);
     assert_eq!(Rc::strong_count(&held), 1);
-    assert!(records.view_mut(surface).is_some());
+    assert!(records.view_mut(surface).is_none());
     Ok(())
+}
+
+#[test]
+fn surfaces_opened_and_retired_many_times_free_their_records_and_get_new_ids() -> TestResult {
+    let mut records = SurfaceRecords::default();
+    let window = open(&mut records)?;
+    let mut ids = BTreeSet::from([window]);
+    for _ in 0..100 {
+        let popup = open(&mut records)?;
+        assert!(ids.insert(popup));
+        assert_eq!(records.handle(popup, configure(None)), None);
+        close_and_retire(&mut records, popup);
+        assert_eq!(records.records.len(), 1);
+    }
+    assert!(records.is_open(window));
+    Ok(())
+}
+
+#[test]
+fn a_late_event_for_a_retired_surface_changes_nothing() -> TestResult {
+    let mut records = SurfaceRecords::default();
+    let retired = open(&mut records)?;
+    let other = open(&mut records)?;
+    let viewport = records.open_viewport(other);
+    close_and_retire(&mut records, retired);
+    let density = Density::from_ratio(2.0, 1.0)?;
+    let late = [
+        records.handle(retired, SurfaceEvent::Closed),
+        records.handle(retired, configure(Some(300.dp()))),
+        records.handle(retired, SurfaceEvent::DensityChanged(density)),
+    ];
+    records.retire(retired);
+    assert_eq!(late, [None, None, None]);
+    assert!(!records.is_open(retired));
+    assert!(!records.is_configured(retired));
+    assert!(records.view_mut(retired).is_none());
+    assert_eq!(records.open_viewport(other), viewport);
+    assert!(records.is_open(other));
+    assert_eq!(records.records.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn opening_fails_once_every_surface_id_is_used() {
+    let mut records = SurfaceRecords {
+        last_id: Some(u64::MAX - 1),
+        ..SurfaceRecords::default()
+    };
+    let last = records.open(empty_view(), Size::ZERO, Density::ONE);
+    assert!(matches!(last, Ok(SurfaceId(u64::MAX))));
+    let opened = records.open(empty_view(), Size::ZERO, Density::ONE);
+    assert!(matches!(opened, Err(Error::NumberSurface)));
+    assert_eq!(records.records.len(), 1);
 }
 
 #[test]

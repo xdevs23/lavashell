@@ -230,7 +230,7 @@ impl Platform {
                 }
                 _ => false,
             };
-            let Some(Role::Layer(layer)) = &mut surface.role else {
+            let Role::Layer(layer) = &mut surface.role else {
                 continue;
             };
             layer.update_transaction(&surface.wl, view, content_current);

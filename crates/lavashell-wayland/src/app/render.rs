@@ -31,6 +31,9 @@ pub(super) enum NextRender {
 
 impl Platform {
     pub(super) fn render(&mut self) -> Result<NextRender, Error> {
+        // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
+        // retires.
+        self.cancel_closed_transfers();
         self.execute_surface_requests();
         self.submit_transfers();
         self.accessibility_updates();
@@ -130,7 +133,7 @@ impl Platform {
     fn composition_order(&self) -> Vec<SurfaceId> {
         let mut order: Vec<_> = (self.surfaces.iter())
             .map(|(&id, surface)| match &surface.role {
-                Some(Role::Layer(layer)) => (layer.composition_order, id),
+                Role::Layer(layer) => (layer.composition_order, id),
                 _ => (0, id),
             })
             .collect();
@@ -188,7 +191,7 @@ impl Platform {
         // The composed view can change the size of a layer that fits its content, or the layer layout can
         // change its margins. The layer-shell requests for that are queued now, so that the compositor
         // applies them with the buffer of this frame.
-        if let Some(Role::Layer(layer)) = &mut surface.role {
+        if let Role::Layer(layer) = &mut surface.role {
             if changed && let Some(proposal) = layer.content_proposal() {
                 let content =
                     lavashell_runtime::measure_content(view, proposal, self.paint.shaper())?;
@@ -309,7 +312,7 @@ impl Platform {
             });
         let frame = frame.map_err(Error::Draw)?;
         painted.map_err(Error::Paint)?;
-        if let Some(Role::Layer(layer)) = &mut surface.role {
+        if let Role::Layer(layer) = &mut surface.role {
             let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
             layer.presented(frame, layer::Content { size, input });
         }

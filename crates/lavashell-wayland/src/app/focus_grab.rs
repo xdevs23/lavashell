@@ -131,7 +131,7 @@ impl super::layer::Runtime {
 impl Platform {
     pub(super) fn update_focus_grabs(&mut self) {
         for (&id, surface) in &mut self.surfaces {
-            if let Some(Role::Layer(layer)) = &mut surface.role
+            if let Role::Layer(layer) = &mut surface.role
                 && let Some(viewport) = self.surface_records.open_viewport(id)
             {
                 layer.update_focus_grab(
@@ -158,7 +158,7 @@ impl Dispatch<Grab, SurfaceId> for Platform {
     ) {
         if let hyprland_focus_grab_v1::Event::Cleared = event
             && let Some(native) = state.surfaces.get_mut(surface)
-            && let Some(Role::Layer(layer)) = &mut native.role
+            && let Role::Layer(layer) = &mut native.role
             && let Some(grab) = &mut layer.focus
             && grab.holds(proxy)
         {

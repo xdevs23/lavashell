@@ -7,9 +7,6 @@ pub(crate) enum Lifecycle {
     Configured,
     /// The surface closed, and the platform has not destroyed the native surface yet.
     Closing,
-    /// The native surface was destroyed and the view was dropped. The record still exists, so the id is known as
-    /// closed.
-    Retired,
 }
 
 impl Lifecycle {
