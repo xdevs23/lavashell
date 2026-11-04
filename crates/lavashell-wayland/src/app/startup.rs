@@ -2,11 +2,11 @@
 use super::creation::NativeSpec;
 use super::{
     App, BTreeMap, ClipboardState, CompositorState, Connection, Duration, EventQueue, Fonts,
-    GlobalList, Instant, LoopHandle, OutputRecords, OutputState, Painter, PainterSetup, Platform,
-    QueueHandle, RegistryState, Request, Role, SeatDevices, SeatState, Shm, SurfaceProtocols,
-    SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window, WindowDecorations, XdgShell,
-    accessibility, focus_grab, output_layers, preferences, presentation, scene, session_lock,
-    wl_surface,
+    GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState, Painter,
+    PainterSetup, Platform, QueueHandle, RegistryState, Request, Role, SeatDevices, SeatState, Shm,
+    SurfaceProtocols, SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window,
+    WindowDecorations, XdgShell, accessibility, focus_grab, output_layers, preferences,
+    presentation, scene, session_lock, wl_surface,
 };
 use crate::Error;
 use crate::logical::{whole_size, window_size};
@@ -68,6 +68,7 @@ impl Platform {
             scene,
             gpu_timing,
             preference_overrides,
+            input_filter,
             config,
             run_end,
             ..
@@ -127,6 +128,7 @@ impl Platform {
             connection: connection.clone(),
             registry: RegistryState::new(globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
+            input: InputRouter::new(input_filter),
             clipboard: ClipboardState::new(globals, &qh, seats.seats(), clipboard),
             seats,
             outputs,

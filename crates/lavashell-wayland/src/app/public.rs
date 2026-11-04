@@ -19,7 +19,7 @@ impl App {
         mut self,
         filter: impl FnMut(SurfaceId, InputEvent) -> Option<InputEvent> + 'static,
     ) -> Self {
-        self.config.input_filter = Some(Box::new(filter));
+        self.input_filter = Some(Box::new(filter));
         self
     }
 
@@ -191,6 +191,7 @@ impl App {
             scene: None,
             gpu_timing: false,
             preference_overrides: lavashell_core::preferences::PreferenceOverrides::default(),
+            input_filter: None,
             config: AppConfig::default(),
             platform,
         }

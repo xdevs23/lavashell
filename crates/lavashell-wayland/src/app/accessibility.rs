@@ -89,7 +89,7 @@ impl Platform {
 
     pub(super) fn accessibility_focus(&mut self) {
         for (&id, surface) in &mut self.surfaces {
-            let focused = self.devices.iter().any(|seat| seat.focus == Some(id));
+            let focused = (self.devices.iter()).any(|seat| seat.keyboard_focuses(&self.input, id));
             if let Some(view) = self.surface_records.open_view_mut(id) {
                 view.input(InputEvent::WindowFocus(focused));
             }

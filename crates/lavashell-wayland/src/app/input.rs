@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::device::{keyboard_device, pointer_device, pointer_event};
 use super::preferences::HostRepeat;
 use super::{
-    Capability, Connection, Cursor, CursorIcon, Duration, InputEvent, InputModifiers, Key,
-    KeyEvent, KeyboardHandler, Keysym, Modifiers, Platform, PointerEvent, PointerEventKind,
-    PointerHandler, QueueHandle, RawModifiers, SeatDevices, SeatHandler, SeatState, SurfaceId,
-    ThemeSpec, sctk, wl_keyboard, wl_pointer, wl_seat, wl_surface,
+    Capability, Connection, Cursor, CursorIcon, Duration, KeyEvent, KeyboardHandler, Keysym,
+    Modifiers, Platform, PointerEvent, PointerEventKind, PointerHandler, QueueHandle, RawModifiers,
+    SeatDevices, SeatHandler, SeatState, SurfaceId, ThemeSpec, ThemedPointer, key, sctk,
+    wl_keyboard, wl_pointer, wl_seat, wl_surface,
 };
 use lavashell_core::platform::KeyRepeat;
+use lavashell_core::ui::InputModifiers;
+use lavashell_platform::{DeviceEvent, InputRequest, KeyboardDevice, PointerDevice, PressState};
+use lavashell_runtime::{InputRouter, RoutedInput};
 use sctk::seat::keyboard::RepeatInfo;
-use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT};
+use sctk::seat::pointer::BTN_LEFT;
 
 /// A physical key of the focused surface, as a Linux evdev code independent of the keyboard
 /// layout and of text editing.
@@ -27,34 +31,80 @@ pub struct KeyboardFocus {
     pub focused: bool,
 }
 
+impl SeatDevices {
+    fn pointer_device(&self) -> Option<PointerDevice> {
+        (self.pointer.as_ref()).map(|themed| pointer_device(themed.pointer()))
+    }
+
+    fn keyboard_device(&self) -> Option<KeyboardDevice> {
+        self.keyboard.as_ref().map(keyboard_device)
+    }
+
+    /// Whether `surface` has keyboard focus.
+    pub(super) fn keyboard_focuses(&self, input: &InputRouter, surface: SurfaceId) -> bool {
+        (self.keyboard_device())
+            .is_some_and(|keyboard| input.keyboard_focus(keyboard) == Some(surface))
+    }
+}
+
 impl Platform {
     pub(super) fn keyboard_seat(&self, keyboard: &wl_keyboard::WlKeyboard) -> Option<&SeatDevices> {
         (self.devices.iter()).find(|seat| seat.keyboard.as_ref() == Some(keyboard))
     }
 
-    fn keyboard_seat_mut(
-        &mut self,
-        keyboard: &wl_keyboard::WlKeyboard,
-    ) -> Option<&mut SeatDevices> {
-        (self.devices.iter_mut()).find(|seat| seat.keyboard.as_ref() == Some(keyboard))
+    fn seat_devices(&mut self, seat: &wl_seat::WlSeat) -> Option<&mut SeatDevices> {
+        (self.devices.iter_mut()).find(|known| &known.seat == seat)
     }
 
-    fn cancel_pointer(&mut self, seat: &wl_seat::WlSeat) {
-        let pointer = self
-            .devices
-            .iter()
-            .find(|device| &device.seat == seat)
-            .and_then(|device| device.pointer.as_ref())
-            .map(smithay_client_toolkit::seat::pointer::ThemedPointer::pointer);
-        if let Some(pointer) = pointer {
-            for (&id, surface) in &mut self.surfaces {
-                if surface.pointer_owner.as_ref() == Some(pointer) {
-                    surface.pointer_owner = None;
-                    if let Some(view) = self.surface_records.open_view_mut(id) {
-                        view.input(InputEvent::CancelPointer);
-                    }
+    /// Hands `event` to the runtime and delivers each input that follows from it.
+    fn route_input(&mut self, event: DeviceEvent) {
+        for routed in self.input.route(event) {
+            self.deliver(routed);
+        }
+    }
+
+    /// Delivers `routed` to the view of the routed surface and executes the request that follows from it. A cancel
+    /// also ends the drag gesture started by the cancelled pointer on the surface.
+    pub(super) fn deliver(&mut self, routed: RoutedInput) {
+        if let RoutedInput::Cancel { surface, pointer } = routed {
+            self.end_drag_gesture(surface, pointer);
+        }
+        if let Some(request) = routed.deliver(&mut self.surface_records) {
+            self.execute_input_request(request);
+        }
+    }
+
+    fn execute_input_request(&self, request: InputRequest) {
+        match request {
+            InputRequest::SetCursor(pointer, cursor) => {
+                let icon = match cursor {
+                    Cursor::Default => CursorIcon::Default,
+                    Cursor::Pointer => CursorIcon::Pointer,
+                    Cursor::Text => CursorIcon::Text,
+                };
+                if let Some(themed) = self.themed_pointer(pointer)
+                    && let Err(error) = themed.set_cursor(&self.connection, icon)
+                {
+                    log::warn!("cannot set the cursor of the pointer: {error}");
                 }
             }
+        }
+    }
+
+    fn themed_pointer(&self, pointer: PointerDevice) -> Option<&ThemedPointer> {
+        (self.devices.iter())
+            .filter_map(|seat| seat.pointer.as_ref())
+            .find(|themed| pointer_device(themed.pointer()) == pointer)
+    }
+
+    /// Ends the drag gesture started with the left button by `pointer` on `surface`.
+    fn end_drag_gesture(&mut self, surface: SurfaceId, pointer: PointerDevice) {
+        let wl = (self.surfaces.get(&surface)).map(|known| known.wl.clone());
+        let native = (self.themed_pointer(pointer)).map(|themed| themed.pointer().clone());
+        if let Some(wl) = wl
+            && let Some(native) = native
+        {
+            self.transfer_pointer_release(&native, &wl, BTN_LEFT);
         }
     }
 
@@ -71,7 +121,7 @@ impl Platform {
         pressed: bool,
         repeat: bool,
     ) -> bool {
-        let Some(surface) = self.keyboard_seat(keyboard).and_then(|seat| seat.focus) else {
+        let Some(surface) = self.input.keyboard_focus(keyboard_device(keyboard)) else {
             return false;
         };
         self.config.key_observer.as_mut().is_some_and(|callback| {
@@ -154,38 +204,52 @@ impl SeatHandler for Platform {
         seat: wl_seat::WlSeat,
         capability: Capability,
     ) {
-        if matches!(capability, Capability::Pointer) {
-            self.cancel_pointer(&seat);
-            self.transfer_pointer_cancel(&seat);
-        }
-        if matches!(capability, Capability::Touch) {
-            self.cancel_touches(&seat);
-        }
-        if let Some(device) = self.devices.iter_mut().find(|device| device.seat == seat) {
-            match capability {
-                Capability::Pointer => device.pointer = None,
-                Capability::Keyboard => {
-                    if let Some(keyboard) = device.keyboard.take() {
-                        keyboard.release();
-                    }
-                    device.focus = None;
+        match capability {
+            Capability::Pointer => {
+                let removed = self
+                    .seat_devices(&seat)
+                    .and_then(|known| known.pointer.take());
+                if let Some(themed) = removed {
+                    self.route_input(DeviceEvent::PointerRemoved(pointer_device(
+                        themed.pointer(),
+                    )));
                 }
-                Capability::Touch => {
-                    if let Some(touch) = device.touch.take() {
-                        touch.release();
-                    }
-                }
-                _ => {}
+                self.transfer_pointer_cancel(&seat);
             }
+            Capability::Keyboard => {
+                let removed = self
+                    .seat_devices(&seat)
+                    .and_then(|known| known.keyboard.take());
+                if let Some(keyboard) = removed {
+                    self.route_input(DeviceEvent::KeyboardRemoved(keyboard_device(&keyboard)));
+                    keyboard.release();
+                }
+            }
+            Capability::Touch => {
+                self.cancel_touches(&seat);
+                if let Some(touch) = self
+                    .seat_devices(&seat)
+                    .and_then(|known| known.touch.take())
+                {
+                    touch.release();
+                }
+            }
+            _ => {}
         }
         self.accessibility_focus();
     }
 
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
-        self.cancel_pointer(&seat);
         self.cancel_touches(&seat);
         self.remove_transfer_seat(&seat);
-        self.devices.retain(|device| device.seat != seat);
+        if let Some(index) = self.devices.iter().position(|known| known.seat == seat) {
+            let removed = self.devices.remove(index);
+            let pointer = removed.pointer_device().map(DeviceEvent::PointerRemoved);
+            let keyboard = removed.keyboard_device().map(DeviceEvent::KeyboardRemoved);
+            for removal in pointer.into_iter().chain(keyboard) {
+                self.route_input(removal);
+            }
+        }
         self.accessibility_focus();
     }
 }
@@ -193,11 +257,12 @@ impl SeatHandler for Platform {
 impl PointerHandler for Platform {
     fn pointer_frame(
         &mut self,
-        connection: &Connection,
+        _: &Connection,
         _: &QueueHandle<Self>,
         pointer: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
+        let device = pointer_device(pointer);
         for event in events {
             let Some(id) = self.find_surface(&event.surface) else {
                 continue;
@@ -205,92 +270,35 @@ impl PointerHandler for Platform {
             if let PointerEventKind::Release { button, .. } = event.kind {
                 self.transfer_pointer_release(pointer, &event.surface, button);
             }
-            let Some(surface) = self.surfaces.get_mut(&id) else {
-                continue;
-            };
-            if matches!(
-                event.kind,
-                PointerEventKind::Leave { .. } | PointerEventKind::Release { .. }
-            ) && surface.pointer_owner.as_ref() != Some(pointer)
-            {
-                continue;
-            }
-            if let Some(previous) = surface.pointer_owner.replace(pointer.clone())
-                && previous != *pointer
-            {
-                if let Some(view) = self.surface_records.open_view_mut(id) {
-                    view.input(InputEvent::CancelPointer);
-                }
-                self.transfer_pointer_release(&previous, &event.surface, BTN_LEFT);
-            }
+            let interacting = self.input.interacting_pointer(id) == Some(device);
             let at = crate::logical::point(event.position.0, event.position.1);
-            match event.kind {
+            let routed = self.input.route(pointer_event(device, id, at, &event.kind));
+            let consumed = match event.kind {
                 PointerEventKind::Press {
                     serial,
                     button: BTN_LEFT,
                     ..
-                } if self.move_window(id, pointer, at, serial) => {
-                    continue;
-                }
+                } if self.move_window(id, pointer, at, serial) => true,
                 PointerEventKind::Press { serial, button, .. } => {
                     self.transfer_pointer_press(pointer, &event.surface, serial, button, at);
+                    false
                 }
-                PointerEventKind::Motion { .. } if self.transfer_pointer_motion(pointer, at) => {
-                    continue;
-                }
-                _ => {}
-            }
-            if let PointerEventKind::Press { serial, .. } | PointerEventKind::Release { serial, .. } =
-                event.kind
-                && let Some(seat) = self.devices.iter().find(|seat| {
-                    (seat.pointer.as_ref()).is_some_and(|themed| themed.pointer() == pointer)
-                })
-            {
-                self.clipboard.note_serial(seat.seat.clone(), serial);
-            }
-            let input = match &event.kind {
-                PointerEventKind::Leave { .. } => Some(InputEvent::Leave),
-                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
-                    Some(InputEvent::Move(at))
-                }
-                PointerEventKind::Press { button, .. } if *button == BTN_LEFT => {
-                    Some(InputEvent::Press(at))
-                }
-                PointerEventKind::Press { button, .. } if *button == BTN_RIGHT => {
-                    Some(InputEvent::Context(at))
-                }
-                PointerEventKind::Release { button, .. } if *button == BTN_LEFT => {
-                    Some(InputEvent::Release(at))
-                }
-                PointerEventKind::Axis {
-                    horizontal,
-                    vertical,
-                    ..
-                } => Some(InputEvent::Scroll {
-                    at,
-                    delta: crate::logical::point(horizontal.absolute, vertical.absolute),
-                }),
+                PointerEventKind::Motion { .. } => self.transfer_pointer_motion(pointer, at),
+                _ => false,
+            };
+            let serial = match event.kind {
+                PointerEventKind::Press { serial, .. } if !consumed => Some(serial),
+                PointerEventKind::Release { serial, .. } if interacting => Some(serial),
                 _ => None,
             };
-            if let Some(input) = input
-                && let Some(view) = self.surface_records.open_view_mut(id)
+            if let Some(serial) = serial
+                && let Some(seat) = self.transfer_pointer_device(pointer)
             {
-                view.input(input);
-                let cursor = view.cursor();
-                if let Some(themed) = self
-                    .devices
-                    .iter()
-                    .filter_map(|seat| seat.pointer.as_ref())
-                    .find(|themed| themed.pointer() == pointer)
-                {
-                    let icon = match cursor {
-                        Cursor::Default => CursorIcon::Default,
-                        Cursor::Pointer => CursorIcon::Pointer,
-                        Cursor::Text => CursorIcon::Text,
-                    };
-                    if let Err(error) = themed.set_cursor(connection, icon) {
-                        log::warn!("the pointer keeps its cursor: {error}");
-                    }
+                self.clipboard.note_serial(seat, serial);
+            }
+            for routed in routed {
+                if !consumed || matches!(routed, RoutedInput::Cancel { .. }) {
+                    self.deliver(routed);
                 }
             }
         }
@@ -339,9 +347,10 @@ impl KeyboardHandler for Platform {
                 focused: true,
             });
         }
-        if let Some(seat) = self.keyboard_seat_mut(keyboard) {
-            seat.focus = focus;
-        }
+        self.route_input(DeviceEvent::KeyboardFocus {
+            keyboard: keyboard_device(keyboard),
+            surface: focus,
+        });
         self.accessibility_focus();
     }
 
@@ -353,9 +362,12 @@ impl KeyboardHandler for Platform {
         _: &wl_surface::WlSurface,
         _: u32,
     ) {
-        let left = self
-            .keyboard_seat_mut(keyboard)
-            .and_then(|seat| seat.focus.take());
+        let device = keyboard_device(keyboard);
+        let left = self.input.keyboard_focus(device);
+        self.route_input(DeviceEvent::KeyboardFocus {
+            keyboard: device,
+            surface: None,
+        });
         if let Some(surface) = left
             && let Some(observer) = &mut self.config.focus_observer
         {
@@ -403,18 +415,11 @@ impl KeyboardHandler for Platform {
         if self.host_key(keyboard, &event, false, false) {
             return;
         }
-        if let Some(surface) = self.keyboard_seat(keyboard).and_then(|seat| seat.focus) {
-            let key = match event.keysym {
-                Keysym::Return | Keysym::KP_Enter => Some(Key::Enter),
-                Keysym::space => Some(Key::Space),
-                _ => None,
-            };
-            if let Some(key) = key
-                && let Some(view) = self.surface_records.open_view_mut(surface)
-            {
-                view.input(InputEvent::KeyRelease(key));
-            }
-        }
+        self.route_input(DeviceEvent::Key {
+            keyboard: keyboard_device(keyboard),
+            stroke: key::stroke(event),
+            state: PressState::Released,
+        });
     }
 
     fn update_modifiers(
@@ -427,17 +432,13 @@ impl KeyboardHandler for Platform {
         _: RawModifiers,
         _: u32,
     ) {
-        if let Some(seat) = self.keyboard_seat_mut(keyboard) {
-            seat.modifiers = modifiers;
-            if let Some(surface) = seat.focus
-                && let Some(view) = self.surface_records.open_view_mut(surface)
-            {
-                view.input(InputEvent::Modifiers(InputModifiers {
-                    control: modifiers.ctrl,
-                    shift: modifiers.shift,
-                    alt: modifiers.alt,
-                }));
-            }
-        }
+        self.route_input(DeviceEvent::Modifiers {
+            keyboard: keyboard_device(keyboard),
+            modifiers: InputModifiers {
+                control: modifiers.ctrl,
+                shift: modifiers.shift,
+                alt: modifiers.alt,
+            },
+        });
     }
 }
