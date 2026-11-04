@@ -235,3 +235,24 @@ fn a_default_layer_takes_and_reserves_the_measured_height_of_its_content() -> Re
     );
     Ok(())
 }
+
+#[test]
+fn an_axis_left_to_the_layer_by_a_configure_event_takes_the_length_requested_last()
+-> Result<(), TestError> {
+    let first = LayerLayout {
+        horizontal: AxisPlacement::Fill,
+        vertical: AxisPlacement::Start(Extent::dp(344.dp())?),
+        exclusive_zone: ExclusiveZone::IgnoreOthers,
+        margins: LayerMargins::default(),
+    };
+    let grown = LayerLayout {
+        vertical: AxisPlacement::Start(Extent::dp(400.dp())?),
+        ..first
+    };
+    let requested = ProtocolLayout::new(grown, UNMEASURED)?;
+    assert_eq!(configured_length(0, requested.height), Some(400));
+    assert_eq!(configured_length(380, requested.height), Some(380));
+    assert_eq!(configured_length(1920, requested.width), Some(1920));
+    assert_eq!(configured_length(0, requested.width), None);
+    Ok(())
+}
