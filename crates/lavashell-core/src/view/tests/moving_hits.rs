@@ -214,7 +214,7 @@ fn a_tap_on_a_padded_field_in_a_reused_row_finds_the_text_where_it_is_shown() ->
         ui.scroll(row.clone(), Modifier::new().size(200.dp(), 60.dp()), |ui| {
             ui.spacer(150.dp(), 60.dp(), Modifier::new());
             ui.scoped("row", Modifier::new(), |ui| {
-                padded_field(ui, Modifier::new())
+                padded_field(ui, Modifier::new());
             });
         });
     });
