@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::device::keyboard_device;
 use super::{InputEvent, Key, KeyEvent, Keysym, Platform, Shortcut, wl_keyboard, wl_seat};
+use crate::clipboard::{ClipboardShortcut, clipboard_shortcut};
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_platform::{DeviceEvent, PressState};
 use lavashell_runtime::RoutedInput;
@@ -44,15 +45,15 @@ impl Platform {
             state: PressState::Pressed,
         };
         for routed in self.input.route(pressed) {
-            if !self.clipboard_shortcut(&routed, &seat) {
+            if !self.run_clipboard_shortcut(&routed, &seat) {
                 self.deliver(routed);
             }
         }
     }
 
-    /// Copies, cuts or pastes text for a shortcut of Control with C, X or V, and returns whether `routed` was one of
-    /// them.
-    fn clipboard_shortcut(&mut self, routed: &RoutedInput, seat: &wl_seat::WlSeat) -> bool {
+    /// Copies, cuts or pastes text for a shortcut of Control with C, X or V, and returns whether it did. The view
+    /// receives the shortcut when there is nothing to copy, cut or paste.
+    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput, seat: &wl_seat::WlSeat) -> bool {
         let RoutedInput::Input {
             surface,
             input:
@@ -67,24 +68,18 @@ impl Platform {
         else {
             return false;
         };
-        let field = (self.surface_records.open_view(surface))
-            .is_some_and(|view| view.editing_target().is_some());
-        if field && key == Key::Character('v') {
-            self.paste_selection(surface, seat);
-            return true;
+        let Some(shortcut) = self
+            .clipboard_view(surface)
+            .and_then(|view| clipboard_shortcut(view, key))
+        else {
+            return false;
+        };
+        match shortcut {
+            ClipboardShortcut::Paste => self.paste_selection(surface, seat),
+            ClipboardShortcut::Cut(source, data) => self.cut_text(surface, source, data),
+            ClipboardShortcut::Copy(text) => self.copy_text(&text),
         }
-        if key == Key::Character('x') {
-            self.cut_text(surface);
-            return true;
-        }
-        if key == Key::Character('c')
-            && let Some(view) = self.surface_records.open_view_mut(surface)
-            && let Some(text) = view.copy_selection(false)
-        {
-            self.copy_text(&text);
-            return true;
-        }
-        false
+        true
     }
 }
 

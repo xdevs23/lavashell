@@ -75,7 +75,7 @@ fn read_only_sources_support_copy_and_never_delete() -> TestResult {
     assert_eq!(source.text(), "abc");
     assert!(!source.can_move());
     assert!(!view.complete_text_move(&source));
-    assert_eq!(view.copy_selection(false).as_deref(), Some("abc"));
+    assert_eq!(view.copy_selection().as_deref(), Some("abc"));
     Ok(())
 }
 

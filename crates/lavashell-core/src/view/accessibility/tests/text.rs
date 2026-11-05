@@ -145,7 +145,7 @@ fn read_only_fields_keep_navigation_and_copy_but_reject_all_edits() -> TestResul
         PERFORMED
     );
     view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
-    assert_eq!(view.copy_selection(false).as_deref(), Some("aé🦀z"));
+    assert_eq!(view.copy_selection().as_deref(), Some("aé🦀z"));
     view.input(InputEvent::Text(String::from("replacement")));
     view.input(InputEvent::Key {
         key: Key::Backspace,
@@ -156,7 +156,11 @@ fn read_only_fields_keep_navigation_and_copy_but_reject_all_edits() -> TestResul
         shift: false,
     });
     assert!(view.text_paste_target(editor).is_none());
-    assert_eq!(view.copy_selection(true).as_deref(), Some("aé🦀z"));
+    let source = view
+        .text_selection_source(editor)
+        .required("a selection source")?;
+    assert!(!source.can_move());
+    assert!(!view.complete_text_move(&source));
     assert_eq!(value.get(), "aé🦀z");
     assert_eq!(
         request(

@@ -126,8 +126,11 @@ fn asynchronous_paste_keeps_field_identity_and_native_selection_uses_utf8() -> T
     view.input(InputEvent::Release(Point::new(5.dp(), 5.dp())));
     let target = view.editing_target().required("an editing target")?;
     view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
-    assert_eq!(view.copy_selection(false).as_deref(), Some("雪🙂"));
-    assert_eq!(view.copy_selection(true).as_deref(), Some("雪🙂"));
+    assert_eq!(view.copy_selection().as_deref(), Some("雪🙂"));
+    let source = view
+        .text_selection_source(target)
+        .required("a selection source")?;
+    assert!(view.complete_text_move(&source));
     assert_eq!(first.get(), "");
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     let paste = view.text_paste_target(target).required("a paste target")?;

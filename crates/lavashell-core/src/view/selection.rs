@@ -37,7 +37,7 @@ impl View {
             .map(|index| self.nodes[index].id)
     }
 
-    pub fn copy_selection(&mut self, cut: bool) -> Option<String> {
+    pub fn copy_selection(&mut self) -> Option<String> {
         let id = self.selection_target()?;
         let index = self.nodes.iter().position(|node| node.id == id)?;
         if self.protected_index(index) {
@@ -50,11 +50,7 @@ impl View {
         if selection.is_empty() {
             return None;
         }
-        let text = value[selection].to_string();
-        if cut {
-            self.edit(|edit, value| edit.replace(value, ""));
-        }
-        Some(text)
+        Some(value[selection].to_string())
     }
 
     /// The drop target at `at` in an editable text field, found from the text geometry of the last paint, whatever

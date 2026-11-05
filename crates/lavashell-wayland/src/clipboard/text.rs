@@ -3,9 +3,41 @@ use super::pipes::Scope;
 use crate::Error;
 use crate::app::Platform;
 use crate::text_transfer::{TEXT_FORMATS, text_data};
+use lavashell_core::prelude::{Key, TextSelectionSource, View};
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::TransferData;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit as sctk;
+
+/// The action that the host runs for a clipboard shortcut instead of sending the key to the view.
+pub(crate) enum ClipboardShortcut {
+    Paste,
+    Cut(TextSelectionSource, TransferData),
+    Copy(String),
+}
+
+/// Returns the action that the host runs for Control with `key`, or `None` when the host sends the key to `view` as a
+/// shortcut. Paste needs an editable focused field. Cut needs selected text that the focused field can give up. Copy
+/// needs selected text.
+pub(crate) fn clipboard_shortcut(view: &mut View, key: Key) -> Option<ClipboardShortcut> {
+    match key {
+        Key::Character('v') => view
+            .editing_target()
+            .is_some()
+            .then_some(ClipboardShortcut::Paste),
+        Key::Character('x') => cut_shortcut(view),
+        Key::Character('c') => view.copy_selection().map(ClipboardShortcut::Copy),
+        _ => None,
+    }
+}
+
+fn cut_shortcut(view: &View) -> Option<ClipboardShortcut> {
+    let source = view
+        .text_selection_source(view.focus()?)
+        .filter(TextSelectionSource::can_move)?;
+    let data = text_data(source.text())?;
+    Some(ClipboardShortcut::Cut(source, data))
+}
 
 impl Platform {
     pub(crate) fn copy_text(&mut self, text: &str) {
@@ -18,19 +50,14 @@ impl Platform {
         }
     }
 
-    pub(crate) fn cut_text(&mut self, surface: SurfaceId) {
-        let Some(source) = self
-            .clipboard_view(surface)
-            .and_then(|view| view.focus().and_then(|id| view.text_selection_source(id)))
-        else {
-            return;
-        };
-        if !source.can_move() {
-            return;
-        }
-        let Some(data) = text_data(source.text()) else {
-            return;
-        };
+    /// Sets `data` as the clipboard selection. When that succeeds, removes the selected text of `source` from the
+    /// field it was recorded from.
+    pub(crate) fn cut_text(
+        &mut self,
+        surface: SurfaceId,
+        source: TextSelectionSource,
+        data: TransferData,
+    ) {
         let actions = self.config.view_actions.clone();
         self.clipboard
             .queue

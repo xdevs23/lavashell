@@ -16,6 +16,7 @@ mod text_transfer_tests;
 pub(crate) use drag::DragCompletion;
 pub use drag::{DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId};
 pub(super) use state::ClipboardState;
+pub(crate) use text::{ClipboardShortcut, clipboard_shortcut};
 
 use crate::{Cancellation, Error};
 use lavashell_core::surface::SurfaceId;
