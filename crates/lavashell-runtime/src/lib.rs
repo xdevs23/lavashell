@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! The rules that every platform shares: the record of each surface with its view, size, density and lifecycle, the
-//! description of each window and its shape, the record of each output with the surfaces shown on it, the routing
-//! of pointer and keyboard input to the views, the settings reported by the host and provided to every view, and when
-//! a run ends.
+//! The rules that every platform shares. Each platform reports to them what its host system does and executes the
+//! requests that follow.
 #![forbid(unsafe_code)]
 
 mod choreographers;
