@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, View, wl_pointer, wl_seat, wl_surface};
+use super::Platform;
 use crate::clipboard::{DragEvent, DragGesture, DragRequest, DropEvent};
 use crate::{Cancellation, Error};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::DropAcceptance;
+use lavashell_core::view::View;
+use sctk::reexports::client::protocol::{wl_pointer, wl_seat, wl_surface};
+use smithay_client_toolkit as sctk;
 
 pub(super) type DragObserver = Box<dyn FnMut(DragEvent, &mut View) -> Option<DropAcceptance>>;
 pub(super) type DropObserver = Box<dyn FnMut(DropEvent, &mut View) -> bool>;

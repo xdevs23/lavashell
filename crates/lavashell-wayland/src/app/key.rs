@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::Platform;
 use super::device::keyboard_device;
-use super::{InputEvent, Key, KeyEvent, Keysym, Platform, Shortcut, wl_keyboard, wl_seat};
 use crate::clipboard::{ClipboardShortcut, clipboard_shortcut};
-use lavashell_core::keyboard::KeyStroke;
+use lavashell_core::keyboard::{Key, KeyStroke, Shortcut};
+use lavashell_core::view::InputEvent;
 use lavashell_platform::{DeviceEvent, PressState};
 use lavashell_runtime::RoutedInput;
+use sctk::reexports::client::protocol::{wl_keyboard, wl_seat};
+use sctk::seat::keyboard::{KeyEvent, Keysym};
+use smithay_client_toolkit as sctk;
 
 /// The key resolved by the keymap for `event`: a named key, or else the character of its keysym, with the text typed
 /// by it.

@@ -2,10 +2,16 @@
 //! Translates the outputs reported by the compositor, and the outputs entered by its surfaces, into events for the
 //! output records of the runtime.
 
-use super::{Duration, Platform, Proxy, Size, SurfaceId, sctk, wl_output, wl_surface};
+use super::Platform;
+use lavashell_core::geometry::Size;
 use lavashell_core::output::{Millimetres, MonitorInfo, PhysicalSize};
+use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{OutputEvent, OutputId};
 use sctk::output::{Mode, OutputData, OutputInfo};
+use sctk::reexports::client::Proxy;
+use sctk::reexports::client::protocol::{wl_output, wl_surface};
+use smithay_client_toolkit as sctk;
+use std::time::Duration;
 
 /// `wl_output` sends the refresh rate of a mode in mHz.
 const MILLIHERTZ_PER_HERTZ: f64 = 1000.0;

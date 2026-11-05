@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::Control;
 use super::owned_wl_surface::OwnedWlSurface;
-use super::{
-    Density, DragRegion, FrameClock, Platform, PresentationTracker, Role, SceneBuilder, Surface,
-    View, detach, shape, wl_surface,
-};
+use super::{Platform, Role, Surface, detach, shape};
 use crate::Error;
+use lavashell_core::frame::{FrameClock, PresentationTracker};
+use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::units::Density;
+use lavashell_core::view::View;
 use lavashell_platform::Appearance;
 use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
-use lavashell_runtime::WindowShape;
+use lavashell_runtime::{DragRegion, WindowShape};
+use sctk::reexports::client::protocol::wl_surface;
+use smithay_client_toolkit as sctk;
 use std::sync::Arc;
 
 /// The view and the settings of a new native surface, apart from its role.

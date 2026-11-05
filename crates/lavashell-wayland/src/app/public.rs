@@ -1,14 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::input::{HostKey, KeyboardFocus};
 use super::render::NextRender;
-use super::{
-    App, AppConfig, Clipboard, Connection, Duration, EventLoop, Fonts, FrameReport, FrameTime,
-    HostKey, InputEvent, Instant, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform,
-    PlatformFacts, Request, RunEnd, SurfaceId, Ui, View, Viewport, Window, registry_queue_init,
-    session_lock,
-};
+
+use super::{App, AppConfig, Platform, Request, session_lock};
 use crate::Error;
+use crate::clipboard::Clipboard;
 use crate::logical::{whole_size, window_size};
-use lavashell_runtime::ViewActions;
+use crate::surface::LayerSurface;
+use lavashell_core::frame::{FrameReport, FrameTime};
+use lavashell_core::geometry::Viewport;
+use lavashell_core::output::OutputInfo;
+use lavashell_core::platform::PlatformFacts;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::ui::Ui;
+use lavashell_core::view::{InputEvent, View};
+use lavashell_renderer::{Fonts, Painter};
+use lavashell_runtime::{RunEnd, ViewActions, Window};
+use sctk::reexports::calloop::EventLoop;
+use sctk::reexports::client::Connection;
+use sctk::reexports::client::globals::registry_queue_init;
+use smithay_client_toolkit as sctk;
+use std::time::{Duration, Instant};
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before

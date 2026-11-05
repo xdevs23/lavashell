@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::app::{Connection, sctk};
 use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1;
 use crate::test_error::TestError;
+use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
+use smithay_client_toolkit as sctk;
 use std::os::unix::net::UnixStream;
 use wire_tests::messages;
 

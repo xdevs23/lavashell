@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    Connection, Dispatch, GlobalList, Platform, Proxy, QueueHandle, Role, Size, SurfaceId,
-    delegate_noop, wl_surface,
-};
+use super::{Platform, Role};
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
     hyprland_focus_grab_v1::{self, HyprlandFocusGrabV1 as Grab},
 };
+use lavashell_core::geometry::Size;
+use lavashell_core::surface::SurfaceId;
+use sctk::reexports::client::globals::GlobalList;
+use sctk::reexports::client::protocol::wl_surface;
+use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop};
+use smithay_client_toolkit as sctk;
 
 /// Whether a layer has its Hyprland focus grab.
 enum GrabState {
