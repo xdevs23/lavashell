@@ -2,6 +2,7 @@
 use super::*;
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::keyboard::{Key, Shortcut};
+use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::{Cursor, View};
 use lavashell_platform::SurfaceEvent;
@@ -285,7 +286,7 @@ fn the_filter_receives_each_pressed_key_and_passes_on_what_it_returns() {
 #[test]
 fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_the_view()
 -> Result<(), crate::Error> {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let view = View::new(lavashell_test_fixtures::facts(), |_| {});
     let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE)?;
     let moved = by(MOUSE, surface, InputEvent::Move(at(1, 1)));

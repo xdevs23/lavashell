@@ -154,8 +154,6 @@ struct Surface {
     /// The presentation feedback of each submitted frame, until the compositor reports whether the frame was presented
     /// or discarded.
     feedback: Vec<WpPresentationFeedback>,
-    /// The platform facts supplied by the app for the view, before the host replaced the facts known to the host.
-    supplied_facts: PlatformFacts,
     clock: FrameClock,
     telemetry: PresentationTracker,
     output: Option<OutputInfo>,
@@ -282,7 +280,6 @@ struct SurfaceProtocols {
 
 pub(super) struct Platform {
     focus_grabs: focus_grab::Capability,
-    view_configuration: preferences::ViewConfiguration,
     output_layers: Option<output_layers::Runtime>,
     accessibility_events: sctk::reexports::calloop::channel::Sender<crate::accessibility::Event>,
     session_lock: Option<session_lock::Runtime>,

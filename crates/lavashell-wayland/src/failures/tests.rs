@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::log_failures;
-use crate::preference_reader::NoText;
 use crate::test_error::TestError;
 use lavashell_core::prelude::*;
-use lavashell_test_fixtures::FrameFailure;
+use lavashell_test_fixtures::{FrameFailure, NoText};
 use log::SetLoggerError;
 use std::{cell::RefCell, sync::OnceLock};
 

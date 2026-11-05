@@ -2014,6 +2014,7 @@
       },
       {
         "dependencies": [
+          "icu_locale_core",
           "lavashell-core"
         ],
         "name": "lavashell-platform",
@@ -2040,6 +2041,7 @@
       },
       {
         "dependencies": [
+          "icu_locale_core",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-test-fixtures",

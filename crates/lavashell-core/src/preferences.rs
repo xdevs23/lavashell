@@ -6,6 +6,7 @@
 //! `View::provide_preferences`.
 
 use crate::local::Local;
+use crate::platform::ColorScheme;
 use crate::units::{Dp, Positive, Sp};
 use std::sync::Arc;
 
@@ -151,6 +152,27 @@ pub struct PreferenceValues {
     pub reduced_motion: bool,
     pub reduced_transparency: bool,
     pub contrast: ContrastPreference,
+}
+
+/// The appearance set in the host system.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Appearance {
+    pub reduced_motion: bool,
+    pub contrast: ContrastPreference,
+    /// `None` while the host system does not prefer a color scheme.
+    pub color_scheme: Option<ColorScheme>,
+}
+
+impl Appearance {
+    /// `system` with the reduced motion and the contrast of this appearance.
+    #[must_use]
+    pub fn applied_to(self, system: &PreferenceValues) -> PreferenceValues {
+        PreferenceValues {
+            reduced_motion: self.reduced_motion,
+            contrast: self.contrast,
+            ..system.clone()
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

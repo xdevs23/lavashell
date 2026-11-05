@@ -2748,6 +2748,7 @@ dependencies = [
 name = "lavashell-platform"
 version = "0.1.0"
 dependencies = [
+ "icu_locale_core",
  "lavashell-core",
 ]
 
@@ -2774,6 +2775,7 @@ dependencies = [
 name = "lavashell-runtime"
 version = "0.1.0"
 dependencies = [
+ "icu_locale_core",
  "lavashell-core",
  "lavashell-platform",
  "lavashell-test-fixtures",

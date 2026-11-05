@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The rules that every platform shares: the record of each surface with its view, size, density and lifecycle, the
 //! description of each window and its shape, the record of each output with the surfaces shown on it, the routing
-//! of pointer and keyboard input to the views, and when a run ends.
+//! of pointer and keyboard input to the views, the settings reported by the host and provided to every view, and when
+//! a run ends.
 #![forbid(unsafe_code)]
 
 mod error;
 mod input;
 mod lifecycle;
 mod output_records;
+#[cfg(test)]
+mod preference_reader;
 mod run_end;
+mod settings;
 mod shape;
 mod surface_records;
 #[cfg(test)]
-mod test_text;
+mod test_error;
 mod window;
 
 pub use error::Error;

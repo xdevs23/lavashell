@@ -1,25 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_text::NoText;
+use crate::test_error::{TestError, TestResult};
 use lavashell_core::prelude::Modifier;
-use lavashell_core::units::{DpExt, NumberError};
-use lavashell_core::view::FrameError;
+use lavashell_core::units::DpExt;
+use lavashell_test_fixtures::NoText;
 use std::collections::BTreeSet;
 use std::rc::Rc;
-
-#[derive(Debug, thiserror::Error)]
-enum TestError {
-    #[error("the runtime failed")]
-    Runtime(#[from] Error),
-    #[error("a view could not frame")]
-    Frame(#[from] FrameError),
-    #[error("a number is not valid")]
-    Number(#[from] NumberError),
-    #[error("the surface is not open")]
-    NotOpen,
-}
-
-type TestResult = Result<(), TestError>;
 
 fn empty_view() -> View {
     View::new(lavashell_test_fixtures::facts(), |_| {})
@@ -62,7 +48,7 @@ fn configure(width: Option<Dp>) -> SurfaceEvent {
 
 #[test]
 fn ids_count_up_and_a_closed_id_is_not_reused() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let first = open(&mut records)?;
     close_and_retire(&mut records, first);
     let second = open(&mut records)?;
@@ -74,7 +60,7 @@ fn ids_count_up_and_a_closed_id_is_not_reused() -> TestResult {
 
 #[test]
 fn a_configure_sets_the_lengths_it_names_and_keeps_the_others() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open(&mut records)?;
     assert_eq!(records.handle(surface, configure(Some(200.dp()))), None);
     let expected = Viewport::new(Size::new(200.dp(), 50.dp()), Density::ONE);
@@ -84,7 +70,7 @@ fn a_configure_sets_the_lengths_it_names_and_keeps_the_others() -> TestResult {
 
 #[test]
 fn a_configure_configures_a_waiting_surface_and_invalidates_its_view() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open(&mut records)?;
     frame(&mut records, surface)?;
     assert!(!records.is_configured(surface));
@@ -96,7 +82,7 @@ fn a_configure_configures_a_waiting_surface_and_invalidates_its_view() -> TestRe
 
 #[test]
 fn a_density_change_sets_the_density_and_invalidates_the_view() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open(&mut records)?;
     frame(&mut records, surface)?;
     let density = Density::from_ratio(2.0, 1.0)?;
@@ -110,7 +96,7 @@ fn a_density_change_sets_the_density_and_invalidates_the_view() -> TestResult {
 
 #[test]
 fn a_close_asks_once_for_the_destruction_and_later_events_change_nothing() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open(&mut records)?;
     let requests = [
         records.handle(surface, SurfaceEvent::Closed),
@@ -127,7 +113,7 @@ fn a_close_asks_once_for_the_destruction_and_later_events_change_nothing() -> Te
 
 #[test]
 fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let held = Rc::new(10.dp());
     let captured = held.clone();
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -146,7 +132,7 @@ fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestR
 
 #[test]
 fn surfaces_opened_and_retired_many_times_free_their_records_and_get_new_ids() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let window = open(&mut records)?;
     let mut ids = BTreeSet::from([window]);
     for _ in 0..100 {
@@ -162,7 +148,7 @@ fn surfaces_opened_and_retired_many_times_free_their_records_and_get_new_ids() -
 
 #[test]
 fn a_late_event_for_a_retired_surface_changes_nothing() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let retired = open(&mut records)?;
     let other = open(&mut records)?;
     let viewport = records.open_viewport(other);
@@ -188,7 +174,7 @@ fn a_late_event_for_a_retired_surface_changes_nothing() -> TestResult {
 fn opening_fails_once_every_surface_id_is_used() {
     let mut records = SurfaceRecords {
         last_id: Some(u64::MAX - 1),
-        ..SurfaceRecords::default()
+        ..SurfaceRecords::new(PreferenceOverrides::default())
     };
     let last = records.open(empty_view(), Size::ZERO, Density::ONE);
     assert!(matches!(last, Ok(SurfaceId(u64::MAX))));
@@ -199,7 +185,7 @@ fn opening_fails_once_every_surface_id_is_used() {
 
 #[test]
 fn only_a_closing_surface_retires() -> TestResult {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open(&mut records)?;
     records.retire(surface);
     assert!(records.is_open(surface));
@@ -208,7 +194,7 @@ fn only_a_closing_surface_retires() -> TestResult {
 
 #[test]
 fn an_unknown_surface_has_no_record() {
-    let mut records = SurfaceRecords::default();
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     assert_eq!(records.handle(SurfaceId(3), SurfaceEvent::Closed), None);
     assert!(records.view_mut(SurfaceId(3)).is_none());
     assert!(!records.any_open());

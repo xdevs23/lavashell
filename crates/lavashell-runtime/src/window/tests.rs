@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_text::NoText;
 use lavashell_core::color::Gamut;
 use lavashell_core::output::{OutputProfile, Precision};
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::DpExt;
+use lavashell_test_fixtures::NoText;
 
 fn spacer_view() -> View {
     View::new(lavashell_test_fixtures::facts(), |ui| {

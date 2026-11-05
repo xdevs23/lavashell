@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Appearance;
 use futures_lite::StreamExt;
 use lavashell_core::platform::ColorScheme;
-use lavashell_core::preferences::ContrastPreference;
+use lavashell_core::preferences::{Appearance, ContrastPreference};
 use sctk::reexports::calloop::channel::Sender;
 use smithay_client_toolkit as sctk;
 use std::collections::HashMap;

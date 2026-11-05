@@ -11,8 +11,7 @@ use super::{
 use crate::Error;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
-use lavashell_core::preferences::PreferenceSource;
-use lavashell_platform::{Role as SurfaceRole, SurfaceSpec};
+use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 
 impl SurfaceProtocols {
@@ -95,16 +94,8 @@ impl Platform {
             })
             .transpose()?;
         let start = Instant::now();
-        let mut view_configuration = preferences::ViewConfiguration {
-            preferences: PreferenceSource::default(),
-            facts: preferences::HostFacts {
-                locales: preferences::user_languages(),
-                ..preferences::HostFacts::default()
-            },
-        };
-        view_configuration
-            .preferences
-            .set_overrides(preference_overrides);
+        let mut surface_records = SurfaceRecords::new(preference_overrides);
+        surface_records.change_settings(SettingsEvent::Locales(preferences::user_languages()));
         let seats = SeatState::new(globals, &qh);
         let connection_source = WaylandSource::new(connection.clone(), queue)
             .insert(loop_handle.clone())
@@ -114,13 +105,12 @@ impl Platform {
         preferences::install(&loop_handle, &mut sources)?;
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
-            view_configuration,
             accessibility_events,
             output_layers,
             session_lock,
             sources,
             readable_sources: Vec::new(),
-            surface_records: SurfaceRecords::default(),
+            surface_records,
             surface_requests: Vec::new(),
             surfaces: BTreeMap::new(),
             gpu,
