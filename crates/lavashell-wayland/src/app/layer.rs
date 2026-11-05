@@ -2,8 +2,8 @@
 use super::creation::NativeSpec;
 use super::{
     Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
-    State, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, physical_size, wl_output,
-    wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
+    State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, configure_event,
+    physical_size, wl_output, wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
 };
 use crate::Error;
 use crate::logical::{extent, whole};
@@ -237,6 +237,31 @@ impl Platform {
         }
         Ok(())
     }
+}
+
+impl Platform {
+    /// The surface event for a configure event of layer `id` with `width` and `height`, as [`configured_length`]
+    /// describes for each axis.
+    pub(super) fn layer_configure(&self, id: SurfaceId, width: u32, height: u32) -> SurfaceEvent {
+        let (requested_width, requested_height) =
+            match self.surfaces.get(&id).map(|surface| &surface.role) {
+                Some(Role::Layer(layer)) => (layer.applied.width, layer.applied.height),
+                _ => (0, 0),
+            };
+        configure_event(
+            configured_length(width, requested_width),
+            configured_length(height, requested_height),
+        )
+    }
+}
+
+/// The length of one axis in a configure event of a layer that last requested `requested` along it. The compositor
+/// sends zero for an axis that it leaves to the layer, which then takes the requested length. A requested zero is an
+/// axis that fills, so both zeros leave the length unknown.
+fn configured_length(configured: u32, requested: u32) -> Option<u32> {
+    [configured, requested]
+        .into_iter()
+        .find(|&length| length != 0)
 }
 
 /// The size proposal for measuring the content of a layer with `layout`. An axis with a fixed length

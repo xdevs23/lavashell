@@ -122,8 +122,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
                 height,
             } => {
                 layer.ack_configure(serial);
-                let leave_to_surface = |length| (length != 0).then_some(length);
-                let event = configure_event(leave_to_surface(width), leave_to_surface(height));
+                let event = state.layer_configure(*id, width, height);
                 state.surface_event(*id, event);
             }
             zwlr_layer_surface_v1::Event::Closed => state.surface_event(*id, SurfaceEvent::Closed),
