@@ -16,15 +16,18 @@ impl<T: TextMeasurer> Measuring<'_, T> {
     ) -> Size {
         let children = self.nodes[index].children.clone();
         let gap = self.nodes[index].gap;
-        let vertical = arrangement == Arrangement::Along(Axis::Vertical);
         let overlay = arrangement == Arrangement::Overlay;
+        let main_axis = match arrangement {
+            Arrangement::Along(axis) => axis,
+            Arrangement::Overlay => Axis::Horizontal,
+        };
         let scroll_axis = self.nodes[index].scroll_axis();
         let mut sizes = vec![Size::ZERO; children.len()];
         let mut in_flow: Vec<_> = children
             .iter()
             .map(|child| matches!(self.nodes[*child].flow, Flow::In(_)))
             .collect();
-        let main = if vertical { c.height } else { c.width };
+        let main = main_axis.span(c);
         let mut loose = Constraints {
             width: c.width.loosened(),
             height: c.height.loosened(),
@@ -34,14 +37,13 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         }
         let bounded = main.bound().is_some();
         let weighted = self.measure_without_shares(index, bounded, loose, &mut sizes, &mut in_flow);
-        let length = |size: Size| if vertical { size.height } else { size.width };
         let flow_count = in_flow.iter().filter(|flow| **flow).count();
         let gaps: Dp = std::iter::repeat_n(gap, flow_count.saturating_sub(1)).sum();
         let shares = |p: usize| weighted.members.iter().any(|(position, ..)| *position == p);
         let fixed = (0..children.len())
             .filter(|&p| !overlay && in_flow[p] && !shares(p))
-            .fold(gaps, |sum, p| sum + length(sizes[p]));
-        let needed = self.measure_shares(&weighted, &mut sizes, c, fixed, vertical);
+            .fold(gaps, |sum, p| sum + main_axis.length(sizes[p]));
+        let needed = self.measure_shares(&weighted, &mut sizes, c, fixed, main_axis);
         let flowing = || {
             sizes
                 .iter()
@@ -50,16 +52,14 @@ impl<T: TextMeasurer> Measuring<'_, T> {
         };
         let stacked = match needed {
             Some(needed) if main.allows_more() => fixed + needed,
-            _ => flowing().map(length).sum::<Dp>() + gaps,
+            _ => flowing().map(|size| main_axis.length(size)).sum::<Dp>() + gaps,
         };
         let widest = flowing().map(|s| s.width).fold(Dp::ZERO, Dp::max);
         let tallest = flowing().map(|s| s.height).fold(Dp::ZERO, Dp::max);
         let content = if overlay {
             Size::new(widest, tallest)
-        } else if vertical {
-            Size::new(widest, stacked)
         } else {
-            Size::new(stacked, tallest)
+            main_axis.with_length(Size::new(widest, tallest), stacked)
         };
         self.layout[index].content = content;
         let extent = scroll_axis.map_or(content, |axis| {

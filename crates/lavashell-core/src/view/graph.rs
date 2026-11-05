@@ -19,6 +19,10 @@ pub(super) struct Graph {
     /// The nodes on the way from a node that reads the size of another node up to the container of
     /// both, and from that container down to the other node.
     crossed: BTreeSet<usize>,
+    /// The nodes that are or contain one node of a read of a size whose other node is inside their parent.
+    reads_within_parent: BTreeSet<usize>,
+    /// The nodes whose sizes are read and the nodes around them.
+    read_sources: BTreeSet<usize>,
     /// For each node whose natural width a size or a condition reads, the reads that the probe of that width makes
     /// from inside the node to the nodes outside it.
     probes: BTreeMap<usize, Vec<Edge>>,
@@ -94,6 +98,16 @@ impl Graph {
     /// of its constraints alone.
     pub fn is_crossed(&self, node: usize) -> bool {
         self.crossed.contains(&node)
+    }
+
+    /// Whether `node` is or contains one node of a read of a size whose other node is inside the parent of `node`.
+    pub fn has_read_within_parent(&self, node: usize) -> bool {
+        self.reads_within_parent.contains(&node)
+    }
+
+    /// Whether the size of `node` or of a node inside it is read.
+    pub fn holds_read_source(&self, node: usize) -> bool {
+        self.read_sources.contains(&node)
     }
 
     /// The nodes outside `subtree` whose values are read by nodes inside `subtree`, each with the part read.
@@ -189,7 +203,7 @@ impl Graph {
     }
 
     /// Moves the read of a size `edge` up to the nearest container of both nodes, adds the nodes on the way to
-    /// `crossed`, and returns the container.
+    /// `crossed`, records the nodes that the read connects, and returns the container.
     fn lift(
         &mut self,
         nodes: &[Node],
@@ -227,6 +241,10 @@ impl Graph {
         };
         self.crossed.extend(path(edge.source, &source));
         self.crossed.extend(path(edge.reader, &reader));
+        self.reads_within_parent
+            .extend([child_at(from), child_at(to)]);
+        self.reads_within_parent.extend(parents.ancestry(from.node));
+        self.read_sources.extend(parents.ancestry(edge.source));
         self.sizes.push(edge);
         let lifted = Lifted {
             from: from.position,

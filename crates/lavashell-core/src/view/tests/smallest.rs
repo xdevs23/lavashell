@@ -270,12 +270,12 @@ fn text_on_one_line_is_as_wide_as_an_ellipsis() {
     assert_eq!(Wrapping.min_width("", &style), Dp::ZERO);
 }
 
-/// Measures like [`Words`] and counts the calls of `measure` in its field.
-struct Counting(usize);
+/// Measures like [`Words`] and records the text and the width of each call of `measure`.
+struct Recording(Vec<(String, Dp)>);
 
-impl TextMeasurer for Counting {
+impl TextMeasurer for Recording {
     fn measure(&mut self, text: &str, style: &TextStyle<Dp>, max_width: Dp) -> Size {
-        self.0 += 1;
+        self.0.push((text.to_owned(), max_width));
         Words.measure(text, style, max_width)
     }
 
@@ -284,42 +284,103 @@ impl TextMeasurer for Counting {
     }
 }
 
-fn nested(ui: &mut Ui, depth: usize) {
+/// Lays out content along an axis in a stack that takes a share of the stack around it.
+type Stack = fn(&mut Ui, Axis, &dyn Fn(&mut Ui));
+
+/// Nested stacks built by `stack` that alternate between rows and columns. Each stack has a text of its own, as long as
+/// "Display brightness", and the innermost text has the modifier `innermost`.
+pub(super) fn nested(ui: &mut Ui, depth: usize, stack: Stack, innermost: &Modifier) {
     let axis = if depth.is_multiple_of(2) {
         Axis::Horizontal
     } else {
         Axis::Vertical
     };
-    ui.layout(axis, Modifier::new().weight(1.0), |ui| {
-        ui.text("Display brightness", Modifier::new());
+    stack(ui, axis, &|ui| {
+        let text = format!("Display bright{depth:04}");
         if depth > 0 {
-            nested(ui, depth - 1);
+            ui.text(text, Modifier::new());
+            nested(ui, depth - 1, stack, innermost);
+        } else {
+            ui.text(text, innermost.clone());
         }
     });
 }
 
-fn measurements(depth: usize) -> Result<usize, TestError> {
-    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
-        nested(ui, depth);
+pub(super) fn weighted(ui: &mut Ui, axis: Axis, content: &dyn Fn(&mut Ui)) {
+    ui.layout(axis, Modifier::new().weight(1.0), content);
+}
+
+fn weighted_up_to(ui: &mut Ui, axis: Axis, content: &dyn Fn(&mut Ui)) {
+    ui.layout(axis, Modifier::new().weight_up_to(1.0), content);
+}
+
+fn filling(ui: &mut Ui, axis: Axis, content: &dyn Fn(&mut Ui)) {
+    let fill = match axis {
+        Axis::Horizontal => Modifier::new().fill_max_height(),
+        Axis::Vertical => Modifier::new().fill_max_width(),
+    };
+    ui.layout(axis, fill, content);
+}
+
+/// An overlay that takes the share only because the stack inside it fills the share.
+fn overlaid(ui: &mut Ui, axis: Axis, content: &dyn Fn(&mut Ui)) {
+    ui.layout(Arrangement::Overlay, Modifier::new(), |ui| {
+        filling(ui, axis, content);
     });
+}
+
+/// Probes the view composed by `compose` within `proposal`. Returns the size and the text and the width of each text
+/// measurement.
+pub(super) fn probe_recording(
+    compose: impl FnMut(&mut Ui) + 'static,
+    proposal: Proposal,
+) -> Result<(Size, Vec<(String, Dp)>), TestError> {
+    let mut view = View::new(crate::platform::fixture::facts(), compose);
     (view.frame_into(WINDOW, &mut Words, &mut SceneBuilder::default())).without_failures()?;
-    let mut counting = Counting(0);
-    let _probed_for_the_count = view.size_that_fits(
-        Proposal {
-            width: Some(0.dp()),
-            height: Some(0.dp()),
-        },
-        &mut counting,
-    );
-    Ok(counting.0)
+    let mut recording = Recording(Vec::new());
+    let size = view.size_that_fits(proposal, &mut recording)?;
+    Ok((size, recording.0))
 }
 
 #[test]
-fn a_probe_measures_the_texts_of_nested_weighted_stacks_at_most_their_count_squared_times()
--> TestResult {
-    for depth in 0..=12 {
-        let texts = depth + 1;
-        assert!(measurements(depth)? <= texts * texts, "{depth}");
+fn a_probe_measures_each_text_of_nested_stacks_that_take_a_share_once_per_width() -> TestResult {
+    let smallest = Proposal {
+        width: Some(0.dp()),
+        height: Some(0.dp()),
+    };
+    for stack in [weighted, weighted_up_to, filling, overlaid] {
+        for depth in 0..=12 {
+            let compose = move |ui: &mut Ui| nested(ui, depth, stack, &Modifier::new());
+            let (size, measured) = probe_recording(compose, smallest)?;
+            for (index, measurement) in measured.iter().enumerate() {
+                assert!(!measured[..index].contains(measurement), "{measurement:?}");
+            }
+            // Each row adds the smallest width of its text, and each column is as wide as its widest child.
+            assert_eq!(size.width, repeated(100.dp(), depth / 2 + 1), "{depth}");
+        }
+        for (depth, size) in [
+            (4, Size::new(300.dp(), 380.dp())),
+            (5, Size::new(300.dp(), 420.dp())),
+        ] {
+            let compose = move |ui: &mut Ui| nested(ui, depth, stack, &Modifier::new());
+            assert_eq!(probe(compose, smallest)?, size);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_probe_measures_each_text_of_nested_stacks_that_fill_a_share_at_most_twice() -> TestResult {
+    let smallest = Proposal {
+        width: Some(0.dp()),
+        height: Some(0.dp()),
+    };
+    for stack in [weighted, filling, overlaid] {
+        for depth in 0..=12 {
+            let compose = move |ui: &mut Ui| nested(ui, depth, stack, &Modifier::new());
+            let (_, measured) = probe_recording(compose, smallest)?;
+            assert!(measured.len() <= 2 * (depth + 1), "{depth}");
+        }
     }
     Ok(())
 }

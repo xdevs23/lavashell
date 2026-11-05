@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::smallest::{nested, probe_recording, weighted};
 use super::*;
 use crate::animation::{Animation, Easing, Tween};
 use std::time::Duration;
@@ -172,5 +173,97 @@ fn a_probe_measures_a_reader_again_under_equal_constraints_after_its_source_chan
         );
     })?;
     assert_eq!(size, Size::new(300.dp(), 100.dp()));
+    Ok(())
+}
+
+/// A row with a row and nested stacks, both with a weight. The second spacer of the inner row is as wide as the first
+/// spacer is tall, and the first spacer fills the height.
+fn reading_row(ui: &mut Ui) {
+    let source = NodeRef::new();
+    ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+        ui.layout(Axis::Horizontal, Modifier::new().weight(1.0), |ui| {
+            ui.spacer(
+                10.dp(),
+                10.dp(),
+                Modifier::new().node_ref(&source).fill_max_height(),
+            );
+            ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(source.height()));
+        });
+        nested(ui, 2, weighted, &Modifier::new());
+    });
+}
+
+#[test]
+fn a_probe_measures_the_width_alone_only_of_a_child_of_a_row_without_reads() -> TestResult {
+    let tall = Proposal {
+        width: Some(0.dp()),
+        height: Some(1000.dp()),
+    };
+    let texts = 3;
+    let (size, measured) = probe_recording(reading_row, tall)?;
+    assert_eq!(size, Size::new(2020.dp(), 1000.dp()));
+    assert!(measured.len() <= 2 * texts, "{measured:?}");
+    Ok(())
+}
+
+/// A row of a column and a spacer that is as wide as the first child of the column is tall. Each child of the column
+/// has a weight, and the second child needs the largest share.
+fn reading_column(ui: &mut Ui) {
+    let source = NodeRef::new();
+    ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+        ui.layout(Axis::Vertical, Modifier::new(), |ui| {
+            ui.spacer(
+                10.dp(),
+                10.dp(),
+                Modifier::new().node_ref(&source).weight(1.0),
+            );
+            ui.spacer(10.dp(), 90.dp(), Modifier::new().weight(1.0));
+            nested(ui, 1, weighted, &Modifier::new());
+        });
+        ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(source.height()));
+    });
+}
+
+#[test]
+fn a_probe_measures_again_only_the_child_of_a_column_whose_height_is_read() -> TestResult {
+    let height = Proposal {
+        width: None,
+        height: Some(0.dp()),
+    };
+    let texts = 2;
+    let (size, measured) = probe_recording(reading_column, height)?;
+    assert_eq!(size, Size::new(270.dp(), 270.dp()));
+    assert!(measured.len() <= 2 * texts, "{measured:?}");
+    Ok(())
+}
+
+/// A row of a column and a spacer that is as wide as the innermost text of the nested stacks in the column is tall.
+fn reading_through(ui: &mut Ui, depth: usize) {
+    let source = NodeRef::new();
+    ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
+        ui.layout(Axis::Vertical, Modifier::new(), |ui| {
+            nested(ui, depth, weighted, &Modifier::new().node_ref(&source));
+        });
+        ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(source.height()));
+    });
+}
+
+#[test]
+fn a_probe_measures_each_text_at_most_twice_with_a_read_across_nested_stacks() -> TestResult {
+    let narrow = Proposal {
+        width: Some(0.dp()),
+        height: None,
+    };
+    for depth in 0..=12 {
+        let (_, measured) = probe_recording(move |ui| reading_through(ui, depth), narrow)?;
+        assert!(measured.len() <= 2 * (depth + 1), "{depth}");
+    }
+    for (depth, size) in [
+        (4, Size::new(480.dp(), 380.dp())),
+        (5, Size::new(480.dp(), 420.dp())),
+    ] {
+        let (probed, _) = probe_recording(move |ui| reading_through(ui, depth), narrow)?;
+        assert_eq!(probed, size);
+    }
     Ok(())
 }
