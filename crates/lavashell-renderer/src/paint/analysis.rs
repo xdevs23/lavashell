@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::parent_copy;
 use crate::effect_registry::EffectRegistry;
 use lavashell_core::prelude::*;
-use lavashell_core::retained::Footprint;
+use lavashell_core::retained::{Extent, Footprint};
 use lavashell_core::scene::tree::{Packet, PacketGeneration};
 use lavashell_core::surface::SurfaceId;
 use std::collections::HashMap;
@@ -10,7 +11,9 @@ use std::rc::Rc;
 #[derive(Clone, Copy)]
 enum Scope {
     Save,
-    Opacity,
+    /// A layer that starts from a copy of the parent when a command inside reads the pixels below the layer.
+    Transparent,
+    /// A layer inside which a command reads only the layer.
     Isolated,
 }
 
@@ -18,7 +21,15 @@ impl Scope {
     fn of(command: &DrawCommand) -> Option<Self> {
         match command {
             DrawCommand::Save => Some(Self::Save),
-            DrawCommand::Opacity(_) | DrawCommand::OpacityLayer { .. } => Some(Self::Opacity),
+            DrawCommand::Opacity(_) | DrawCommand::OpacityLayer { .. } => Some(Self::Transparent),
+            DrawCommand::EffectLayer {
+                blend,
+                blur,
+                filter,
+                ..
+            } if parent_copy::restores_effect_layer(*blend, *blur, filter.as_ref()) => {
+                Some(Self::Transparent)
+            }
             DrawCommand::EffectLayer { .. } => Some(Self::Isolated),
             _ => None,
         }
@@ -59,8 +70,11 @@ fn paints_past_bounds(opener: &DrawCommand, inside: &[DrawCommand]) -> bool {
 
 /// Facts about the draw commands of one packet that painting the commands needs, found in one pass over them.
 pub(crate) struct Analysis {
-    /// For each command that opens an opacity layer, whether a command inside reads the pixels below it.
+    /// For each command that opens a transparent layer, whether a command inside reads the pixels below it.
     groups: Vec<bool>,
+    /// For each command that opens an effect layer that a command inside reads through, the layout bounds of the
+    /// layer joined with the area that the commands inside paint or read, in the coordinates of the layer.
+    areas: Vec<Option<Extent>>,
     /// For each command that opens a scope, whether a command inside the scope paints past the layout bounds of the
     /// scope.
     expanding: Vec<bool>,
@@ -93,8 +107,16 @@ impl Analysis {
         self.effects.is_some_and(|reads| reads.unknown)
     }
 
+    /// Whether a command inside the layer opened at `index` reads the pixels below the layer.
     pub fn reads_group(&self, index: usize) -> bool {
         self.groups.get(index).copied().unwrap_or(false)
+    }
+
+    /// The area that the effect layer opened at `index` covers when a command inside reads through it. None means the
+    /// whole clip, for a layer that paints past its layout bounds or a packet whose sampling is unknown.
+    pub fn layer_area(&self, index: usize) -> Option<Extent> {
+        (self.areas.get(index).copied().flatten())
+            .filter(|_| !self.expands_group(index) && !self.unknown_sampling())
     }
 
     /// Whether the scope opened by the command at `index` paints past its layout bounds. Layout bounds do not clip,
@@ -109,13 +131,27 @@ impl Analysis {
     }
 
     /// Marks `scope`, which ends before `commands[end]`, as expanding when a transform inside it moves the commands
-    /// past the layout bounds of the scope.
+    /// past the layout bounds of the scope, and records the area of an effect layer that a command inside reads
+    /// through.
     fn close(&mut self, commands: &[DrawCommand], scope: &OpenScope, end: usize) {
+        let (opener, inside) = (&commands[scope.opener], &commands[scope.opener + 1..end]);
         if scope.transformed
             && !self.expands_group(scope.opener)
-            && paints_past_bounds(&commands[scope.opener], &commands[scope.opener + 1..end])
+            && paints_past_bounds(opener, inside)
         {
             self.mark_expanding(scope.opener, commands.len());
+        }
+        if let (Scope::Transparent, DrawCommand::EffectLayer { bounds, .. }) = (scope.scope, opener)
+            && self.reads_group(scope.opener)
+        {
+            let footprint = Footprint::analyze(inside);
+            self.areas.resize(commands.len(), None);
+            self.areas[scope.opener] = Some(
+                [footprint.output, footprint.backdrop]
+                    .into_iter()
+                    .flatten()
+                    .fold(Extent::from(*bounds), Extent::union),
+            );
         }
     }
 }
@@ -173,6 +209,7 @@ impl Analyses {
 fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
     let mut analysis = Analysis {
         groups: Vec::new(),
+        areas: Vec::new(),
         expanding: Vec::new(),
         effects: None,
         layers: false,
@@ -224,7 +261,7 @@ fn inspect(commands: &[DrawCommand], registry: &EffectRegistry) -> Analysis {
             let mut isolated = false;
             for open in scopes.iter().rev() {
                 match open.scope {
-                    Scope::Opacity => {
+                    Scope::Transparent => {
                         analysis.groups.resize(commands.len(), false);
                         analysis.groups[open.opener] = true;
                     }

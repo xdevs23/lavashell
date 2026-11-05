@@ -308,6 +308,8 @@ pub enum DrawCommand {
         bounds: Rect,
     },
     Transform(Affine),
+    /// A backdrop inside the layer samples the scene under the layer when the layer blends source-over without a blur
+    /// or a filter. With another blend mode, a blur or a filter, the backdrop samples only the layer.
     EffectLayer {
         bounds: Rect,
         blend: BlendMode,

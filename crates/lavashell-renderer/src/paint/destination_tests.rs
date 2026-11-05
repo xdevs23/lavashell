@@ -284,12 +284,15 @@ fn assert_transformed_damage(in_packet: bool, scale: f64) -> Result<(), TestErro
     Ok(())
 }
 
+/// Over the opaque black surface, Screen paints what source-over paints.
+const ISOLATING_BLEND: BlendMode = BlendMode::Screen;
+
 fn isolate(mut commands: Vec<DrawCommand>, viewport: Rect) -> Vec<DrawCommand> {
     commands.insert(
         0,
         DrawCommand::EffectLayer {
             bounds: viewport,
-            blend: BlendMode::SourceOver,
+            blend: ISOLATING_BLEND,
             blur: NonNegativeDp::ZERO,
             filter: None,
         },
