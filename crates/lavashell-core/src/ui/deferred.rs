@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::animation::{Animatable, Animation, Bindable};
 use crate::geometry::{Axis, Rect, Size};
+use crate::rebuilt::BuiltLike;
 use crate::units::Dp;
 use laid_out::{Measured, Placed};
 use std::fmt;
@@ -50,6 +51,19 @@ impl<T: Clone, R: Reach> Clone for Deferred<T, R> {
             Source::Constant(value) => Source::Constant(value.clone()),
             Source::Computed(computed) => Source::Computed(computed.clone()),
         })
+    }
+}
+
+impl<T: PartialEq, R: Reach> BuiltLike for Deferred<T, R> {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        match (&self.0, &earlier.0) {
+            (Source::Constant(value), Source::Constant(earlier)) => value == earlier,
+            (Source::Computed(computed), Source::Computed(earlier)) => {
+                computed.is_built_like(earlier)
+            }
+            (Source::Constant(_), Source::Computed(_))
+            | (Source::Computed(_), Source::Constant(_)) => false,
+        }
     }
 }
 

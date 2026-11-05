@@ -168,8 +168,6 @@ pub(crate) struct LocalScope {
 struct ProvidedValue {
     key: KeyId,
     value: Box<dyn Any>,
-    /// The number of values provided around this one, itself included.
-    depth: usize,
     outer: Option<Rc<ProvidedValue>>,
 }
 
@@ -185,7 +183,6 @@ impl LocalScope {
         let provided = ProvidedValue {
             key,
             value: Box::new(value),
-            depth: self.depth() + 1,
             outer: self.provided.clone(),
         };
         Self {
@@ -200,10 +197,6 @@ impl LocalScope {
         })
         .find(|provided| provided.key == key)
     }
-
-    fn depth(&self) -> usize {
-        self.provided.as_ref().map_or(0, |provided| provided.depth)
-    }
 }
 
 /// Reads the values for one composition. Each key is resolved once, and again after a wrapper
@@ -211,35 +204,13 @@ impl LocalScope {
 pub(crate) struct LocalReader {
     scope: LocalScope,
     resolved: RefCell<BTreeMap<KeyId, Box<dyn Any>>>,
-    log: Option<ComponentLog>,
-}
-
-/// The values that a scoped component reads from outside itself: the values provided around the place where the
-/// component was created, and root values. A value provided inside the component is set by the composition of the
-/// component itself, so the log skips it.
-struct ComponentLog {
-    depth: usize,
-    reads: RefCell<ReadLog>,
 }
 
 impl LocalReader {
-    /// A reader for the root composition, which logs nothing.
-    pub(crate) fn root(scope: LocalScope) -> Self {
+    pub(crate) fn new(scope: LocalScope) -> Self {
         Self {
             scope,
             resolved: RefCell::default(),
-            log: None,
-        }
-    }
-
-    pub(crate) fn for_component(scope: LocalScope) -> Self {
-        let log = ComponentLog {
-            depth: scope.depth(),
-            reads: RefCell::default(),
-        };
-        Self {
-            log: Some(log),
-            ..Self::root(scope)
         }
     }
 
@@ -260,11 +231,6 @@ impl LocalReader {
         let nearest = self.scope.nearest(id);
         let provided = nearest.and_then(|provided| provided.value.downcast_ref::<T>());
         let value = provided.map_or_else(|| self.scope.root.value(key).get(), T::clone);
-        if let Some(log) = &self.log
-            && nearest.is_none_or(|provided| provided.depth <= log.depth)
-        {
-            log.reads.borrow_mut().record(id, &value);
-        }
         let _no_earlier_resolution = self
             .resolved
             .borrow_mut()
@@ -291,14 +257,6 @@ impl LocalReader {
             None => resolved.remove(&saved.key),
         };
     }
-
-    /// The values read by a scoped component from outside itself, or an empty log for the root composition.
-    pub(crate) fn take_reads(&self) -> ReadLog {
-        self.log
-            .as_ref()
-            .map(|log| log.reads.take())
-            .unwrap_or_default()
-    }
 }
 
 /// The scope and the resolved value of a key outside a wrapper, restored when the wrapper closes.
@@ -306,32 +264,4 @@ pub(crate) struct SavedScope {
     key: KeyId,
     scope: LocalScope,
     resolved: Option<Box<dyn Any>>,
-}
-
-/// The values read by a scoped component from the scope in which the component was created, one for each key.
-#[derive(Default, PartialEq)]
-pub(crate) struct ReadLog(BTreeMap<KeyId, Box<dyn ErasedValue>>);
-
-impl ReadLog {
-    /// Records the first value read for `key`.
-    fn record<T: Clone + PartialEq + 'static>(&mut self, key: KeyId, value: &T) {
-        let _logged_first_read = self.0.entry(key).or_insert_with(|| Box::new(value.clone()));
-    }
-}
-
-/// A value of any type that compares with another value of the same type.
-trait ErasedValue: Any {
-    fn equals(&self, other: &dyn Any) -> bool;
-}
-
-impl<T: PartialEq + 'static> ErasedValue for T {
-    fn equals(&self, other: &dyn Any) -> bool {
-        other.downcast_ref::<T>() == Some(self)
-    }
-}
-
-impl PartialEq for dyn ErasedValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.equals(other)
-    }
 }

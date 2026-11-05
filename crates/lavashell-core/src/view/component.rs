@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::parents::ROOT;
 use super::{BTreeMap, BTreeSet, Node, NodeId, Phase, View};
-use std::rc::Rc;
 
 /// Whether `refresh_components` composed any component again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,34 +45,51 @@ impl View {
         if replacements.is_empty() {
             return Refresh::Unchanged;
         }
+        self.drop_layout_retries(&stale);
+        // Removing an id from the retained layouts and paintings also drops those of every component around it.
+        stale.extend(self.ids_of_changed_nodes(&covered, &replacements));
+        stale.extend(self.ids_of_components_reading_values(&covered));
+        self.retained.remove(&stale);
         let mut nodes = Vec::with_capacity(self.nodes.len());
         append(&self.nodes, ROOT, &mut replacements, &mut nodes);
-        self.drop_layout_retries(&stale);
-        stale.extend(changed_readers(&nodes, &self.nodes));
-        self.retained.remove(&stale);
         self.replace_tree(nodes);
         Refresh::Recomposed
     }
-}
 
-/// The ids of the components in `nodes` that were created again inside a component composed again, and that read
-/// other values than the earlier instance with the same id in `old`. The retained paint and layout of a component
-/// created again are valid only while the new instance reads the same values as the earlier one.
-fn changed_readers(nodes: &[Node], old: &[Node]) -> Vec<NodeId> {
-    let previous: BTreeMap<_, _> = old
-        .iter()
-        .filter_map(|node| Some((node.id, node.component.as_ref()?)))
-        .collect();
-    nodes
-        .iter()
-        .filter(|node| {
-            let (Some(component), Some(before)) = (&node.component, previous.get(&node.id)) else {
-                return false;
-            };
-            !Rc::ptr_eq(component, before) && *component.reads.borrow() != *before.reads.borrow()
-        })
-        .map(|node| node.id)
-        .collect()
+    /// The ids of the nodes at `covered` that are gone from the trees in `replacements`, or that a tree there built
+    /// differently.
+    fn ids_of_changed_nodes(
+        &self,
+        covered: &BTreeSet<usize>,
+        replacements: &BTreeMap<usize, Vec<Node>>,
+    ) -> Vec<NodeId> {
+        let rebuilt: BTreeMap<_, _> = (replacements.values())
+            .flat_map(|tree| {
+                tree.iter()
+                    .map(move |node| (node.id, (node, tree.as_slice())))
+            })
+            .collect();
+        (covered.iter().map(|index| &self.nodes[*index]))
+            .filter(|&earlier| {
+                !rebuilt
+                    .get(&earlier.id)
+                    .is_some_and(|(node, tree)| node.is_built_like(tree, earlier, &self.nodes))
+            })
+            .map(|earlier| earlier.id)
+            .collect()
+    }
+
+    /// The ids of the components at `covered` whose last layout or paint read a value or is dirty. A component built
+    /// again has a new scope, which has not subscribed to those values.
+    fn ids_of_components_reading_values(&self, covered: &BTreeSet<usize>) -> Vec<NodeId> {
+        (covered.iter().map(|index| &self.nodes[*index]))
+            .filter(|earlier| {
+                (earlier.component.as_ref())
+                    .is_some_and(|component| !component.lays_out_and_paints_from_its_nodes())
+            })
+            .map(|earlier| earlier.id)
+            .collect()
+    }
 }
 
 pub(super) fn index_of(nodes: &[Node], id: NodeId) -> Option<usize> {

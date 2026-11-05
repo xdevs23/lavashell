@@ -171,8 +171,7 @@ fn a_scoped_component_reads_the_wrappers_around_it_when_it_composes_again_alone(
 }
 
 #[test]
-fn a_component_created_again_with_a_changed_value_repaints_while_others_keep_their_paint()
--> TestResult {
+fn a_component_created_again_with_a_new_drawing_paints_again() -> TestResult {
     let red = Color::oklch(0.6, 0.2, 30.0);
     let ink = State::new(Color::WHITE);
     let source = ink.clone();
@@ -207,7 +206,7 @@ fn a_component_created_again_with_a_changed_value_repaints_while_others_keep_the
     ink.set(red);
     scene.show(view.frame(WINDOW, &mut Metrics).without_failures()?)?;
     assert_eq!(fills(&scene), [red.into(), Brush::from(Color::TRANSPARENT)]);
-    assert_eq!(view.stats().reused_components, before.reused_components + 1);
+    assert_eq!(view.stats().reused_components, before.reused_components);
     Ok(())
 }
 

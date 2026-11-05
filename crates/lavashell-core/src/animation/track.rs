@@ -5,6 +5,7 @@ use super::{
     Trajectory, VectorSpace,
 };
 use crate::reactive::State;
+use crate::rebuilt::BuiltLike;
 use crate::units::Dp;
 use std::{
     cell::{Cell, RefCell, RefMut},
@@ -267,6 +268,12 @@ pub struct Animation<T: Animatable>(Rc<Inner<T>>);
 impl<T: Animatable> Clone for Animation<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<T: Animatable> BuiltLike for Animation<T> {
+    fn is_built_like(&self, earlier: &Self) -> bool {
+        self.0.is_built_like(&earlier.0)
     }
 }
 

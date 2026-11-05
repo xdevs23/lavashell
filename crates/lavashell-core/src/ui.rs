@@ -6,6 +6,7 @@ mod deferred;
 mod modifier;
 mod node;
 mod pointer;
+mod rebuilt;
 mod scrolling;
 mod settings;
 

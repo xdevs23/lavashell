@@ -322,7 +322,7 @@ impl View {
         self.layout_retries.clear();
         let handles = self.handles();
         let compose = &mut self.compose;
-        let locals = LocalReader::root(LocalScope::root(self.root_values.clone()));
+        let locals = LocalReader::new(LocalScope::root(self.root_values.clone()));
         let mut ui = self.scope.track(Phase::Composition, || {
             let mut ui = Ui::composing(handles, locals);
             compose(&mut ui);

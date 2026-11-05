@@ -332,16 +332,12 @@ impl View {
         }
         if node.enabled && (node.handles_input() || node.modal) {
             let rect = self.layout[index].rect;
-            self.hits.push(Hit {
-                action: node.action.clone(),
-                activate: node.activate.clone(),
-                context: node.context.clone(),
-                pointer: node.pointer.clone(),
-                drag: node.drag.clone(),
-                transform: node.transform.clone(),
+            let mut hit = Hit {
                 group: self.moving.current,
                 ..Hit::new(node.id, node.focusable && !node.modal, rect, clips.to_vec())
-            });
+            };
+            hit.use_handlers_of(node);
+            self.hits.push(hit);
         }
     }
 

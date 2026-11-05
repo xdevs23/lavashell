@@ -31,7 +31,7 @@ pub enum BoundsMotion {
     Reflow,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transition {
     pub spec: MotionSpec,
     pub bounds: BoundsMotion,

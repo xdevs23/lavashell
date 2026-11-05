@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{ComposedShortcut, Modifier, Node, Ui, ViewHandles};
-use crate::local::ReadLog;
 use crate::local::{LocalReader, LocalScope};
 use crate::reactive::{Phase, Scope};
 use crate::view::NodeName;
@@ -15,7 +14,6 @@ pub(crate) struct Component {
     pub scope: Scope,
     compose: RefCell<Compose>,
     locals: LocalScope,
-    pub reads: RefCell<ReadLog>,
     pub shortcuts: RefCell<Vec<ComposedShortcut>>,
     composed: Cell<usize>,
 }
@@ -26,7 +24,7 @@ impl Component {
     /// by its composition changes.
     pub(crate) fn build(&self, node: &Node, handles: ViewHandles) -> Ui {
         self.scope.track(Phase::Composition, || {
-            let locals = LocalReader::for_component(self.locals.clone());
+            let locals = LocalReader::new(self.locals.clone());
             let mut ui = Ui::composing(handles, locals);
             ui.nodes.reserve(self.composed.get());
             ui.nodes[0].id = node.id;
@@ -34,9 +32,16 @@ impl Component {
             ui.record_failure(NodeName::of(node));
             self.composed.set(ui.nodes.len());
             *self.shortcuts.borrow_mut() = std::mem::take(&mut ui.shortcuts);
-            *self.reads.borrow_mut() = ui.locals.take_reads();
             ui
         })
+    }
+
+    /// Whether the layout and the paint of the component follow from its nodes alone: neither read a value, and
+    /// neither is dirty.
+    pub(crate) fn lays_out_and_paints_from_its_nodes(&self) -> bool {
+        [Phase::Layout, Phase::Paint]
+            .into_iter()
+            .all(|phase| !self.scope.has_read(phase) && !self.scope.dirty().contains(phase))
     }
 }
 
@@ -56,7 +61,6 @@ impl Ui {
             scope: Scope::default(),
             compose: RefCell::new(Box::new(compose)),
             locals: self.locals.scope().clone(),
-            reads: RefCell::default(),
             shortcuts: RefCell::default(),
             composed: Cell::new(0),
         });

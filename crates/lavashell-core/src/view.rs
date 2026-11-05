@@ -171,6 +171,15 @@ impl Hit {
         }
     }
 
+    fn use_handlers_of(&mut self, node: &Node) {
+        self.action.clone_from(&node.action);
+        self.activate.clone_from(&node.activate);
+        self.context.clone_from(&node.context);
+        self.pointer.clone_from(&node.pointer);
+        self.drag.clone_from(&node.drag);
+        self.transform.clone_from(&node.transform);
+    }
+
     fn contains(&self, p: Point, moving: &Moving) -> bool {
         self.rect.contains(moving.painted(self.group, p))
             && (self.clips.iter()).all(|clip| clip.shape.contains(moving.painted(clip.group, p)))

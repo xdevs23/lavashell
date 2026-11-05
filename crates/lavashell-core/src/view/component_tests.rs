@@ -20,6 +20,15 @@ impl TextMeasurer for Measure {
     }
 }
 
+fn fills(scene: &Scene) -> Vec<Brush> {
+    (scene.commands().into_iter())
+        .filter_map(|command| match command {
+            DrawCommand::Fill { brush, .. } => Some(brush),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn only_dirty_component_recomposes_and_other_packet_survives() -> TestResult {
     let value = State::new(0);
@@ -132,6 +141,144 @@ fn nested_layout_signal_bypasses_an_unchanged_outer_cache() -> TestResult {
     assert!(inner.dirty().contains(Phase::Layout));
     advance_with(&mut scene, &mut view, window, &mut Measure)?;
     assert!(!inner.dirty().contains(Phase::Layout));
+    Ok(())
+}
+
+#[test]
+fn a_nested_component_created_again_as_its_own_value_changes_paints_the_new_value() -> TestResult {
+    let gap = State::new(10.dp());
+    let ink = State::new(Color::WHITE);
+    let red = Color::oklch(0.6, 0.2, 30.0);
+    let (gap_read, ink_read) = (gap.clone(), ink.clone());
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let (gap_read, ink_read) = (gap_read.clone(), ink_read.clone());
+        ui.scoped("outer", Modifier::new(), move |ui| {
+            ui.spacer(gap_read.get(), 10.dp(), Modifier::new());
+            let ink_read = ink_read.clone();
+            ui.scoped("inner", Modifier::new(), move |ui| {
+                let (square, ink) = (Rect::new(0.dp(), 0.dp(), 10.dp(), 10.dp()), ink_read.get());
+                ui.canvas(square.size(), Modifier::new(), move |d| d.fill(square, ink));
+            });
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    let before = view.stats();
+    gap.set(20.dp());
+    ink.set(red);
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    assert_eq!(fills(&scene), [Brush::from(red)]);
+    assert_eq!(
+        view.stats().painted_components,
+        before.painted_components + 2
+    );
+    Ok(())
+}
+
+#[test]
+fn a_nested_component_created_again_paints_a_value_passed_by_the_parent() -> TestResult {
+    let ink = State::new(Color::WHITE);
+    let red = Color::oklch(0.6, 0.2, 30.0);
+    let ink_read = ink.clone();
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let ink_read = ink_read.clone();
+        ui.scoped("outer", Modifier::new(), move |ui| {
+            let ink = ink_read.get();
+            ui.scoped("inner", Modifier::new(), move |ui| {
+                let square = Rect::new(0.dp(), 0.dp(), 10.dp(), 10.dp());
+                ui.canvas(square.size(), Modifier::new(), move |d| d.fill(square, ink));
+            });
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    ink.set(red);
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    assert_eq!(fills(&scene), [Brush::from(red)]);
+    Ok(())
+}
+
+#[test]
+fn a_component_created_again_subscribes_to_the_values_read_while_painting() -> TestResult {
+    let gap = State::new(10.dp());
+    let ink = State::new(Color::WHITE);
+    let red = Color::oklch(0.6, 0.2, 30.0);
+    let (gap_read, ink_read) = (gap.clone(), ink.clone());
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let (gap_read, ink_read) = (gap_read.clone(), ink_read.clone());
+        ui.scoped("outer", Modifier::new(), move |ui| {
+            ui.spacer(gap_read.get(), 10.dp(), Modifier::new());
+            let ink_read = ink_read.clone();
+            ui.scoped("inner", Modifier::new(), move |ui| {
+                let square = Rect::new(0.dp(), 0.dp(), 10.dp(), 10.dp());
+                let ink_read = ink_read.clone();
+                ui.canvas(square.size(), Modifier::new(), move |d| {
+                    d.fill(square, ink_read.get());
+                });
+            });
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    gap.set(20.dp());
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    ink.set(red);
+    assert!(view.needs_frame());
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    assert_eq!(fills(&scene), [Brush::from(red)]);
+    Ok(())
+}
+
+#[test]
+fn a_component_built_again_with_equal_nodes_follows_the_animation_read_while_painting() -> TestResult
+{
+    let gap = State::new(10.dp());
+    let fade = Animation::new(1.0_f64)?;
+    let (gap_read, fading) = (gap.clone(), fade.clone());
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let (gap_read, fading) = (gap_read.clone(), fading.clone());
+        ui.scoped("outer", Modifier::new(), move |ui| {
+            ui.spacer(gap_read.get(), 10.dp(), Modifier::new());
+            let fading = fading.clone();
+            ui.scoped("inner", Modifier::new(), move |ui| {
+                let opacity = Modifier::new().animated_opacity(fading.clone());
+                ui.spacer(10.dp(), 10.dp(), opacity.background(Color::WHITE));
+            });
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    gap.set(20.dp());
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    fade.snap(0.5)?;
+    assert!(view.needs_frame());
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    let opacities: Vec<_> = scene.groups().iter().map(|group| group.opacity).collect();
+    assert!(opacities.contains(&0.5), "{opacities:?}");
+    Ok(())
+}
+
+#[test]
+fn a_nested_component_paints_text_selectable_as_set_by_the_parent() -> TestResult {
+    let selectable = State::new(false);
+    let read = selectable.clone();
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let read = read.clone();
+        ui.scoped("outer", Modifier::new(), move |ui| {
+            let selection = Modifier::new().user_select(read.get());
+            ui.layout(Axis::Vertical, selection, |ui| {
+                ui.scoped("inner", Modifier::new(), |ui| {
+                    ui.text("hi", Modifier::new());
+                });
+            });
+        });
+    });
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    let unselectable = view.hits.len();
+    selectable.set(true);
+    advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
+    assert_eq!(view.hits.len(), unselectable + 1);
     Ok(())
 }
 
