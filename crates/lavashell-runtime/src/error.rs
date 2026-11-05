@@ -6,6 +6,8 @@ use lavashell_core::units::NumberError;
 pub enum Error {
     #[error("every surface id is used")]
     NumberSurface,
+    #[error("a new watch has a number too large for a watch id")]
+    NumberWatch,
     #[error("the content of a surface could not be measured")]
     MeasureView(#[source] NumberError),
 }

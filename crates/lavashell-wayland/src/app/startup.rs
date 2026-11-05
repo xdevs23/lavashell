@@ -109,7 +109,7 @@ impl Platform {
             output_layers,
             session_lock,
             sources,
-            readable_sources: Vec::new(),
+            watches: BTreeMap::new(),
             surface_records,
             surface_requests: Vec::new(),
             surfaces: BTreeMap::new(),

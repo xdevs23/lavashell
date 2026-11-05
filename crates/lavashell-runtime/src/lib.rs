@@ -17,6 +17,7 @@ mod shape;
 mod surface_records;
 #[cfg(test)]
 mod test_error;
+mod view_actions;
 mod window;
 
 pub use error::Error;
@@ -25,4 +26,5 @@ pub use output_records::OutputRecords;
 pub use run_end::RunEnd;
 pub use shape::WindowShape;
 pub use surface_records::{SurfaceRecords, measure_content};
+pub use view_actions::{ActionBatch, ActionQueue, ViewActions};
 pub use window::{DragRegion, Window};

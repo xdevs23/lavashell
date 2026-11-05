@@ -58,7 +58,7 @@ impl Platform {
         source: TextSelectionSource,
         data: TransferData,
     ) {
-        let actions = self.config.view_actions.clone();
+        let actions = self.config.action_queue.view_actions();
         self.clipboard
             .queue
             .set_data(data, move |result| match result {

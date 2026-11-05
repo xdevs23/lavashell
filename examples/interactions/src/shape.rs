@@ -7,9 +7,11 @@ use crate::{
     ui,
 };
 use lavashell::core::numbers::{count_f64, whole_count};
+use lavashell::core::surface::SurfaceId;
 use lavashell::prelude::*;
-use lavashell_example_support::report;
+use lavashell_example_support::{report, report_failure};
 use rustix::process::{Pid, PidfdFlags, pidfd_open};
+use std::cell::RefCell;
 use std::f64::consts::{PI, TAU};
 use std::ffi::OsString;
 use std::os::fd::OwnedFd;
@@ -233,10 +235,7 @@ pub fn compose(ui: &mut Ui, demo: &Demo, actions: &ViewActions) {
                                 let outcome = child.borrow_mut().open();
                                 match outcome {
                                     Ok(Some(exited)) => {
-                                        let child = child.clone();
-                                        actions.dispatch_when_readable(exited, window, move |_| {
-                                            child.borrow_mut().reap();
-                                        });
+                                        watch_exit(&actions, window, exited, child.clone());
                                     }
                                     Ok(None) => {}
                                     Err(error) => report("shaped child", error),
@@ -260,6 +259,17 @@ pub fn compose(ui: &mut Ui, demo: &Demo, actions: &ViewActions) {
             },
         );
     });
+}
+
+fn watch_exit(
+    actions: &ViewActions,
+    window: SurfaceId,
+    exited: OwnedFd,
+    child: Rc<RefCell<ChildWindow>>,
+) {
+    let watched =
+        actions.dispatch_when_readable(exited, window, move |_| child.borrow_mut().reap());
+    report_failure("shaped child", watched);
 }
 
 pub fn child_compose(ui: &mut Ui, demo: &Demo, clipboard: &Clipboard, actions: &ViewActions) {
