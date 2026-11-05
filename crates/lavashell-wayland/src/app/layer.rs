@@ -324,16 +324,14 @@ fn zone_axis(layout: LayerLayout) -> Option<Axis> {
     }
 }
 
-/// The size of a layer before the first configure event arrives. An axis that fills starts at
-/// one logical pixel.
+/// The size of a layer before the first configure event arrives, computed from the current layout. An axis
+/// that fills starts at one logical pixel.
 pub(super) fn initial_size(
     options: &LayerSurface,
     context: LayerContext,
 ) -> Result<(u32, u32), Error> {
-    Ok((
-        protocol_extent(options.horizontal, context.content.width)?.max(1),
-        protocol_extent(options.vertical, context.content.height)?.max(1),
-    ))
+    let layout = ProtocolLayout::new(options.current_layout(), context)?;
+    Ok((layout.width.max(1), layout.height.max(1)))
 }
 
 /// The length that the layer-shell protocol expects along one axis. The protocol expects zero for an

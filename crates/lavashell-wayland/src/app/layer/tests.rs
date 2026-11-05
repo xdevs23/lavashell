@@ -156,6 +156,26 @@ fn a_layer_length_below_one_logical_pixel_is_sent_as_one_and_never_as_fill() -> 
 }
 
 #[test]
+fn the_initial_size_of_a_layer_follows_the_layout_state_over_the_static_placement()
+-> Result<(), TestError> {
+    let layout = LayerLayout {
+        horizontal: AxisPlacement::Start(Extent::dp(321.dp())?),
+        vertical: AxisPlacement::Start(Extent::dp(345.dp())?),
+        exclusive_zone: ExclusiveZone::IgnoreOthers,
+        margins: LayerMargins::default(),
+    };
+    let short = AxisPlacement::Start(Extent::dp(10.dp())?);
+    let options = LayerSurface::new("stateful")
+        .placement(AxisPlacement::Fill, short)
+        .layout_state(State::new(layout));
+    let size = initial_size(&options, UNMEASURED)?;
+    assert_eq!(size, (321, 345));
+    let protocol = ProtocolLayout::new(options.current_layout(), UNMEASURED)?;
+    assert_eq!(size, (protocol.width, protocol.height));
+    Ok(())
+}
+
+#[test]
 fn a_layer_length_that_is_not_finite_is_rejected() {
     assert_eq!(Extent::dp(Dp::new(f64::NAN)), Err(NumberError::NotFinite));
     assert_eq!(
