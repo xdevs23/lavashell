@@ -19,7 +19,7 @@ impl View {
             .hits
             .iter()
             .find(|hit| Some(hit.id) == self.focus && hit.input.is_some())
-            .and_then(|hit| hit.input)
+            .and_then(|hit| hit.input.map(|target| target.index))
         else {
             return false;
         };

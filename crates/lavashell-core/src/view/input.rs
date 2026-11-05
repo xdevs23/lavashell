@@ -92,7 +92,8 @@ impl View {
     pub(super) fn focused_text(&self) -> Option<FocusedText> {
         let index = (self.hits.iter())
             .filter(|hit| Some(hit.id) == self.focus)
-            .find_map(|hit| hit.input)?;
+            .find_map(|hit| hit.input)?
+            .index;
         let takes_line_breaks = match &self.nodes[index].kind {
             NodeKind::TextInput { content, .. } => content.lines() == Lines::Several,
             NodeKind::Text(..) => true,

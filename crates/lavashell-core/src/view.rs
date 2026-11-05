@@ -135,8 +135,8 @@ pub struct TouchSample {
     pub kind: PointerKind,
 }
 
-/// An area of a node that receives pointer input, with the handlers of that node. `rect` and `clips` are in the
-/// coordinates of the view as painted, inside the moving group `group`.
+/// An area of a node that receives pointer input, with the handlers of that node. `rect`, `clips` and the origin of
+/// `input` are in the coordinates of the view as painted, inside the moving group `group`.
 #[derive(Clone)]
 struct Hit {
     id: NodeId,
@@ -148,7 +148,7 @@ struct Hit {
     pointer: Option<PointerAction>,
     drag: Option<Draggable>,
     transform: Option<TransformHandler>,
-    input: Option<usize>,
+    input: Option<TextTarget>,
     activate: Option<ActivateAction>,
     context: Option<ActivateAction>,
 }
@@ -179,6 +179,31 @@ impl Hit {
     /// Whether a click or the keyboard activates the node of the hit.
     fn activates(&self) -> bool {
         self.action.is_some() || self.activate.is_some()
+    }
+}
+
+/// The node at `index` whose text a [`Hit`] edits or selects. `origin` is the point where that text starts. The
+/// position of a pointer in the text is measured from that point.
+#[derive(Clone, Copy)]
+struct TextTarget {
+    index: usize,
+    origin: Point,
+}
+
+impl TextTarget {
+    /// The node at `index`, with the text painted in `content`, in the coordinates of the view.
+    fn new(index: usize, content: Rect) -> Self {
+        Self {
+            index,
+            origin: Point::new(content.x, content.y),
+        }
+    }
+
+    fn mapped(self, transform: Transform) -> Self {
+        Self {
+            origin: transform.point(self.origin),
+            ..self
+        }
     }
 }
 

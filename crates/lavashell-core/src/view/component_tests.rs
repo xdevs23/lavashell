@@ -93,8 +93,8 @@ fn recycled_hit_input_indices_follow_stable_identity() -> TestResult {
     value.set(true);
     advance_with(&mut scene, &mut view, WINDOW, &mut Measure)?;
     for hit in &view.hits {
-        if let Some(index) = hit.input {
-            assert_eq!(view.nodes[index].id, hit.id);
+        if let Some(target) = hit.input {
+            assert_eq!(view.nodes[target.index].id, hit.id);
         }
     }
     Ok(())

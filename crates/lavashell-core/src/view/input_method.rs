@@ -129,8 +129,8 @@ impl View {
     pub(super) fn finish_text_action(&mut self, action: TextAction) {
         match action {
             TextAction::Next => self.cycle_focus(false, |view, hit| {
-                (hit.input).is_some_and(|index| {
-                    matches!(view.nodes[index].kind, NodeKind::TextInput { .. })
+                (hit.input).is_some_and(|target| {
+                    matches!(view.nodes[target.index].kind, NodeKind::TextInput { .. })
                 })
             }),
             TextAction::Done => {

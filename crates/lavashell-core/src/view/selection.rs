@@ -58,7 +58,7 @@ impl View {
     #[must_use]
     pub fn text_drop_target(&self, at: Point) -> Option<TextDropTarget> {
         let hit = self.hit_at(at)?;
-        let index = hit.input?;
+        let index = hit.input?.index;
         if !self.writable_text_target(index) {
             return None;
         }
@@ -291,8 +291,11 @@ impl View {
 
 /// The hit of the text field `id`, with the index of the node that receives the text input of that hit.
 fn input_hit(hits: &[Hit], id: NodeId) -> Option<(&Hit, usize)> {
-    hits.iter()
-        .find_map(|hit| hit.input.filter(|_| hit.id == id).map(|index| (hit, index)))
+    hits.iter().find_map(|hit| {
+        hit.input
+            .filter(|_| hit.id == id)
+            .map(|target| (hit, target.index))
+    })
 }
 
 impl View {
@@ -303,6 +306,7 @@ impl View {
         positions: &FieldGeometry,
         at: Point,
     ) -> Option<Point> {
+        let origin = hit.input?.origin;
         let at = self.moving.painted(hit.group, at);
         if positions.scale.x <= 0.0
             || positions.scale.y <= 0.0
@@ -312,8 +316,8 @@ impl View {
             return None;
         }
         Some(Point::new(
-            (at.x - hit.rect.x) / positions.scale.x + positions.scroll.x,
-            (at.y - hit.rect.y) / positions.scale.y + positions.scroll.y,
+            (at.x - origin.x) / positions.scale.x + positions.scroll.x,
+            (at.y - origin.y) / positions.scale.y + positions.scroll.y,
         ))
     }
 }

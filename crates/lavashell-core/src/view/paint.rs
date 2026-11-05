@@ -15,7 +15,7 @@ use super::parents::ROOT;
 use super::{
     Affine, BTreeMap, BTreeSet, Brush, Dp, DrawCommand, Drawing, FieldGeometry, Hit, HitClip,
     ModifierElement, NodeId, NodeKind, Point, Rect, Scale, Size, TextMeasurer, TextStyle,
-    Transform, View, accessibility, field, index_of,
+    TextTarget, Transform, View, accessibility, field, index_of,
 };
 use crate::animation::Animatable;
 use crate::shape::{Corners, Radius, RoundedRect, Shape};
@@ -161,7 +161,7 @@ impl View {
             laid_out: (inherited.laid_out)
                 .offset(painted.offset_at_rest.x, painted.offset_at_rest.y),
         };
-        self.paint_kind(index, rect, transform, inside, text);
+        self.paint_kind(index, decorated_surface, rect, transform, inside, text);
         if self.is_focused(id) && self.focus_shows_on(index) {
             self.paint_focus_ring(index, decorated_surface, interaction.as_ref());
         }

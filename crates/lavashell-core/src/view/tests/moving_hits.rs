@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::selection::Shaped;
+use super::selection::{Shaped, field_id, padded_field};
 use super::*;
 use crate::animation::{Easing, Tween};
 use crate::geometry::FinitePoint;
@@ -202,5 +202,64 @@ fn focus_on_a_row_scrolled_out_of_a_smooth_list_falls_back_to_the_list() -> Test
         advance(&mut scene, &mut view, WINDOW_SIZE, ms)?;
     }
     assert!(view.tagged_state("list")?.focus.focused);
+    Ok(())
+}
+
+#[test]
+fn a_tap_on_a_padded_field_in_a_reused_row_finds_the_text_where_it_is_shown() -> TestResult {
+    let scroll = ScrollState::new(Axis::Horizontal);
+    let row = scroll.clone();
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        ui.scroll(row.clone(), Modifier::new().size(200.dp(), 60.dp()), |ui| {
+            ui.spacer(150.dp(), 60.dp(), Modifier::new());
+            ui.scoped("row", Modifier::new(), |ui| {
+                padded_field(ui, Modifier::new())
+            });
+        });
+    });
+    let window = Viewport::new(WINDOW_SIZE, Density::ONE);
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
+    let reused = view.stats().reused_components;
+    scroll.jump_to(40.dp());
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
+    assert!(view.stats().reused_components > reused);
+    let id = field_id(&view)?;
+    tap_at(&mut view, Point::new(114.dp(), 26.dp()));
+    assert_eq!(view.focus(), Some(id));
+    assert_eq!(view.edits[&id].selection(), 0..0);
+    tap_at(&mut view, Point::new(137.dp(), 26.dp()));
+    assert_eq!(view.edits[&id].selection(), 1..1);
+    Ok(())
+}
+
+#[test]
+fn a_tap_on_a_field_that_follows_a_scroll_lands_where_the_field_is_shown() -> TestResult {
+    let scroll = ScrollState::new(Axis::Vertical);
+    let list = scroll.clone();
+    let mut scene = Scene::default();
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let list = list.clone();
+        ui.layout(Axis::Vertical, Modifier::new(), move |ui| {
+            ui.scroll(
+                list.clone(),
+                Modifier::new().size(100.dp(), 100.dp()),
+                |ui| {
+                    ui.spacer(100.dp(), 200.dp(), Modifier::new());
+                },
+            );
+            padded_field(ui, Modifier::new().follow_scroll(list, 50.dp()));
+        });
+    });
+    let window = Viewport::new(WINDOW_SIZE, Density::ONE);
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
+    scroll.jump_to(100.dp());
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
+    let id = field_id(&view)?;
+    tap_at(&mut view, Point::new(60.dp(), 126.dp()));
+    assert_eq!(view.focus(), None);
+    tap_at(&mut view, Point::new(4.dp(), 176.dp()));
+    assert_eq!(view.focus(), Some(id));
+    assert_eq!(view.edits[&id].selection(), 0..0);
     Ok(())
 }
