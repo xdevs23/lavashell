@@ -2,14 +2,13 @@
 use crate::clipboard::{Clipboard, ClipboardState};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::SceneBuilder;
-use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceTarget, VulkanRenderer};
 use lavashell_runtime::{
-    ActionQueue, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd, SurfaceRecords,
-    Window,
+    ActionQueue, Choreographers, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd,
+    SceneSink, SurfaceRecords, Window,
 };
 use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
 use sctk::output::{OutputHandler, OutputState};
@@ -52,6 +51,7 @@ use sctk::shell::xdg::{
 use sctk::shm::{Shm, ShmHandler};
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
+use std::convert::Infallible;
 use std::time::{Duration, Instant};
 
 use crate::surface::{LayerLevel, LayerSurface};
@@ -179,34 +179,43 @@ impl Surface {
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to send the next frame of `view` to the scene builder, and logs each component that failed in it
-    /// as an error. When a change does not fit the scene, the builder restarts and the view sends the whole scene with
-    /// the next frame. If the builder had a scene before, the failure is logged and the frame ends without error. If
-    /// the builder was empty, the failure ends the frame with an error.
+    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, builds the frames merged
+    /// there into the scene builder, and logs each component that failed in the frame as an error. When a change does
+    /// not fit the scene, the view sends the whole scene with the next frame. The builder restarts with that frame.
+    /// If the builder had a scene before, the failure is logged and the frame ends without error. If the builder was
+    /// empty, the failure ends the frame with an error.
     fn show(
         &mut self,
+        id: SurfaceId,
         view: &mut View,
-        frame: impl FnOnce(&mut View, &mut SceneBuilder) -> Result<Failures, FrameError>,
+        choreographers: &mut Choreographers,
+        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
     ) -> Result<(), crate::Error> {
         let showed_nothing = self.builder.is_empty();
-        match frame(view, &mut self.builder) {
+        let error = match frame(view, choreographers.sink(id)) {
             Ok(failures) => {
                 crate::failures::log_failures(failures);
-                Ok(())
+                let Err(error) = choreographers.build(id, &mut self.builder) else {
+                    return Ok(());
+                };
+                view.invalidate();
+                crate::Error::BuildScene(error)
             }
-            Err(FrameError::Mirror(error) | FrameError::Sink(error)) if !showed_nothing => {
-                self.repaint_after_builder_restart(error);
-                Ok(())
-            }
-            Err(error) => Err(crate::Error::ShowScene(error)),
+            Err(error) => crate::Error::ShowScene(error),
+        };
+        if showed_nothing {
+            return Err(error);
         }
+        self.repaint_after_builder_restart(&error);
+        Ok(())
     }
 
     /// Invalidates the damage tracker after a change did not fit the scene, so the next presentation paints the whole
-    /// surface. The builder has restarted by then.
-    fn repaint_after_builder_restart(&mut self, error: ApplyError) {
+    /// surface. The builder restarts with the next frame.
+    fn repaint_after_builder_restart(&mut self, error: &crate::Error) {
         log::warn!(
-            "a change did not fit the scene, so the surface shows the whole scene next: {error}"
+            "the surface shows the whole scene next: {}",
+            lavashell_core::error::message_chain(error)
         );
         self.damage.invalidate();
     }
@@ -292,6 +301,7 @@ pub(super) struct Platform {
     surface_records: SurfaceRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
+    choreographers: Choreographers,
     paint: Painter,
     surfaces: BTreeMap<SurfaceId, Surface>,
     scene: Option<scene::SceneRuntime>,
@@ -353,6 +363,7 @@ impl Platform {
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
                     drop(self.surfaces.remove(&id));
+                    self.choreographers.retire(id);
                     self.surface_records.retire(id);
                     self.config.action_queue.forget_surface(id);
                 }

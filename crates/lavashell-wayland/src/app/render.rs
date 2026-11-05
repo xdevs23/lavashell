@@ -3,8 +3,8 @@ use super::scene::SceneRuntime;
 use super::shape::{ShapeUpdate, SurfaceShape};
 use super::{
     Density, Dp, Duration, FrameCallbackData, FrameOutcome, FrameReport, FrameStage, FrameTime,
-    Instant, Platform, Rect, Role, SceneBuilder, Size, SurfaceId, View, Viewport, layer,
-    open_surface, physical_size, presentation, sctk,
+    Instant, Platform, Rect, Role, SceneSink, Size, SurfaceId, View, Viewport, layer, open_surface,
+    physical_size, presentation, sctk,
 };
 use crate::Error;
 use lavashell_core::frame::Submission;
@@ -167,15 +167,15 @@ impl Platform {
         }
         let mut changed = false;
         if wanted == Wanted::View {
-            let mut frame = |view: &mut View, builder: &mut SceneBuilder| {
-                view.frame_into_at(viewport, self.paint.shaper(), start.timing, builder)
+            let mut frame = |view: &mut View, sink: &mut SceneSink| {
+                view.frame_into_at(viewport, self.paint.shaper(), start.timing, sink)
             };
             changed = view.needs_visual_frame();
-            surface.show(view, &mut frame)?;
+            surface.show(id, view, &mut self.choreographers, &mut frame)?;
             actions.run(id, view);
             if view.needs_visual_frame() {
                 changed = true;
-                surface.show(view, &mut frame)?;
+                surface.show(id, view, &mut self.choreographers, &mut frame)?;
             }
         }
         // The composed view can change the size of a layer that fits its content, or the layer layout can

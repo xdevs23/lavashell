@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{InputEvent, LoopHandle, Platform, SceneBuilder, View, open_surface, sctk};
+use super::{InputEvent, LoopHandle, Platform, SceneSink, View, open_surface, sctk};
 use crate::Error;
 use crate::accessibility::Event;
 use lavashell_core::accessibility::ActionOutcome;
@@ -50,12 +50,12 @@ impl Platform {
             // The first frame after the compositor configures the surface publishes the complete initial tree.
             return;
         }
-        let mut frame = |view: &mut View, builder: &mut SceneBuilder| {
-            view.frame_into(viewport, self.paint.shaper(), builder)
+        let mut frame = |view: &mut View, sink: &mut SceneSink| {
+            view.frame_into(viewport, self.paint.shaper(), sink)
         };
         let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
         if shown {
-            if let Err(error) = surface.show(view, &mut frame) {
+            if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame) {
                 log::error!("{error}");
             }
             view.invalidate();
@@ -73,7 +73,8 @@ impl Platform {
                     // Show the frame now, even while a frame callback of the compositor is pending, so that the changed
                     // semantics are published at once. Showing a frame updates only the scene tree. It acquires no
                     // swapchain image and does not wait for the scene queue.
-                    if let Err(error) = surface.show(view, &mut frame) {
+                    if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame)
+                    {
                         log::error!("{error}");
                     }
                     view.invalidate();

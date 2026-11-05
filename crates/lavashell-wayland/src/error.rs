@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::Size;
+use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
@@ -13,6 +14,7 @@ use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
 use std::collections::TryReserveError;
+use std::convert::Infallible;
 use std::io;
 use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
@@ -109,7 +111,9 @@ pub enum Error {
     #[error("the input region of a window shape could not be computed")]
     ShapeInput(#[source] InputSizeError),
     #[error("a surface could not show a frame of its view")]
-    ShowScene(#[source] FrameError),
+    ShowScene(#[source] FrameError<Infallible>),
+    #[error("the merged frames of a view do not fit the scene in the builder")]
+    BuildScene(#[source] ApplyError),
     #[error("a frame could not be drawn")]
     Draw(#[source] RendererError),
     #[error("the contents of a drawn surface could not be checked")]

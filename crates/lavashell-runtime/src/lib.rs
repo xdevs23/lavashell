@@ -5,6 +5,7 @@
 //! a run ends.
 #![forbid(unsafe_code)]
 
+mod choreographers;
 mod error;
 mod input;
 mod lifecycle;
@@ -12,6 +13,7 @@ mod output_records;
 #[cfg(test)]
 mod preference_reader;
 mod run_end;
+mod scene_item;
 mod settings;
 mod shape;
 mod surface_records;
@@ -20,6 +22,7 @@ mod test_error;
 mod view_actions;
 mod window;
 
+pub use choreographers::{Choreographers, SceneSink};
 pub use error::Error;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;

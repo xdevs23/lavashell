@@ -2267,6 +2267,7 @@
       {
         "dependencies": [
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-test-fixtures",
