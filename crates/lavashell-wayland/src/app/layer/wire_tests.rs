@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
-use focus_wire::{LAYER, Wire};
+use focus_wire::Wire;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{ContentSize, Extent, LayerLayout, LayerMargins};
 use lavashell_core::units::DpExt;
@@ -150,14 +150,14 @@ fn private_wire_resizes_and_reserves_a_layer_again_for_a_new_content_height()
 -> Result<(), TestError> {
     let mut wire = Wire::new(4)?;
     let options = LayerSurface::new("content");
-    let mut layer = wire.layer(&options)?;
+    let layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(wire.commit(&mut layer)?.is_empty());
+    assert!(wire.commit(&layer)?.is_empty());
     let content = ContentSize::try_from(Size::new(500.dp(), 40.dp()))?;
     let geometry = PanelGeometry::of(options.panel.current_layout(), content);
     let role = layer.proxy.id().protocol_id();
     for sent in [vec![(0, vec![0, 40]), (2, vec![40])], Vec::new()] {
-        layer.execute(&wire.surface, PanelRequest::Update(LAYER, geometry))?;
+        wire.send_geometry(geometry)?;
         wire.connection.flush().map_err(Error::Flush)?;
         assert_eq!(requests(&mut wire.peer, role)?, sent);
     }

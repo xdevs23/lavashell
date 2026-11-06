@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{Platform, Role, open_surface};
+use super::shape::ShapeGeometry;
+use super::{Platform, Role, open_surface, send_surface_state};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
@@ -8,7 +8,6 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
 use lavashell_runtime::{ActionBatch, PanelContent, SceneSink};
-use smithay_client_toolkit as sctk;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
@@ -113,8 +112,8 @@ impl Platform {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `id` with its queued actions, and updates the role, the
-    /// shape and the blur region of the surface for the frame.
+    /// Composes the view of surface `id` with its queued actions, sends the state of the surface for the frame with
+    /// it, and builds the frame.
     fn prepare_surface(
         &mut self,
         id: SurfaceId,
@@ -147,49 +146,36 @@ impl Platform {
                 view.frame_into_at(viewport, self.renderer.shaper(), start.timing, sink)
             };
             changed = view.needs_visual_frame();
-            surface.show(id, view, &mut self.choreographers, &mut frame)?;
+            surface.compose(id, view, &mut self.choreographers, &mut frame)?;
             actions.run(id, view);
             if view.needs_visual_frame() {
                 changed = true;
-                surface.show(id, view, &mut self.choreographers, &mut frame)?;
+                surface.compose(id, view, &mut self.choreographers, &mut frame)?;
             }
         }
         // The composed view can change the size of a panel that fits its content, or the panel layout can
-        // change its margins. The requests for that are sent now, so that the compositor applies them with the
-        // buffer of this frame.
+        // change its margins. The geometry for that is sent with this frame, so that the compositor applies it with
+        // the buffer of this frame.
         if changed {
             self.panels.measure(id, view, self.renderer.shaper())?;
         }
-        let mut panel_requests = Vec::new();
-        self.panels.update(id, &mut panel_requests);
-        surface.execute_panel_requests(id, panel_requests)?;
+        surface.send_keyboard(id, self.panels.update(id))?;
         if let Some(bridge) = &mut surface.accessibility {
             bridge.publish(view.accessibility(), false);
         }
-        let shape_changed = match &mut surface.shape {
-            Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
-            None => ShapeUpdate::Unchanged,
-        } == ShapeUpdate::Changed;
-        if shape_changed {
-            let outline = surface.shape.as_ref().and_then(SurfaceShape::path).cloned();
+        let mut clip = None;
+        let shape_changes = surface.shape.update(size, density, |outline| {
+            let geometry = ShapeGeometry::new(outline, size, density)?;
+            clip = Some(geometry.clip);
+            Ok::<_, Error>(geometry.input_cells)
+        })?;
+        if let Some(path) = clip {
+            let outline = surface.shape.clips_paint().then_some(path);
             (self.renderer.set_outline(id, outline)).map_err(Error::Render)?;
         }
-        if let Some(background) = &surface.background
-            && (shape_changed || surface.blur_size != Some(size))
-        {
-            let region = if let Some(shape) = &surface.shape {
-                shape.region(&self.compositor)?
-            } else {
-                let region =
-                    sctk::compositor::Region::new(&self.compositor).map_err(Error::CreateRegion)?;
-                let (width, height) =
-                    crate::logical::protocol_size(size).ok_or(Error::SurfaceSize(size))?;
-                region.add(0, 0, width, height);
-                region
-            };
-            background.set_blur_region(Some(region.wl_region()));
-            surface.blur_size = Some(size);
-        }
+        let sink = self.choreographers.sink(id);
+        send_surface_state(sink, &self.panels, id, shape_changes);
+        surface.build(id, view, &mut self.choreographers)?;
         Ok(start)
     }
 
@@ -203,14 +189,14 @@ impl Platform {
         let frame = PresentFrame {
             time: timing,
             viewport,
+            state: &surface.state,
         };
         let snapshot = surface.builder.snapshot();
         let drawn = (self.renderer.draw(id, frame, &snapshot)).map_err(Error::Draw)?;
         if drawn.outcome == FrameOutcome::Shown {
-            let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
             let content = PanelContent {
                 size: viewport.size,
-                input,
+                input: surface.shape.accepts_input(),
             };
             self.panels.shown(id, content);
         }

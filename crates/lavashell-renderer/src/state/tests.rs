@@ -6,6 +6,7 @@ use ash::vk;
 use lavashell_core::prelude::{
     Brush, Color, Density, DpExt, DrawCommand, FrameTime, Rect, SceneTree, Size,
 };
+use lavashell_core::surface::SurfaceChange;
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Presentation};
 use std::cell::RefCell;
 use std::convert::Infallible;
@@ -59,11 +60,12 @@ unsafe impl Window for HeadlessWindow {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Event {
     Prepare(Viewport),
     BeforePresent(Viewport),
     AfterPresent(FrameOutcome),
+    CommitState(SurfaceState),
 }
 
 /// A control that records each call made by the renderer state.
@@ -89,6 +91,13 @@ impl SurfaceControl for RecordingControl {
 
     fn after_present(&mut self, outcome: FrameOutcome) {
         self.events.borrow_mut().push(Event::AfterPresent(outcome));
+    }
+
+    fn commit_state(&mut self, state: &SurfaceState) -> Result<(), Infallible> {
+        self.events
+            .borrow_mut()
+            .push(Event::CommitState(state.clone()));
+        Ok(())
     }
 }
 
@@ -119,13 +128,25 @@ fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl> {
     }
 }
 
-fn frame(sequence: u64) -> PresentFrame {
+/// Attaches the surface with a control that records into `events`.
+fn attach_recording(
+    state: &mut RendererState<RecordingControl>,
+    events: &Rc<RefCell<Vec<Event>>>,
+) -> Result<(), TestError> {
+    state
+        .attach(attach(events))
+        .map_err(|failed| failed.error)?;
+    Ok(())
+}
+
+fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
     PresentFrame {
         time: FrameTime {
             sequence,
             ..FrameTime::default()
         },
         viewport: Viewport::new(Size::new(40.dp(), 30.dp()), Density::ONE),
+        state,
     }
 }
 
@@ -141,10 +162,11 @@ fn scene() -> Result<SceneSnapshot, TestError> {
 fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Result<(), TestError> {
     let events = Rc::default();
     let mut state = state()?;
-    state.attach(attach(&events))?;
+    attach_recording(&mut state, &events)?;
     let snapshot = scene()?;
+    let surface_state = SurfaceState::default();
     for sequence in [1, 2] {
-        let frame = frame(sequence);
+        let frame = frame(sequence, &surface_state);
         assert_eq!(
             state.draw(SURFACE, frame, &snapshot)?.outcome,
             FrameOutcome::Shown
@@ -165,14 +187,37 @@ fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Resul
 fn a_surface_attaches_once_and_draws_no_more_once_retired() -> Result<(), TestError> {
     let events = Rc::default();
     let mut state = state()?;
-    state.attach(attach(&events))?;
+    attach_recording(&mut state, &events)?;
     let twice = state.attach(attach(&events));
-    assert!(matches!(twice, Err(StateError::AttachedTwice(SURFACE))));
+    assert!(matches!(
+        twice,
+        Err(AttachError {
+            error: StateError::AttachedTwice(SURFACE),
+            ..
+        })
+    ));
     assert!(state.retire(SURFACE).is_some());
-    let drawn = state.draw(SURFACE, frame(1), &scene()?);
+    let drawn = state.draw(SURFACE, frame(1, &SurfaceState::default()), &scene()?);
     assert!(matches!(
         drawn,
         Err(DrawError::State(StateError::UnknownSurface(SURFACE)))
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_committed_state_goes_to_the_control_of_its_surface_without_a_draw() -> Result<(), TestError> {
+    let events = Rc::default();
+    let mut state = state()?;
+    attach_recording(&mut state, &events)?;
+    let mut committed = SurfaceState::default();
+    committed.apply(SurfaceChange::InputRegion(Some(Vec::new())));
+    state.commit_state(SURFACE, &committed)?;
+    assert_eq!(events.take(), [Event::CommitState(committed.clone())]);
+    let unknown = state.commit_state(SurfaceId(1), &committed);
+    assert!(matches!(
+        unknown,
+        Err(CommitError::State(StateError::UnknownSurface(SurfaceId(1))))
     ));
     Ok(())
 }
