@@ -5,7 +5,7 @@ use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins, PanelGeometry,
 };
 use lavashell_core::reactive::State;
-use lavashell_core::surface::{SurfaceChange, SurfaceId};
+use lavashell_core::surface::{SurfaceChange, SurfaceField, SurfaceId, SurfaceState};
 use lavashell_core::view::{TextMeasurer, View};
 use lavashell_platform::KeyboardMode;
 use std::collections::BTreeMap;
@@ -93,8 +93,11 @@ pub enum ContentState {
 pub enum Transaction {
     /// No request waits for a commit.
     Settled,
-    /// The platform commits the requests and the geometry at once, without a new frame.
+    /// The platform commits the requests and the geometry at once, without a new frame, and reports the commit with
+    /// [`PanelRecords::committed`].
     Committed,
+    /// A commit without a frame of the requests and the geometry runs already.
+    Committing,
     /// The requests and the geometry wait for the next frame of the panel, which commits them with its buffer.
     NeedsFrame,
 }
@@ -108,16 +111,24 @@ pub struct PanelUpdate {
     pub transaction: Transaction,
 }
 
-/// A panel on the host: its geometry, the keyboard mode sent last, whether they wait for a commit, and the content of
-/// the last frame shown.
+/// The geometry and the keyboard mode that one commit of a panel applies on the host.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PanelRequests {
+    geometry: Option<PanelGeometry>,
+    keyboard: KeyboardMode,
+}
+
+/// A panel on the host: its geometry, the keyboard mode sent last, the requests that the host applied last, and the
+/// content of the last frame shown.
 pub struct Panel {
     options: PanelOptions,
     content: ContentSize,
     geometry: PanelGeometry,
     keyboard_mode: KeyboardMode,
-    committed_keyboard: KeyboardMode,
+    applied: Option<PanelRequests>,
+    /// The requests of the last transaction that the platform commits without a frame.
+    committing: Option<PanelRequests>,
     shown: Option<PanelContent>,
-    pending: bool,
 }
 
 impl Panel {
@@ -137,11 +148,11 @@ impl Panel {
         Ok(Self {
             geometry: PanelGeometry::of(layout, content),
             keyboard_mode: options.keyboard.mode(),
-            // The first commit of a panel only asks the host for a configure event. The keyboard mode is committed
-            // with the first content.
-            committed_keyboard: KeyboardMode::Off,
+            // The first commit of a panel only asks the host for a configure event. The geometry and the keyboard
+            // mode apply with the first content.
+            applied: None,
+            committing: None,
             shown: None,
-            pending: true,
             content,
             options,
         })
@@ -169,9 +180,7 @@ impl Panel {
     /// that allows it with no request waiting for a commit.
     #[must_use]
     pub fn keyboard_granted(&self) -> bool {
-        !self.pending
-            && self.committed_keyboard == KeyboardMode::OnDemand
-            && self.keyboard_allowed()
+        !self.pending() && self.keyboard_mode == KeyboardMode::OnDemand && self.keyboard_allowed()
     }
 
     /// Whether the content of the last frame shown accepts input.
@@ -188,23 +197,26 @@ impl Panel {
 
     /// Lays the panel out again, and returns the keyboard mode to send once the mode changed.
     fn update(&mut self) -> Option<KeyboardMode> {
-        let geometry = PanelGeometry::of(self.options.current_layout(), self.content);
-        if geometry != self.geometry {
-            self.geometry = geometry;
-            self.pending = true;
-        }
+        self.geometry = PanelGeometry::of(self.options.current_layout(), self.content);
         let keyboard = self.options.keyboard.mode();
         if keyboard == self.keyboard_mode {
             return None;
         }
         self.keyboard_mode = keyboard;
-        self.pending = true;
         Some(keyboard)
     }
 
-    fn submitted(&mut self) {
-        self.committed_keyboard = self.keyboard_mode;
-        self.pending = false;
+    /// The geometry and the keyboard mode sent to the host last.
+    fn requested(&self) -> PanelRequests {
+        PanelRequests {
+            geometry: Some(self.geometry),
+            keyboard: self.keyboard_mode,
+        }
+    }
+
+    /// Whether a request for the geometry or the keyboard mode waits for a commit.
+    fn pending(&self) -> bool {
+        self.applied != Some(self.requested())
     }
 }
 
@@ -266,13 +278,16 @@ impl PanelRecords {
             };
         };
         let keyboard = panel.update();
-        let transaction = match (panel.pending, content) {
-            (false, _) => Transaction::Settled,
-            (true, ContentState::Current) => {
-                panel.submitted();
-                Transaction::Committed
-            }
-            (true, ContentState::Stale) => Transaction::NeedsFrame,
+        let requested = panel.requested();
+        let transaction = if !panel.pending() {
+            Transaction::Settled
+        } else if panel.committing == Some(requested) {
+            Transaction::Committing
+        } else if content == ContentState::Current {
+            panel.committing = Some(requested);
+            Transaction::Committed
+        } else {
+            Transaction::NeedsFrame
         };
         PanelUpdate {
             keyboard,
@@ -287,11 +302,31 @@ impl PanelRecords {
         (self.records.get(&surface)).map(|panel| SurfaceChange::Panel(panel.geometry))
     }
 
-    /// Records that the host shows a frame of the panel of `surface` with `content`. The frame committed every
-    /// request made before it.
-    pub fn shown(&mut self, surface: SurfaceId, content: PanelContent) {
+    /// The requests that a commit of `surface` sent from now on applies with `state`: the keyboard mode sent last,
+    /// and the geometry in `state`. Returns `None` when the surface has no panel.
+    #[must_use]
+    pub fn requests(&self, surface: SurfaceId, state: &SurfaceState) -> Option<PanelRequests> {
+        let geometry = match state.get(SurfaceField::Panel) {
+            Some(SurfaceChange::Panel(geometry)) => Some(*geometry),
+            _ => None,
+        };
+        (self.records.get(&surface)).map(|panel| PanelRequests {
+            geometry,
+            keyboard: panel.keyboard_mode,
+        })
+    }
+
+    /// Records that the host applied `requests` to the panel of `surface` with a commit without a frame.
+    pub fn committed(&mut self, surface: SurfaceId, requests: PanelRequests) {
         if let Some(panel) = self.records.get_mut(&surface) {
-            panel.submitted();
+            panel.applied = Some(requests);
+        }
+    }
+
+    /// Records that the host shows a frame of the panel of `surface` with `content`, which applied `requests`.
+    pub fn shown(&mut self, surface: SurfaceId, content: PanelContent, requests: PanelRequests) {
+        if let Some(panel) = self.records.get_mut(&surface) {
+            panel.applied = Some(requests);
             panel.shown = Some(content);
         }
     }

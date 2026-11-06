@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::control::RoleControl;
+use super::control::{Control, RoleControl};
 use super::creation::NativeSpec;
 use super::{
-    App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation, scene_reports, session_lock,
+    App, AppConfig, Platform, Request, Role, SeatDevices, Stops, SurfaceProtocols, accessibility,
+    focus_grab, output_layers, preferences, presentation, renderer_outputs, scene_reports,
+    session_lock,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
@@ -12,10 +13,11 @@ use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
-use lavashell_renderer::{RendererSetup, RendererState};
+use lavashell_renderer::RendererSetup;
+use lavashell_renderer::text::Shaper;
 use lavashell_runtime::{
-    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline, SurfaceRecords,
-    Window,
+    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, Renderer, RendererObserver,
+    ScenePipeline, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -30,7 +32,7 @@ use sctk::shell::WaylandSurface;
 use sctk::shell::xdg::{XdgShell, window::WindowDecorations};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 impl SurfaceProtocols {
@@ -61,7 +63,7 @@ impl Platform {
             session_lock,
             clipboard,
             painter_setup,
-            scene,
+            scene: scene_setup,
             gpu_timing,
             preference_overrides,
             input_filter,
@@ -74,13 +76,12 @@ impl Platform {
         let setup = RendererSetup {
             fonts,
             painter: painter_setup,
-            scene,
+            scene: scene_setup,
             gpu_timing,
             full_redraw: config.full_redraw,
             start,
         };
-        let wayland = WaylandPresentation::new(connection.backend());
-        let renderer = RendererState::new(&wayland, setup).map_err(Error::Render)?;
+        let redraw = redraw_mode(&config, &setup);
         let outputs = OutputState::new(globals, &qh);
         let session_lock = session_lock
             .map(|configuration| {
@@ -106,12 +107,10 @@ impl Platform {
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
         let builder_reports = scene_reports::install(&loop_handle, &mut sources)?;
-        let redraw = if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene()
-        {
-            Redraw::Continuous
-        } else {
-            Redraw::OnChange
-        };
+        let renderer_outputs = renderer_outputs::install(&loop_handle, &mut sources)?;
+        let scene = ScenePipeline::start(builder_reports)?;
+        let cpu_timing = config.observer.is_some();
+        let (renderer, shaper) = start_renderer(connection, setup, cpu_timing, renderer_outputs)?;
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
@@ -122,13 +121,16 @@ impl Platform {
             surface_records,
             panels: PanelRecords::default(),
             surface_requests: Vec::new(),
-            scene: ScenePipeline::start(builder_reports)?,
-            scene_stopped: false,
+            scene,
+            renderer,
+            stops: Stops::default(),
+            shaper,
+            scene_deadline: None,
             scheduler: FrameScheduler::new(redraw),
             started_frames: BTreeMap::new(),
-            state_commits: BTreeSet::new(),
+            state_commits: BTreeMap::new(),
             surfaces: BTreeMap::new(),
-            renderer,
+            retiring: BTreeMap::new(),
             connection: connection.clone(),
             registry: RegistryState::new(globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
@@ -149,7 +151,9 @@ impl Platform {
             qh,
         };
         for request in requests {
-            let _surface = platform.create_requested_surface(request)?;
+            if let Err(error) = platform.create_requested_surface(request) {
+                return Err(platform.stopped_actor_failure(error));
+            }
         }
         Ok(platform)
     }
@@ -157,7 +161,7 @@ impl Platform {
     fn create_requested_surface(&mut self, request: Request) -> Result<SurfaceId, Error> {
         match request {
             Request::Window(window, mut view) => {
-                let spec = window.spec(&mut view, self.renderer.shaper())?;
+                let spec = window.spec(&mut view, &mut self.shaper)?;
                 let native = NativeSpec::window(window, view, &spec)?;
                 self.create_surface(native, |platform, wl, _| {
                     platform.window_role(wl, &spec.role)
@@ -202,6 +206,32 @@ impl Platform {
         window.commit();
         Ok((Role::Window { window }, RoleControl::Stateless))
     }
+}
+
+/// Draws continuously while the app ticks, observes every frame or shows a scene, and otherwise only after a change.
+fn redraw_mode(config: &AppConfig, setup: &RendererSetup) -> Redraw {
+    if config.tick.is_some() || config.on_frame.is_some() || setup.shows_scene() {
+        Redraw::Continuous
+    } else {
+        Redraw::OnChange
+    }
+}
+
+/// Starts the renderer for the surfaces of `connection`, and the shaper that measures text with the text rendering of
+/// that renderer.
+fn start_renderer(
+    connection: &Connection,
+    setup: RendererSetup,
+    cpu_timing: bool,
+    outputs: RendererObserver,
+) -> Result<(Renderer<Control>, Shaper), Error> {
+    let fonts = setup.fonts.clone();
+    let wayland = WaylandPresentation::new(connection.backend());
+    let renderer =
+        Renderer::start(wayland, setup, cpu_timing, outputs).map_err(Error::StartRenderer)?;
+    let shaper =
+        Shaper::with_rendering(&fonts, renderer.text_rendering()).map_err(Error::CreateShaper)?;
+    Ok((renderer, shaper))
 }
 
 impl NativeSpec {

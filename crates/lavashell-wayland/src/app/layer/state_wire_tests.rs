@@ -22,7 +22,8 @@ fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_
     let layer = wire.layer(&LayerSurface::new("state"))?;
     assert!(!wire.flush()?.is_empty());
     let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
-    let token = (control.layer_mut().ok_or(TestError::NoLayer)?).receive_configure(7);
+    let token = ConfigureToken::default();
+    control.receive(LayerConfigure { token, serial: 7 });
     let mut state = SurfaceState::default();
     state.apply(SurfaceChange::Configure(token));
     let region = vec![Rect::new(0.dp(), 0.dp(), 4.dp(), 2.dp())];

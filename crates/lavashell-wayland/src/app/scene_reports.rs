@@ -2,7 +2,9 @@
 use super::{Platform, warn_whole_scene_next};
 use crate::Error;
 use lavashell_actor::Closed;
-use lavashell_runtime::{BuilderObserver, BuilderReport, BuiltChange, SchedulerInput};
+use lavashell_runtime::{
+    BuilderObserver, BuilderReport, BuiltChange, RendererInput, SchedulerInput,
+};
 use sctk::reexports::calloop::channel::{self, Event};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
@@ -17,7 +19,7 @@ pub(super) fn install(
     let source = handle
         .insert_source(channel, |event, (), platform| match event {
             Event::Msg(report) => platform.scene_report(report),
-            Event::Closed => platform.scene_stopped = true,
+            Event::Closed => platform.stops.scene = true,
         })
         .map_err(|failure| Error::WatchScene(failure.error))?;
     sources.push(source);
@@ -27,17 +29,15 @@ pub(super) fn install(
 
 impl Platform {
     /// Renders a composed frame of the surface once its scene is built. A frame sent outside a compose that changed
-    /// only the surface state is committed by the next render without a frame. After a frame that did not fit the
-    /// scene, the view of the surface sends the whole scene to a restarted sink.
+    /// only the surface state waits for a commit without a frame, which the frame scheduler starts. After a frame
+    /// that did not fit the scene, the view of the surface sends the whole scene to a restarted sink.
     fn scene_report(&mut self, report: BuilderReport) {
         match report {
             BuilderReport::Built {
                 surface,
                 sequence: None,
                 change: BuiltChange::State,
-            } => {
-                let _queued = self.state_commits.insert(surface);
-            }
+            } => self.schedule(SchedulerInput::StateChanged(surface)),
             BuilderReport::Built {
                 surface, sequence, ..
             } => {
@@ -53,12 +53,15 @@ impl Platform {
         }
     }
 
-    /// Commits the newest built state of each surface in `state_commits` without a frame, while the surface is open.
+    /// Makes the renderer commit the built state in `state_commits` of each open surface without a frame, and records
+    /// the panel requests that the commit applies.
     pub(super) fn commit_built_states(&mut self) -> Result<(), Error> {
-        for id in mem::take(&mut self.state_commits) {
-            if self.surface_records.is_open(id) {
-                let built = self.scene.built(id);
-                (self.renderer.commit_state(id, &built.state)).map_err(Error::CommitState)?;
+        for (id, built) in mem::take(&mut self.state_commits) {
+            if self.surface_records.is_open(id)
+                && let Some(surface) = self.surfaces.get_mut(&id)
+            {
+                surface.committing = self.panels.requests(id, &built.state);
+                (self.renderer).send(RendererInput::CommitState { surface: id, built })?;
             }
         }
         Ok(())

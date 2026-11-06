@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, log_or_record_stop, open_surface, send_frame};
+use super::{Platform, open_surface, send_frame};
 use crate::Error;
 use crate::accessibility::Event;
 use lavashell_core::accessibility::ActionOutcome;
@@ -54,12 +54,12 @@ impl Platform {
             return;
         }
         let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
-            view.frame_into(viewport, self.renderer.shaper(), sink)
+            view.frame_into(viewport, &mut self.shaper, sink)
         };
         let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
         if shown {
             if let Err(error) = send_frame(view, self.scene.sink(id, None), &mut frame) {
-                log_or_record_stop(error, &mut self.scene_stopped);
+                self.stops.record(error);
             }
             view.invalidate();
         }
@@ -76,7 +76,7 @@ impl Platform {
                     // Send the frame now, even while the compositor has a frame callback pending, so that the changed
                     // semantics are published at once. Sending a frame does not acquire a swapchain image.
                     if let Err(error) = send_frame(view, self.scene.sink(id, None), &mut frame) {
-                        log_or_record_stop(error, &mut self.scene_stopped);
+                        self.stops.record(error);
                     }
                     view.invalidate();
                 }

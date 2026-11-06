@@ -67,6 +67,11 @@ pub enum SchedulerInput {
         surface: SurfaceId,
         sequence: Option<FrameSequence>,
     },
+    /// The surface state changed outside a compose. The scheduler starts a commit without a frame for the change
+    /// once no frame of the surface is composed or drawn. A frame drawn before that applies the change.
+    StateChanged(SurfaceId),
+    /// The host received the commit started by [`SchedulerOutput::CommitState`].
+    Committed(SurfaceId),
     /// The frame for `frame` was drawn with `outcome`, which took `cost`.
     Rendered {
         surface: SurfaceId,
@@ -93,6 +98,9 @@ pub enum SchedulerOutput {
         kind: FrameKind,
         time: FrameTime,
     },
+    /// Commit the newest built surface state of the surface without a frame, and report it with
+    /// [`SchedulerInput::Committed`].
+    CommitState(SurfaceId),
     /// Pass the report to the frame observer of the app.
     Report(Box<FrameReport>),
 }
@@ -119,6 +127,7 @@ impl FrameScheduler {
     /// Applies `input` at `now` and appends the outputs that follow from it to `out`. A report about a surface
     /// unknown to the scheduler leaves the pacing state unchanged.
     pub fn handle(&mut self, now: Duration, input: SchedulerInput, out: &mut Vec<SchedulerOutput>) {
+        let surface = input.surface();
         let started = match input {
             SchedulerInput::Opened(surface) => {
                 let _reopened = self.surfaces.insert(surface, Pacing::default());
@@ -150,6 +159,18 @@ impl FrameScheduler {
             SchedulerInput::Built { surface, sequence } => (self.surfaces.get_mut(&surface))
                 .and_then(|pacing| pacing.built(sequence))
                 .map(|frame| (surface, frame)),
+            SchedulerInput::StateChanged(surface) => {
+                if let Some(pacing) = self.surfaces.get_mut(&surface) {
+                    pacing.state_changed();
+                }
+                None
+            }
+            SchedulerInput::Committed(surface) => {
+                if let Some(pacing) = self.surfaces.get_mut(&surface) {
+                    pacing.committed();
+                }
+                None
+            }
             SchedulerInput::Rendered {
                 surface,
                 frame,
@@ -175,6 +196,11 @@ impl FrameScheduler {
                 kind,
                 time,
             });
+        }
+        if let Some(surface) = surface
+            && (self.surfaces.get_mut(&surface)).is_some_and(Pacing::start_commit)
+        {
+            out.push(SchedulerOutput::CommitState(surface));
         }
     }
 
@@ -225,6 +251,24 @@ impl FrameScheduler {
                     submission: None,
                 })));
             }
+        }
+    }
+}
+
+impl SchedulerInput {
+    /// The surface named by the input, or `None` for a timing event.
+    fn surface(&self) -> Option<SurfaceId> {
+        match *self {
+            Self::Opened(surface)
+            | Self::Wants { surface, .. }
+            | Self::Published { surface, .. }
+            | Self::Built { surface, .. }
+            | Self::StateChanged(surface)
+            | Self::Committed(surface)
+            | Self::Rendered { surface, .. }
+            | Self::OutputRefresh { surface, .. }
+            | Self::Closed(surface) => Some(surface),
+            Self::Timing(_) => None,
         }
     }
 }

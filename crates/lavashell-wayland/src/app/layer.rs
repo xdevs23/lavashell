@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::control::{Control, RoleControl};
+use super::control::RoleControl;
 use super::creation::NativeSpec;
-use super::{Platform, Role, Surface, configure_event, log_or_record_stop, send_surface_state};
+use super::{Platform, Role, Surface, configure_event, send_surface_state};
 use crate::logical::{extent, whole};
 use crate::surface::LayerSurface;
 use crate::{Error, LayerLayoutError};
-use lavashell_actor::Closed;
 use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::units::{FiniteDp, NonNegativeDp};
 use lavashell_core::view::View;
 use lavashell_platform::{Appearance, KeyboardMode, SurfaceEvent};
 use lavashell_renderer::SurfaceContents;
-use lavashell_runtime::{ContentState, Panel, Transaction};
+use lavashell_runtime::{ContentState, Panel, SchedulerInput, Transaction};
 use sctk::reexports::client::protocol::{wl_output, wl_surface};
 use sctk::reexports::client::{Proxy, QueueHandle};
 use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
@@ -66,6 +65,13 @@ pub(super) struct LayerControl {
     configures: VecDeque<(ConfigureToken, u32)>,
 }
 
+/// A configure event of a layer with `serial`. The frame whose surface state contains `token` acknowledges it.
+#[derive(Clone, Copy)]
+pub(super) struct LayerConfigure {
+    pub token: ConfigureToken,
+    pub serial: u32,
+}
+
 /// A layer-shell request for the state of a layer surface.
 #[derive(Clone, Copy)]
 pub(super) enum LayerRequest {
@@ -84,17 +90,10 @@ impl LayerControl {
         }
     }
 
-    /// Records a configure event with `serial`, and returns the token for the surface state of the frame that applies
-    /// the event.
-    pub fn receive_configure(&mut self, serial: u32) -> ConfigureToken {
-        let token = ConfigureToken::default();
-        self.configures.push_back((token, serial));
-        token
-    }
-
-    /// The width and the height sent to the compositor last, zero along an axis that fills.
-    pub fn requested_size(&self) -> (u32, u32) {
-        (self.layout.width, self.layout.height)
+    /// Records `configure` until the frame that applies it.
+    pub fn receive_configure(&mut self, configure: LayerConfigure) {
+        self.configures
+            .push_back((configure.token, configure.serial));
     }
 
     /// The request for `change`, or `None` for a part of the state that the layer role does not set.
@@ -194,7 +193,7 @@ impl Platform {
         mut view: View,
         output: Option<&wl_output::WlOutput>,
     ) -> Result<SurfaceId, Error> {
-        let panel = Panel::new(options.panel.clone(), &mut view, self.renderer.shaper())?;
+        let panel = Panel::new(options.panel.clone(), &mut view, &mut self.shaper)?;
         let geometry = panel.geometry();
         let layout = ProtocolLayout::new(geometry).map_err(Error::LayerLayout)?;
         let keyboard = panel.keyboard_mode();
@@ -226,9 +225,12 @@ impl Platform {
     }
 
     /// Sends the requests made by the runtime for each panel before a frame is rendered. While the compositor shows
-    /// the current content of a panel, a changed geometry is sent to the scene pipeline, and the render after the
-    /// scene builder built it commits it without a frame.
+    /// the current content of a panel, a changed geometry or keyboard mode is committed without a frame once the
+    /// scene builder built it and no frame of the panel is composed or drawn.
     pub(super) fn update_layers(&mut self) -> Result<(), Error> {
+        // A transaction whose geometry the sink sent already, such as a change of the keyboard mode alone, builds no
+        // new state.
+        let mut changed_states = Vec::new();
         for (&id, surface) in &mut self.surfaces {
             if self.panels.get(id).is_none() {
                 continue;
@@ -242,11 +244,7 @@ impl Platform {
             let content = if surface.needs_visual_frame(view) {
                 ContentState::Stale
             } else {
-                match self
-                    .renderer
-                    .contents(id, viewport)
-                    .map_err(Error::Render)?
-                {
+                match surface.contents(viewport) {
                     SurfaceContents::Current => ContentState::Current,
                     SurfaceContents::Outdated => ContentState::Stale,
                 }
@@ -254,51 +252,44 @@ impl Platform {
             let update = self.panels.update_transaction(id, content);
             surface.send_keyboard(id, update.keyboard)?;
             match update.transaction {
-                Transaction::Settled => {}
+                Transaction::Settled | Transaction::Committing => {}
                 Transaction::NeedsFrame => view.invalidate(),
                 Transaction::Committed => {
                     let sink = self.scene.sink(id, None);
                     match send_surface_state(sink, &self.panels, id, []) {
                         Ok(true) => {}
-                        Ok(false) => {
-                            let _queued = self.state_commits.insert(id);
-                        }
-                        Err(error) => log_or_record_stop(error, &mut self.scene_stopped),
+                        Ok(false) => changed_states.push(id),
+                        Err(error) => self.stops.record(error),
                     }
                 }
             }
+        }
+        for id in changed_states {
+            self.schedule(SchedulerInput::StateChanged(id));
         }
         Ok(())
     }
 }
 
 impl Platform {
-    /// Records the configure event of layer `id` with `serial`, so that the first commit whose surface state applies
-    /// the event acknowledges it. Returns the surface event for `width` and `height`, as [`configured_length`]
-    /// describes for each axis.
+    /// The surface event for a configure event of layer `id` with `width` and `height`, as [`configured_length`]
+    /// describes for each axis, where the panel of the layer requests the length along it.
     pub(super) fn layer_configure(
-        &mut self,
+        &self,
         id: SurfaceId,
-        serial: u32,
         width: u32,
         height: u32,
-    ) -> SurfaceEvent {
-        let layer = (self.renderer.control_mut(id)).and_then(Control::layer_mut);
+    ) -> Result<SurfaceEvent, Error> {
+        let requested = (self.panels.get(id))
+            .map(|panel| ProtocolLayout::new(panel.geometry()))
+            .transpose()
+            .map_err(Error::LayerLayout)?;
         let (requested_width, requested_height) =
-            (layer.as_deref()).map_or((0, 0), LayerControl::requested_size);
-        if let Some(layer) = layer
-            && self.surface_records.is_open(id)
-        {
-            let token = layer.receive_configure(serial);
-            let configure = SurfaceChange::Configure(token);
-            if let Err(Closed) = self.scene.sink(id, None).set_state(configure) {
-                self.scene_stopped = true;
-            }
-        }
-        configure_event(
+            requested.map_or((0, 0), |layout| (layout.width, layout.height));
+        Ok(configure_event(
             configured_length(width, requested_width),
             configured_length(height, requested_height),
-        )
+        ))
     }
 }
 

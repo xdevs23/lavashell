@@ -31,6 +31,10 @@ pub(super) struct Pacing {
     next_change: Option<Duration>,
     /// Whether the scene builder built a scene that no frame rendered yet.
     undrawn: bool,
+    /// Whether a change of the surface state made outside a compose waits for a commit without a frame.
+    uncommitted: bool,
+    /// Whether a commit without a frame started and was not reported yet.
+    committing: bool,
 }
 
 impl Pacing {
@@ -77,6 +81,26 @@ impl Pacing {
                 None
             }
         }
+    }
+
+    pub fn state_changed(&mut self) {
+        self.uncommitted = true;
+    }
+
+    pub fn committed(&mut self) {
+        self.committing = false;
+    }
+
+    /// Starts the commit without a frame of a waiting change of the surface state, while no other commit runs and no
+    /// frame of the surface is composed or drawn. Returns whether the commit started.
+    pub fn start_commit(&mut self) -> bool {
+        let free = matches!(self.stage, Stage::Ready | Stage::Shown);
+        let starts = self.uncommitted && free && !self.committing;
+        if starts {
+            self.uncommitted = false;
+            self.committing = true;
+        }
+        starts
     }
 
     pub fn output_refresh(&mut self, refresh: Option<Duration>) {
@@ -164,11 +188,14 @@ impl Pacing {
         }
     }
 
+    /// Starts the draw of `frame`. The draw applies the newest built surface state, so a waiting change of the
+    /// surface state needs no commit of its own.
     fn render(&mut self, frame: FrameTime) -> (FrameKind, FrameTime) {
         self.stage = Stage::Drawing {
             sequence: frame.sequence,
         };
         self.undrawn = false;
+        self.uncommitted = false;
         (FrameKind::Render, frame)
     }
 

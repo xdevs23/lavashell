@@ -7,7 +7,7 @@ mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
 
-use crate::text::Shaper;
+use crate::text::TextRendering;
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
 use crate::{
     Error, Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents, SurfaceFrame, SurfaceTiming,
@@ -27,7 +27,10 @@ use std::time::{Duration, Instant};
 use targets::{AttachedSurface, PixelInputs};
 
 /// Runs on the painter once it exists.
-pub type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
+pub type PainterSetup = Box<dyn FnOnce(&mut Painter) + Send>;
+
+/// Makes the scene source on the thread that draws.
+pub type SceneSetup = Box<dyn FnOnce() -> Box<dyn SceneSource> + Send>;
 
 /// What the renderer state is made from.
 pub struct RendererSetup {
@@ -35,14 +38,22 @@ pub struct RendererSetup {
     /// Runs on the painter once it exists, for example to install effects or to replace the chooser of the effect
     /// quality.
     pub painter: Option<PainterSetup>,
-    /// Draws the latest completed image of the scene source beneath the scene on every surface.
-    pub scene: Option<Box<dyn SceneSource>>,
+    /// Makes the scene source whose latest completed image is drawn beneath the scene on every surface.
+    pub scene: Option<SceneSetup>,
     /// Measures the GPU time of every frame. [`Drawn::gpu`] contains the measured times.
     pub gpu_timing: bool,
     /// Paints the whole surface in every frame instead of the area that changed.
     pub full_redraw: bool,
     /// The instant from which the times passed to the scene source are measured.
     pub start: Instant,
+}
+
+impl RendererSetup {
+    /// Whether the renderer draws a scene source beneath the scene of every surface.
+    #[must_use]
+    pub fn shows_scene(&self) -> bool {
+        self.scene.is_some()
+    }
 }
 
 /// A surface for the renderer state to draw into, with the control that makes the platform requests of each present.
@@ -195,7 +206,7 @@ impl<C: SurfaceControl> RendererState<C> {
         Ok(Self {
             painter,
             surfaces: BTreeMap::new(),
-            scene: scene.map(SceneImages::new),
+            scene: scene.map(|make| SceneImages::new(make())),
             gpu,
             start,
             full_redraw,
@@ -286,14 +297,11 @@ impl<C: SurfaceControl> RendererState<C> {
             .map_err(StateError::ReadContents)
     }
 
-    /// The shaper that measures text for views and shapes the text painted by the painter of the state.
-    pub fn shaper(&mut self) -> &mut Shaper {
-        self.painter.shaper()
-    }
-
+    /// The text rendering of the painter, which a shaper made by [`crate::text::Shaper::with_rendering`] follows to
+    /// measure text as the painter shapes it.
     #[must_use]
-    pub fn shows_scene(&self) -> bool {
-        self.scene.is_some()
+    pub fn text_rendering(&self) -> TextRendering {
+        self.painter.text_rendering()
     }
 
     /// The instant at which the scene source produces its next scene, or `None` without a scene source or while it

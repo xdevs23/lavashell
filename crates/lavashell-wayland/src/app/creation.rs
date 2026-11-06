@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::{Control, RoleControl, SurfaceObjects};
 use super::owned_wl_surface::OwnedWlSurface;
-use super::render::NextDraw;
+use super::render::FrameProgress;
 use super::{Platform, Role, Surface, destroy_objects};
 use crate::Error;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
 use lavashell_platform::Appearance;
-use lavashell_renderer::{Attach, AttachError, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
-use lavashell_runtime::{DragRegion, SchedulerInput, SurfaceShape, WindowShape};
+use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell_runtime::{DragRegion, RendererInput, SchedulerInput, SurfaceShape, WindowShape};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -28,8 +28,8 @@ pub(super) struct NativeSpec {
 
 impl Platform {
     /// Opens the record of a surface with its view in the runtime, creates the native surface under the id of that
-    /// record, and calls `create_role` to create the role of its Wayland surface with the control of the role. Returns
-    /// the id of the surface.
+    /// record, calls `create_role` to create the role of its Wayland surface with the control of the role, and attaches
+    /// the surface to the renderer. Returns the id of the surface.
     pub(super) fn create_surface(
         &mut self,
         spec: NativeSpec,
@@ -63,10 +63,7 @@ impl Platform {
         let (role, role_control) = match create_role(self, &wl, id) {
             Ok(created) => created,
             Err(error) => {
-                if let Some(viewport) = wp_viewport {
-                    viewport.destroy();
-                }
-                destroy_objects(fractional, background, None);
+                destroy_objects(wp_viewport, fractional, background, None);
                 return Err(error);
             }
         };
@@ -88,8 +85,9 @@ impl Platform {
             control: Control::new(
                 id,
                 SurfaceObjects {
+                    connection: self.connection.clone(),
                     wl: wl.clone(),
-                    viewport: wp_viewport,
+                    viewport: wp_viewport.clone(),
                     presentation,
                     compositor: self.compositor.wl_compositor().clone(),
                     background: background.clone(),
@@ -99,11 +97,6 @@ impl Platform {
                 self.qh.clone(),
             ),
         };
-        if let Err(AttachError { control, error }) = self.renderer.attach(attach) {
-            control.destroy();
-            destroy_objects(fractional, background, Some(&role));
-            return Err(Error::Render(error));
-        }
         let accessibility = crate::accessibility::Bridge::new(
             id,
             spec.accessible_name,
@@ -111,10 +104,13 @@ impl Platform {
         );
         let surface = Surface {
             accessibility: Some(accessibility),
-            next_draw: NextDraw::SceneOnly,
+            frame: FrameProgress::Idle,
+            last_frame: None,
+            committing: None,
             role,
             wl,
             _window: window,
+            viewport: wp_viewport,
             fractional,
             output: None,
             background,
@@ -123,6 +119,8 @@ impl Platform {
         };
         let _replaced_surface = self.surfaces.insert(id, surface);
         self.schedule(SchedulerInput::Opened(id));
+        self.renderer
+            .send(RendererInput::Attach(Box::new(attach)))?;
         Ok(id)
     }
 }

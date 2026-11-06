@@ -153,7 +153,11 @@ fn a_frame_without_changes_reports_its_sequence_and_publishes_nothing() -> TestR
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     let shown = pipeline.built(SURFACE);
     assert!(!pipeline.sink(SURFACE, None).end_state_frame()?);
-    assert!(pipeline.sink(SURFACE, Some(FrameSequence(3))).end_state_frame()?);
+    assert!(
+        pipeline
+            .sink(SURFACE, Some(FrameSequence(3)))
+            .end_state_frame()?
+    );
     let report = reports.recv()?;
     assert!(matches!(
         report,

@@ -86,6 +86,17 @@
             },
             {
               "manifest": {
+                "dependencies": {
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
+                  }
+                },
                 "features": {},
                 "lib": {
                   "path": "src/lib.rs"
@@ -730,6 +741,32 @@
                     "features": [],
                     "package": "lavashell-platform",
                     "path": "../lavashell-platform"
+                  },
+                  "lavashell-renderer": {
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "package": "lavashell-renderer",
+                    "path": "../lavashell-renderer"
+                  },
+                  "rustix": {
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "package": "rustix",
+                    "version": "=1.1.5"
                   },
                   "thiserror": {
                     "default-features": false,
@@ -2473,6 +2510,9 @@
                 "version": "0.0.0"
               },
               {
+                "dependencies": [
+                  "thiserror"
+                ],
                 "name": "lavashell-actor",
                 "version": "0.0.0"
               },
@@ -2594,6 +2634,8 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-platform",
+                  "lavashell-renderer",
+                  "rustix",
                   "thiserror"
                 ],
                 "name": "lavashell-runtime",
@@ -3906,7 +3948,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "95eb66de056f633dc1e25823c4c5f4b09da6f3a77e009fb44382d5fd18cd97ba"
+        "seedHash": "e2271ac177e42d378f6d24ce6cd756c0789e0f551261ee6984b4ddf4082cbf87"
       }
     }
   },
@@ -4938,6 +4980,9 @@
         "version": "0.1.0"
       },
       {
+        "dependencies": [
+          "thiserror 2.0.21"
+        ],
         "name": "lavashell-actor",
         "version": "0.1.0"
       },
@@ -5074,11 +5119,15 @@
       },
       {
         "dependencies": [
+          "ash",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
+          "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "rustix",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",
