@@ -2,8 +2,8 @@
 use lavashell_core::geometry::Point;
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::ui::InputModifiers;
-use lavashell_core::view::Cursor;
+use lavashell_core::ui::{InputModifiers, TouchId};
+use lavashell_core::view::{Cursor, TouchSample};
 
 /// Identifies a pointer connected to the host while it exists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -12,6 +12,10 @@ pub struct PointerDevice(pub u64);
 /// Identifies a keyboard connected to the host while it exists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KeyboardDevice(pub u64);
+
+/// The number given by the host to an input event. A request made on behalf of that input contains it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InputSerial(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Button {
@@ -29,8 +33,8 @@ pub enum PressState {
     Released,
 }
 
-/// What a pointer or keyboard connected to the host did. A position is in dp, relative to the surface under the
-/// pointer.
+/// What a pointer, keyboard or touch screen connected to the host did. A position is in dp, relative to the surface
+/// under the pointer or to the surface on which the touch point went down.
 #[derive(Debug, PartialEq)]
 pub enum DeviceEvent {
     PointerEnter {
@@ -50,6 +54,7 @@ pub enum DeviceEvent {
         button: Button,
         state: PressState,
         at: Point,
+        serial: InputSerial,
     },
     /// A scroll wheel or touchpad scrolled by `delta` along each axis. A positive component of `delta` scrolls toward
     /// the right or the bottom of the content.
@@ -74,6 +79,15 @@ pub enum DeviceEvent {
     },
     PointerRemoved(PointerDevice),
     KeyboardRemoved(KeyboardDevice),
+    /// A touch point went down on `surface`.
+    TouchDown {
+        surface: SurfaceId,
+        sample: TouchSample,
+    },
+    TouchMotion(TouchSample),
+    TouchUp(TouchSample),
+    /// A touch point ended without going up.
+    TouchCancel(TouchId),
 }
 
 /// What the runtime asks a platform to do with a pointer.

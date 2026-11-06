@@ -2,7 +2,7 @@
 use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
 use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
-use lavashell_core::geometry::{Size, Viewport};
+use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::scene::SceneBuilder;
@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd,
-    SceneSink, SurfaceRecords, Window,
+    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
+    SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -135,7 +135,6 @@ struct Surface {
     background: Option<ExtBackgroundEffectSurfaceV1>,
     blur_size: Option<Size>,
     shape: Option<shape::SurfaceShape>,
-    drag_region: Option<DragRegion>,
 }
 
 impl Surface {
@@ -221,17 +220,19 @@ struct SeatDevices {
     pointer: Option<ThemedPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     touch: Option<wl_touch::WlTouch>,
-    touches: touch::TouchPoints,
+    /// The last position of each touch point that is down, because the protocol reports no position when a point goes
+    /// up.
+    touch_positions: BTreeMap<i32, Point>,
 }
 
 impl SeatDevices {
     fn new(seat: wl_seat::WlSeat) -> Self {
         Self {
-            touches: touch::TouchPoints::new(seat.id().protocol_id()),
             seat,
             pointer: None,
             keyboard: None,
             touch: None,
+            touch_positions: BTreeMap::new(),
         }
     }
 }
@@ -271,6 +272,8 @@ pub(super) struct Platform {
     protocols: SurfaceProtocols,
     devices: Vec<SeatDevices>,
     input: InputRouter,
+    /// The failure of a request that followed from an input, which ends the run once the event dispatch returns.
+    input_failure: Option<crate::Error>,
     pub(super) loop_handle: LoopHandle<'static, Self>,
     pub(super) clipboard: ClipboardState,
     pub(super) config: AppConfig,

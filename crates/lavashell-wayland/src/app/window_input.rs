@@ -1,39 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, Role, open_surface};
-use lavashell_core::geometry::Point;
-use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::InputEvent;
-use sctk::reexports::client::protocol::wl_pointer;
-use smithay_client_toolkit as sctk;
+use super::device::protocol_serial;
+use super::{Platform, Role};
+use crate::Error;
+use lavashell_platform::WindowControlRequest;
 
 impl Platform {
-    pub(super) fn move_window(
-        &mut self,
-        surface: SurfaceId,
-        pointer: &wl_pointer::WlPointer,
-        at: Point,
-        serial: u32,
-    ) -> bool {
-        let Some(seat) = self.transfer_pointer_device(pointer) else {
-            return false;
-        };
-        let Ok((native, view, viewport)) =
-            open_surface(&mut self.surfaces, &mut self.surface_records, surface)
-        else {
-            return false;
-        };
-        if native
-            .drag_region
-            .as_ref()
-            .is_none_or(|region| !region(at, viewport.size))
-        {
-            return false;
+    /// Executes `request` while the window and the pointer in it exist, and returns whether a move of the window
+    /// started.
+    pub(super) fn execute_window_control(
+        &self,
+        request: WindowControlRequest,
+    ) -> Result<bool, Error> {
+        match request {
+            WindowControlRequest::BeginMove {
+                surface,
+                pointer,
+                serial,
+            } => {
+                let serial = protocol_serial(serial)?;
+                let role = (self.surfaces.get(&surface)).map(|known| &known.role);
+                let started = match (self.pointer_seat(pointer), role) {
+                    (Some(seat), Some(Role::Window { window })) => {
+                        window.move_(seat, serial);
+                        true
+                    }
+                    _ => false,
+                };
+                Ok(started)
+            }
         }
-        let Role::Window { window } = &native.role else {
-            return false;
-        };
-        window.move_(&seat, serial);
-        view.input(InputEvent::CancelPointer);
-        true
     }
 }

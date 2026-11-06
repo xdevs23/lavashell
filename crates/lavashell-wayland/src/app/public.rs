@@ -305,7 +305,7 @@ impl App {
     /// # Errors
     ///
     /// Fails with the error of `startup`, when no surface was added, and when the connection, a
-    /// protocol the surfaces need, the renderer or a frame fails.
+    /// protocol the surfaces need, the renderer, a frame or a window move fails.
     pub fn run(
         mut self,
         startup: impl FnOnce(&mut Self) -> Result<(), Error>,
@@ -324,6 +324,9 @@ impl App {
         let mut platform =
             Platform::new(&connection, &globals, qh, queue, self, event_loop.handle())?;
         loop {
+            if let Some(error) = platform.input_failure.take() {
+                return Err(error);
+            }
             if let Some(layers) = &mut platform.output_layers {
                 layers.check()?;
             }

@@ -118,6 +118,7 @@ impl Platform {
             registry: RegistryState::new(globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
             input: InputRouter::new(input_filter),
+            input_failure: None,
             clipboard: ClipboardState::new(globals, &qh, seats.seats(), clipboard),
             seats,
             outputs,

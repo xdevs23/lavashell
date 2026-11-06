@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::Error;
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{Button, DeviceEvent, KeyboardDevice, PointerDevice, PressState};
+use lavashell_platform::{
+    Button, DeviceEvent, InputSerial, KeyboardDevice, PointerDevice, PressState,
+};
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer};
 use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT, PointerEventKind};
@@ -20,6 +23,14 @@ pub(super) fn keyboard_device(keyboard: &wl_keyboard::WlKeyboard) -> KeyboardDev
     KeyboardDevice(protocol_id(keyboard))
 }
 
+fn input_serial(serial: u32) -> InputSerial {
+    InputSerial(u64::from(serial))
+}
+
+pub(super) fn protocol_serial(serial: InputSerial) -> Result<u32, Error> {
+    u32::try_from(serial.0).map_err(Error::ProtocolSerial)
+}
+
 /// The event reported by `kind` for `pointer` at `at` on `surface`.
 pub(super) fn pointer_event(
     pointer: PointerDevice,
@@ -35,11 +46,11 @@ pub(super) fn pointer_event(
         },
         PointerEventKind::Leave { .. } => DeviceEvent::PointerLeave { pointer },
         PointerEventKind::Motion { .. } => DeviceEvent::PointerMotion { pointer, at },
-        PointerEventKind::Press { button, .. } => {
-            button_event(pointer, button, PressState::Pressed, at)
+        PointerEventKind::Press { button, serial, .. } => {
+            button_event(pointer, button, PressState::Pressed, at, serial)
         }
-        PointerEventKind::Release { button, .. } => {
-            button_event(pointer, button, PressState::Released, at)
+        PointerEventKind::Release { button, serial, .. } => {
+            button_event(pointer, button, PressState::Released, at, serial)
         }
         PointerEventKind::Axis {
             horizontal,
@@ -53,8 +64,14 @@ pub(super) fn pointer_event(
     }
 }
 
-/// The event for the button with the evdev `code` on `pointer`.
-fn button_event(pointer: PointerDevice, code: u32, state: PressState, at: Point) -> DeviceEvent {
+/// The event for the button with the evdev `code` on `pointer`, reported with `serial`.
+fn button_event(
+    pointer: PointerDevice,
+    code: u32,
+    state: PressState,
+    at: Point,
+    serial: u32,
+) -> DeviceEvent {
     let button = match code {
         BTN_LEFT => Button::Primary,
         BTN_RIGHT => Button::Secondary,
@@ -65,6 +82,7 @@ fn button_event(pointer: PointerDevice, code: u32, state: PressState, at: Point)
         button,
         state,
         at,
+        serial: input_serial(serial),
     }
 }
 

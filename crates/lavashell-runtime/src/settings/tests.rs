@@ -14,7 +14,7 @@ use lavashell_platform::SurfaceEvent;
 fn open_reader(records: &mut SurfaceRecords) -> Result<(SurfaceId, PreferenceReader), TestError> {
     let (view, reader) = PreferenceReader::view(lavashell_test_fixtures::facts());
     let size = Size::new(100.dp(), 50.dp());
-    Ok((records.open(view, size, Density::ONE)?, reader))
+    Ok((records.open(view, size, Density::ONE, None)?, reader))
 }
 
 fn read(

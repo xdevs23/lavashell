@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::DragRegion;
+use crate::test_error::TestError;
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::keyboard::{Key, Shortcut};
 use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::prelude::Modifier;
+use lavashell_core::ui::PointerPhase;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::{Cursor, View};
-use lavashell_platform::SurfaceEvent;
-use std::cell::Cell;
+use lavashell_platform::{SurfaceEvent, WindowControlRequest};
+use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 const MOUSE: PointerDevice = PointerDevice(1);
@@ -14,6 +19,7 @@ const TABLET: PointerDevice = PointerDevice(2);
 const KEYBOARD: KeyboardDevice = KeyboardDevice(3);
 const WINDOW: SurfaceId = SurfaceId(0);
 const PANEL: SurfaceId = SurfaceId(1);
+const SERIAL: InputSerial = InputSerial(7);
 
 fn route_all(
     router: &mut InputRouter,
@@ -50,6 +56,16 @@ fn button(pointer: PointerDevice, button: Button, state: PressState, at: Point) 
         button,
         state,
         at,
+        serial: SERIAL,
+    }
+}
+
+fn primary_press(pointer: PointerDevice, surface: SurfaceId, at: Point) -> RoutedInput {
+    RoutedInput::PrimaryPress {
+        surface,
+        pointer,
+        at,
+        serial: SERIAL,
     }
 }
 
@@ -97,21 +113,19 @@ fn pointer_input_reaches_the_surface_under_the_pointer_at_the_position_of_each_e
             button(MOUSE, Button::Primary, PressState::Pressed, at(9, 4)),
         ],
     );
+    let scroll = InputEvent::Scroll {
+        at: at(9, 4),
+        delta,
+    };
     let expected = [
-        InputEvent::Move(at(4, 2)),
-        InputEvent::Move(at(6, 3)),
-        InputEvent::Press(at(7, 3)),
-        InputEvent::Release(at(8, 3)),
-        InputEvent::Context(at(9, 3)),
-        InputEvent::Scroll {
-            at: at(9, 4),
-            delta,
-        },
-        InputEvent::Leave,
+        by(MOUSE, WINDOW, InputEvent::Move(at(4, 2))),
+        by(MOUSE, WINDOW, InputEvent::Move(at(6, 3))),
+        primary_press(MOUSE, WINDOW, at(7, 3)),
+        by(MOUSE, WINDOW, InputEvent::Release(at(8, 3))),
+        by(MOUSE, WINDOW, InputEvent::Context(at(9, 3))),
+        by(MOUSE, WINDOW, scroll),
+        by(MOUSE, WINDOW, InputEvent::Leave),
     ];
-    let expected: Vec<_> = (expected.into_iter())
-        .map(|input| by(MOUSE, WINDOW, input))
-        .collect();
     assert_eq!(received, expected);
 }
 
@@ -130,7 +144,7 @@ fn a_pointer_that_takes_over_a_surface_cancels_the_interaction_of_the_pointer_be
     );
     let expected = [
         by(MOUSE, WINDOW, InputEvent::Move(at(1, 1))),
-        by(MOUSE, WINDOW, InputEvent::Press(at(1, 1))),
+        primary_press(MOUSE, WINDOW, at(1, 1)),
         RoutedInput::Cancel {
             surface: WINDOW,
             pointer: MOUSE,
@@ -288,10 +302,15 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
 -> Result<(), crate::Error> {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let view = View::new(lavashell_test_fixtures::facts(), |_| {});
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     let moved = by(MOUSE, surface, InputEvent::Move(at(1, 1)));
-    let cursor = Some(InputRequest::SetCursor(MOUSE, Cursor::Default));
+    let cursor = Some(PlatformRequest::Input(InputRequest::SetCursor(
+        MOUSE,
+        Cursor::Default,
+    )));
     assert_eq!(moved.deliver(&mut records), cursor);
+    let pressed = primary_press(MOUSE, surface, at(1, 1));
+    assert_eq!(pressed.deliver(&mut records), cursor);
     let cancel = RoutedInput::Cancel {
         surface,
         pointer: TABLET,
@@ -300,5 +319,49 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     let left = by(MOUSE, surface, InputEvent::Leave);
     assert_eq!(left.deliver(&mut records), None);
+    Ok(())
+}
+
+#[test]
+fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_the_press()
+-> Result<(), TestError> {
+    let phases = Rc::new(RefCell::new(Vec::new()));
+    let recorded = phases.clone();
+    let size = Size::new(10.dp(), 10.dp());
+    let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        let recorded = recorded.clone();
+        let modifier =
+            Modifier::new().on_pointer(move |input| recorded.borrow_mut().push(input.phase));
+        ui.spacer(size.width, size.height, modifier);
+    });
+    let presses = || {
+        (phases.borrow().iter())
+            .filter(|&&phase| phase == PointerPhase::Pressed)
+            .count()
+    };
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let upper_half: DragRegion = Rc::new(|at: Point, size: Size| at.y < size.height * 0.5);
+    let surface = records.open(view, size, Density::ONE, Some(upper_half))?;
+    let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
+    let view = records.open_view_mut(surface).ok_or(TestError::NotOpen)?;
+    (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
+    let begin_move = WindowControlRequest::BeginMove {
+        surface,
+        pointer: MOUSE,
+        serial: SERIAL,
+    };
+    let in_region = primary_press(MOUSE, surface, at(5, 2));
+    assert_eq!(
+        in_region.deliver(&mut records),
+        Some(PlatformRequest::WindowControl(begin_move))
+    );
+    assert_eq!(presses(), 0);
+    let outside = primary_press(MOUSE, surface, at(5, 8));
+    let cursor = PlatformRequest::Input(InputRequest::SetCursor(MOUSE, Cursor::Pointer));
+    assert_eq!(outside.deliver(&mut records), Some(cursor));
+    assert_eq!(presses(), 1);
+    assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
+    records.retire(surface);
+    assert!(!records.in_drag_region(surface, at(5, 2)));
     Ok(())
 }

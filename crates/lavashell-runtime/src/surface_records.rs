@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
-use lavashell_core::geometry::{Size, Viewport};
+use crate::{DragRegion, Error};
+use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::SurfaceId;
@@ -19,6 +19,7 @@ struct Record {
     size: Size,
     density: Density,
     lifecycle: Lifecycle,
+    drag_region: Option<DragRegion>,
 }
 
 impl Record {
@@ -59,12 +60,18 @@ impl SurfaceRecords {
     }
 
     /// Opens a surface that shows `view` at `size` and `density` until the host configures it. The view gets the
-    /// current settings.
+    /// current settings. A press of the primary button in `drag_region` starts a move of the surface by the host.
     ///
     /// # Errors
     ///
     /// Fails when every surface id is used.
-    pub fn open(&mut self, view: View, size: Size, density: Density) -> Result<SurfaceId, Error> {
+    pub fn open(
+        &mut self,
+        view: View,
+        size: Size,
+        density: Density,
+        drag_region: Option<DragRegion>,
+    ) -> Result<SurfaceId, Error> {
         let id = match self.last_id {
             None => 0,
             Some(last) => last.checked_add(1).ok_or(Error::NumberSurface)?,
@@ -79,6 +86,7 @@ impl SurfaceRecords {
             size,
             density,
             lifecycle: Lifecycle::Waiting,
+            drag_region,
         };
         let _replaced_record = self.records.insert(id, record);
         Ok(id)
@@ -151,6 +159,13 @@ impl SurfaceRecords {
     #[must_use]
     pub fn is_configured(&self, surface: SurfaceId) -> bool {
         (self.records.get(&surface)).is_some_and(|record| record.lifecycle.is_configured())
+    }
+
+    /// Whether `at` in dp lies in the drag region of `surface` while it is open.
+    pub(crate) fn in_drag_region(&self, surface: SurfaceId, at: Point) -> bool {
+        self.open_record(surface).is_some_and(|record| {
+            (record.drag_region.as_ref()).is_some_and(|region| region(at, record.size))
+        })
     }
 
     #[must_use]

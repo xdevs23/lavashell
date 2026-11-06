@@ -110,6 +110,8 @@ pub enum Error {
     ClipboardUnavailable,
     #[error("the clipboard needs the serial of an input event")]
     NoInputSerial,
+    #[error("the serial of an input event does not fit a Wayland serial")]
+    ProtocolSerial(#[source] TryFromIntError),
     #[error("the surface has no focused input device")]
     NoFocusedInputDevice,
     #[error("the surface has more than one focused input device")]

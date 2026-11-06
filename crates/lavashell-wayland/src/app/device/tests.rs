@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::test_error::TestError;
 use lavashell_core::units::DpExt;
 use sctk::seat::pointer::{AxisScroll, BTN_MIDDLE};
 
@@ -14,7 +15,7 @@ fn pressed(code: u32) -> DeviceEvent {
     let kind = PointerEventKind::Press {
         time: 0,
         button: code,
-        serial: 0,
+        serial: 9,
     };
     pointer_event(MOUSE, WINDOW, at(), &kind)
 }
@@ -25,6 +26,7 @@ fn pressed_button(button: Button) -> DeviceEvent {
         button,
         state: PressState::Pressed,
         at: at(),
+        serial: InputSerial(9),
     }
 }
 
@@ -53,4 +55,15 @@ fn a_scroll_reports_the_absolute_distance_along_each_axis_as_its_delta() {
         delta: Point::new(3.dp(), (-5).dp()),
     };
     assert_eq!(pointer_event(MOUSE, WINDOW, at(), &kind), expected);
+}
+
+#[test]
+fn an_input_serial_converts_back_to_wayland_and_a_wider_one_fails() -> Result<(), TestError> {
+    assert_eq!(protocol_serial(input_serial(u32::MAX))?, u32::MAX);
+    let wider = InputSerial(u64::from(u32::MAX) + 1);
+    assert!(matches!(
+        protocol_serial(wider),
+        Err(Error::ProtocolSerial(_))
+    ));
+    Ok(())
 }

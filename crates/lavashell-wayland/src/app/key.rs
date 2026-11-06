@@ -50,7 +50,7 @@ impl Platform {
         };
         for routed in self.input.route(pressed) {
             if !self.run_clipboard_shortcut(&routed, &seat) {
-                self.deliver(routed);
+                let _keys_start_no_move = self.deliver(routed);
             }
         }
     }
