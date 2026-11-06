@@ -2,16 +2,16 @@
 use super::creation::NativeSpec;
 use super::{
     App, BTreeMap, Choreographers, ClipboardState, CompositorState, Connection, Duration,
-    EventQueue, Fonts, GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState,
-    Painter, PainterSetup, Platform, QueueHandle, RegistryState, Request, Role, SeatDevices,
-    SeatState, Shm, SurfaceProtocols, SurfaceRecords, View, VulkanRenderer, WaylandSurface, Window,
-    WindowDecorations, XdgShell, accessibility, focus_grab, output_layers, preferences,
-    presentation, scene, session_lock, wl_surface,
+    EventQueue, GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState, Platform,
+    QueueHandle, RegistryState, RendererState, Request, Role, SeatDevices, SeatState, Shm,
+    SurfaceProtocols, SurfaceRecords, View, WaylandSurface, Window, WindowDecorations, XdgShell,
+    accessibility, focus_grab, output_layers, preferences, presentation, session_lock, wl_surface,
 };
 use crate::Error;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
+use lavashell_renderer::RendererSetup;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 
 impl SurfaceProtocols {
@@ -24,28 +24,6 @@ impl SurfaceProtocols {
             background: globals.bind(qh, 1..=1, ()).ok(),
         }
     }
-}
-
-/// Creates a painter on `gpu` and runs `setup` on it. The painter gets a GPU profiler when `gpu_timing` is set or
-/// when its quality chooser picks the effect quality from measured GPU times.
-fn painter(
-    gpu: &mut VulkanRenderer,
-    fonts: &Fonts,
-    setup: Option<PainterSetup>,
-    gpu_timing: bool,
-) -> Result<Painter, Error> {
-    let mut paint = gpu.painter(fonts).map_err(Error::CreatePainter)?;
-    if let Some(setup) = setup {
-        setup(&mut paint);
-    }
-    if gpu_timing || paint.uses_quality_chooser() {
-        let profiler = gpu.create_profiler().map_err(Error::CreateProfiler)?;
-        if gpu_timing {
-            gpu.time_frames(profiler.clone());
-        }
-        paint.time_gpu(profiler);
-    }
-    Ok(paint)
 }
 
 impl Platform {
@@ -73,9 +51,17 @@ impl Platform {
             ..
         } = app;
         let protocols = SurfaceProtocols::bind(globals, &qh);
+        let start = Instant::now();
+        let setup = RendererSetup {
+            fonts,
+            painter: painter_setup,
+            scene,
+            gpu_timing,
+            full_redraw: config.full_redraw,
+            start,
+        };
         let wayland = WaylandPresentation::new(connection.backend());
-        let mut gpu = VulkanRenderer::new(&wayland).map_err(Error::CreateRenderer)?;
-        let paint = painter(&mut gpu, &fonts, painter_setup, gpu_timing)?;
+        let renderer = RendererState::new(&wayland, setup).map_err(Error::Render)?;
         let outputs = OutputState::new(globals, &qh);
         let session_lock = session_lock
             .map(|configuration| {
@@ -93,7 +79,6 @@ impl Platform {
                 output_layers::Runtime::new(configuration, protocols.layers.as_ref())
             })
             .transpose()?;
-        let start = Instant::now();
         let mut surface_records = SurfaceRecords::new(preference_overrides);
         surface_records.change_settings(SettingsEvent::Locales(preferences::user_languages()));
         let seats = SeatState::new(globals, &qh);
@@ -114,8 +99,7 @@ impl Platform {
             surface_requests: Vec::new(),
             choreographers: Choreographers::default(),
             surfaces: BTreeMap::new(),
-            gpu,
-            paint,
+            renderer,
             connection: connection.clone(),
             registry: RegistryState::new(globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
@@ -133,7 +117,6 @@ impl Platform {
             run_end,
             start,
             last_tick: Duration::ZERO,
-            scene: scene.map(scene::SceneRuntime::new),
             qh,
         };
         for request in requests {
@@ -145,7 +128,7 @@ impl Platform {
     fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
         match request {
             Request::Window(window, mut view) => {
-                let spec = window.spec(&mut view, self.paint.shaper())?;
+                let spec = window.spec(&mut view, self.renderer.shaper())?;
                 let native = NativeSpec::window(window, view, &spec)?;
                 self.create_surface(native, |platform, wl, _| {
                     platform.window_role(wl, &spec.role)

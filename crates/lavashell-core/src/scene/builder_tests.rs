@@ -68,6 +68,22 @@ fn a_restart_after_a_change_that_does_not_fit_builds_the_next_frame_from_empty()
 }
 
 #[test]
+fn snapshots_share_a_lineage_until_the_builder_restarts() -> TestResult {
+    let mut builder = SceneBuilder::default();
+    builder.change(leaf(1))?;
+    builder.end_frame()?;
+    let first = builder.snapshot().lineage();
+    builder.change(leaf(2))?;
+    builder.end_frame()?;
+    assert_eq!(builder.snapshot().lineage(), first);
+    builder.restart()?;
+    assert_eq!(builder.snapshot().lineage(), first);
+    builder.end_frame()?;
+    assert_ne!(builder.snapshot().lineage(), first);
+    Ok(())
+}
+
+#[test]
 fn a_restart_empties_the_snapshot_once_the_next_frame_ends() -> TestResult {
     let mut builder = SceneBuilder::default();
     builder.change(leaf(1))?;

@@ -51,7 +51,7 @@ impl Platform {
             return;
         }
         let mut frame = |view: &mut View, sink: &mut SceneSink| {
-            view.frame_into(viewport, self.paint.shaper(), sink)
+            view.frame_into(viewport, self.renderer.shaper(), sink)
         };
         let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
         if shown {

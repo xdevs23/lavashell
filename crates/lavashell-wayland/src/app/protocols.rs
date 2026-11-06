@@ -56,7 +56,7 @@ impl CompositorHandler for Platform {
         if let Some(id) = self.find_surface(wl)
             && let Some(surface) = self.surfaces.get_mut(&id)
         {
-            surface.frame_callback = None;
+            surface.frame_callback_pending = false;
         }
     }
 

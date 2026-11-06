@@ -3,7 +3,7 @@ use super::creation::NativeSpec;
 use super::{
     Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
     State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, configure_event,
-    physical_size, wl_output, wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
+    wl_output, wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
 };
 use crate::Error;
 use crate::logical::{extent, whole};
@@ -193,7 +193,7 @@ impl Platform {
         view: &mut View,
     ) -> Result<LayerContext, Error> {
         let proposal = content_proposal(options.current_layout());
-        let content = lavashell_runtime::measure_content(view, proposal, self.paint.shaper())?;
+        let content = lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
         Ok(LayerContext { content })
     }
 
@@ -223,12 +223,11 @@ impl Platform {
             let Some(view) = self.surface_records.open_view_mut(id) else {
                 continue;
             };
-            let content_current = match &surface.target {
-                Some(target) if !surface.needs_visual_frame(view) => {
-                    let contents = target.contents(physical_size(viewport)?);
-                    contents.map_err(Error::ReadSurfaceContents)? == SurfaceContents::Current
-                }
-                _ => false,
+            let content_current = if surface.needs_visual_frame(view) {
+                false
+            } else {
+                let contents = self.renderer.contents(id, viewport);
+                contents.map_err(Error::Render)? == SurfaceContents::Current
             };
             let Role::Layer(layer) = &mut surface.role else {
                 continue;

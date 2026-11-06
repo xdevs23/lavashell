@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::Control;
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{
-    DamageTracker, Density, DragRegion, FrameClock, Platform, PresentationTracker, Role,
-    SceneBuilder, Surface, View, shape, wl_surface,
+    Density, DragRegion, FrameClock, Platform, PresentationTracker, Role, SceneBuilder, Surface,
+    View, detach, shape, wl_surface,
 };
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::Appearance;
-use lavashell_renderer::{PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
 use lavashell_runtime::WindowShape;
 use std::sync::Arc;
 
@@ -56,18 +57,20 @@ impl Platform {
         } else {
             SurfaceAlpha::Opaque
         };
-        let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
-        let mut target = self
-            .gpu
-            .surface_target(window.clone(), alpha, timing)
-            .map_err(Error::CreateTarget)?;
-        target.request_output(spec.appearance.output);
-        if let Some(metadata) = spec.appearance.hdr_metadata {
-            target
-                .hdr_metadata(metadata)
-                .map_err(Error::SetHdrMetadata)?;
-        }
-        let role = role(self, &wl, id)?;
+        let presentation =
+            (self.presentation.as_ref()).map(|presentation| presentation.proxy.clone());
+        let attach = Attach {
+            surface: id,
+            window: window.clone(),
+            alpha,
+            timing: SurfaceTiming::new(PresentationPolicy::Automatic),
+            output: spec.appearance.output,
+            hdr_metadata: spec.appearance.hdr_metadata,
+            gpu_budget: self.config.ui_budget,
+            control: Control::new(id, wl.clone(), wp_viewport, presentation, self.qh.clone()),
+        };
+        self.renderer.attach(attach).map_err(Error::Render)?;
+        let role = role(self, &wl, id).inspect_err(|_| detach(&mut self.renderer, id))?;
         let accessibility = crate::accessibility::Bridge::new(
             id,
             spec.accessible_name,
@@ -75,18 +78,12 @@ impl Platform {
         );
         let surface = Surface {
             accessibility: Some(accessibility),
-            scene_generation: 0,
-            target: Some(target),
             builder: SceneBuilder::default(),
-            damage: DamageTracker::default(),
             role,
             wl,
             _window: window,
-            wp_viewport,
             fractional,
-            frame_request: None,
-            frame_callback: None,
-            feedback: Vec::new(),
+            frame_callback_pending: false,
             clock: FrameClock::default(),
             telemetry: PresentationTracker::default(),
             output: None,

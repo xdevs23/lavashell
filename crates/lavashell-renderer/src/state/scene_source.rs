@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Duration, Viewport, VulkanRenderer};
-use crate::Error;
-use lavashell_renderer::vulkan::{
-    CompletedScene, SceneCompletion, SceneImage, SceneMailbox, SceneSource,
+use super::StateError;
+use crate::vulkan::{
+    CompletedScene, SceneCompletion, SceneImage, SceneMailbox, SceneSource, VulkanRenderer,
 };
+use lavashell_core::prelude::Viewport;
 use std::sync::Arc;
+use std::time::Duration;
 
-pub(super) struct SceneRuntime {
+/// A scene source with the mailbox of the scene images it submitted.
+pub(super) struct SceneImages {
     source: Box<dyn SceneSource>,
     /// Limits the scenes in flight to the smallest number of frames in flight among the swapchains that show the
     /// scene. The mailbox is created once the first of those swapchains exists.
     mailbox: Option<SceneMailbox<SceneImage, SceneCompletion>>,
 }
 
-impl SceneRuntime {
+impl SceneImages {
     pub fn new(source: Box<dyn SceneSource>) -> Self {
         Self {
             source,
@@ -39,8 +41,8 @@ impl SceneRuntime {
         now: Duration,
         viewport: Viewport,
         frames_in_flight: Option<usize>,
-    ) -> Result<(), Error> {
-        (gpu.poll_scene_imports()).map_err(Error::ReleaseSceneImports)?;
+    ) -> Result<(), StateError> {
+        (gpu.poll_scene_imports()).map_err(StateError::ReleaseSceneImports)?;
         if let Some(capacity) = frames_in_flight {
             match &mut self.mailbox {
                 Some(mailbox) => mailbox.set_capacity(capacity),
@@ -50,16 +52,17 @@ impl SceneRuntime {
         let Some(mailbox) = &mut self.mailbox else {
             return Ok(());
         };
-        (mailbox.poll(SceneCompletion::status)).map_err(Error::SceneCompletion)?;
+        (mailbox.poll(SceneCompletion::status)).map_err(StateError::SceneCompletion)?;
         if now >= self.source.next_deadline()
             && mailbox.can_publish()
             && let Some(pending) =
-                (self.source.produce(gpu, now, viewport)).map_err(Error::ProduceScene)?
+                (self.source.produce(gpu, now, viewport)).map_err(StateError::ProduceScene)?
         {
-            (mailbox.publish(pending.scene, pending.completion)).map_err(Error::PublishScene)?;
+            (mailbox.publish(pending.scene, pending.completion))
+                .map_err(StateError::PublishScene)?;
             // A scene made from an external frame that has already completed needs only an acquire on the
             // local queue. Polling again makes it the latest scene in this frame instead of the next tick.
-            (mailbox.poll(SceneCompletion::status)).map_err(Error::SceneCompletion)?;
+            (mailbox.poll(SceneCompletion::status)).map_err(StateError::SceneCompletion)?;
         }
         Ok(())
     }

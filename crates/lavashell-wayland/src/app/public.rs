@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::render::NextRender;
-use super::scene::SceneRuntime;
 use super::{
     App, AppConfig, Clipboard, Connection, Duration, EventLoop, Fonts, FrameReport, FrameTime,
-    HostKey, InputEvent, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform, PlatformFacts,
-    Request, RunEnd, SurfaceId, Ui, View, Viewport, Window, registry_queue_init, session_lock,
+    HostKey, InputEvent, Instant, KeyboardFocus, LayerSurface, OutputInfo, Painter, Platform,
+    PlatformFacts, Request, RunEnd, SurfaceId, Ui, View, Viewport, Window, registry_queue_init,
+    session_lock,
 };
 use crate::Error;
 use crate::logical::{whole_size, window_size};
@@ -344,17 +344,15 @@ impl Platform {
     fn timeout(&self) -> Option<Duration> {
         let elapsed = self.start.elapsed();
         let exit = self.run_end.exit_in(elapsed);
-        let scene = (self.scene.as_ref())
-            .and_then(SceneRuntime::wake)
-            .filter(|deadline| *deadline > elapsed);
-        let surfaces = (self.surfaces.iter()).filter_map(|(&id, surface)| {
-            surface.wakes(self.surface_records.open_view(id)?, elapsed)
-        });
-        let wakes = scene
-            .into_iter()
-            .chain(surfaces)
+        let scene = (self.renderer.scene_deadline())
+            .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
+            .filter(|wait| !wait.is_zero());
+        let surfaces = (self.surfaces.iter())
+            .filter_map(|(&id, surface)| {
+                surface.wakes(self.surface_records.open_view(id)?, elapsed)
+            })
             .map(|deadline| deadline.saturating_sub(elapsed));
-        exit.into_iter().chain(wakes).min()
+        exit.into_iter().chain(scene).chain(surfaces).min()
     }
 
     /// Whether the run ends now. The session lock and the per-output layers count as open until they end.

@@ -22,6 +22,7 @@ mod retention;
 mod scalar;
 mod silhouette;
 pub mod source_filters;
+mod state;
 pub mod text;
 mod text_alignment;
 mod text_cache;
@@ -40,6 +41,10 @@ pub use paint::{
     outline_path, skpoint, skrect,
 };
 pub use skia_safe as skia;
+pub use state::{
+    Attach, DrawError, Drawn, PainterSetup, PresentFrame, RendererSetup, RendererState, StateError,
+    SurfaceControl,
+};
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
     ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, PresentationBackend,

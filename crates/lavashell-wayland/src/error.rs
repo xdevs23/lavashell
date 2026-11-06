@@ -5,7 +5,7 @@ use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
-use lavashell_renderer::{Error as RendererError, InputSizeError, OutlineError};
+use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
 use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
@@ -70,16 +70,10 @@ pub enum Error {
     NoXdgShell,
     #[error("the compositor offers no layer-shell")]
     NoLayerShell,
-    #[error("the Vulkan renderer could not start")]
-    CreateRenderer(#[source] RendererError),
-    #[error("the painter could not start")]
-    CreatePainter(#[source] RendererError),
-    #[error("the GPU profiler could not be created")]
-    CreateProfiler(#[source] RendererError),
-    #[error("the Vulkan target of a surface could not be created")]
-    CreateTarget(#[source] RendererError),
-    #[error("the HDR metadata of a surface was rejected")]
-    SetHdrMetadata(#[source] RendererError),
+    #[error("the renderer failed")]
+    Render(#[source] StateError),
+    #[error("a frame could not be drawn")]
+    Draw(#[source] DrawError<ControlError>),
     #[error("a region could not be created")]
     CreateRegion(#[source] sctk::error::GlobalError),
     #[error("a session lock needs an advertised output")]
@@ -100,10 +94,6 @@ pub enum Error {
     LayerMargin(FiniteDp),
     #[error("the size {0:?} of a surface does not fit the protocol")]
     SurfaceSize(Size),
-    #[error("the buffer scale of a surface does not fit the protocol")]
-    BufferScale(#[source] TryFromIntError),
-    #[error("no buffer of whole pixels covers the size of a surface")]
-    BufferSize(#[source] NumberError),
     #[error("a contour of a window shape is not a valid polygon")]
     ShapeContour(#[source] PointsError),
     #[error("the path of a window shape could not be built")]
@@ -114,24 +104,8 @@ pub enum Error {
     ShowScene(#[source] FrameError<Infallible>),
     #[error("the merged frames of a view do not fit the scene in the builder")]
     BuildScene(#[source] ApplyError),
-    #[error("a frame could not be drawn")]
-    Draw(#[source] RendererError),
-    #[error("the contents of a drawn surface could not be checked")]
-    ReadSurfaceContents(#[source] RendererError),
-    #[error("a frame could not be painted")]
-    Paint(#[source] RendererError),
-    #[error("a drawn surface has no Vulkan target")]
-    SurfaceWithoutTarget,
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
-    #[error("the scene images that the GPU is done with could not be released")]
-    ReleaseSceneImports(#[source] RendererError),
-    #[error("the completion of a scene could not be read")]
-    SceneCompletion(#[source] RendererError),
-    #[error("the scene source could not produce a scene")]
-    ProduceScene(#[source] RendererError),
-    #[error("the scene mailbox refused a produced scene")]
-    PublishScene(#[source] RendererError),
     #[error("the compositor offers no clipboard")]
     ClipboardUnavailable,
     #[error("the clipboard needs the serial of an input event")]
@@ -185,4 +159,15 @@ pub enum Cancellation {
     SurfaceClosed,
     #[error("the compositor cancelled the data source")]
     SourceCancelled,
+}
+
+/// A failure of a request that the present of a frame applies to a native surface.
+#[derive(Debug, thiserror::Error)]
+pub enum ControlError {
+    #[error("no buffer of whole pixels covers one logical pixel")]
+    BufferSize(#[source] NumberError),
+    #[error("the buffer scale of a surface does not fit the protocol")]
+    BufferScale(#[source] TryFromIntError),
+    #[error("the size {0:?} of a surface does not fit the viewport destination")]
+    Destination(Size),
 }

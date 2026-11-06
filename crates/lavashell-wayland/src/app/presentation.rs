@@ -94,17 +94,12 @@ impl Dispatch<WpPresentation, ()> for Platform {
 impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
     fn event(
         state: &mut Self,
-        proxy: &WpPresentationFeedback,
+        _: &WpPresentationFeedback,
         event: wp_presentation_feedback::Event,
         data: &Feedback,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if !matches!(event, wp_presentation_feedback::Event::SyncOutput { .. })
-            && let Some(surface) = state.surfaces.get_mut(&data.surface)
-        {
-            surface.feedback.retain(|feedback| feedback != proxy);
-        }
         match event {
             wp_presentation_feedback::Event::Presented {
                 tv_sec_hi,
