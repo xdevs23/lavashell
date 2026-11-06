@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::RoleControl;
 use super::creation::NativeSpec;
 use super::{Platform, Request, Role, configure_event};
 use crate::Error;
 use lavashell_core::output::OutputRequest;
 use lavashell_core::platform::PlatformFacts;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::View;
 use lavashell_platform::{Appearance, SurfaceEvent};
@@ -173,6 +174,7 @@ impl NativeSpec {
             shape: None,
             drag_region: None,
             accessible_name: String::new(),
+            role_state: SurfaceState::default(),
         }
     }
 }
@@ -183,15 +185,14 @@ impl Platform {
         wl: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
         id: SurfaceId,
-    ) -> Result<Role, Error> {
+    ) -> Result<(Role, RoleControl), Error> {
         let lock = self
             .session_lock
             .as_mut()
             .ok_or(Error::LockSurfaceWithoutLock)?;
         lock.outputs.push((output.clone(), id));
-        Ok(Role::Lock(
-            lock.proxy.get_lock_surface(wl, output, &self.qh, id),
-        ))
+        let surface = lock.proxy.get_lock_surface(wl, output, &self.qh, id);
+        Ok((Role::Lock(surface), RoleControl::Stateless))
     }
 
     pub(super) fn lock_output_added(&mut self, output: &wl_output::WlOutput) {

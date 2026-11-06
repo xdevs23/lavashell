@@ -132,7 +132,7 @@ fn private_wire_keyboard_changes_commit_without_geometry_and_replay_for_a_new_ro
             .keyboard(true)
             .keyboard_when(move || active.get());
         let mut wire = Wire::new(version)?;
-        let mut layer = wire.layer(&options)?;
+        let layer = wire.layer(&options)?;
         wire.connection.flush().map_err(Error::Flush)?;
         let initial = requests(&mut wire.peer, layer.proxy.id().protocol_id())?;
         assert!(initial.contains(&(4, vec![0])));
@@ -140,13 +140,13 @@ fn private_wire_keyboard_changes_commit_without_geometry_and_replay_for_a_new_ro
         assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
         visible.set(true);
         let enabled = if version >= 4 { 2 } else { 1 };
-        assert_eq!(wire.commit(&mut layer)?, vec![(4, vec![enabled])]);
+        assert_eq!(wire.commit(&layer)?, vec![(4, vec![enabled])]);
         assert!(wire.keyboard_granted());
-        assert!(wire.commit(&mut layer)?.is_empty());
+        assert!(wire.commit(&layer)?.is_empty());
         visible.set(false);
         assert!(!wire.keyboard_granted());
-        assert_eq!(wire.commit(&mut layer)?, vec![(4, vec![0])]);
-        assert!(wire.commit(&mut layer)?.is_empty());
+        assert_eq!(wire.commit(&layer)?, vec![(4, vec![0])]);
+        assert!(wire.commit(&layer)?.is_empty());
         layer.proxy.destroy();
         wire.replace_surface();
         assert!(!wire.flush()?.is_empty());
@@ -179,7 +179,7 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
     assert!(!wire.flush()?.is_empty());
     assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     visible.set(true);
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert!(!wire.keyboard_granted());
     assert_eq!(
         wire.focus(&mut layer)?,
@@ -192,7 +192,7 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
     ] {
         assert!(wire.present(frame)?.is_empty());
         assert_eq!(
-            wire.transaction(&mut layer, &mut empty_view(), ContentState::Stale)?,
+            wire.transaction(&layer, &mut empty_view(), ContentState::Stale)?,
             Transaction::NeedsFrame
         );
         assert!(wire.focus(&mut layer)?.is_empty());
@@ -214,7 +214,7 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
         ]
     );
     assert_eq!(
-        wire.transaction(&mut layer, &mut empty_view(), ContentState::Current)?,
+        wire.transaction(&layer, &mut empty_view(), ContentState::Current)?,
         Transaction::Settled
     );
     assert!(wire.flush()?.is_empty());
@@ -244,7 +244,7 @@ fn private_wire_pending_content_keeps_a_live_grab_but_false_releases_before_any_
     let grab = wire.focus(&mut layer)?[0].2[0];
     let taller = AxisPlacement::Start(Extent::dp(2.dp())?);
     layout.update(|layout| layout.vertical = taller);
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert_eq!(
         wire.flush()?,
         vec![(layer.proxy.id().protocol_id(), 0, vec![1, 2])]
@@ -253,19 +253,19 @@ fn private_wire_pending_content_keeps_a_live_grab_but_false_releases_before_any_
     assert!(wire.focus(&mut layer)?.is_empty());
     visible.set(false);
     assert_eq!(wire.focus(&mut layer)?, vec![(grab, 3, vec![])]);
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert_eq!(
         wire.flush()?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![0])]
     );
     visible.set(true);
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert_eq!(
         wire.focus(&mut layer)?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![2])]
     );
     assert!(wire.present(FrameOutcome::Stale)?.is_empty());
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert_eq!(wire.focus(&mut layer)?.len(), 3);
     Ok(())
@@ -287,7 +287,7 @@ fn private_wire_initial_and_replacement_configure_commits_do_not_admit_focus()
             vec![(wire.surface.id().protocol_id(), 6, vec![])]
         );
         assert_eq!(
-            wire.transaction(&mut layer, &mut empty_view(), ContentState::Stale)?,
+            wire.transaction(&layer, &mut empty_view(), ContentState::Stale)?,
             Transaction::NeedsFrame
         );
         assert!(wire.present(FrameOutcome::Pending)?.is_empty());
@@ -338,7 +338,7 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
         // After a suboptimal frame is shown, the renderer reports the contents of the target as outdated. The
         // test passes `ContentState::Stale` to the transaction as the loop would.
         assert_eq!(
-            wire.transaction(&mut layer, &mut view, ContentState::Stale)?,
+            wire.transaction(&layer, &mut view, ContentState::Stale)?,
             Transaction::NeedsFrame
         );
         assert_eq!(
@@ -362,7 +362,7 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
             assert!(focused.is_empty());
         }
         assert_eq!(
-            wire.transaction(&mut layer, &mut view, ContentState::Stale)?,
+            wire.transaction(&layer, &mut view, ContentState::Stale)?,
             Transaction::Settled
         );
         assert!(!view.needs_visual_frame());
@@ -386,13 +386,13 @@ fn private_wire_hidden_layer_cannot_grab_and_releases_even_if_the_request_stays_
     assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
     visible.set(true);
-    wire.update(&mut layer)?;
+    wire.update(&layer)?;
     assert_eq!(
         wire.focus(&mut layer)?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![2])]
     );
     assert_eq!(
-        wire.transaction(&mut layer, &mut empty_view(), ContentState::Current)?,
+        wire.transaction(&layer, &mut empty_view(), ContentState::Current)?,
         Transaction::Committed
     );
     assert_eq!(
@@ -413,10 +413,10 @@ fn private_wire_hidden_layer_cannot_grab_and_releases_even_if_the_request_stays_
     );
     visible.set(false);
     assert_eq!(wire.focus(&mut layer)?, vec![(grab, 3, vec![])]);
-    assert_eq!(wire.commit(&mut layer)?, vec![(4, vec![0])]);
+    assert_eq!(wire.commit(&layer)?, vec![(4, vec![0])]);
     assert!(wire.focus(&mut layer)?.is_empty());
     visible.set(true);
-    assert!(!wire.commit(&mut layer)?.is_empty());
+    assert!(!wire.commit(&layer)?.is_empty());
     assert_eq!(wire.focus(&mut layer)?.len(), 3);
     Ok(())
 }

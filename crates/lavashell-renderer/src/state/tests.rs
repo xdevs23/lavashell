@@ -10,6 +10,7 @@ use lavashell_core::prelude::{
     SceneTree, Size, StreamId, StreamImage,
 };
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
+use lavashell_core::surface::SurfaceChange;
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Presentation};
 use skia_safe::IPoint;
 use std::cell::RefCell;
@@ -64,13 +65,14 @@ unsafe impl Window for HeadlessWindow {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Event {
     Prepare(Viewport),
     BeforePresent(Viewport),
     AfterPresent(FrameOutcome),
     ImportStreams,
     ReleaseStreams,
+    CommitState(SurfaceState),
 }
 
 /// A control that records each call made by the renderer state.
@@ -96,6 +98,13 @@ impl SurfaceControl for RecordingControl {
 
     fn after_present(&mut self, outcome: FrameOutcome) {
         self.events.borrow_mut().push(Event::AfterPresent(outcome));
+    }
+
+    fn commit_state(&mut self, state: &SurfaceState) -> Result<(), Infallible> {
+        self.events
+            .borrow_mut()
+            .push(Event::CommitState(state.clone()));
+        Ok(())
     }
 }
 
@@ -180,7 +189,18 @@ fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl> {
     }
 }
 
-fn frame(sequence: u64) -> PresentFrame {
+/// Attaches the surface with a control that records into `events`.
+fn attach_recording<S: StreamBackend<Gpu = VulkanRenderer>>(
+    state: &mut RendererState<RecordingControl, S>,
+    events: &Rc<RefCell<Vec<Event>>>,
+) -> Result<(), TestError> {
+    state
+        .attach(attach(events))
+        .map_err(|failed| failed.error)?;
+    Ok(())
+}
+
+fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
     PresentFrame {
         time: FrameTime {
             sequence,
@@ -188,6 +208,7 @@ fn frame(sequence: u64) -> PresentFrame {
         },
         viewport: Viewport::new(Size::new(40.dp(), 30.dp()), Density::ONE),
         present_at: None,
+        state,
     }
 }
 
@@ -203,10 +224,11 @@ fn scene() -> Result<SceneSnapshot, TestError> {
 fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Result<(), TestError> {
     let events = Rc::default();
     let mut state = state()?;
-    state.attach(attach(&events))?;
+    attach_recording(&mut state, &events)?;
     let snapshot = scene()?;
+    let surface_state = SurfaceState::default();
     for sequence in [1, 2] {
-        let frame = frame(sequence);
+        let frame = frame(sequence, &surface_state);
         assert_eq!(
             state.draw(SURFACE, frame, &snapshot)?.outcome,
             FrameOutcome::Shown
@@ -227,11 +249,17 @@ fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Resul
 fn a_surface_attaches_once_and_draws_no_more_once_retired() -> Result<(), TestError> {
     let events = Rc::default();
     let mut state = state()?;
-    state.attach(attach(&events))?;
+    attach_recording(&mut state, &events)?;
     let twice = state.attach(attach(&events));
-    assert!(matches!(twice, Err(StateError::AttachedTwice(SURFACE))));
+    assert!(matches!(
+        twice,
+        Err(AttachError {
+            error: StateError::AttachedTwice(SURFACE),
+            ..
+        })
+    ));
     assert!(state.retire(SURFACE).is_some());
-    let drawn = state.draw(SURFACE, frame(1), &scene()?);
+    let drawn = state.draw(SURFACE, frame(1, &SurfaceState::default()), &scene()?);
     assert!(matches!(
         drawn,
         Err(DrawError::Frame(FrameError::State(
@@ -248,8 +276,9 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
         events: Rc::clone(&events),
     };
     let mut state = RendererState::with_streams(&HeadlessBackend, setup(), |_| Ok(streams))?;
-    state.attach(attach(&events))?;
-    let frame = frame(1);
+    attach_recording(&mut state, &events)?;
+    let surface_state = SurfaceState::default();
+    let frame = frame(1, &surface_state);
     let drawn = state.draw(SURFACE, frame, &scene()?);
     assert!(matches!(
         drawn,
@@ -305,7 +334,8 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
     let mut state =
         RendererState::with_streams(&HeadlessBackend, setup(), |_| Ok(BoundFrames::default()))
             .map_err(StartError::into_state)?;
-    state.attach(attach(&events))?;
+    attach_recording(&mut state, &events)?;
+    let surface_state = SurfaceState::default();
     let stream = StreamId::next();
     let image = |generation| StreamImage {
         stream,
@@ -334,7 +364,7 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
     let mut red = state.gpu.offscreen((16, 12))?;
     let _chained_canvas = red.canvas().clear(skia_safe::Color::RED);
     (state.streams.0).bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));
-    let drawn = state.draw(SURFACE, frame(1), &tree.snapshot())?;
+    let drawn = state.draw(SURFACE, frame(1, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [255, 0, 0, 255]);
     let outside = painted_pixel(&mut state, 2, 2)?;
@@ -345,11 +375,28 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
         id: SceneNodeId(2),
         content: Content::Packet(stream_packet(image(2))),
     }]))?;
-    let drawn = state.draw(SURFACE, frame(2), &tree.snapshot())?;
+    let drawn = state.draw(SURFACE, frame(2, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [0, 0, 255, 255]);
     assert_eq!(painted_pixel(&mut state, 2, 2)?, outside);
     // Releases the bound images while the device of the state exists.
     state.streams.0.retire(stream);
+    Ok(())
+}
+
+#[test]
+fn a_committed_state_goes_to_the_control_of_its_surface_without_a_draw() -> Result<(), TestError> {
+    let events = Rc::default();
+    let mut state = state()?;
+    attach_recording(&mut state, &events)?;
+    let mut committed = SurfaceState::default();
+    committed.apply(SurfaceChange::InputRegion(Some(Vec::new())));
+    state.commit_state(SURFACE, &committed)?;
+    assert_eq!(events.take(), [Event::CommitState(committed.clone())]);
+    let unknown = state.commit_state(SurfaceId(1), &committed);
+    assert!(matches!(
+        unknown,
+        Err(CommitError::State(StateError::UnknownSurface(SurfaceId(1))))
+    ));
     Ok(())
 }

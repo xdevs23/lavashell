@@ -33,12 +33,6 @@ fn panel(records: &PanelRecords) -> Result<&Panel, TestError> {
     records.get(PANEL).ok_or(TestError::NoPanel)
 }
 
-fn updated(records: &mut PanelRecords) -> Vec<PanelRequest> {
-    let mut requests = Vec::new();
-    records.update(PANEL, &mut requests);
-    requests
-}
-
 #[test]
 fn the_keyboard_policy_asks_for_on_demand_focus_only_while_its_condition_holds() {
     assert_eq!(KeyboardPolicy::Off.mode(), KeyboardMode::Off);
@@ -86,7 +80,7 @@ fn a_new_panel_lays_out_its_content_and_receives_the_keyboard_after_a_shown_fram
         AxisPlacement::Start(NonNegativeDp::try_new(40.dp())?)
     );
     assert_eq!(panel(&records)?.keyboard_mode(), KeyboardMode::OnDemand);
-    assert!(updated(&mut records).is_empty());
+    assert!(records.update(PANEL).is_none());
     assert!(!panel(&records)?.keyboard_granted());
     assert!(!panel(&records)?.input_enabled());
     let size = Size::new(500.dp(), 40.dp());
@@ -105,17 +99,14 @@ fn a_panel_lays_out_again_when_its_content_measures_differently() -> TestResult 
     let mut records = PanelRecords::default();
     open(&mut records, PanelOptions::default(), &mut view)?;
     records.measure(PANEL, &mut view, &mut NoText)?;
-    assert!(updated(&mut records).is_empty());
+    assert!(records.update(PANEL).is_none());
     height.set(60.dp());
     frame(&mut view)?;
     records.measure(PANEL, &mut view, &mut NoText)?;
     let content = ContentSize::try_from(Size::new(500.dp(), 60.dp()))?;
     let geometry = PanelGeometry::of(PanelOptions::default().layout, content);
-    assert_eq!(
-        updated(&mut records),
-        [PanelRequest::Update(PANEL, geometry)]
-    );
-    assert!(updated(&mut records).is_empty());
+    assert!(records.update(PANEL).is_none());
+    assert_eq!(panel(&records)?.geometry(), geometry);
     Ok(())
 }
 
@@ -133,21 +124,20 @@ fn a_change_commits_at_once_only_while_the_host_shows_the_current_content() -> T
     let size = Size::new(500.dp(), 40.dp());
     records.shown(PANEL, PanelContent { size, input: true });
     active.set(true);
-    let mut requests = Vec::new();
-    let waiting = records.update_transaction(PANEL, ContentState::Stale, &mut requests);
-    assert_eq!(waiting, Transaction::NeedsFrame);
-    let enable = PanelRequest::SetKeyboard(PANEL, KeyboardMode::OnDemand);
-    assert_eq!(requests, [enable]);
+    let waiting = records.update_transaction(PANEL, ContentState::Stale);
+    let enable = PanelUpdate {
+        keyboard: Some(KeyboardMode::OnDemand),
+        transaction: Transaction::NeedsFrame,
+    };
+    assert_eq!(waiting, enable);
     assert!(!panel(&records)?.keyboard_granted());
-    requests.clear();
-    let committed = records.update_transaction(PANEL, ContentState::Current, &mut requests);
-    assert_eq!(committed, Transaction::Committed);
-    assert_eq!(requests, [PanelRequest::Commit(PANEL)]);
+    let committed = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(committed.transaction, Transaction::Committed);
+    assert_eq!(committed.keyboard, None);
     assert!(panel(&records)?.keyboard_granted());
-    requests.clear();
-    let settled = records.update_transaction(PANEL, ContentState::Current, &mut requests);
-    assert_eq!(settled, Transaction::Settled);
-    assert!(requests.is_empty());
+    let settled = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(settled.transaction, Transaction::Settled);
+    assert_eq!(settled.keyboard, None);
     Ok(())
 }
 
@@ -162,10 +152,9 @@ fn a_forgotten_panel_makes_no_requests() -> TestResult {
     open(&mut records, options, &mut view)?;
     records.forget(PANEL);
     assert!(records.get(PANEL).is_none());
-    let mut requests = Vec::new();
-    let settled = records.update_transaction(PANEL, ContentState::Current, &mut requests);
-    assert_eq!(settled, Transaction::Settled);
-    assert!(requests.is_empty());
+    let settled = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(settled.transaction, Transaction::Settled);
+    assert_eq!(settled.keyboard, None);
     Ok(())
 }
 
@@ -184,10 +173,9 @@ fn a_layout_change_below_half_a_dp_reaches_the_host_as_no_change() -> TestResult
     records.shown(PANEL, PanelContent { size, input: true });
     let nudged = FiniteDp::try_new(0.2.dp())?;
     layout.update(|layout| layout.margins.top = nudged);
-    let mut requests = Vec::new();
-    let settled = records.update_transaction(PANEL, ContentState::Stale, &mut requests);
-    assert_eq!(settled, Transaction::Settled);
-    assert!(requests.is_empty());
+    let settled = records.update_transaction(PANEL, ContentState::Stale);
+    assert_eq!(settled.transaction, Transaction::Settled);
+    assert_eq!(settled.keyboard, None);
     assert!(panel(&records)?.keyboard_granted());
     Ok(())
 }

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::{Control, RoleControl};
 use super::creation::NativeSpec;
-use super::{Platform, Role, Surface, configure_event};
-use crate::Error;
+use super::{Platform, Role, Surface, configure_event, send_surface_state};
 use crate::logical::{extent, whole};
 use crate::surface::LayerSurface;
+use crate::{Error, LayerLayoutError};
 use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLevel, PanelGeometry};
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::units::{FiniteDp, NonNegativeDp};
 use lavashell_core::view::View;
-use lavashell_platform::{Appearance, KeyboardMode, PanelRequest, SurfaceEvent};
+use lavashell_platform::{Appearance, KeyboardMode, SurfaceEvent};
 use lavashell_renderer::SurfaceContents;
 use lavashell_runtime::{ContentState, Panel, Transaction};
 use sctk::reexports::client::protocol::{wl_output, wl_surface};
@@ -18,14 +19,14 @@ use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
 };
 use smithay_client_toolkit as sctk;
+use std::collections::VecDeque;
 use zwlr_layer_surface_v1::Anchor;
 
-/// The layer-shell role of a surface, with the geometry sent to the compositor last.
+/// The layer-shell role of a surface.
 pub(super) struct Runtime {
     pub composition_order: i32,
     pub focus: Option<super::focus_grab::Runtime>,
     pub proxy: ZwlrLayerSurfaceV1,
-    applied: ProtocolLayout,
 }
 
 impl Runtime {
@@ -45,52 +46,127 @@ impl Runtime {
                 .clone()
                 .map(super::focus_grab::Runtime::new),
             proxy,
-            applied: layout,
         }
     }
 
-    /// Sends the layer-shell requests for `request`, made by the runtime for the layer on `wl`.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the geometry of the request does not fit the protocol. Nothing is sent then.
-    pub fn execute(
-        &mut self,
-        wl: &wl_surface::WlSurface,
-        request: PanelRequest,
-    ) -> Result<(), Error> {
-        match request {
-            PanelRequest::Update(_, geometry) => {
-                let next = ProtocolLayout::new(geometry)?;
-                apply(&self.proxy, Some(self.applied), next);
-                self.applied = next;
-            }
-            PanelRequest::SetKeyboard(_, keyboard) => apply_keyboard(&self.proxy, keyboard),
-            PanelRequest::Commit(_) => wl.commit(),
+    /// Sends `keyboard`, the keyboard mode set by the runtime for the panel.
+    pub fn send_keyboard(&self, keyboard: KeyboardMode) {
+        apply_keyboard(&self.proxy, keyboard);
+    }
+}
+
+/// Makes the layer-shell requests for the state of a layer surface: the geometry and the acknowledgement of a
+/// configure event.
+pub(super) struct LayerControl {
+    proxy: ZwlrLayerSurfaceV1,
+    /// The layout sent to the compositor last.
+    layout: ProtocolLayout,
+    /// The configure events received and not forgotten yet, oldest first, with the serial of each.
+    configures: VecDeque<(ConfigureToken, u32)>,
+}
+
+/// A layer-shell request for the state of a layer surface.
+#[derive(Clone, Copy)]
+pub(super) enum LayerRequest {
+    /// Sets the parts of the geometry that differ from the layout sent last.
+    Layout(ProtocolLayout),
+    AckConfigure(u32),
+}
+
+impl LayerControl {
+    /// The control of the layer `proxy`, whose role sent `layout` already.
+    pub fn new(proxy: ZwlrLayerSurfaceV1, layout: ProtocolLayout) -> Self {
+        Self {
+            proxy,
+            layout,
+            configures: VecDeque::new(),
         }
-        Ok(())
+    }
+
+    /// Records a configure event with `serial`, and returns the token for the surface state of the frame that applies
+    /// the event.
+    pub fn receive_configure(&mut self, serial: u32) -> ConfigureToken {
+        let token = ConfigureToken::default();
+        self.configures.push_back((token, serial));
+        token
+    }
+
+    /// The width and the height sent to the compositor last, zero along an axis that fills.
+    pub fn requested_size(&self) -> (u32, u32) {
+        (self.layout.width, self.layout.height)
+    }
+
+    /// The request for `change`, or `None` for a part of the state that the layer role does not set.
+    pub fn request(
+        &mut self,
+        change: &SurfaceChange,
+    ) -> Result<Option<LayerRequest>, LayerLayoutError> {
+        Ok(match change {
+            SurfaceChange::Panel(geometry) => {
+                Some(LayerRequest::Layout(ProtocolLayout::new(*geometry)?))
+            }
+            SurfaceChange::Configure(token) => {
+                self.forget_until(*token).map(LayerRequest::AckConfigure)
+            }
+            SurfaceChange::InputRegion(_) | SurfaceChange::BlurRegion(_) => None,
+        })
+    }
+
+    pub fn send(&mut self, request: LayerRequest) {
+        match request {
+            LayerRequest::Layout(next) => {
+                apply(&self.proxy, Some(self.layout), next);
+                self.layout = next;
+            }
+            LayerRequest::AckConfigure(serial) => self.proxy.ack_configure(serial),
+        }
+    }
+
+    /// Forgets the configure events received before the event of `token`, because the surface state applies only the
+    /// last configure event, and returns the serial of `token`. Returns `None` when the event was forgotten already.
+    fn forget_until(&mut self, token: ConfigureToken) -> Option<u32> {
+        while let Some(&(oldest, serial)) = self.configures.front() {
+            if oldest == token {
+                return Some(serial);
+            }
+            let _superseded = self.configures.pop_front();
+        }
+        None
     }
 }
 
 impl Surface {
-    /// Sends the panel requests made by the runtime for this surface, `id`.
-    pub(super) fn execute_panel_requests(
-        &mut self,
+    /// Sends `keyboard`, the keyboard mode set by the runtime for the panel on this surface, `id`, once the mode
+    /// changed.
+    pub(super) fn send_keyboard(
+        &self,
         id: SurfaceId,
-        requests: Vec<PanelRequest>,
+        keyboard: Option<KeyboardMode>,
     ) -> Result<(), Error> {
-        for request in requests {
-            let Role::Layer(layer) = &mut self.role else {
+        if let Some(keyboard) = keyboard {
+            let Role::Layer(layer) = &self.role else {
                 return Err(Error::PanelWithoutLayer(id));
             };
-            layer.execute(&self.wl, request)?;
+            layer.send_keyboard(keyboard);
         }
         Ok(())
     }
 }
 
+/// The state of a layer surface with `geometry`, sent to the compositor with the role of the surface.
+fn role_state(geometry: PanelGeometry) -> SurfaceState {
+    let mut state = SurfaceState::default();
+    state.apply(SurfaceChange::Panel(geometry));
+    state
+}
+
 impl NativeSpec {
-    fn layer(options: &LayerSurface, view: View, layout: ProtocolLayout) -> Self {
+    fn layer(
+        options: &LayerSurface,
+        view: View,
+        geometry: PanelGeometry,
+        layout: ProtocolLayout,
+    ) -> Self {
         Self {
             view,
             size: initial_size(layout),
@@ -103,6 +179,7 @@ impl NativeSpec {
             shape: options.shape.clone(),
             drag_region: None,
             accessible_name: options.namespace.clone(),
+            role_state: role_state(geometry),
         }
     }
 }
@@ -117,17 +194,19 @@ impl Platform {
         output: Option<&wl_output::WlOutput>,
     ) -> Result<SurfaceId, Error> {
         let panel = Panel::new(options.panel.clone(), &mut view, self.renderer.shaper())?;
-        let layout = ProtocolLayout::new(panel.geometry())?;
+        let geometry = panel.geometry();
+        let layout = ProtocolLayout::new(geometry).map_err(Error::LayerLayout)?;
         let keyboard = panel.keyboard_mode();
-        let spec = NativeSpec::layer(options, view, layout);
-        self.create_surface(spec, |platform, wl, id| {
-            let role = platform.layer_role(wl, output, options, layout, keyboard, id)?;
-            platform.panels.open(id, panel);
-            Ok(role)
-        })
+        let spec = NativeSpec::layer(options, view, geometry, layout);
+        let id = self.create_surface(spec, |platform, wl, id| {
+            platform.layer_role(wl, output, options, layout, keyboard, id)
+        })?;
+        self.panels.open(id, panel);
+        Ok(id)
     }
 
     /// Gives `wl` the layer role on `output` and commits `wl`, so that the compositor sends the first configure event.
+    /// Returns the role with the control of its state.
     fn layer_role(
         &self,
         wl: &wl_surface::WlSurface,
@@ -136,15 +215,17 @@ impl Platform {
         layout: ProtocolLayout,
         keyboard: KeyboardMode,
         id: SurfaceId,
-    ) -> Result<Role, Error> {
+    ) -> Result<(Role, RoleControl), Error> {
         let shell = self.protocols.layers.as_ref().ok_or(Error::NoLayerShell)?;
         let proxy = create(shell, wl, output, options, &self.qh, id);
+        let control = LayerControl::new(proxy.clone(), layout);
         let layer = Runtime::new(proxy, options, layout, keyboard);
         wl.commit();
-        Ok(Role::Layer(Box::new(layer)))
+        Ok((Role::Layer(Box::new(layer)), RoleControl::Layer(control)))
     }
 
-    /// Sends the requests made by the runtime for each panel before a render.
+    /// Sends the requests made by the runtime for each panel before a frame is rendered. While the compositor shows
+    /// the current content of a panel, the renderer commits a changed geometry at once, without a frame.
     pub(super) fn update_layers(&mut self) -> Result<(), Error> {
         for (&id, surface) in &mut self.surfaces {
             if self.panels.get(id).is_none() {
@@ -168,26 +249,44 @@ impl Platform {
                     SurfaceContents::Outdated => ContentState::Stale,
                 }
             };
-            let mut requests = Vec::new();
-            let transaction = self.panels.update_transaction(id, content, &mut requests);
-            if transaction == Transaction::NeedsFrame {
-                view.invalidate();
+            let update = self.panels.update_transaction(id, content);
+            surface.send_keyboard(id, update.keyboard)?;
+            match update.transaction {
+                Transaction::Settled => {}
+                Transaction::NeedsFrame => view.invalidate(),
+                Transaction::Committed => {
+                    send_surface_state(self.choreographers.sink(id), &self.panels, id, []);
+                    surface.build(id, view, &mut self.choreographers)?;
+                    (self.renderer.commit_state(id, &surface.state)).map_err(Error::CommitState)?;
+                }
             }
-            surface.execute_panel_requests(id, requests)?;
         }
         Ok(())
     }
 }
 
 impl Platform {
-    /// The surface event for a configure event of layer `id` with `width` and `height`, as [`configured_length`]
+    /// Records the configure event of layer `id` with `serial`, so that the first commit whose surface state applies
+    /// the event acknowledges it. Returns the surface event for `width` and `height`, as [`configured_length`]
     /// describes for each axis.
-    pub(super) fn layer_configure(&self, id: SurfaceId, width: u32, height: u32) -> SurfaceEvent {
+    pub(super) fn layer_configure(
+        &mut self,
+        id: SurfaceId,
+        serial: u32,
+        width: u32,
+        height: u32,
+    ) -> SurfaceEvent {
+        let layer = (self.renderer.control_mut(id)).and_then(Control::layer_mut);
         let (requested_width, requested_height) =
-            match self.surfaces.get(&id).map(|surface| &surface.role) {
-                Some(Role::Layer(layer)) => (layer.applied.width, layer.applied.height),
-                _ => (0, 0),
-            };
+            (layer.as_deref()).map_or((0, 0), LayerControl::requested_size);
+        if let Some(layer) = layer
+            && self.surface_records.is_open(id)
+        {
+            let token = layer.receive_configure(serial);
+            self.choreographers
+                .sink(id)
+                .set_state(SurfaceChange::Configure(token));
+        }
         configure_event(
             configured_length(width, requested_width),
             configured_length(height, requested_height),
@@ -258,21 +357,23 @@ fn initial_size(layout: ProtocolLayout) -> (u32, u32) {
 
 /// The length that the layer-shell protocol expects along one axis. The protocol expects zero for an
 /// axis that fills the space between its anchors.
-fn protocol_extent(span: AxisPlacement<NonNegativeDp>) -> Result<u32, Error> {
+fn protocol_extent(span: AxisPlacement<NonNegativeDp>) -> Result<u32, LayerLayoutError> {
     match span.extent() {
         None => Ok(0),
-        Some(length) => extent(length.get(), 0).ok_or(Error::LayerLength(length)),
+        Some(length) => extent(length.get(), 0).ok_or(LayerLayoutError::Length(length)),
     }
 }
 
 /// The exclusive zone that the layer-shell protocol expects. The protocol expects -1 for a layer that
 /// extends under the zones reserved by other layers. `across` is the protocol length of the layer
 /// across its anchored edge, or `None` when the layer is not anchored to a single edge.
-fn protocol_zone(zone: ExclusiveZone, across: Option<u32>) -> Result<i32, Error> {
+fn protocol_zone(zone: ExclusiveZone, across: Option<u32>) -> Result<i32, LayerLayoutError> {
     match zone {
-        ExclusiveZone::Reserve(length) => whole(length.get()).ok_or(Error::ExclusiveZone(length)),
+        ExclusiveZone::Reserve(length) => {
+            whole(length.get()).ok_or(LayerLayoutError::ExclusiveZone(length))
+        }
         ExclusiveZone::LayerExtent => {
-            i32::try_from(across.unwrap_or(0)).map_err(Error::ReserveLayerExtent)
+            i32::try_from(across.unwrap_or(0)).map_err(LayerLayoutError::ReserveExtent)
         }
         ExclusiveZone::IgnoreOthers => Ok(-1),
     }
@@ -280,7 +381,7 @@ fn protocol_zone(zone: ExclusiveZone, across: Option<u32>) -> Result<i32, Error>
 
 /// The whole numbers sent to the compositor for a layout.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct ProtocolLayout {
+pub(super) struct ProtocolLayout {
     anchor: Anchor,
     width: u32,
     height: u32,
@@ -297,8 +398,8 @@ struct ProtocolMargins {
 }
 
 impl ProtocolLayout {
-    fn new(geometry: PanelGeometry) -> Result<Self, Error> {
-        let margin = |length: FiniteDp| whole(length.get()).ok_or(Error::LayerMargin(length));
+    pub fn new(geometry: PanelGeometry) -> Result<Self, LayerLayoutError> {
+        let margin = |length: FiniteDp| whole(length.get()).ok_or(LayerLayoutError::Margin(length));
         let margins = geometry.margins();
         let (horizontal, vertical) = (geometry.horizontal(), geometry.vertical());
         let width = protocol_extent(horizontal)?;
@@ -385,6 +486,8 @@ impl GeometryRequest {
 mod focus_wire;
 #[cfg(test)]
 mod focus_wire_tests;
+#[cfg(test)]
+mod state_wire_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

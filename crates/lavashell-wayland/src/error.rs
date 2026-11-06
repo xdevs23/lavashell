@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::geometry::Size;
+use lavashell_core::geometry::{Rect, Size};
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
-use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
+use lavashell_renderer::{CommitError, DrawError, InputSizeError, OutlineError, StateError};
 use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
@@ -74,26 +74,18 @@ pub enum Error {
     Render(#[source] StateError),
     #[error("a frame could not be drawn")]
     Draw(#[source] DrawError<ControlError>),
-    #[error("a region could not be created")]
-    CreateRegion(#[source] sctk::error::GlobalError),
+    #[error("the state of a panel could not be committed without a frame")]
+    CommitState(#[source] CommitError<ControlError>),
     #[error("a session lock needs an advertised output")]
     SessionLockWithoutOutput,
     #[error("a lock surface was requested without a session lock")]
     LockSurfaceWithoutLock,
     #[error("the compositor refused or ended the session lock")]
     SessionLockEnded,
-    #[error("the layer length {0:?} does not fit the protocol")]
-    LayerLength(NonNegativeDp),
-    #[error("the exclusive zone {0:?} does not fit the protocol")]
-    ExclusiveZone(NonNegativeDp),
-    #[error("the extent of a layer is too long to reserve")]
-    ReserveLayerExtent(#[source] TryFromIntError),
-    #[error("the layer margin {0:?} does not fit the protocol")]
-    LayerMargin(FiniteDp),
-    #[error("the size {0:?} of a surface does not fit the protocol")]
-    SurfaceSize(Size),
+    #[error("the layout of a new layer does not fit the protocol")]
+    LayerLayout(#[source] LayerLayoutError),
     #[error("a contour of a window shape is not a valid polygon")]
-    ShapeContour(#[source] PointsError),
+    ShapeContour(#[from] PointsError),
     #[error("the path of a window shape could not be built")]
     ShapePath(#[source] OutlineError),
     #[error("the input region of a window shape could not be computed")]
@@ -163,7 +155,8 @@ pub enum Cancellation {
     SourceCancelled,
 }
 
-/// A failure of a request that the present of a frame applies to a native surface.
+/// A failure of a request for the size or the state of a native surface, sent with a frame or with a commit without a
+/// frame.
 #[derive(Debug, thiserror::Error)]
 pub enum ControlError {
     #[error("no buffer of whole pixels covers one logical pixel")]
@@ -172,4 +165,21 @@ pub enum ControlError {
     BufferScale(#[source] TryFromIntError),
     #[error("the size {0:?} of a surface does not fit the viewport destination")]
     Destination(Size),
+    #[error("the rectangle {0:?} of a region does not fit the protocol")]
+    Region(Rect),
+    #[error("the layout of a layer does not fit the protocol")]
+    Layout(#[from] LayerLayoutError),
+}
+
+/// A layout of a layer whose lengths do not fit the layer-shell protocol.
+#[derive(Debug, thiserror::Error)]
+pub enum LayerLayoutError {
+    #[error("the layer length {0:?} does not fit the protocol")]
+    Length(NonNegativeDp),
+    #[error("the exclusive zone {0:?} does not fit the protocol")]
+    ExclusiveZone(NonNegativeDp),
+    #[error("the extent of a layer is too long to reserve")]
+    ReserveExtent(#[source] TryFromIntError),
+    #[error("the layer margin {0:?} does not fit the protocol")]
+    Margin(FiniteDp),
 }

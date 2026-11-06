@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::RoleControl;
 use super::creation::NativeSpec;
 use super::{
     App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
@@ -8,7 +9,7 @@ use crate::Error;
 use crate::clipboard::ClipboardState;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
@@ -159,7 +160,11 @@ impl Platform {
         }
     }
 
-    fn window_role(&self, wl: &wl_surface::WlSurface, role: &SurfaceRole) -> Result<Role, Error> {
+    fn window_role(
+        &self,
+        wl: &wl_surface::WlSurface,
+        role: &SurfaceRole,
+    ) -> Result<(Role, RoleControl), Error> {
         let SurfaceRole::Window {
             title,
             app_id,
@@ -184,7 +189,7 @@ impl Platform {
             window.set_fullscreen(None);
         }
         window.commit();
-        Ok(Role::Window { window })
+        Ok((Role::Window { window }, RoleControl::Stateless))
     }
 }
 
@@ -198,6 +203,7 @@ impl NativeSpec {
             shape: window.shape,
             drag_region: window.drag_region,
             accessible_name: window.title,
+            role_state: SurfaceState::default(),
         })
     }
 }
