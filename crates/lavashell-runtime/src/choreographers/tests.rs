@@ -3,6 +3,7 @@ use super::*;
 use lavashell_core::geometry::{Color, Size, Viewport};
 use lavashell_core::prelude::{Modifier, TextStyle};
 use lavashell_core::reactive::State;
+use lavashell_core::surface::ConfigureToken;
 use lavashell_core::units::{Density, Dp, DpExt};
 use lavashell_core::view::{FrameError, TextMeasurer, View};
 use std::time::Duration;
@@ -51,10 +52,11 @@ fn leaves(builder: &SceneBuilder) -> usize {
 fn a_frame_sent_to_the_sink_of_a_surface_shows_in_the_builder_once_it_is_built() -> TestResult {
     let mut choreographers = Choreographers::default();
     let mut builder = SceneBuilder::default();
+    let mut state = SurfaceState::default();
     let mut view = square(&State::new(Color::WHITE));
     frame(&mut view, &mut choreographers)?;
     assert!(builder.is_empty());
-    choreographers.build(SURFACE, &mut builder)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
     assert_ne!(leaves(&builder), 0);
     Ok(())
 }
@@ -65,15 +67,20 @@ fn after_a_change_that_does_not_fit_the_builder_the_view_sends_the_whole_scene()
     let color = State::new(Color::WHITE);
     let mut view = square(&color);
     let mut first = SceneBuilder::default();
+    let mut state = SurfaceState::default();
     frame(&mut view, &mut choreographers)?;
-    choreographers.build(SURFACE, &mut first)?;
+    choreographers.build(SURFACE, &mut first, &mut state)?;
     let mut builder = SceneBuilder::default();
     color.set(Color::TRANSPARENT);
     frame(&mut view, &mut choreographers)?;
-    assert!(choreographers.build(SURFACE, &mut builder).is_err());
+    assert!(
+        choreographers
+            .build(SURFACE, &mut builder, &mut state)
+            .is_err()
+    );
     color.set(Color::WHITE);
     frame(&mut view, &mut choreographers)?;
-    choreographers.build(SURFACE, &mut builder)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
     assert_eq!(leaves(&builder), leaves(&first));
     Ok(())
 }
@@ -82,15 +89,16 @@ fn after_a_change_that_does_not_fit_the_builder_the_view_sends_the_whole_scene()
 fn a_restart_replaces_the_scene_in_the_builder_instead_of_adding_to_it() -> TestResult {
     let mut choreographers = Choreographers::default();
     let mut builder = SceneBuilder::default();
+    let mut state = SurfaceState::default();
     let color = State::new(Color::WHITE);
     let mut view = square(&color);
     frame(&mut view, &mut choreographers)?;
-    choreographers.build(SURFACE, &mut builder)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
     let shown = leaves(&builder);
     choreographers.retire(SURFACE);
     color.set(Color::oklch(0.0, 0.0, 0.0));
     frame(&mut view, &mut choreographers)?;
-    choreographers.build(SURFACE, &mut builder)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
     assert_eq!(leaves(&builder), shown);
     Ok(())
 }
@@ -99,9 +107,86 @@ fn a_restart_replaces_the_scene_in_the_builder_instead_of_adding_to_it() -> Test
 fn a_retired_surface_builds_nothing() -> TestResult {
     let mut choreographers = Choreographers::default();
     let mut builder = SceneBuilder::default();
+    let mut state = SurfaceState::default();
     frame(&mut square(&State::new(Color::WHITE)), &mut choreographers)?;
     choreographers.retire(SURFACE);
-    choreographers.build(SURFACE, &mut builder)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
     assert!(builder.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_frame_of_surface_state_changes_the_state_and_keeps_the_scene() -> TestResult {
+    let mut choreographers = Choreographers::default();
+    let mut builder = SceneBuilder::default();
+    let mut state = SurfaceState::default();
+    frame(&mut square(&State::new(Color::WHITE)), &mut choreographers)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    let shown = leaves(&builder);
+    let configure = SurfaceChange::Configure(ConfigureToken::default());
+    choreographers.sink(SURFACE).set_state(configure.clone());
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    assert!(!state.contains(&configure));
+    choreographers.sink(SURFACE).end_state_frame();
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    assert!(state.contains(&configure));
+    assert_eq!(leaves(&builder), shown);
+    Ok(())
+}
+
+#[test]
+fn after_a_restart_the_state_waits_for_the_whole_scene_and_the_builder_keeps_its_scene()
+-> TestResult {
+    let mut choreographers = Choreographers::default();
+    let mut builder = SceneBuilder::default();
+    let mut state = SurfaceState::default();
+    frame(&mut square(&State::new(Color::WHITE)), &mut choreographers)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    let shown = leaves(&builder);
+    let configure = SurfaceChange::Configure(ConfigureToken::default());
+    let sink = choreographers.sink(SURFACE);
+    let Ok(()) = sink.restart();
+    sink.set_state(configure.clone());
+    sink.end_state_frame();
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    assert!(!state.contains(&configure));
+    assert_eq!(leaves(&builder), shown);
+    frame(&mut square(&State::new(Color::WHITE)), &mut choreographers)?;
+    choreographers.build(SURFACE, &mut builder, &mut state)?;
+    assert!(state.contains(&configure));
+    assert_eq!(leaves(&builder), shown);
+    Ok(())
+}
+
+#[test]
+fn a_restart_sends_the_surface_state_again_with_the_whole_scene() -> TestResult {
+    let mut choreographers = Choreographers::default();
+    let mut state = SurfaceState::default();
+    let configure = SurfaceChange::Configure(ConfigureToken::default());
+    let sink = choreographers.sink(SURFACE);
+    sink.set_state(configure.clone());
+    sink.end_state_frame();
+    let Ok(()) = sink.restart();
+    frame(&mut square(&State::new(Color::WHITE)), &mut choreographers)?;
+    choreographers.build(SURFACE, &mut SceneBuilder::default(), &mut state)?;
+    assert!(state.contains(&configure));
+    Ok(())
+}
+
+#[test]
+fn a_change_of_the_surface_state_applies_when_the_scene_in_its_frame_does_not_fit() -> TestResult {
+    let mut choreographers = Choreographers::default();
+    let color = State::new(Color::WHITE);
+    let mut view = square(&color);
+    let mut state = SurfaceState::default();
+    frame(&mut view, &mut choreographers)?;
+    choreographers.build(SURFACE, &mut SceneBuilder::default(), &mut state)?;
+    color.set(Color::TRANSPARENT);
+    let configure = SurfaceChange::Configure(ConfigureToken::default());
+    choreographers.sink(SURFACE).set_state(configure.clone());
+    frame(&mut view, &mut choreographers)?;
+    let built = choreographers.build(SURFACE, &mut SceneBuilder::default(), &mut state);
+    assert!(built.is_err());
+    assert!(state.contains(&configure));
     Ok(())
 }

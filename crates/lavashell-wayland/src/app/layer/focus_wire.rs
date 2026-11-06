@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::app::control::{Control, RoleControl, SurfaceObjects};
 use crate::app::focus_grab::Grabs;
 use crate::app::wire_messages::messages;
 use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1;
@@ -7,9 +8,10 @@ use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::scene::SceneBuilder;
 use lavashell_core::units::Density;
-use lavashell_renderer::FrameOutcome;
-use lavashell_runtime::{PanelContent, PanelRecords, SurfaceRecords};
+use lavashell_renderer::{FrameOutcome, SurfaceControl};
+use lavashell_runtime::{Choreographers, PanelContent, PanelRecords, PanelUpdate, SurfaceRecords};
 use lavashell_test_fixtures::NoText;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
@@ -39,6 +41,11 @@ pub(super) struct Wire {
     panels: PanelRecords,
     surfaces: SurfaceRecords,
     grabs: Grabs,
+    choreographers: Choreographers,
+    builder: SceneBuilder,
+    state: SurfaceState,
+    /// The control of the layer created last by `layer`.
+    pub(super) control: Option<Control>,
 }
 
 impl Wire {
@@ -76,6 +83,10 @@ impl Wire {
             input: true,
             panels: PanelRecords::default(),
             surfaces,
+            choreographers: Choreographers::default(),
+            builder: SceneBuilder::default(),
+            state: SurfaceState::default(),
+            control: None,
         };
         wire.configure();
         Ok(wire)
@@ -101,8 +112,22 @@ impl Wire {
     pub(super) fn layer(&mut self, options: &LayerSurface) -> Result<Runtime, TestError> {
         let panel = Panel::new(options.panel.clone(), &mut empty_view(), &mut NoText)
             .map_err(Error::from)?;
-        let layout = ProtocolLayout::new(panel.geometry())?;
+        let geometry = panel.geometry();
+        let layout = ProtocolLayout::new(geometry)?;
         let proxy = create(&self.shell, &self.surface, None, options, &self.qh, LAYER);
+        let objects = SurfaceObjects {
+            wl: self.surface.clone(),
+            viewport: None,
+            presentation: None,
+            compositor: self.compositor.clone(),
+            background: None,
+            role_control: RoleControl::Layer(LayerControl::new(proxy.clone(), layout)),
+        };
+        let control = Control::new(LAYER, objects, role_state(geometry), self.qh.clone());
+        self.control = Some(control);
+        self.choreographers = Choreographers::default();
+        self.builder = SceneBuilder::default();
+        self.state = SurfaceState::default();
         let layer = Runtime::new(proxy, options, layout, panel.keyboard_mode());
         self.panels.open(LAYER, panel);
         if let Some(grab) = &options.focus_grab {
@@ -121,38 +146,58 @@ impl Wire {
         Ok(())
     }
 
-    /// Sends the requests made by the runtime for the layout and the keyboard mode of the panel, as the frame of
-    /// a layer does before its draw.
-    pub(super) fn update(&mut self, layer: &mut Runtime) -> Result<(), TestError> {
-        let mut requests = Vec::new();
-        self.panels.update(LAYER, &mut requests);
-        self.execute(layer, requests)
+    /// Sends the keyboard mode set by the runtime for the panel and the surface state with the geometry of the panel,
+    /// as the frame of a layer does before its present.
+    pub(super) fn update(&mut self, layer: &Runtime) -> Result<(), TestError> {
+        send_keyboard(layer, self.panels.update(LAYER));
+        self.build_state()?;
+        self.send_state()
+    }
+
+    /// Sends the geometry of the panel to the sink of the layer and builds the surface state from the sink, as the
+    /// app does before a frame or a commit without a frame.
+    fn build_state(&mut self) -> Result<(), TestError> {
+        send_surface_state(self.choreographers.sink(LAYER), &self.panels, LAYER, []);
+        self.choreographers
+            .build(LAYER, &mut self.builder, &mut self.state)?;
+        Ok(())
+    }
+
+    /// Sends the requests for the parts of `geometry` that differ from the geometry applied last.
+    pub(super) fn send_geometry(&mut self, geometry: PanelGeometry) -> Result<(), TestError> {
+        self.state.apply(SurfaceChange::Panel(geometry));
+        self.send_state()
+    }
+
+    fn send_state(&mut self) -> Result<(), TestError> {
+        let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
+        control.send_state(&self.state)?;
+        Ok(())
     }
 
     /// Runs the transaction of the panel with `view` while the host shows `content`, as the loop does before a
     /// render.
     pub(super) fn transaction(
         &mut self,
-        layer: &mut Runtime,
+        layer: &Runtime,
         view: &mut View,
         content: ContentState,
     ) -> Result<Transaction, TestError> {
-        let mut requests = Vec::new();
-        let transaction = self
-            .panels
-            .update_transaction(LAYER, content, &mut requests);
-        if transaction == Transaction::NeedsFrame {
-            view.invalidate();
+        let PanelUpdate {
+            keyboard,
+            transaction,
+        } = self.panels.update_transaction(LAYER, content);
+        send_keyboard(layer, keyboard);
+        match transaction {
+            Transaction::Settled => {}
+            Transaction::NeedsFrame => view.invalidate(),
+            Transaction::Committed => {
+                self.build_state()?;
+                let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
+                control.commit_state(&self.state)?;
+            }
         }
-        self.execute(layer, requests)?;
         Ok(transaction)
-    }
-
-    fn execute(&self, layer: &mut Runtime, requests: Vec<PanelRequest>) -> Result<(), TestError> {
-        for request in requests {
-            layer.execute(&self.surface, request)?;
-        }
-        Ok(())
     }
 
     pub(super) fn keyboard_granted(&self) -> bool {
@@ -164,10 +209,7 @@ impl Wire {
         messages(&mut self.peer)
     }
 
-    pub(super) fn commit(
-        &mut self,
-        layer: &mut Runtime,
-    ) -> Result<Vec<(u16, Vec<u32>)>, TestError> {
+    pub(super) fn commit(&mut self, layer: &Runtime) -> Result<Vec<(u16, Vec<u32>)>, TestError> {
         let transaction = self.transaction(layer, &mut empty_view(), ContentState::Current)?;
         let messages = self.flush()?;
         let surface = self.surface.id().protocol_id();
@@ -227,5 +269,11 @@ impl Wire {
     pub(super) fn replace_surface(&mut self) {
         self.surface.destroy();
         self.surface = self.compositor.create_surface(&self.client_qh, ());
+    }
+}
+
+fn send_keyboard(layer: &Runtime, keyboard: Option<KeyboardMode>) {
+    if let Some(keyboard) = keyboard {
+        layer.send_keyboard(keyboard);
     }
 }

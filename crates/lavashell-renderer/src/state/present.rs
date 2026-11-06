@@ -11,7 +11,7 @@ use lavashell_core::surface::SurfaceId;
 pub(super) struct FrameInputs<'a, C> {
     pub surface: SurfaceId,
     pub attached: &'a mut AttachedSurface<C>,
-    pub frame: PresentFrame,
+    pub frame: PresentFrame<'a>,
     pub shown: Presented<'a>,
     /// The size of the frame in physical pixels.
     pub physical: (u32, u32),

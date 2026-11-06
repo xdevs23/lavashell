@@ -33,7 +33,7 @@ pub use input::{
 };
 pub use lock::LockEvent;
 pub use output::{OutputEvent, OutputId};
-pub use panel::{KeyboardMode, PanelRequest};
+pub use panel::KeyboardMode;
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};

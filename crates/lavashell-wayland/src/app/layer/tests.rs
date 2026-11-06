@@ -129,7 +129,7 @@ fn the_initial_size_of_a_layer_follows_the_layout_state_over_the_static_placemen
     let panel =
         Panel::new(options.panel.clone(), &mut empty_view(), &mut NoText).map_err(Error::from)?;
     let protocol = ProtocolLayout::new(panel.geometry())?;
-    let spec = NativeSpec::layer(&options, empty_view(), protocol);
+    let spec = NativeSpec::layer(&options, empty_view(), panel.geometry(), protocol);
     assert_eq!(spec.size, (321, 345));
     assert_eq!(spec.size, (protocol.width, protocol.height));
     Ok(())

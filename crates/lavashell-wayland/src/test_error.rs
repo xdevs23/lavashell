@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The failures that the tests of this crate return in place of a panic.
 
-use crate::Error;
+use crate::{ControlError, Error, LayerLayoutError};
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
 use lavashell_test_fixtures::FrameFailure;
@@ -71,6 +71,12 @@ pub(crate) enum TestError {
     CreateSocketPair(#[source] io::Error),
     #[error("the socket could not be made non-blocking")]
     ConfigureSocket(#[source] io::Error),
+    #[error("the wire has no layer")]
+    NoLayer,
+    #[error("a request for a native surface does not fit the protocol")]
+    Control(#[from] ControlError),
+    #[error("the layout of a layer does not fit the protocol")]
+    LayerLayout(#[from] LayerLayoutError),
     #[error("the pipe could not be created")]
     CreatePipe(#[source] rustix::io::Errno),
     #[error("the file is not a pipe")]
