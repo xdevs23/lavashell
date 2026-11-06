@@ -4,14 +4,14 @@ mod latch;
 mod surfaces;
 
 use super::{warnings, window};
+use crate::Error;
 use crate::platform::{NativeSurface, Producer, SIDE, SURFACE_SIZE, TestError};
 use crate::renderer::AndroidRenderer;
-use crate::surface_stream::{BufferSizes, SurfaceStream};
-use crate::{Error, Latch};
+use crate::surface_stream::{BufferSizes, StreamFormat, SurfaceStream};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_renderer::{
-    Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming, skia,
+    Fonts, FrameOutcome, Latch, PresentationPolicy, Stream, SurfaceAlpha, SurfaceTiming, skia,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -72,14 +72,18 @@ fn render(renderer: &mut AndroidRenderer, image: StreamImage) -> Result<FrameOut
         .map_err(TestError::from)
 }
 
-fn producer(stream: &SurfaceStream) -> Result<Producer, TestError> {
-    Producer::of(stream.native_window())
+fn create_stream(sizes: BufferSizes, format: StreamFormat) -> Result<Stream<SurfaceStream>, Error> {
+    SurfaceStream::new(sizes, format).map(Stream::new)
+}
+
+fn producer(stream: &Stream<SurfaceStream>) -> Result<Producer, TestError> {
+    Producer::of(stream.source().native_window())
 }
 
 /// The image of the frame latched by `renderer` from `stream`, or an error when the latch finds no new frame.
 fn latched(
     renderer: &mut AndroidRenderer,
-    stream: &mut SurfaceStream,
+    stream: &mut Stream<SurfaceStream>,
 ) -> Result<StreamImage, TestError> {
     match renderer.latch(stream)? {
         Latch::Frame(image) => Ok(image),

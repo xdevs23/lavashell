@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::error::NativeMethodError;
-use lavashell_android::{
-    AndroidRenderer, BufferSizes, Latch, NativeWindow, StreamFormat, SurfaceStream,
-};
+use lavashell_android::{AndroidRenderer, BufferSizes, NativeWindow, StreamFormat, SurfaceStream};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{Change, Content, Group, Node, Packet, SceneNodeId, Slot};
 use lavashell_renderer::{
-    Fonts, ForeignFormat, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming, skia,
+    Fonts, ForeignFormat, FrameOutcome, Latch, PresentationPolicy, Stream, SurfaceAlpha,
+    SurfaceTiming, skia,
 };
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferUsage};
 use ndk::media::image_reader::{AcquireResult, Image, ImageFormat, ImageReader};
@@ -23,7 +22,7 @@ pub struct StreamRoundTrip {
     // Declared before `target`, so the renderer detaches from the window of the target ImageReader before that reader
     // is deleted.
     renderer: AndroidRenderer,
-    stream: SurfaceStream,
+    stream: Stream<SurfaceStream>,
     target: TargetReader,
     pane: skia::IRect,
     arrived: mpsc::Receiver<()>,
@@ -49,7 +48,7 @@ impl StreamRoundTrip {
             .map_err(NativeMethodError::SetUp)?;
         Ok(Self {
             renderer,
-            stream,
+            stream: Stream::new(stream),
             target,
             pane: skia::IRect::from_wh(width, height),
             arrived,
@@ -60,11 +59,11 @@ impl StreamRoundTrip {
 
     /// The window of the Surface that the producer draws into.
     pub fn producer_window(&self) -> &ndk::native_window::NativeWindow {
-        self.stream.native_window()
+        self.stream.source().native_window()
     }
 
     pub fn resize(&mut self, sizes: BufferSizes) -> Result<(), NativeMethodError> {
-        self.stream.resize(sizes).map_err(NativeMethodError::Resize)
+        (self.stream.source_mut().resize(sizes)).map_err(NativeMethodError::Resize)
     }
 
     /// Reads the format that the Vulkan device of the renderer reports for `buffer`.
@@ -117,7 +116,7 @@ impl StreamRoundTrip {
                 }
                 Latch::Unchanged => {}
             }
-            match self.stream.producer_fence() {
+            match self.stream.source().producer_fence() {
                 Some(fence) => wait_until_signalled(fence)?,
                 None => self.await_wake()?,
             }

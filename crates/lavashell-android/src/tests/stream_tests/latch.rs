@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::platform::{Buffer, StreamEvent as Event, Writing};
-use crate::surface_stream::{StreamFormat, SurfaceStream};
 
 #[test]
 fn a_frame_is_imported_when_a_render_draws_it_and_returned_after_it() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let first = latched(&mut renderer, &mut stream)?;
@@ -52,7 +51,7 @@ fn a_frame_is_imported_when_a_render_draws_it_and_returned_after_it() -> Result<
 #[test]
 fn a_frame_waits_in_the_stream_until_its_producer_has_written_it() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let shown = latched(&mut renderer, &mut stream)?;
@@ -64,15 +63,15 @@ fn a_frame_waits_in_the_stream_until_its_producer_has_written_it() -> Result<(),
         drawing.writing = Writing::Pending;
         producer.queue(drawing);
         assert_eq!(renderer.latch(&mut stream)?, Latch::Unchanged);
-        assert!(stream.waits_for_producer());
-        assert!(stream.producer_fence().is_some());
+        assert!(stream.source().waits_for_producer());
+        assert!(stream.source().producer_fence().is_some());
         assert_eq!(render(&mut renderer, shown)?, FrameOutcome::Shown);
         assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, RED);
     }
     producer.finish_writing(3)?;
     let written = latched(&mut renderer, &mut stream)?;
-    assert!(!stream.waits_for_producer());
-    assert!(stream.producer_fence().is_none());
+    assert!(!stream.source().waits_for_producer());
+    assert!(stream.source().producer_fence().is_none());
     assert_eq!(written.generation, shown.generation + 1);
     assert_eq!(render(&mut renderer, written)?, FrameOutcome::Shown);
     assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, BLUE);
@@ -100,7 +99,7 @@ fn a_frame_waits_in_the_stream_until_its_producer_has_written_it() -> Result<(),
 #[test]
 fn a_frame_imported_by_a_pending_render_is_drawn_by_the_next_render() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let image = latched(&mut renderer, &mut stream)?;
@@ -119,7 +118,7 @@ fn a_frame_imported_by_a_pending_render_is_drawn_by_the_next_render() -> Result<
 #[test]
 fn an_undrawn_stream_returns_its_frames_with_their_own_fences() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Private)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Private)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
@@ -161,7 +160,7 @@ fn an_undrawn_stream_returns_its_frames_with_their_own_fences() -> Result<(), Te
 #[test]
 fn a_frame_latched_over_an_older_frame_returns_with_a_fence_of_its_own() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let first = latched(&mut renderer, &mut stream)?;

@@ -3,7 +3,6 @@ use super::*;
 use crate::platform::{
     Buffer, GPU, HardwareBufferFormat, HardwareBufferUsage, MEDIA, StreamEvent as Event,
 };
-use crate::surface_stream::{BufferSizes, StreamFormat, SurfaceStream};
 
 /// A buffer one pixel wider than the largest size drawn.
 const TOO_WIDE: PixelSize = PixelSize::new(SURFACE_SIZE.width + 1, SURFACE_SIZE.height);
@@ -20,7 +19,7 @@ fn reported(warnings: &[String], rejection: StreamRejection) -> usize {
 #[test]
 fn a_rejected_frame_is_returned_and_the_stream_shows_the_frame_before() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Private)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Private)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let shown = latched(&mut renderer, &mut stream)?;
@@ -83,8 +82,8 @@ fn a_rejected_frame_is_returned_and_the_stream_shows_the_frame_before() -> Resul
 #[test]
 fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestError> {
     let (mut renderer, surface) = attached()?;
-    let mut failing = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let mut working = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut failing = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut working = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let (failing_producer, working_producer) = (producer(&failing)?, producer(&working)?);
     let mut unimportable = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     unimportable.fails_import = true;
@@ -128,7 +127,7 @@ fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestE
 #[test]
 fn a_frame_drawn_without_a_release_fence_returns_once_the_gpu_finished() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let image = latched(&mut renderer, &mut stream)?;
@@ -164,7 +163,7 @@ fn a_frame_drawn_without_a_release_fence_returns_once_the_gpu_finished() -> Resu
 #[test]
 fn a_frame_drawn_when_no_fence_can_be_submitted_returns_at_teardown() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let image = latched(&mut renderer, &mut stream)?;
@@ -197,7 +196,7 @@ fn a_frame_drawn_when_no_fence_can_be_submitted_returns_at_teardown() -> Result<
 fn a_device_with_a_ycbcr_conversion_samples_a_half_float_frame() -> Result<(), TestError> {
     GPU.with(|gpu| gpu.sampler_ycbcr_conversion.set(true));
     let (mut renderer, surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Private)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Private)?;
     let mut half_float = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     half_float.format = HardwareBufferFormat::R16G16B16A16_FLOAT;
     producer(&stream)?.queue(half_float);
@@ -210,7 +209,7 @@ fn a_device_with_a_ycbcr_conversion_samples_a_half_float_frame() -> Result<(), T
 #[test]
 fn a_render_on_a_lost_device_reports_every_step_that_failed() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
     let image = latched(&mut renderer, &mut stream)?;
@@ -253,7 +252,7 @@ fn a_reader_that_hands_out_no_window_fails_where_the_stream_is_made() {
 #[test]
 fn when_every_image_is_held_for_the_gpu_the_newest_frame_waits() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     GPU.with(|gpu| gpu.busy.set(true));
     for id in 1..=3 {
@@ -278,7 +277,7 @@ fn when_every_image_is_held_for_the_gpu_the_newest_frame_waits() -> Result<(), T
 #[test]
 fn a_freed_buffer_whose_id_cannot_be_read_fails_one_latch() -> Result<(), TestError> {
     let (mut renderer, _surface) = attached()?;
-    let mut stream = SurfaceStream::new(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
     let producer = producer(&stream)?;
     let mut unidentifiable = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     unidentifiable.unidentifiable = true;

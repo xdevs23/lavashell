@@ -357,29 +357,54 @@ impl fmt::Display for InOrder<'_> {
     }
 }
 
-/// Collects the failures of a call that continues its other work after a failure.
-#[derive(Default)]
-pub(crate) struct FailureList(Vec<Error>);
+/// A failure that can stand for several failures of one call.
+pub trait MultipleFailures: Sized {
+    /// Combines `failures`, in the order in which they happened, into one failure.
+    fn several(failures: Vec<Self>) -> Self;
 
-impl FailureList {
-    pub fn add(&mut self, result: Result<(), Error>) {
+    /// The failures that this failure combines, in the order in which they happened, or this failure alone.
+    fn into_failures(self) -> Vec<Self>;
+}
+
+impl MultipleFailures for Error {
+    fn several(failures: Vec<Self>) -> Self {
+        Self::Several(failures)
+    }
+
+    fn into_failures(self) -> Vec<Self> {
+        match self {
+            Self::Several(failures) => failures,
+            failure => vec![failure],
+        }
+    }
+}
+
+/// Collects the failures of a call that continues its other work after a failure.
+pub struct FailureList<E>(Vec<E>);
+
+impl<E> Default for FailureList<E> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<E: MultipleFailures> FailureList<E> {
+    pub fn add(&mut self, result: Result<(), E>) {
         if let Err(error) = result {
             self.push(error);
         }
     }
 
-    pub fn push(&mut self, error: Error) {
-        match error {
-            Error::Several(errors) => self.0.extend(errors),
-            error => self.0.push(error),
-        }
+    pub fn push(&mut self, error: E) {
+        self.0.extend(error.into_failures());
     }
 
-    /// `Ok` when no failure was added, the failure itself when one was added, and `Error::Several` when more were
-    /// added.
-    pub fn into_result(mut self) -> Result<(), Error> {
+    /// # Errors
+    /// Fails with the failure itself when one was added, and with the failures combined by
+    /// `MultipleFailures::several` when more were added.
+    pub fn into_result(mut self) -> Result<(), E> {
         if self.0.len() > 1 {
-            return Err(Error::Several(self.0));
+            return Err(E::several(self.0));
         }
         self.0.pop().map_or(Ok(()), Err)
     }
@@ -393,7 +418,7 @@ mod tests {
     #[test]
     fn collected_failures_keep_their_order_and_a_single_one_stays_itself() -> Result<(), TestError>
     {
-        let mut none = FailureList::default();
+        let mut none = FailureList::<Error>::default();
         none.add(Ok(()));
         assert!(none.into_result().is_ok());
         let mut one = FailureList::default();
