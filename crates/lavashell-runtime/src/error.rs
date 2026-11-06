@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_core::accessibility::ActionError;
 use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::NumberError;
 use lavashell_platform::SelectionRefusal;
@@ -47,4 +48,14 @@ pub enum Error {
     DecodeText(#[source] FromUtf8Error),
     #[error("the transfer was cancelled")]
     Cancelled(#[from] Cancellation),
+}
+
+/// A failure while the runtime handles an event of an assistive technology. `E` is the failure of the platform to
+/// show a frame.
+#[derive(Debug, thiserror::Error)]
+pub enum AccessibilityFailure<E> {
+    #[error("a surface could not show the frame that an assistive technology reads")]
+    Show(#[source] E),
+    #[error("the app could not perform an action requested by an assistive technology")]
+    PerformAction(#[source] ActionError),
 }

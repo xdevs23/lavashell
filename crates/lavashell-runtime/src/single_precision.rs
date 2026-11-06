@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Conversion of the `f64` numbers used by Lavashell to the `f32` coordinates expected by Skia and AccessKit.
+//! Conversion of the `f64` numbers used by Lavashell to the `f32` coordinates expected by AccessKit.
 
 use num_traits::AsPrimitive;
 

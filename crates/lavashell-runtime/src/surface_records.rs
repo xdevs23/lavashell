@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod accessibility;
+
+pub use accessibility::AccessibilityOutcome;
+
+use crate::accessibility::SurfaceAccessibility;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
 use crate::{DragRegion, Error};
@@ -20,6 +25,7 @@ struct Record {
     density: Density,
     lifecycle: Lifecycle,
     drag_region: Option<DragRegion>,
+    accessibility: SurfaceAccessibility,
 }
 
 impl Record {
@@ -61,6 +67,7 @@ impl SurfaceRecords {
 
     /// Opens a surface that shows `view` at `size` and `density` until the host configures it. The view gets the
     /// current settings. A press of the primary button in `drag_region` starts a move of the surface by the host.
+    /// Assistive technologies read `accessible_name` as the name of the view when its root node is unnamed.
     ///
     /// # Errors
     ///
@@ -71,6 +78,7 @@ impl SurfaceRecords {
         size: Size,
         density: Density,
         drag_region: Option<DragRegion>,
+        accessible_name: String,
     ) -> Result<SurfaceId, Error> {
         let id = match self.last_id {
             None => 0,
@@ -87,6 +95,7 @@ impl SurfaceRecords {
             density,
             lifecycle: Lifecycle::Waiting,
             drag_region,
+            accessibility: SurfaceAccessibility::new(accessible_name),
         };
         let _replaced_record = self.records.insert(id, record);
         Ok(id)
@@ -179,6 +188,20 @@ impl SurfaceRecords {
 
     fn open_record_mut(&mut self, surface: SurfaceId) -> Option<&mut Record> {
         (self.records.get_mut(&surface)).filter(|record| record.lifecycle.is_open())
+    }
+
+    /// Every open record with the id of its surface.
+    fn open_records(&self) -> impl Iterator<Item = (SurfaceId, &Record)> {
+        (self.records.iter())
+            .filter(|(_, record)| record.lifecycle.is_open())
+            .map(|(&surface, record)| (surface, record))
+    }
+
+    /// Every open record with the id of its surface.
+    fn open_records_mut(&mut self) -> impl Iterator<Item = (SurfaceId, &mut Record)> {
+        (self.records.iter_mut())
+            .filter(|(_, record)| record.lifecycle.is_open())
+            .map(|(&surface, record)| (surface, record))
     }
 }
 

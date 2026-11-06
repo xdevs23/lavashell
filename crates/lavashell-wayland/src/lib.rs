@@ -7,7 +7,6 @@ mod failures;
 mod focus_grab;
 mod logical;
 mod preferences;
-mod single_precision;
 mod surface;
 #[cfg(test)]
 mod test_bus;

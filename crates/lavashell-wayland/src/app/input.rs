@@ -10,7 +10,7 @@ use lavashell_platform::SettingsEvent;
 use lavashell_platform::{
     DeviceEvent, InputRequest, KeyboardDevice, PlatformRequest, PointerDevice, PressState,
 };
-use lavashell_runtime::{InputRouter, RoutedInput};
+use lavashell_runtime::RoutedInput;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer, wl_seat, wl_surface};
 use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::seat::keyboard::{
@@ -47,12 +47,6 @@ impl SeatDevices {
 
     fn keyboard_device(&self) -> Option<KeyboardDevice> {
         self.keyboard.as_ref().map(keyboard_device)
-    }
-
-    /// Whether `surface` has keyboard focus.
-    pub(super) fn keyboard_focuses(&self, input: &InputRouter, surface: SurfaceId) -> bool {
-        (self.keyboard_device())
-            .is_some_and(|keyboard| input.keyboard_focus(keyboard) == Some(surface))
     }
 }
 
@@ -270,7 +264,7 @@ impl SeatHandler for Platform {
             }
             _ => {}
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
@@ -284,7 +278,7 @@ impl SeatHandler for Platform {
                 self.route_input(removal);
             }
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 }
 
@@ -373,7 +367,7 @@ impl KeyboardHandler for Platform {
             keyboard: keyboard_device(keyboard),
             surface: focus,
         });
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn leave(
@@ -398,7 +392,7 @@ impl KeyboardHandler for Platform {
                 focused: false,
             });
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn press_key(

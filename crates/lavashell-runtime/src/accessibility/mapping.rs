@@ -5,7 +5,7 @@ use lavashell_core::accessibility::{AccessibilityTree, AccessibleNode, ActionKin
 use lavashell_core::prelude::Axis;
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(super) fn tree(tree: &AccessibilityTree, ids: &mut Ids, title: &str) -> TreeUpdate {
+pub(super) fn tree(tree: &AccessibilityTree, ids: &mut Ids, root_name: &str) -> TreeUpdate {
     let root = ids.node(tree.root);
     let mut nodes = Vec::new();
     let parents: BTreeMap<_, _> = tree
@@ -24,7 +24,7 @@ pub(super) fn tree(tree: &AccessibilityTree, ids: &mut Ids, title: &str) -> Tree
                 .collect::<Vec<_>>(),
         );
         if source.id == tree.root && source.name.is_none() {
-            node.set_label(title);
+            node.set_label(root_name);
         }
         properties::apply(source, &mut node, ids);
         if let Some(index) = collection_index(tree, source, &parents) {
@@ -66,28 +66,6 @@ fn collection_index(
         parent = parents.get(id);
     }
     Some(item.row)
-}
-
-pub(super) fn difference(full: &TreeUpdate, previous: Option<&TreeUpdate>) -> TreeUpdate {
-    let Some(previous) = previous.filter(|previous| previous.tree == full.tree) else {
-        return full.clone();
-    };
-    let old: BTreeMap<_, _> = previous
-        .nodes
-        .iter()
-        .map(|(id, node)| (*id, node))
-        .collect();
-    TreeUpdate {
-        nodes: full
-            .nodes
-            .iter()
-            .filter(|(id, node)| old.get(id) != Some(&node))
-            .cloned()
-            .collect(),
-        tree: None,
-        tree_id: TreeId::ROOT,
-        focus: full.focus,
-    }
 }
 
 pub(super) fn rect(rect: lavashell_core::prelude::Rect) -> Rect {

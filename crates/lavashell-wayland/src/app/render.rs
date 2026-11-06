@@ -51,6 +51,7 @@ impl Platform {
                 self.notify_frame(timing);
             }
             let start = self.prepare_surface(id, kind, timing, &mut actions)?;
+            self.publish_accessibility(id);
             let frame = self.draw_surface(id, start)?;
             let outcome = frame.outcome;
             let cost = self.report_frame(id, frame, start)?;
@@ -183,9 +184,6 @@ impl Platform {
         let mut panel_requests = Vec::new();
         self.panels.update(id, &mut panel_requests);
         surface.execute_panel_requests(id, panel_requests)?;
-        if let Some(bridge) = &mut surface.accessibility {
-            bridge.publish(view.accessibility(), false);
-        }
         let shape_changed = match &mut surface.shape {
             Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
             None => ShapeUpdate::Unchanged,

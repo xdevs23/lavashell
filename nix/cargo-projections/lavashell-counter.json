@@ -536,6 +536,12 @@
             {
               "manifest": {
                 "dependencies": {
+                  "accesskit": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "accesskit",
+                    "version": "=0.25.1"
+                  },
                   "icu_locale_core": {
                     "default-features": false,
                     "features": [
@@ -712,6 +718,12 @@
             {
               "manifest": {
                 "dependencies": {
+                  "accesskit": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "accesskit",
+                    "version": "=0.25.1"
+                  },
                   "icu_locale_core": {
                     "default-features": false,
                     "features": [
@@ -758,6 +770,15 @@
                     "package": "log",
                     "version": "=0.4.34"
                   },
+                  "num-traits": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "num-traits",
+                    "version": "=0.2.19"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -766,6 +787,12 @@
                     ],
                     "package": "thiserror",
                     "version": "=2.0.21"
+                  },
+                  "unicode-segmentation": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "unicode-segmentation",
+                    "version": "=1.13.3"
                   }
                 },
                 "features": {},
@@ -1055,12 +1082,6 @@
                     ],
                     "package": "thiserror",
                     "version": "=2.0.21"
-                  },
-                  "unicode-segmentation": {
-                    "default-features": false,
-                    "features": [],
-                    "package": "unicode-segmentation",
-                    "version": "=1.13.3"
                   },
                   "wayland-backend": {
                     "default-features": false,
@@ -2592,6 +2613,7 @@
               },
               {
                 "dependencies": [
+                  "accesskit",
                   "icu_locale_core",
                   "lavashell-core",
                   "thiserror"
@@ -2618,13 +2640,16 @@
               },
               {
                 "dependencies": [
+                  "accesskit",
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-platform",
                   "lavashell-renderer",
                   "log",
-                  "thiserror"
+                  "num-traits",
+                  "thiserror",
+                  "unicode-segmentation"
                 ],
                 "name": "lavashell-runtime",
                 "version": "0.0.0"
@@ -2663,7 +2688,6 @@
                   "smithay-client-toolkit",
                   "sys-locale",
                   "thiserror",
-                  "unicode-segmentation",
                   "wayland-backend",
                   "wayland-scanner",
                   "zbus"
@@ -3936,7 +3960,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "701973fd1d9ce3206f7c547f00cd150b04553c4063d23a8f3a259275923a8373"
+        "seedHash": "4fcfaccb5c7b099663d4f71dd88f6f20f99bf2dd422e3b80048f28e55195eda5"
       }
     }
   },
@@ -5078,6 +5102,7 @@
       },
       {
         "dependencies": [
+          "accesskit",
           "icu_locale_core",
           "lavashell-core",
           "thiserror 2.0.21"
@@ -5105,6 +5130,8 @@
       },
       {
         "dependencies": [
+          "accesskit",
+          "accesskit_consumer",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
@@ -5112,7 +5139,9 @@
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "log",
-          "thiserror 2.0.21"
+          "num-traits",
+          "thiserror 2.0.21",
+          "unicode-segmentation"
         ],
         "name": "lavashell-runtime",
         "version": "0.1.0"
@@ -5139,7 +5168,6 @@
       {
         "dependencies": [
           "accesskit",
-          "accesskit_consumer",
           "accesskit_unix",
           "ash",
           "calloop",
@@ -5162,7 +5190,6 @@
           "smithay-client-toolkit",
           "sys-locale",
           "thiserror 2.0.21",
-          "unicode-segmentation",
           "wayland-backend",
           "wayland-scanner",
           "zbus"
