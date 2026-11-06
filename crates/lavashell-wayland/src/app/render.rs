@@ -44,6 +44,7 @@ impl Platform {
                 continue;
             }
             let start = self.prepare_surface(id, wanted, &mut actions, &mut frame_notified)?;
+            self.publish_accessibility(id);
             let drawn = self.draw_surface(id, start)?;
             if self.report_frame(id, drawn, start)? == NextRender::Immediately {
                 next = NextRender::Immediately;
@@ -164,9 +165,6 @@ impl Platform {
                 layer.content_measured(content);
             }
             layer.update();
-        }
-        if let Some(bridge) = &mut surface.accessibility {
-            bridge.publish(view.accessibility(), false);
         }
         let shape_changed = match &mut surface.shape {
             Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,

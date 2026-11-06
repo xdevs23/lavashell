@@ -195,13 +195,13 @@ impl InputRouter {
                     .collect()
             }
             DeviceEvent::KeyboardFocus { keyboard, surface } => {
-                self.keyboards.entry(keyboard).or_default().focus = surface;
-                Vec::new()
+                self.focus_keyboard(keyboard, surface)
             }
             DeviceEvent::PointerRemoved(pointer) => self.remove_pointer(pointer),
             DeviceEvent::KeyboardRemoved(keyboard) => {
+                let left = self.focus_keyboard(keyboard, None);
                 self.keyboards.retain(|&known, _| known != keyboard);
-                Vec::new()
+                left
             }
             DeviceEvent::TouchDown { surface, sample } => vec![self.touches.down(surface, sample)],
             DeviceEvent::TouchMotion(sample) => self.touches.motion(sample).into_iter().collect(),
@@ -214,6 +214,12 @@ impl InputRouter {
     #[must_use]
     pub fn keyboard_focus(&self, keyboard: KeyboardDevice) -> Option<SurfaceId> {
         self.keyboards.get(&keyboard)?.focus
+    }
+
+    /// Whether a keyboard focuses `surface`.
+    #[must_use]
+    pub fn is_keyboard_focused(&self, surface: SurfaceId) -> bool {
+        (self.keyboards.values()).any(|keyboard| keyboard.focus == Some(surface))
     }
 
     /// The pointer that interacts with `surface`.
@@ -301,6 +307,24 @@ impl InputRouter {
             (Button::Secondary | Button::Other, PressState::Released)
             | (Button::Other, PressState::Pressed) => None,
         })
+    }
+
+    /// Moves the focus of `keyboard` to `surface`. Returns the window focus of the surface that `keyboard` left and of
+    /// `surface`, for each of them that gained the focus of a keyboard or lost the focus of the last keyboard, the left
+    /// surface first.
+    fn focus_keyboard(
+        &mut self,
+        keyboard: KeyboardDevice,
+        surface: Option<SurfaceId>,
+    ) -> Vec<RoutedInput> {
+        let before: Vec<_> = (self.keyboard_focus(keyboard).into_iter().chain(surface))
+            .map(|known| (known, self.is_keyboard_focused(known)))
+            .collect();
+        self.keyboards.entry(keyboard).or_default().focus = surface;
+        (before.into_iter())
+            .filter(|&(known, focused)| self.is_keyboard_focused(known) != focused)
+            .map(|(known, lost)| input_without_pointer(known, InputEvent::WindowFocus(!lost)))
+            .collect()
     }
 
     /// The input of a key of `keyboard` for the surface focused by it. The filter receives each pressed key.
