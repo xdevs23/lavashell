@@ -12,6 +12,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
+use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{Fonts, Painter};
 use lavashell_runtime::{
     Clipboard, ClipboardTransfers, DragGesture, DragRequest, DropEvent, LockConfiguration, RunEnd,
@@ -159,18 +160,25 @@ impl App {
         self
     }
 
-    /// Draws the latest completed image of `source` beneath the UI of each window. The effect quality chosen for the
-    /// UI does not change the deadlines of `source`.
+    /// Draws the latest completed image of the scene source returned by `make` beneath the UI of each window. `make`
+    /// runs on the thread of the renderer, which owns the source. The effect quality chosen for the UI does not change
+    /// the deadlines of the source.
     #[must_use]
-    pub fn scene(mut self, source: impl lavashell_renderer::vulkan::SceneSource + 'static) -> Self {
-        self.scene = Some(Box::new(source));
+    pub fn scene<S: SceneSource + 'static>(
+        mut self,
+        make: impl FnOnce() -> S + Send + 'static,
+    ) -> Self {
+        self.scene = Some(Box::new(move || -> Box<dyn SceneSource> {
+            Box::new(make())
+        }));
         self
     }
 
-    /// Adds `setup`, which runs on the painter before the first render, for example to install effects or to replace
-    /// the chooser of the effect quality. Each setup runs after the setups added before it.
+    /// Adds `setup`, which runs on the painter on the thread of the renderer before the first render, for example to
+    /// install effects or to replace the chooser of the effect quality. Each setup runs after the setups added before
+    /// it. The text rendering set by `setup` applies to measuring text for the views too.
     #[must_use]
-    pub fn configure_painter(mut self, setup: impl FnOnce(&mut Painter) + 'static) -> Self {
+    pub fn configure_painter(mut self, setup: impl FnOnce(&mut Painter) + Send + 'static) -> Self {
         let previous = self.painter_setup.take();
         self.painter_setup = Some(Box::new(move |painter| {
             if let Some(previous) = previous {
@@ -323,42 +331,81 @@ impl App {
             EventLoop::try_new().map_err(Error::CreateEventLoop)?;
         let mut platform =
             Platform::new(&connection, &globals, qh, queue, self, event_loop.handle())?;
-        loop {
-            if let Some(error) = platform.input_failure.take() {
-                return Err(error);
-            }
-            if let Some(layers) = &mut platform.output_layers {
-                layers.check()?;
-            }
-            platform.update_layers()?;
-            platform.update_lock()?;
-            platform.render()?;
-            platform.update_focus_grabs()?;
-            if platform.finished() {
-                break;
-            }
-            platform.execute_watch_requests()?;
-            event_loop
-                .dispatch(platform.timeout(), &mut platform)
-                .map_err(Error::DispatchEvents)?;
-        }
-        platform.drain_scheduler(&mut event_loop)
+        let ran = platform
+            .run(&mut event_loop)
+            .and_then(|()| platform.stop_actors(&mut event_loop));
+        ran.map_err(|error| platform.stopped_actor_failure(error))
     }
 }
 
 impl Platform {
-    /// How long the event loop waits: not at all while started frames wait for the next render, and otherwise until
-    /// the earliest of the exit time, the next scene image and the time at which the scheduler asks the views to report
-    /// again. A scene deadline that has passed is left out, because the render before this wait handled it. A wake
-    /// time that is due ends the wait at once and is used up by the next render. The loop then waits for the timing
-    /// events of the surfaces that were drawn and the outputs of the scheduler.
+    /// Runs the event loop until the session lock is released or the run ends.
+    fn run(&mut self, event_loop: &mut EventLoop<'static, Self>) -> Result<(), Error> {
+        loop {
+            if let Some(error) = self.input_failure.take() {
+                return Err(error);
+            }
+            if let Some(layers) = &mut self.output_layers {
+                layers.check()?;
+            }
+            self.update_layers()?;
+            self.update_lock()?;
+            self.render()?;
+            self.update_focus_grabs()?;
+            if self.finished() {
+                return Ok(());
+            }
+            self.execute_watch_requests()?;
+            event_loop
+                .dispatch(self.timeout(), self)
+                .map_err(Error::DispatchEvents)?;
+        }
+    }
+
+    /// Stops the renderer, then the frame scheduler and then the scene pipeline at the end of a run, and waits for
+    /// their threads. The last outputs of the renderer reach the scheduler before it stops, and the frame observer of
+    /// the app receives the last reports of the scheduler.
+    ///
+    /// # Errors
+    ///
+    /// Fails with the first failure among the renderer, the frame scheduler and the scene pipeline, in that order.
+    fn stop_actors(&mut self, event_loop: &mut EventLoop<'static, Self>) -> Result<(), Error> {
+        self.renderer.stop().map_err(Error::RunRenderer)?;
+        super::actor_link::dispatch_until(self, event_loop, |platform| platform.stops.renderer)?;
+        self.drain_scheduler(event_loop)?;
+        self.scene.stop().map_err(Error::SceneFailed)
+    }
+
+    /// Joins the scene pipeline, the frame scheduler or the renderer when `error` reports that it stopped, and
+    /// returns the failure of the actor that stopped in place of `error`. Returns `error` when the actor did not fail.
+    pub(super) fn stopped_actor_failure(&mut self, error: Error) -> Error {
+        match error {
+            Error::SceneStopped => match self.scene.stop() {
+                Ok(()) => Error::SceneStopped,
+                Err(failure) => Error::SceneFailed(failure),
+            },
+            Error::SchedulerStopped => self.stopped_scheduler_error(),
+            Error::RendererStopped(stopped) => match self.renderer.stop() {
+                Ok(()) => Error::RendererStopped(stopped),
+                Err(failure) => Error::RunRenderer(failure),
+            },
+            error => error,
+        }
+    }
+
+    /// How long the event loop waits: not at all while started frames or commits wait for the next render, and
+    /// otherwise until the earliest of the exit time, the next scene image and the time at which the scheduler asks
+    /// the views to report again. A scene deadline that has passed is left out, because the render before this wait
+    /// asked the scene source to advance, and the renderer reports the next deadline once it changes. A wake time that
+    /// is due ends the wait at once and is used up by the next render. The loop then waits for the timing events of
+    /// the surfaces that were drawn and the outputs of the scheduler and the renderer.
     fn timeout(&mut self) -> Option<Duration> {
-        if !self.started_frames.is_empty() {
+        if !(self.started_frames.is_empty() && self.state_commits.is_empty()) {
             return Some(Duration::ZERO);
         }
         let elapsed = self.start.elapsed();
         let exit = self.run_end.exit_in(elapsed);
-        let scene = (self.renderer.scene_deadline())
+        let scene = (self.scene_deadline)
             .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
             .filter(|wait| !wait.is_zero());
         let wake = (self.scheduler_wake).map(|wake| wake.saturating_sub(elapsed));

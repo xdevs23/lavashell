@@ -111,6 +111,8 @@ impl Merge for SchedulerItem {
             SchedulerInput::Wants { .. }
             | SchedulerInput::Opened(_)
             | SchedulerInput::Built { .. }
+            | SchedulerInput::StateChanged(_)
+            | SchedulerInput::Committed(_)
             | SchedulerInput::Rendered { .. }
             | SchedulerInput::Closed(_) => Effect::BuildsOn,
         }

@@ -8712,6 +8712,16 @@
         "version": "0.4.10"
       },
       {
+        "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+        "dependencies": [
+          "libc",
+          "windows-sys"
+        ],
+        "name": "errno",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.3.14"
+      },
+      {
         "checksum": "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06",
         "dependencies": [
           "num-traits"
@@ -9303,14 +9313,17 @@
         "dependencies": [
           "accesskit 0.25.1",
           "accesskit_consumer",
+          "ash",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
           "log",
           "num-traits",
+          "rustix",
           "thiserror 2.0.21",
           "unicode-segmentation"
         ],
@@ -9363,6 +9376,12 @@
         "name": "libm",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "version": "0.2.16"
+      },
+      {
+        "checksum": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53",
+        "name": "linux-raw-sys",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.12.1"
       },
       {
         "checksum": "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae",
@@ -10005,6 +10024,19 @@
         "name": "rustc_version",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "version": "0.4.1"
+      },
+      {
+        "checksum": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+        "dependencies": [
+          "bitflags",
+          "errno",
+          "libc",
+          "linux-raw-sys",
+          "windows-sys"
+        ],
+        "name": "rustix",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "1.1.5"
       },
       {
         "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",

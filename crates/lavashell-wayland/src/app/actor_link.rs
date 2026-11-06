@@ -3,8 +3,9 @@ use super::Platform;
 use crate::Error;
 use lavashell_actor::Closed;
 use sctk::reexports::calloop::channel::{self, Event};
-use sctk::reexports::calloop::{self, LoopHandle, RegistrationToken};
+use sctk::reexports::calloop::{self, EventLoop, LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
+use std::time::Duration;
 
 /// Watches the messages of an actor in the event loop, and returns the observer that sends each message there.
 /// The event loop passes each message to `on_message`, and calls `on_closed` once the actor dropped the observer.
@@ -24,6 +25,19 @@ pub(super) fn watch<T: Send + 'static>(
         .map_err(|failure| watch_error(failure.error))?;
     sources.push(source);
     Ok(move |message: T| sender.send(message).map_err(|_unsent| Closed))
+}
+
+/// Dispatches the ready events of the event loop until `closed` reports that the outputs of an actor are closed, so
+/// that every output sent before the actor stopped is handled.
+pub(super) fn dispatch_until(
+    platform: &mut Platform,
+    event_loop: &mut EventLoop<'static, Platform>,
+    closed: fn(&Platform) -> bool,
+) -> Result<(), Error> {
+    while !closed(platform) {
+        (event_loop.dispatch(Some(Duration::ZERO), platform)).map_err(Error::DispatchEvents)?;
+    }
+    Ok(())
 }
 
 /// The error of a stopped actor: the failure returned by `stop`, or `clean` when the actor did not fail.

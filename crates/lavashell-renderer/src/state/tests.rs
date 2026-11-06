@@ -82,6 +82,11 @@ struct RecordingControl {
 
 impl SurfaceControl for RecordingControl {
     type Error = Infallible;
+    type Message = Infallible;
+
+    fn receive(&mut self, message: Infallible) {
+        match message {}
+    }
 
     fn prepare(&mut self, frame: &PresentFrame) -> Result<(), Infallible> {
         self.events

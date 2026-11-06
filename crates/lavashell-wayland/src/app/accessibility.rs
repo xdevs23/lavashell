@@ -37,16 +37,16 @@ impl Platform {
         {
             bridge.deactivate();
         }
-        let (scene, renderer) = (&mut self.scene, &mut self.renderer);
+        let (scene, shaper) = (&mut self.scene, &mut self.shaper);
         let show = |view: &mut View, viewport: Viewport| {
             send_frame(view, scene.sink(id, None), |view, sink| {
-                view.frame_into(viewport, renderer.shaper(), sink)
+                view.frame_into(viewport, shaper, sink)
             })
         };
         let outcome = (self.surface_records).handle_accessibility(event, show);
         for failure in outcome.failures {
             match failure {
-                AccessibilityFailure::Show(Error::SceneStopped) => self.scene_stopped = true,
+                AccessibilityFailure::Show(Error::SceneStopped) => self.stops.scene = true,
                 failure => log::error!("{failure}"),
             }
         }

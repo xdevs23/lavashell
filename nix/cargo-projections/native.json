@@ -796,6 +796,23 @@
                     "package": "num-traits",
                     "version": "=0.2.19"
                   },
+                  "rustix": {
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "package": "rustix",
+                    "version": "=1.1.5"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -2615,6 +2632,7 @@
                   "lavashell-renderer",
                   "log",
                   "num-traits",
+                  "rustix",
                   "thiserror",
                   "unicode-segmentation"
                 ],
@@ -3926,7 +3944,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "06897f9a0a2c1872a911a1f336ad1e9b9c27bc751914bb26da78ba5f9beed0de"
+        "seedHash": "360f78c9e33aebad62ce23357a8b3977eea86c865b238f221f7a34f0d6d32adb"
       }
     }
   },
@@ -5093,14 +5111,17 @@
         "dependencies": [
           "accesskit",
           "accesskit_consumer",
+          "ash",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
           "log",
           "num-traits",
+          "rustix",
           "thiserror 2.0.21",
           "unicode-segmentation"
         ],

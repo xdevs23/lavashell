@@ -4,7 +4,6 @@ use crate::Error;
 use lavashell_runtime::{SchedulerObserver, SchedulerOutput};
 use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
-use std::time::Duration;
 
 /// Watches the outputs of the frame scheduler in the event loop, and returns the observer that sends each output
 /// there.
@@ -16,15 +15,16 @@ pub(super) fn install(
         handle,
         sources,
         Platform::scheduler_output,
-        |platform| platform.scheduler_stopped = true,
+        |platform| platform.stops.scheduler = true,
         Error::WatchScheduler,
     )?;
     Ok(Box::new(observer))
 }
 
 impl Platform {
-    /// Stores each started frame for the next render and the time at which the views report again, and passes each
-    /// report to the frame observer of the app.
+    /// Stores each started frame and each commit without a frame for the next render, and the time at which the views
+    /// report again. Passes each report to the frame observer of the app. A commit reads the newest built state of
+    /// the surface when the scheduler starts it, while no frame of the surface is composed or drawn.
     fn scheduler_output(&mut self, output: SchedulerOutput) {
         match output {
             SchedulerOutput::Frame {
@@ -33,6 +33,10 @@ impl Platform {
                 time,
             } => {
                 let _older_frame = self.started_frames.insert(surface, (kind, time));
+            }
+            SchedulerOutput::CommitState(surface) => {
+                let built = self.scene.built(surface);
+                let _replaced = self.state_commits.insert(surface, built);
             }
             SchedulerOutput::Report(report) => {
                 if let Some(observer) = &mut self.config.observer {
@@ -60,9 +64,6 @@ impl Platform {
         event_loop: &mut EventLoop<'static, Self>,
     ) -> Result<(), Error> {
         self.scheduler.stop().map_err(Error::Runtime)?;
-        while !self.scheduler_stopped {
-            (event_loop.dispatch(Some(Duration::ZERO), self)).map_err(Error::DispatchEvents)?;
-        }
-        Ok(())
+        actor_link::dispatch_until(self, event_loop, |platform| platform.stops.scheduler)
     }
 }

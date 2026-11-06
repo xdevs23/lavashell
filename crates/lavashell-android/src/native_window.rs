@@ -42,6 +42,11 @@ impl NativeWindow {
 /// `PresentFrame` sets the presentation time, and a Surface has no surface state, so a native window sends nothing.
 impl SurfaceControl for NativeWindow {
     type Error = Infallible;
+    type Message = Infallible;
+
+    fn receive(&mut self, message: Infallible) {
+        match message {}
+    }
 
     fn prepare(&mut self, _: &PresentFrame) -> Result<(), Infallible> {
         Ok(())

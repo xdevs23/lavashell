@@ -18,9 +18,12 @@ lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 log.workspace = true
 num-traits.workspace = true
+rustix = { workspace = true, features = ["time"] }
 thiserror.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]
 accesskit_consumer.workspace = true
+ash.workspace = true
 lavashell-test-fixtures.workspace = true
+lavashell-vulkan.workspace = true

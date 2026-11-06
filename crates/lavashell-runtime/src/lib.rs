@@ -7,6 +7,7 @@ mod accessibility;
 mod builder_actor;
 mod choreographer_actor;
 mod clipboard;
+mod cpu_time;
 mod drag;
 mod error;
 mod focus_grab;
@@ -17,6 +18,7 @@ mod panels;
 mod pipe_transfers;
 #[cfg(test)]
 mod preference_reader;
+mod renderer_actor;
 mod run_end;
 mod scene_item;
 mod scene_pipeline;
@@ -37,14 +39,19 @@ mod window;
 mod window_move;
 
 pub use clipboard::{Clipboard, ClipboardTransfers, TextClipboard};
+pub use cpu_time::CpuStamp;
 pub use drag::{DragGesture, DragRequest, Drags, DropEvent};
 pub use error::{AccessibilityFailure, Error};
 pub use focus_grab::FocusGrabs;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
 pub use panels::{
-    ContentState, KeyboardPolicy, Panel, PanelContent, PanelOptions, PanelRecords, PanelUpdate,
-    PanelsPerOutput, Transaction,
+    ContentState, KeyboardPolicy, Panel, PanelContent, PanelOptions, PanelRecords, PanelRequests,
+    PanelUpdate, PanelsPerOutput, Transaction,
+};
+pub use renderer_actor::{
+    Rendered, Renderer, RendererError, RendererInput, RendererObserver, RendererOutput,
+    RendererStopped,
 };
 pub use run_end::RunEnd;
 pub use scene_pipeline::{BuilderObserver, BuilderReport, ScenePipeline, SceneSink};

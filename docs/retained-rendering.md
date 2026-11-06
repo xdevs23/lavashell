@@ -64,7 +64,7 @@ impl SceneSource for Scene {
     }
 }
 
-let app = App::new(platform).scene(Scene);
+let app = App::new(platform).scene(|| Scene);
 ```
 
 `VulkanRenderer::import_scene` imports images from a producer on another Vulkan device without copying them.
