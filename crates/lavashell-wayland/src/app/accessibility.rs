@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
+use super::{Platform, send_frame};
 use crate::Error;
 use crate::accessibility::Bridge;
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{AccessibilityEvent, AccessibilityRequest};
+use lavashell_runtime::AccessibilityFailure;
 use sctk::reexports::calloop::channel::{self, Event as ChannelEvent, Sender};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
@@ -36,20 +37,18 @@ impl Platform {
         {
             bridge.deactivate();
         }
-        let (surfaces, choreographers, renderer) = (
-            &mut self.surfaces,
-            &mut self.choreographers,
-            &mut self.renderer,
-        );
-        let show = |view: &mut View, viewport: Viewport| -> Result<(), Error> {
-            let surface = surfaces.get_mut(&id).ok_or(Error::SurfaceNotOpen(id))?;
-            surface.show(id, view, choreographers, |view, sink| {
+        let (scene, renderer) = (&mut self.scene, &mut self.renderer);
+        let show = |view: &mut View, viewport: Viewport| {
+            send_frame(view, scene.sink(id, None), |view, sink| {
                 view.frame_into(viewport, renderer.shaper(), sink)
             })
         };
         let outcome = (self.surface_records).handle_accessibility(event, show);
         for failure in outcome.failures {
-            log::error!("{failure}");
+            match failure {
+                AccessibilityFailure::Show(Error::SceneStopped) => self.scene_stopped = true,
+                failure => log::error!("{failure}"),
+            }
         }
         self.execute_accessibility_requests(outcome.publish);
     }

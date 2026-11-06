@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::ClipboardState;
 use crate::surface::LayerSurface;
+use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::{Point, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
-use lavashell_core::scene::SceneBuilder;
-use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
+use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{AccessibilityEvent, SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, ClipboardTransfers, Drags, FrameKind, FrameScheduler, InputFilter,
-    InputRouter, LockConfiguration, OutputRecords, PanelRecords, PanelsPerOutput, RunEnd,
+    ActionQueue, ClipboardTransfers, Drags, FrameKind, FrameScheduler, InputFilter, InputRouter,
+    LockConfiguration, OutputRecords, PanelRecords, PanelsPerOutput, RunEnd, ScenePipeline,
     SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, SurfaceShape, Watches, Window,
 };
 use sctk::compositor::CompositorState;
@@ -39,7 +39,6 @@ use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
-use std::convert::Infallible;
 use std::time::{Duration, Instant};
 
 mod accessibility;
@@ -58,6 +57,7 @@ mod presentation;
 mod protocols;
 mod public;
 mod render;
+mod scene_reports;
 mod session_lock;
 mod shape;
 mod standard_error;
@@ -149,9 +149,9 @@ impl Role {
 
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
-    builder: SceneBuilder,
-    /// The state of the surface built from the same frames as the scene in `builder`.
-    state: SurfaceState,
+    next_draw: render::NextDraw,
+    /// Whether the scene builder built a surface state that the host receives with a commit without a frame.
+    uncommitted_state: bool,
     role: Role,
     wl: wl_surface::WlSurface,
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
@@ -165,53 +165,6 @@ struct Surface {
 impl Surface {
     fn needs_visual_frame(&self, view: &View) -> bool {
         view.needs_visual_frame() || self.shape.needs_frame()
-    }
-
-    /// Composes the next frame of `view` and builds it, as `compose` and `build` do.
-    fn show(
-        &mut self,
-        id: SurfaceId,
-        view: &mut View,
-        choreographers: &mut Choreographers,
-        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
-    ) -> Result<(), crate::Error> {
-        self.compose(id, view, choreographers, frame)?;
-        self.build(id, view, choreographers)
-    }
-
-    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, and logs each component
-    /// that failed in the frame as an error. A failure follows the rule of `tolerate`.
-    fn compose(
-        &self,
-        id: SurfaceId,
-        view: &mut View,
-        choreographers: &mut Choreographers,
-        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
-    ) -> Result<(), crate::Error> {
-        match frame(view, choreographers.sink(id)) {
-            Ok(failures) => {
-                crate::failures::log_failures(failures);
-                Ok(())
-            }
-            Err(error) => tolerate(self.builder.is_empty(), crate::Error::ShowScene(error)),
-        }
-    }
-
-    /// Builds the frames of surface `id` that ended in the choreographer into the scene builder and the surface state.
-    /// When a change does not fit the scene, the view sends the whole scene with the next frame. The builder restarts
-    /// with that frame. A failure follows the rule of `tolerate`.
-    fn build(
-        &mut self,
-        id: SurfaceId,
-        view: &mut View,
-        choreographers: &mut Choreographers,
-    ) -> Result<(), crate::Error> {
-        let showed_nothing = self.builder.is_empty();
-        let Err(error) = choreographers.build(id, &mut self.builder, &mut self.state) else {
-            return Ok(());
-        };
-        view.invalidate();
-        tolerate(showed_nothing, crate::Error::BuildScene(error))
     }
 }
 
@@ -270,9 +223,11 @@ pub(super) struct Platform {
     panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
-    choreographers: Choreographers,
+    scene: ScenePipeline,
+    /// Whether the scene builder stopped, so that the next render ends the run.
+    scene_stopped: bool,
     scheduler: FrameScheduler,
-    /// The newest frame started by the scheduler for each surface, until a render draws it.
+    /// The newest frame started by the scheduler for each surface, until a render composes or draws it.
     started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
     surfaces: BTreeMap<SurfaceId, Surface>,
     renderer: RendererState<control::Control>,
@@ -367,7 +322,9 @@ impl Platform {
                     self.forget_focus_grab(id)?;
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
-                    self.choreographers.retire(id);
+                    if self.scene.retire(id).is_err() {
+                        self.scene_stopped = true;
+                    }
                     self.surface_records.retire(id);
                     self.config.action_queue.forget_surface(id);
                     self.clipboard.transfers.forget_surface(id);
@@ -378,18 +335,18 @@ impl Platform {
     }
 }
 
-/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends a frame that contains them unless
-/// the frame waits for the whole scene.
+/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends the frame as
+/// [`SceneSink::end_state_frame`] does. Returns whether the frame ended.
 fn send_surface_state(
-    sink: &mut SceneSink,
+    mut sink: SceneSink<'_>,
     panels: &PanelRecords,
     id: SurfaceId,
     changes: impl IntoIterator<Item = SurfaceChange>,
-) {
+) -> Result<bool, Closed> {
     for change in changes.into_iter().chain(panels.geometry_change(id)) {
-        sink.set_state(change);
+        sink.set_state(change)?;
     }
-    sink.end_state_frame();
+    sink.end_state_frame()
 }
 
 /// Destroys the protocol objects of a native surface apart from its `wl_surface` and the objects of its control.
@@ -409,17 +366,35 @@ fn destroy_objects(
     }
 }
 
-/// Returns `error` when the surface showed nothing before. Otherwise the error is logged, and the surface shows the
-/// whole scene with the next frame.
-fn tolerate(showed_nothing: bool, error: crate::Error) -> Result<(), crate::Error> {
-    if showed_nothing {
-        return Err(error);
+/// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
+/// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
+/// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
+fn send_frame(
+    view: &mut View,
+    mut sink: SceneSink<'_>,
+    frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
+) -> Result<(), crate::Error> {
+    let shows_scene = sink.any_frame_ended();
+    match frame(view, &mut sink) {
+        Ok(failures) => {
+            crate::failures::log_failures(failures);
+            Ok(())
+        }
+        Err(FrameError::Sink(Closed)) => Err(crate::Error::SceneStopped),
+        Err(error) if shows_scene => {
+            warn_whole_scene_next(&error);
+            Ok(())
+        }
+        Err(error) => Err(crate::Error::ShowScene(error)),
     }
+}
+
+/// Logs `error`, after which the view sends the whole scene with the next frame.
+fn warn_whole_scene_next(error: impl std::error::Error) {
     log::warn!(
-        "the surface shows the whole scene next: {}",
-        lavashell_core::error::message_chain(&error)
+        "a frame failed, and the whole scene is sent with the next frame: {}",
+        lavashell_core::error::message_chain(error)
     );
-    Ok(())
 }
 
 /// The native surface `id`, its view and its viewport, while the surface is open.

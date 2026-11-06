@@ -12,11 +12,15 @@ mod pacing;
 /// The kind of frame started by a surface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrameKind {
-    /// The view composes the frame, then the frame is rendered.
+    /// The view composes the frame. The frame renders once the scene builder built it.
     Compose,
     /// Only motions of the scene change, so the scene is rendered without composing the view.
     Render,
 }
+
+/// The sequence number of a frame started by the frame scheduler.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FrameSequence(pub u64);
 
 /// What the view of a surface needs for the next frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +61,12 @@ pub enum SchedulerInput {
         surface: SurfaceId,
         next_change: Option<Duration>,
     },
+    /// The scene of the surface contains every frame that the view composed up to the frame with `sequence`. A
+    /// scene built from a frame sent outside a compose has no sequence.
+    Built {
+        surface: SurfaceId,
+        sequence: Option<FrameSequence>,
+    },
     /// The frame for `frame` was drawn with `outcome`, which took `cost`.
     Rendered {
         surface: SurfaceId,
@@ -77,7 +87,7 @@ pub enum SchedulerInput {
 /// What the frame scheduler asks for.
 #[derive(Clone, Debug)]
 pub enum SchedulerOutput {
-    /// Draw a frame of `kind` for the surface at `time`.
+    /// Start a frame of `kind` for the surface at `time`.
     Frame {
         surface: SurfaceId,
         kind: FrameKind,
@@ -88,8 +98,9 @@ pub enum SchedulerOutput {
 }
 
 /// Decides when each surface composes and renders. A surface starts a frame when the view of the surface needs one or
-/// the scene moves. No earlier frame of the surface may be in progress or waiting for the display. The frame clock of
-/// each surface predicts when the frame becomes visible from the reports of the host and the render cost.
+/// the scene moves. No earlier frame of the surface may be in progress or waiting for the display. A composed frame
+/// renders once the scene builder built it. The frame clock of each surface predicts when the frame becomes visible
+/// from the reports of the host and the render cost.
 #[derive(Debug)]
 pub struct FrameScheduler {
     redraw: Redraw,
@@ -136,6 +147,9 @@ impl FrameScheduler {
                 }
                 None
             }
+            SchedulerInput::Built { surface, sequence } => (self.surfaces.get_mut(&surface))
+                .and_then(|pacing| pacing.built(sequence))
+                .map(|frame| (surface, frame)),
             SchedulerInput::Rendered {
                 surface,
                 frame,

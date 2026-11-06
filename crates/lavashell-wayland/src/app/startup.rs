@@ -3,7 +3,7 @@ use super::control::RoleControl;
 use super::creation::NativeSpec;
 use super::{
     App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation,
+    output_layers, preferences, presentation, scene_reports,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
@@ -14,8 +14,8 @@ use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
 use lavashell_runtime::{
-    Choreographers, FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw,
-    SurfaceRecords, TextClipboard, Window,
+    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline, SurfaceRecords,
+    TextClipboard, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -94,6 +94,7 @@ impl Platform {
         let mut sources = vec![connection_source];
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
+        let builder_reports = scene_reports::install(&loop_handle, &mut sources)?;
         let redraw = if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene()
         {
             Redraw::Continuous
@@ -111,7 +112,8 @@ impl Platform {
             surface_records,
             panels: PanelRecords::default(),
             surface_requests: Vec::new(),
-            choreographers: Choreographers::default(),
+            scene: ScenePipeline::start(builder_reports)?,
+            scene_stopped: false,
             scheduler: FrameScheduler::new(redraw),
             started_frames: BTreeMap::new(),
             surfaces: BTreeMap::new(),

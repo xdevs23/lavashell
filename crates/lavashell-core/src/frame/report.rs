@@ -33,8 +33,9 @@ pub struct FrameReport {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Submission {
-    /// The wall-clock time spent on composition, painting and submission, including time in which the thread was
-    /// preempted.
+    /// The wall-clock time from the start of the frame to its submission, including time in which the thread was
+    /// preempted. A frame that the view composed starts with the compose, so the time includes the wait for the scene
+    /// builder.
     pub render_cost: Duration,
     /// The CPU time of the calling thread within the same span, without the time of other threads or of the GPU.
     pub cpu_time: Duration,

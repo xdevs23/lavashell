@@ -5,6 +5,7 @@ use super::{Platform, Role, Surface, configure_event, send_surface_state};
 use crate::logical::{extent, whole};
 use crate::surface::LayerSurface;
 use crate::{Error, LayerLayoutError};
+use lavashell_actor::Closed;
 use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::units::{FiniteDp, NonNegativeDp};
@@ -253,9 +254,16 @@ impl Platform {
                 Transaction::Settled => {}
                 Transaction::NeedsFrame => view.invalidate(),
                 Transaction::Committed => {
-                    send_surface_state(self.choreographers.sink(id), &self.panels, id, []);
-                    surface.build(id, view, &mut self.choreographers)?;
-                    (self.renderer.commit_state(id, &surface.state)).map_err(Error::CommitState)?;
+                    let sink = self.scene.sink(id, None);
+                    match send_surface_state(sink, &self.panels, id, []) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            let built = self.scene.built(id);
+                            (self.renderer.commit_state(id, &built.state))
+                                .map_err(Error::CommitState)?;
+                        }
+                        Err(Closed) => self.scene_stopped = true,
+                    }
                 }
             }
         }
@@ -280,10 +288,10 @@ impl Platform {
         if let Some(layer) = layer
             && self.surface_records.is_open(id)
         {
-            let token = layer.receive_configure(serial);
-            self.choreographers
-                .sink(id)
-                .set_state(SurfaceChange::Configure(token));
+            let configure = SurfaceChange::Configure(layer.receive_configure(serial));
+            if self.scene.sink(id, None).set_state(configure).is_err() {
+                self.scene_stopped = true;
+            }
         }
         configure_event(
             configured_length(width, requested_width),
