@@ -4,8 +4,8 @@ use lavashell_actor::JoinError;
 use lavashell_core::geometry::{Color, Size, Viewport};
 use lavashell_core::prelude::{Modifier, TextStyle};
 use lavashell_core::reactive::State;
-use lavashell_core::surface::ConfigureToken;
 use lavashell_core::scene::tree::{SceneNodeId, SceneSnapshot};
+use lavashell_core::surface::ConfigureToken;
 use lavashell_core::units::{Density, Dp, DpExt};
 use lavashell_core::view::{FrameError, TextMeasurer, View};
 use std::sync::mpsc;
@@ -181,7 +181,11 @@ fn a_frame_of_surface_state_changes_the_state_and_keeps_the_scene() -> TestResul
 fn a_sink_with_a_sequence_ends_a_frame_without_state_unless_the_frame_waits_for_the_whole_scene()
 -> TestResult {
     let (mut pipeline, reports) = start()?;
-    assert!(pipeline.sink(SURFACE, Some(FrameSequence(3))).end_state_frame()?);
+    assert!(
+        pipeline
+            .sink(SURFACE, Some(FrameSequence(3)))
+            .end_state_frame()?
+    );
     assert!(matches!(
         reports.recv()?,
         BuilderReport::Built {

@@ -14,8 +14,8 @@ use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
 use lavashell_runtime::{
-    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline, SurfaceRecords,
-    TextClipboard, Window,
+    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline,
+    SurfaceRecords, TextClipboard, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;

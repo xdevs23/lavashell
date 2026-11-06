@@ -104,10 +104,13 @@ impl Actor for BuilderActor {
             }
             reports.push(report);
         }
-        let requested = (reports.into_iter())
-            .try_for_each(&mut self.observer)
-            .and_then(|()| self.choreographer.push(ChoreographerInput::Ask(sizes)));
-        Ok(requested.map_or(Flow::Stop, |()| Flow::Continue))
+        let observed = reports.into_iter().try_for_each(&mut self.observer);
+        if observed.is_err() {
+            return Ok(Flow::Stop);
+        }
+        // The mailbox can still contain surfaces that the choreographer retired before it stopped.
+        let _choreographer_gone = self.choreographer.push(ChoreographerInput::Ask(sizes));
+        Ok(Flow::Continue)
     }
 }
 
