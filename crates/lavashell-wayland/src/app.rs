@@ -11,13 +11,13 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, InputFilter, InputRouter, LockConfiguration, OutputRecords,
+    RunEnd, SceneSink, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
-use sctk::reexports::client::protocol::{wl_keyboard, wl_output, wl_seat, wl_surface, wl_touch};
+use sctk::reexports::client::protocol::{wl_keyboard, wl_seat, wl_surface, wl_touch};
 use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use sctk::reexports::protocols::ext::background_effect::v1::client::{
     ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
@@ -57,7 +57,7 @@ mod presentation;
 mod protocols;
 mod public;
 mod render;
-pub(crate) mod session_lock;
+mod session_lock;
 mod shape;
 mod standard_error;
 mod startup;
@@ -66,6 +66,8 @@ mod transfer;
 mod wake;
 mod watch;
 mod window_input;
+#[cfg(test)]
+mod wire_messages;
 
 pub use input::{HostKey, KeyboardFocus};
 
@@ -74,14 +76,13 @@ type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
 enum Request {
     Window(Window, View),
     Layer(LayerSurface, View),
-    Lock(wl_output::WlOutput, View),
 }
 
 pub struct App {
     requests: Vec<Request>,
     output_layers: Option<output_layers::Configuration>,
     fonts: Fonts,
-    session_lock: Option<session_lock::Configuration>,
+    session_lock: Option<LockConfiguration>,
     run_end: RunEnd,
     clipboard: Clipboard,
     painter_setup: Option<PainterSetup>,

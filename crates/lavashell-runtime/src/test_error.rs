@@ -18,6 +18,8 @@ pub(crate) enum TestError {
     Number(#[from] NumberError),
     #[error("the surface is not open")]
     NotOpen,
+    #[error("the session lock offered no view for the output")]
+    NoLockView,
 }
 
 pub(crate) type TestResult = Result<(), TestError>;

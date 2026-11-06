@@ -2,12 +2,13 @@
 use super::creation::NativeSpec;
 use super::{
     App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation, session_lock,
+    output_layers, preferences, presentation,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
@@ -50,7 +51,7 @@ impl Platform {
         loop_handle: LoopHandle<'static, Self>,
     ) -> Result<Self, Error> {
         let App {
-            mut requests,
+            requests,
             output_layers,
             fonts,
             session_lock,
@@ -77,17 +78,6 @@ impl Platform {
         let wayland = WaylandPresentation::new(connection.backend());
         let renderer = RendererState::new(&wayland, setup).map_err(Error::Render)?;
         let outputs = OutputState::new(globals, &qh);
-        let session_lock = session_lock
-            .map(|configuration| {
-                session_lock::Runtime::new(
-                    globals,
-                    &qh,
-                    configuration,
-                    outputs.outputs(),
-                    &mut requests,
-                )
-            })
-            .transpose()?;
         let output_layers = output_layers
             .map(|configuration| {
                 output_layers::Runtime::new(configuration, protocols.layers.as_ref())
@@ -106,7 +96,7 @@ impl Platform {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
             output_layers,
-            session_lock,
+            session_lock: None,
             sources,
             watches: BTreeMap::new(),
             surface_records,
@@ -135,12 +125,15 @@ impl Platform {
             qh,
         };
         for request in requests {
-            platform.create_requested_surface(request)?;
+            let _requested_surface = platform.create_requested_surface(request)?;
+        }
+        if let Some(configuration) = session_lock {
+            platform.start_lock(globals, configuration)?;
         }
         Ok(platform)
     }
 
-    fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
+    fn create_requested_surface(&mut self, request: Request) -> Result<SurfaceId, Error> {
         match request {
             Request::Window(window, mut view) => {
                 let spec = window.spec(&mut view, self.renderer.shaper())?;
@@ -156,10 +149,6 @@ impl Platform {
                     platform.layer_role(wl, None, &options, context, id)
                 })
             }
-            Request::Lock(output, view) => self
-                .create_surface(NativeSpec::lock(view), |platform, wl, id| {
-                    platform.lock_role(wl, &output, id)
-                }),
         }
     }
 

@@ -26,8 +26,6 @@ pub enum Error {
     SessionLockConfigured,
     #[error("the app has a per-output layer factory already")]
     OutputLayersConfigured,
-    #[error("the session-lock handle belongs to another lock")]
-    SessionLockReused,
     #[error("the window size {0:?} is not positive and finite or does not fit the protocol")]
     WindowSize(Size),
     #[error("the minimum window size {0:?} is not finite or does not fit the protocol")]
@@ -66,6 +64,8 @@ pub enum Error {
     BindCompositor(#[source] BindError),
     #[error("ext-session-lock-v1 could not be bound")]
     BindSessionLock(#[source] BindError),
+    #[error("an output has no id from the output state")]
+    OutputWithoutId,
     #[error("the compositor offers no xdg-shell")]
     NoXdgShell,
     #[error("the compositor offers no layer-shell")]
@@ -76,12 +76,6 @@ pub enum Error {
     Draw(#[source] DrawError<ControlError>),
     #[error("a region could not be created")]
     CreateRegion(#[source] sctk::error::GlobalError),
-    #[error("a session lock needs an advertised output")]
-    SessionLockWithoutOutput,
-    #[error("a lock surface was requested without a session lock")]
-    LockSurfaceWithoutLock,
-    #[error("the compositor refused or ended the session lock")]
-    SessionLockEnded,
     #[error("the layer length {0:?} does not fit the protocol")]
     LayerLength(NonNegativeDp),
     #[error("the measured content length {0:?} of a layer does not fit the protocol")]

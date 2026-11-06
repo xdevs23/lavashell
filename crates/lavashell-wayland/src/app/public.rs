@@ -2,7 +2,7 @@
 use super::input::{HostKey, KeyboardFocus};
 use super::render::NextRender;
 
-use super::{App, AppConfig, Platform, Request, session_lock};
+use super::{App, AppConfig, Platform, Request};
 use crate::Error;
 use crate::clipboard::Clipboard;
 use crate::logical::{whole_size, window_size};
@@ -15,7 +15,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::{Fonts, Painter};
-use lavashell_runtime::{RunEnd, ViewActions, Window};
+use lavashell_runtime::{LockConfiguration, RunEnd, SessionLock, ViewActions, Window};
 use sctk::reexports::calloop::EventLoop;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::globals::registry_queue_init;
@@ -44,13 +44,13 @@ impl App {
     /// Fails when the app has a session lock already.
     pub fn session_lock(
         &mut self,
-        handle: crate::SessionLock,
+        handle: SessionLock,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), Error> {
         if self.session_lock.is_some() {
             return Err(Error::SessionLockConfigured);
         }
-        self.session_lock = Some(session_lock::Configuration::new(
+        self.session_lock = Some(LockConfiguration::new(
             handle,
             self.platform.clone(),
             compose,
@@ -331,9 +331,7 @@ impl App {
                 layers.check()?;
             }
             platform.update_layers()?;
-            if platform.update_lock()? == session_lock::LockState::Released {
-                break;
-            }
+            platform.update_lock()?;
             let next = platform.render()?;
             platform.update_focus_grabs();
             if platform.finished() {

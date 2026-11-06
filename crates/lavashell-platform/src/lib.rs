@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 mod input;
+mod lock;
 mod output;
 mod request;
 mod settings;
@@ -14,6 +15,7 @@ mod window_control;
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };
+pub use lock::LockEvent;
 pub use output::{OutputEvent, OutputId};
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;

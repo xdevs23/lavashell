@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::time::Duration;
 
-/// When a run ends: once nothing is open, once the time set by `exit_after` has passed since the start, or once the
-/// predicate set by `exit_when` returns true.
+/// When a run ends: once `end` was called, once nothing is open, once the time set by `exit_after` has passed since
+/// the start, or once the predicate set by `exit_when` returns true.
 #[derive(Default)]
 pub struct RunEnd {
+    ended: bool,
     exit_after: Option<Duration>,
     exit_when: Option<Box<dyn FnMut() -> bool>>,
 }
@@ -18,10 +19,16 @@ impl RunEnd {
         self.exit_when = Some(Box::new(predicate));
     }
 
+    /// Ends the run at the next check, whatever is still open.
+    pub fn end(&mut self) {
+        self.ended = true;
+    }
+
     /// Whether the run ends at `elapsed` after its start. The predicate of `exit_when` runs only when nothing else
     /// ends the run.
     pub fn finished(&mut self, elapsed: Duration, anything_open: bool) -> bool {
-        !anything_open
+        self.ended
+            || !anything_open
             || self.exit_after.is_some_and(|limit| elapsed >= limit)
             || self.exit_when.as_mut().is_some_and(|predicate| predicate())
     }
@@ -73,5 +80,19 @@ mod tests {
         assert!(!end.finished(SECOND, true));
         assert!(end.finished(SECOND, true));
         assert_eq!(calls.get(), 2);
+    }
+
+    #[test]
+    fn an_ended_run_ends_while_something_is_open_without_the_exit_predicate() {
+        let calls = Rc::new(Cell::new(0));
+        let counted = calls.clone();
+        let mut end = RunEnd::default();
+        end.exit_when(move || {
+            counted.set(counted.get() + 1);
+            false
+        });
+        end.end();
+        assert!(end.finished(SECOND, true));
+        assert_eq!(calls.get(), 0);
     }
 }

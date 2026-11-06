@@ -10,4 +10,10 @@ pub enum Error {
     NumberWatch,
     #[error("the content of a surface could not be measured")]
     MeasureView(#[source] NumberError),
+    #[error("the session-lock handle belongs to another lock")]
+    SessionLockReused,
+    #[error("a session lock needs an output")]
+    SessionLockWithoutOutput,
+    #[error("the host refused or ended the session lock")]
+    SessionLockEnded,
 }

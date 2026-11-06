@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::LayerMargins;
+use crate::app::wire_messages::requests;
 use crate::test_error::TestError;
 use focus_wire::Wire;
 use lavashell_core::prelude::{
     Density, DpExt, Modifier, NonNegativeDp, TextMeasurer, TextStyle, Viewport,
 };
 use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
-use wire_tests::requests;
 
 #[test]
 fn private_wire_empty_submitted_input_cannot_grab_before_a_nonempty_frame_is_shown()
