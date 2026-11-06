@@ -2130,6 +2130,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
+          "lavashell-renderer",
           "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ],
