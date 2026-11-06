@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, FrameKind, FrameScheduler, InputFilter, InputRouter, OutputRecords, RunEnd,
-    ScenePipeline, SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
+    ActionQueue, FrameKind, InputFilter, InputRouter, OutputRecords, RunEnd, ScenePipeline,
+    SceneSink, SchedulerInput, SchedulerThread, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -41,6 +41,7 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 mod accessibility;
+mod actor_link;
 mod control;
 mod creation;
 mod device;
@@ -57,6 +58,7 @@ mod protocols;
 mod public;
 mod render;
 mod scene_reports;
+mod scheduler_outputs;
 pub(crate) mod session_lock;
 mod shape;
 mod standard_error;
@@ -205,7 +207,11 @@ pub(super) struct Platform {
     scene: ScenePipeline,
     /// Whether the scene builder stopped, so that the next render ends the run.
     scene_stopped: bool,
-    scheduler: FrameScheduler,
+    scheduler: SchedulerThread,
+    /// The time at which the scheduler asks the views to report again what they need.
+    scheduler_wake: Option<Duration>,
+    /// Whether the frame scheduler stopped, so that the next render ends the run.
+    scheduler_stopped: bool,
     /// The newest frame started by the scheduler for each surface, until a render composes or draws it.
     started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
     surfaces: BTreeMap<SurfaceId, Surface>,
@@ -260,27 +266,9 @@ impl Platform {
         (self.surface_requests).extend(self.surface_records.handle(surface, event));
     }
 
-    /// Hands `input` to the frame scheduler. Passes each report to the frame observer of the app at once, and keeps
-    /// each started frame for the next render.
-    fn schedule(&mut self, input: SchedulerInput) {
-        let mut outputs = Vec::new();
-        (self.scheduler).handle(self.start.elapsed(), input, &mut outputs);
-        for output in outputs {
-            match output {
-                SchedulerOutput::Frame {
-                    surface,
-                    kind,
-                    time,
-                } => {
-                    let _older_frame = self.started_frames.insert(surface, (kind, time));
-                }
-                SchedulerOutput::Report(report) => {
-                    if let Some(observer) = &mut self.config.observer {
-                        observer(*report);
-                    }
-                }
-            }
-        }
+    /// Sends `input` to the frame scheduler. A scheduler that is gone closes its outputs, which ends the run.
+    fn schedule(&self, input: SchedulerInput) {
+        let _gone_scheduler_ends_the_run = self.scheduler.send(input);
     }
 
     /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires

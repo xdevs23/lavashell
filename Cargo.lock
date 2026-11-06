@@ -2752,6 +2752,7 @@ name = "lavashell-platform"
 version = "0.1.0"
 dependencies = [
  "icu_locale_core",
+ "lavashell-actor",
  "lavashell-core",
 ]
 

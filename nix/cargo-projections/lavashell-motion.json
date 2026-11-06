@@ -2029,6 +2029,7 @@
       {
         "dependencies": [
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-core"
         ],
         "name": "lavashell-platform",

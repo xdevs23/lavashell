@@ -11,4 +11,5 @@ workspace = true
 
 [dependencies]
 icu_locale_core.workspace = true
+lavashell-actor.workspace = true
 lavashell-core.workspace = true

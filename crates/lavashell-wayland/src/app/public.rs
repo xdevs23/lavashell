@@ -342,16 +342,17 @@ impl App {
                 .dispatch(platform.timeout(), &mut platform)
                 .map_err(Error::DispatchEvents)?;
         }
-        Ok(())
+        platform.drain_scheduler(&mut event_loop)
     }
 }
 
 impl Platform {
     /// How long the event loop waits: not at all while started frames wait for the next render, and otherwise until
-    /// the earliest of the exit time, the next scene image and the next wake time of the scheduler. A scene deadline
-    /// that has passed is left out, because the render before this wait handled it. The loop then waits for the timing
-    /// events of the surfaces that were drawn.
-    fn timeout(&self) -> Option<Duration> {
+    /// the earliest of the exit time, the next scene image and the time at which the scheduler asks the views to report
+    /// again. A scene deadline that has passed is left out, because the render before this wait handled it. A wake
+    /// time that is due ends the wait at once and is used up by the next render. The loop then waits for the timing
+    /// events of the surfaces that were drawn and the outputs of the scheduler.
+    fn timeout(&mut self) -> Option<Duration> {
         if !self.started_frames.is_empty() {
             return Some(Duration::ZERO);
         }
@@ -360,9 +361,11 @@ impl Platform {
         let scene = (self.renderer.scene_deadline())
             .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
             .filter(|wait| !wait.is_zero());
-        let wakes =
-            (self.scheduler.next_wake(elapsed)).map(|deadline| deadline.saturating_sub(elapsed));
-        exit.into_iter().chain(scene).chain(wakes).min()
+        let wake = (self.scheduler_wake).map(|wake| wake.saturating_sub(elapsed));
+        if wake.is_some_and(|wait| wait.is_zero()) {
+            self.scheduler_wake = None;
+        }
+        exit.into_iter().chain(scene).chain(wake).min()
     }
 
     /// Whether the run ends now. The session lock and the per-output layers count as open until they end.

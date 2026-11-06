@@ -555,6 +555,12 @@
                     "package": "icu_locale_core",
                     "version": "=2.3.0"
                   },
+                  "lavashell-actor": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-actor",
+                    "path": "../lavashell-actor"
+                  },
                   "lavashell-core": {
                     "default-features": false,
                     "features": [
@@ -2589,6 +2595,7 @@
               {
                 "dependencies": [
                   "icu_locale_core",
+                  "lavashell-actor",
                   "lavashell-core"
                 ],
                 "name": "lavashell-platform",
@@ -3930,7 +3937,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "a2434bd26c0a380fb38db9234163e33a7cbcf8c0d507b241f1bb9a79755d059b"
+        "seedHash": "3e98cfe1fceb6dcc880584bd74088229a3ca1368f9dd3361fcb3960c03d830fe"
       }
     }
   },
@@ -5076,6 +5083,7 @@
       {
         "dependencies": [
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-core"
         ],
         "name": "lavashell-platform",

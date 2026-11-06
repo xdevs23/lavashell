@@ -47,10 +47,10 @@ fn actions_queued_while_a_batch_runs_wait_for_the_next_batch() {
     actions.dispatch(SurfaceId(3), move |_| again.dispatch(SurfaceId(4), |_| {}));
     let mut batch = queue.take_batch();
     assert!(!queue.has_pending_for(SurfaceId(3)));
-    assert!(batch.has_actions_for(SurfaceId(3)));
     batch.run(SurfaceId(3), &mut empty_view());
-    assert!(!batch.has_actions_for(SurfaceId(3)));
-    assert!(queue.take_batch().has_actions_for(SurfaceId(4)));
+    assert!(queue.has_pending_for(SurfaceId(4)));
+    queue.requeue(batch);
+    assert!(!queue.has_pending_for(SurfaceId(3)));
 }
 
 #[test]
@@ -129,14 +129,13 @@ fn forgetting_a_surface_drops_the_actions_and_watches_for_it() -> TestResult {
     queue.requeue(batch);
     actions.dispatch(forgotten, |_| {});
     assert_eq!(unwatched(&queue.take_requests()), ids[..1]);
-    let batch = queue.take_batch();
-    assert!(!batch.has_actions_for(forgotten));
-    assert!(batch.has_actions_for(open));
+    assert!(!queue.has_pending_for(forgotten));
+    assert!(queue.has_pending_for(open));
+    let _taken = queue.take_batch();
     for id in &ids {
         queue.handle(WatchEvent::Readable(*id));
     }
-    let batch = queue.take_batch();
-    assert!(!batch.has_actions_for(forgotten));
-    assert!(batch.has_actions_for(open));
+    assert!(!queue.has_pending_for(forgotten));
+    assert!(queue.has_pending_for(open));
     Ok(())
 }

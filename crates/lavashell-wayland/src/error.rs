@@ -47,6 +47,8 @@ pub enum Error {
     WatchAccessibility(#[source] calloop::Error),
     #[error("the reports of the scene builder could not join the event loop")]
     WatchScene(#[source] calloop::Error),
+    #[error("the outputs of the frame scheduler could not join the event loop")]
+    WatchScheduler(#[source] calloop::Error),
     #[error("the system preferences could not join the event loop")]
     WatchPreferences(#[source] calloop::Error),
     #[error("the watch of the system preferences could not be created")]
@@ -105,6 +107,8 @@ pub enum Error {
     ShowScene(#[source] FrameError<Closed>),
     #[error("the scene builder stopped")]
     SceneStopped,
+    #[error("the frame scheduler stopped")]
+    SchedulerStopped,
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
     #[error("the compositor offers no clipboard")]

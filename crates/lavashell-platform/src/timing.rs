@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_actor::{Effect, Merge};
 use lavashell_core::frame::{FrameTime, PresentationFlags};
 use lavashell_core::surface::SurfaceId;
 use std::time::Duration;
@@ -23,4 +24,17 @@ pub enum TimingEvent {
         surface: SurfaceId,
         frame: FrameTime,
     },
+}
+
+impl Merge for TimingEvent {
+    type Key = SurfaceId;
+
+    /// A newer display-ready report for a surface replaces the earlier one. Every report about a frame builds on the
+    /// reports before it.
+    fn effect(&self) -> Effect<SurfaceId> {
+        match *self {
+            Self::DisplayReady(surface) => Effect::Overwrites(surface),
+            Self::Presented { .. } | Self::Discarded { .. } => Effect::BuildsOn,
+        }
+    }
 }

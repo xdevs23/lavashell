@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{AppConfig, FrameDelivery, Platform, Role, layer, open_surface, send_frame};
+use super::{
+    AppConfig, FrameDelivery, Platform, Role, actor_link, layer, open_surface, send_frame,
+};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
@@ -57,8 +59,11 @@ impl AppConfig {
 
 impl Platform {
     /// Runs the frame started by the frame scheduler for each surface, in composition order. Returns an error after
-    /// the scene pipeline has stopped. When an actor failed, the error is the failure that stopped the pipeline.
+    /// the scene pipeline or the frame scheduler has stopped. When an actor failed, the error is its failure.
     pub(super) fn render(&mut self) -> Result<(), Error> {
+        if self.scheduler_stopped {
+            return Err(self.stopped_scheduler_error());
+        }
         match self.run_started_frames() {
             Err(Error::SceneStopped) => Err(self.stopped_scene_error()),
             ran => ran,
@@ -68,17 +73,13 @@ impl Platform {
     /// Joins the threads of the stopped scene pipeline, and returns the failure of the actor that stopped it, or
     /// `SceneStopped` when neither actor failed.
     fn stopped_scene_error(&mut self) -> Error {
-        match self.scene.stop() {
-            Ok(()) => Error::SceneStopped,
-            Err(error) => Error::Runtime(error),
-        }
+        actor_link::stopped(self.scene.stop(), Error::SceneStopped)
     }
 
     /// Runs the frame started by the frame scheduler for each surface, in composition order. A compose frame sends the
-    /// frames of the view to the scene pipeline, and a render frame draws the newest scene of the surface. Before the
-    /// frame of a surface runs, the surface reports what the view needs. The scheduler samples the frame at that time.
-    /// After the frames, every surface reports again with the deadline after composing, and each drawn surface reports
-    /// the rendered frame.
+    /// frames of the view to the scene pipeline, and a render frame draws the newest scene of the surface. After the
+    /// frames, every surface reports what its view needs, with the deadline after composing, and the scheduler starts
+    /// the next frame from that report. Each drawn surface reports the rendered frame.
     fn run_started_frames(&mut self) -> Result<(), Error> {
         // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
         // retires.
@@ -99,7 +100,6 @@ impl Platform {
                 let _closed_frame = self.started_frames.remove(&id);
                 continue;
             }
-            self.want_frame(id, actions.has_actions_for(id));
             let Some((kind, timing)) = self.started_frames.remove(&id) else {
                 continue;
             };

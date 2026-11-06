@@ -15,19 +15,34 @@ fn ms(millis: u64) -> Duration {
 }
 
 /// A frame scheduler fed one input at a time, at a time given in milliseconds.
-struct Script(FrameScheduler);
+struct Script {
+    scheduler: FrameScheduler,
+    /// Every wake time sent by the scheduler, in order.
+    wakes: Vec<Option<Duration>>,
+}
 
 impl Script {
     /// A script whose window has opened.
     fn opened(redraw: Redraw) -> Self {
-        let mut script = Self(FrameScheduler::new(redraw));
+        let mut script = Self {
+            scheduler: FrameScheduler::new(redraw),
+            wakes: Vec::new(),
+        };
         assert!(script.at(0, SchedulerInput::Opened(WINDOW)).is_empty());
         script
     }
 
+    /// The frames and reports that follow from `input`. The wake times go to `wakes`.
     fn at(&mut self, millis: u64, input: SchedulerInput) -> Vec<SchedulerOutput> {
         let mut out = Vec::new();
-        self.0.handle(ms(millis), input, &mut out);
+        self.scheduler.handle(ms(millis), input, &mut out);
+        out.retain(|output| match *output {
+            SchedulerOutput::WakeAt(wake) => {
+                self.wakes.push(wake);
+                false
+            }
+            SchedulerOutput::Frame { .. } | SchedulerOutput::Report(_) => true,
+        });
         out
     }
 
@@ -85,7 +100,7 @@ impl Script {
     }
 
     fn next_wake_at(&self, millis: u64) -> Option<Duration> {
-        self.0.next_wake(ms(millis))
+        self.scheduler.next_wake(ms(millis))
     }
 }
 
@@ -155,6 +170,15 @@ fn presented_after_16_ms() -> Result<Script, MissingOutput> {
     let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, shown(first, ms(1))).is_empty());
     let _presented_report = script.report_at(16, presented(first, Some(ms(16)), None))?;
+    Ok(script)
+}
+
+/// A script whose window showed one frame at 16 ms, which took 1 ms to render, on a display with a 10 ms refresh.
+fn presented_on_a_10_ms_refresh() -> Result<Script, MissingOutput> {
+    let mut script = Script::opened(Redraw::OnChange);
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
+    assert!(script.at(1, shown(first, ms(1))).is_empty());
+    let _presented_report = script.report_at(16, presented(first, Some(ms(16)), Some(ms(10))))?;
     Ok(script)
 }
 
@@ -402,6 +426,19 @@ fn a_change_of_the_scene_wakes_one_presentation_lead_early() -> TestResult {
     let mut script = presented_after_16_ms()?;
     assert!(script.at(100, published(Some(ms(150)))).is_empty());
     assert_eq!(script.next_wake_at(100), Some(ms(134)));
+    Ok(())
+}
+
+#[test]
+fn with_a_refresh_the_wake_before_a_change_of_the_scene_stays_while_time_passes() -> TestResult {
+    let mut script = presented_on_a_10_ms_refresh()?;
+    assert!(script.at(100, published(Some(ms(150)))).is_empty());
+    for millis in [100, 103, 107] {
+        assert_eq!(script.next_wake_at(millis), Some(ms(145)));
+    }
+    assert!(script.at(103, wants(ViewState::Unchanged, None)).is_empty());
+    assert!(script.at(107, wants(ViewState::Unchanged, None)).is_empty());
+    assert_eq!(script.wakes, [Some(ms(145))]);
     Ok(())
 }
 
