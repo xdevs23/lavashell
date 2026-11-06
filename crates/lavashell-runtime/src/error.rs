@@ -16,4 +16,6 @@ pub enum Error {
     SessionLockWithoutOutput,
     #[error("the host refused or ended the session lock")]
     SessionLockEnded,
+    #[error("the content of a panel measures a length that is negative or not finite")]
+    PanelContent(#[source] NumberError),
 }

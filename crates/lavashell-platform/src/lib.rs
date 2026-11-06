@@ -6,6 +6,7 @@
 mod input;
 mod lock;
 mod output;
+mod panel;
 mod request;
 mod settings;
 mod surface;
@@ -18,6 +19,7 @@ pub use input::{
 };
 pub use lock::LockEvent;
 pub use output::{OutputEvent, OutputId};
+pub use panel::{KeyboardMode, PanelRequest};
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};

@@ -6,6 +6,7 @@ use crate::focus_grab::protocol::{
 };
 use lavashell_core::geometry::Size;
 use lavashell_core::surface::SurfaceId;
+use lavashell_runtime::Panel;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_surface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop};
@@ -22,7 +23,7 @@ enum GrabState {
 
 /// What a layer can do with its focus grab in an update.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Readiness {
+pub(super) enum Readiness {
     /// The layer releases its grab, if it has one.
     Unavailable,
     /// The layer does not release a grab that it has, and does not take a new one.
@@ -108,6 +109,18 @@ impl Capability {
     }
 }
 
+/// What the layer of `panel` can do with its focus grab, while the surface of the layer has `size` and is
+/// `configured` or not.
+pub(super) fn readiness(panel: &Panel, configured: bool, size: Size) -> Readiness {
+    if !(configured && panel.keyboard_allowed() && panel.input_enabled()) {
+        Readiness::Unavailable
+    } else if panel.keyboard_granted() && panel.content_current(size) {
+        Readiness::Acquirable
+    } else {
+        Readiness::Holdable
+    }
+}
+
 impl super::layer::Runtime {
     pub(super) fn update_focus_grab(
         &mut self,
@@ -115,16 +128,8 @@ impl super::layer::Runtime {
         wl: &wl_surface::WlSurface,
         qh: &QueueHandle<Platform>,
         surface: SurfaceId,
-        configured: bool,
-        size: Size,
+        readiness: Readiness,
     ) {
-        let readiness = if !(configured && self.keyboard_active() && self.input_enabled()) {
-            Readiness::Unavailable
-        } else if self.keyboard_enabled() && self.content_current(size) {
-            Readiness::Acquirable
-        } else {
-            Readiness::Holdable
-        };
         if let Some(grab) = &mut self.focus {
             grab.update(manager, wl, qh, surface, readiness);
         }
@@ -135,15 +140,16 @@ impl Platform {
     pub(super) fn update_focus_grabs(&mut self) {
         for (&id, surface) in &mut self.surfaces {
             if let Role::Layer(layer) = &mut surface.role
+                && let Some(panel) = self.panels.get(id)
                 && let Some(viewport) = self.surface_records.open_viewport(id)
             {
+                let configured = self.surface_records.is_configured(id);
                 layer.update_focus_grab(
                     self.focus_grabs.0.as_ref(),
                     &surface.wl,
                     &self.qh,
                     id,
-                    self.surface_records.is_configured(id),
-                    viewport.size,
+                    readiness(panel, configured, viewport.size),
                 );
             }
         }

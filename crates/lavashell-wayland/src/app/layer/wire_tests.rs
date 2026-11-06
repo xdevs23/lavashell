@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::LayerMargins;
 use crate::app::wire_messages::{messages, requests};
 use crate::test_error::TestError;
+use focus_wire::{LAYER, Wire};
+use lavashell_core::geometry::Size;
+use lavashell_core::panel::{ContentSize, Extent, LayerLayout, LayerMargins};
 use lavashell_core::units::DpExt;
 use sctk::reexports::client::protocol::{wl_compositor, wl_registry};
 use sctk::reexports::client::{Connection, delegate_noop};
@@ -54,11 +56,9 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
             ..Default::default()
         },
     };
-    let context = LayerContext {
-        content: Size::ZERO,
-    };
     let anchor = (Anchor::Top | Anchor::Left).bits();
-    let initial = ProtocolLayout::new(layout, context)?;
+    let empty = ContentSize::try_from(Size::ZERO)?;
+    let initial = ProtocolLayout::new(PanelGeometry::of(layout, empty))?;
     apply(&layer, None, initial);
     connection.flush().map_err(Error::Flush)?;
     assert_eq!(
@@ -70,16 +70,14 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
             (3, vec![48, 0, 0, 1592]),
         ]
     );
-    let moved = ProtocolLayout::new(
-        LayerLayout {
-            margins: LayerMargins {
-                left: FiniteDp::try_new(-8.dp())?,
-                ..layout.margins
-            },
-            ..layout
+    let moved = LayerLayout {
+        margins: LayerMargins {
+            left: FiniteDp::try_new(-8.dp())?,
+            ..layout.margins
         },
-        context,
-    )?;
+        ..layout
+    };
+    let moved = ProtocolLayout::new(PanelGeometry::of(moved, empty))?;
     apply(&layer, Some(initial), moved);
     connection.flush().map_err(Error::Flush)?;
     assert_eq!(
@@ -112,25 +110,20 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
 }
 
 #[test]
-fn private_wire_resizes_and_reserves_a_layer_again_when_its_content_measures_differently()
+fn private_wire_resizes_and_reserves_a_layer_again_for_a_new_content_height()
 -> Result<(), TestError> {
-    let mut wire = super::focus_wire::Wire::new(4)?;
-    let mut layer = wire.layer(&LayerSurface::new("content"))?;
+    let mut wire = Wire::new(4)?;
+    let options = LayerSurface::new("content");
+    let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
     assert!(wire.commit(&mut layer)?.is_empty());
-    assert_eq!(
-        layer.content_proposal(),
-        Some(Proposal {
-            width: None,
-            height: None
-        })
-    );
-    layer.content_measured(Size::new(500.dp(), 40.dp()));
-    assert_eq!(
-        wire.commit(&mut layer)?,
-        vec![(0, vec![0, 40]), (2, vec![40])]
-    );
-    layer.content_measured(Size::new(500.dp(), 40.dp()));
-    assert!(wire.commit(&mut layer)?.is_empty());
+    let content = ContentSize::try_from(Size::new(500.dp(), 40.dp()))?;
+    let geometry = PanelGeometry::of(options.panel.current_layout(), content);
+    let role = layer.proxy.id().protocol_id();
+    for sent in [vec![(0, vec![0, 40]), (2, vec![40])], Vec::new()] {
+        layer.execute(&wire.surface, PanelRequest::Update(LAYER, geometry))?;
+        wire.connection.flush().map_err(Error::Flush)?;
+        assert_eq!(requests(&mut wire.peer, role)?, sent);
+    }
     Ok(())
 }
