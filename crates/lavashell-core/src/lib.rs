@@ -18,6 +18,7 @@ pub mod keyboard;
 pub mod local;
 pub mod numbers;
 pub mod output;
+pub mod panel;
 pub mod platform;
 pub mod preferences;
 pub mod protected_text;
