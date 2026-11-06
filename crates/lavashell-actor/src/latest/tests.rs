@@ -31,6 +31,18 @@ fn a_lease_stays_valid_after_a_newer_publish_and_after_a_clear() {
 }
 
 #[test]
+fn a_take_returns_each_published_value_once() {
+    let latest = Latest::new();
+    latest.publish(1);
+    assert_eq!(latest.take().as_deref(), Some(&1));
+    assert_eq!(latest.take(), None);
+    latest.publish(2);
+    assert_eq!(latest.read().as_deref(), Some(&2));
+    assert_eq!(latest.take().as_deref(), Some(&2));
+    assert_eq!(latest.read(), None);
+}
+
+#[test]
 fn a_reader_beside_a_publisher_reads_neither_a_stale_nor_an_unpublished_value() {
     const PUBLISHES: u64 = 100;
     let latest = Latest::new();

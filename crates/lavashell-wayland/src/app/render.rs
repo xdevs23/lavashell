@@ -70,7 +70,7 @@ impl Platform {
     fn stopped_scene_error(&mut self) -> Error {
         match self.scene.stop() {
             Ok(()) => Error::SceneStopped,
-            Err(error) => Error::Runtime(error),
+            Err(error) => Error::SceneFailed(error),
         }
     }
 
@@ -247,14 +247,14 @@ impl Platform {
             NextDraw::SceneOnly => self.config.start_frame(timing, viewport),
         };
         self.prepare_surface_for_draw(id, start.viewport)?;
-        let scene = self.scene.snapshot(id);
-        let drawn = self.draw_surface(id, start, &scene)?;
+        let scene = self.scene.built(id);
+        let drawn = self.draw_surface(id, start, &scene.snapshot)?;
         let outcome = drawn.outcome;
         let cost = rendering.elapsed();
         self.report_frame(id, drawn, start)?;
         let published = SchedulerInput::Published {
             surface: id,
-            next_change: scene.next_change(timing.presentation),
+            next_change: scene.snapshot.next_change(timing.presentation),
         };
         let rendered = SchedulerInput::Rendered {
             surface: id,

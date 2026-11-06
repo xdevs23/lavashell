@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, warn_whole_scene_next};
+use super::Platform;
 use crate::Error;
 use lavashell_actor::Closed;
 use lavashell_runtime::{BuilderObserver, BuilderReport, SchedulerInput};
@@ -33,10 +33,8 @@ impl Platform {
                 self.schedule(SchedulerInput::Built { surface, sequence });
             }
             BuilderReport::Restart { surface, error } => {
-                warn_whole_scene_next(error);
-                self.scene.restart(surface);
                 if let Some(view) = self.surface_records.open_view_mut(surface) {
-                    view.invalidate();
+                    self.scene.restart_view(surface, view, &error);
                 }
             }
         }

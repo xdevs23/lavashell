@@ -2274,6 +2274,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "log",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",

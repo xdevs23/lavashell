@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The failures that the tests of this crate return in place of a panic.
 
-use crate::Error;
+use crate::error::{Error, ShowFrameError};
 use bevy::ecs::error::BevyError;
 use bevy::ecs::system::RegisteredSystemError;
+use lavashell_actor::Closed;
 use std::num::TryFromIntError;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TestError {
     #[error("the scene export failed")]
     Scene(#[from] Error),
+    #[error("the scene pipeline of the overlay failed")]
+    Pipeline(#[from] Arc<lavashell_runtime::Error>),
+    #[error("the overlay could not show a frame")]
+    ShowFrame(#[from] ShowFrameError),
+    #[error("the choreographer of the overlay is gone")]
+    Closed(#[from] Closed),
     #[error("a Vulkan call failed")]
     Vulkan(#[from] lavashell_vulkan::Error),
     #[error("the rotation of the export targets could not run")]

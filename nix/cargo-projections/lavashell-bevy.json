@@ -3672,7 +3672,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "bf0a18eaf03eb56b11bed884a61c90ad54bdfbfa5a8c05713e0673ff46f9db92"
+        "seedHash": "0077ec121abd81a27915629787efac25c1830498793ce72b5884c1eb2dc774fd"
       }
     }
   },
@@ -9209,10 +9209,20 @@
       },
       {
         "dependencies": [
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-actor",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "bevy",
+          "lavashell-actor",
           "lavashell-core",
           "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "thiserror 2.0.21",
@@ -9243,6 +9253,14 @@
       },
       {
         "dependencies": [
+          "icu_locale_core",
+          "lavashell-core"
+        ],
+        "name": "lavashell-platform",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "i_overlay",
           "inventory",
@@ -9257,6 +9275,20 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-renderer",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "icu_locale_core",
+          "lavashell-actor",
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-renderer",
+          "lavashell-test-fixtures",
+          "log",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-runtime",
         "version": "0.1.0"
       },
       {

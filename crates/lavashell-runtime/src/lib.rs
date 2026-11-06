@@ -35,5 +35,6 @@ pub use scheduler::{
 };
 pub use shape::WindowShape;
 pub use surface_records::{SurfaceRecords, measure_content};
+pub use surface_slots::BuiltScene;
 pub use view_actions::{ActionBatch, ActionQueue, ViewActions};
 pub use window::{DragRegion, Window};

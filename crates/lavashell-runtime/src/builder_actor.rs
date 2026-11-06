@@ -2,7 +2,7 @@
 use crate::choreographer_actor::ChoreographerInput;
 use crate::scene_item::{SceneFrame, SceneItem};
 use crate::scene_pipeline::{BuilderObserver, BuilderReport};
-use crate::surface_slots::SurfaceSlots;
+use crate::surface_slots::{BuiltScene, SurfaceSlots};
 use lavashell_actor::{Actor, Effect, Flow, Merge, Sender};
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::scene::{ChangeSink, SceneBuilder};
@@ -77,7 +77,11 @@ impl Actor for BuilderActor {
             let scene = self.scenes.entry(surface).or_default();
             match scene.apply(frame) {
                 Ok(Some(size)) => {
-                    self.slots.publish(surface, scene.builder.snapshot());
+                    let built = BuiltScene {
+                        sequence,
+                        snapshot: scene.builder.snapshot(),
+                    };
+                    self.slots.publish(surface, built);
                     sizes.push((surface, size));
                 }
                 Ok(None) => {}

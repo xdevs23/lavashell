@@ -27,6 +27,12 @@ impl<T> Latest<T> {
         self.lock().clone()
     }
 
+    /// Empties the slot and returns the newest value, so a value is taken once even while another thread publishes.
+    #[must_use]
+    pub fn take(&self) -> Option<Arc<T>> {
+        self.lock().take()
+    }
+
     pub fn clear(&self) {
         self.replace(None);
     }

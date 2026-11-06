@@ -751,6 +751,15 @@
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
                   },
+                  "log": {
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "package": "log",
+                    "version": "=0.4.34"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -2618,6 +2627,7 @@
                   "lavashell-core",
                   "lavashell-platform",
                   "lavashell-renderer",
+                  "log",
                   "thiserror"
                 ],
                 "name": "lavashell-runtime",
@@ -3930,7 +3940,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "a2434bd26c0a380fb38db9234163e33a7cbcf8c0d507b241f1bb9a79755d059b"
+        "seedHash": "ac7613e8267c07fb44b70dd3e4b0d4bddda3947b7c6ed0bfce48b6d8502e58c4"
       }
     }
   },
@@ -5107,6 +5117,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "log",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",

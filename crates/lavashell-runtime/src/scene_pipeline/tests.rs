@@ -4,7 +4,7 @@ use lavashell_actor::JoinError;
 use lavashell_core::geometry::{Color, Size, Viewport};
 use lavashell_core::prelude::{Modifier, TextStyle};
 use lavashell_core::reactive::State;
-use lavashell_core::scene::tree::SceneNodeId;
+use lavashell_core::scene::tree::{SceneNodeId, SceneSnapshot};
 use lavashell_core::units::{Density, Dp, DpExt};
 use lavashell_core::view::{FrameError, TextMeasurer, View};
 use std::sync::mpsc;
@@ -14,14 +14,18 @@ const SURFACE: SurfaceId = SurfaceId(0);
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("the scene pipeline failed")]
+    #[error("the scene pipeline failed to start")]
     Pipeline(#[from] Error),
+    #[error("the scene pipeline stopped with a failure")]
+    Stopped(#[from] Arc<Error>),
     #[error("a view failed to send a frame")]
     Frame(#[from] FrameError<Closed>),
     #[error("the choreographer is gone")]
     Closed(#[from] Closed),
     #[error("the scene builder sent no report")]
     Report(#[from] mpsc::RecvError),
+    #[error("the scene builder sent another report: {0:?}")]
+    UnexpectedReport(BuilderReport),
 }
 
 type TestResult = Result<(), TestError>;
@@ -82,7 +86,9 @@ fn a_frame_shows_in_the_scene_of_its_surface_once_the_builder_reports_it_built()
             sequence: Some(FrameSequence(7)),
         }
     ));
-    assert_ne!(leaves(&pipeline.snapshot(SURFACE)), 0);
+    let built = pipeline.built(SURFACE);
+    assert_eq!(built.sequence, Some(FrameSequence(7)));
+    assert_ne!(leaves(&built.snapshot), 0);
     pipeline.stop()?;
     Ok(())
 }
@@ -94,40 +100,46 @@ fn a_stale_scene_skips_each_frame_until_the_view_sends_the_whole_scene_to_the_re
     let mut view = square(&State::new(Color::WHITE));
     frame(&mut view, &mut pipeline, None)?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
-    let shown = pipeline.snapshot(SURFACE);
+    let shown = pipeline.built(SURFACE);
     send_bad_frame(&mut pipeline)?;
-    let restart = reports.recv()?;
-    assert!(matches!(
-        restart,
+    let error = match reports.recv()? {
         BuilderReport::Restart {
             surface: SURFACE,
-            ..
-        }
-    ));
+            error,
+        } => error,
+        other => return Err(TestError::UnexpectedReport(other)),
+    };
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     pipeline.sink(SURFACE, None).end_frame()?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
-    assert!(Arc::ptr_eq(&pipeline.snapshot(SURFACE), &shown));
-    pipeline.restart(SURFACE);
-    view.invalidate();
+    assert!(Arc::ptr_eq(&pipeline.built(SURFACE), &shown));
+    pipeline.restart_view(SURFACE, &mut view, &error);
+    assert!(view.needs_frame());
     frame(&mut view, &mut pipeline, None)?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
-    let resent = pipeline.snapshot(SURFACE);
-    assert_ne!(resent.lineage(), shown.lineage());
-    assert_eq!(leaves(&resent), leaves(&shown));
+    let resent = pipeline.built(SURFACE);
+    assert_ne!(resent.snapshot.lineage(), shown.snapshot.lineage());
+    assert_eq!(leaves(&resent.snapshot), leaves(&shown.snapshot));
     pipeline.stop()?;
     Ok(())
 }
 
 #[test]
-fn a_first_frame_that_does_not_fit_stops_the_scene_builder_with_the_failure() -> TestResult {
+fn every_stop_returns_the_failure_of_a_scene_builder_stopped_by_a_first_frame_that_does_not_fit()
+-> TestResult {
     let (mut pipeline, _reports) = start()?;
     send_bad_frame(&mut pipeline)?;
-    let stopped = pipeline.stop();
+    let stopped = pipeline.stop().err();
     assert!(matches!(
-        stopped,
-        Err(Error::RunBuilder(JoinError::Failed(_)))
+        stopped.as_deref(),
+        Some(Error::RunBuilder(JoinError::Failed(_)))
     ));
+    let stopped_again = pipeline.stop().err();
+    assert!(
+        stopped
+            .zip(stopped_again)
+            .is_some_and(|(first, again)| Arc::ptr_eq(&first, &again))
+    );
     let change = Change::Remove { id: SceneNodeId(1) };
     assert_eq!(pipeline.sink(SURFACE, None).change(change), Err(Closed));
     Ok(())
@@ -140,6 +152,6 @@ fn a_retired_surface_has_an_empty_scene() -> TestResult {
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     pipeline.retire(SURFACE)?;
     pipeline.stop()?;
-    assert!(pipeline.snapshot(SURFACE).is_empty());
+    assert!(pipeline.built(SURFACE).snapshot.is_empty());
     Ok(())
 }
