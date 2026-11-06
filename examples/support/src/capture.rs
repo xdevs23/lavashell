@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Error, FrameInterval, fonts, report_failures};
+use lavashell::core::scene::tree::{ApplyError, Change};
+use lavashell::core::scene::{ChangeSink, SinkId};
 use lavashell::prelude::*;
 use std::{path::Path, time::Duration};
 
@@ -85,7 +87,7 @@ impl Capture {
 pub struct OffscreenView {
     pub view: View,
     capture: Capture,
-    tree: SceneTree,
+    scene: OffscreenScene,
     viewport: Viewport,
     time: Duration,
 }
@@ -106,7 +108,7 @@ impl OffscreenView {
         Ok(Self {
             view,
             capture,
-            tree: SceneTree::default(),
+            scene: OffscreenScene::default(),
             viewport: Viewport::new(size, density),
             time: Duration::ZERO,
         })
@@ -142,34 +144,14 @@ impl OffscreenView {
     /// # Errors
     /// Returns an error when the frame cannot be shown.
     pub fn frame(&mut self) -> Result<(), Error> {
-        let update = self.frame_update()?;
-        self.show(update)
-    }
-
-    /// Frames the view at the time of the last frame, reports each component that failed in it and returns the
-    /// changes to the scene. After a failed frame, the next update from the view contains the whole scene. The tree is
-    /// emptied here so that this whole scene replaces the old one.
-    fn frame_update(&mut self) -> Result<SceneUpdate, Error> {
         let timing = FrameTime {
             now: self.time,
             presentation: self.time,
             ..FrameTime::default()
         };
         let shaper = self.capture.painter.shaper();
-        match (self.view).frame_at(self.viewport, shaper, timing) {
-            Ok(frame) => {
-                report_failures(frame.failures);
-                Ok(frame.update)
-            }
-            Err(error) => {
-                self.tree = SceneTree::default();
-                Err(Error::Frame(error))
-            }
-        }
-    }
-
-    fn show(&mut self, update: SceneUpdate) -> Result<(), Error> {
-        self.tree.show(update).map_err(Error::ShowScene)
+        let frame = (self.view).frame_into_at(self.viewport, shaper, timing, &mut self.scene);
+        frame.map(report_failures).map_err(Error::Frame)
     }
 
     /// The next deadline of the view after the last frame: when a timer fires or a motion comes to
@@ -201,14 +183,12 @@ impl OffscreenView {
     /// changes nothing in the scene and the view still needs another frame, or when a frame cannot be shown.
     pub fn settle(&mut self) -> Result<(), Error> {
         loop {
-            let update = self.frame_update()?;
-            let unchanged = update.changes.is_empty();
-            self.show(update)?;
+            self.frame()?;
             if self.view.motion().is_active() {
                 self.time = self.next_deadline()?;
             } else if !self.view.needs_frame() {
                 return Ok(());
-            } else if unchanged {
+            } else if !self.scene.last_frame_changed {
                 return Err(Error::NoRest);
             }
         }
@@ -241,6 +221,44 @@ impl OffscreenView {
     /// # Errors
     /// Returns an error when the scene cannot be rendered or written.
     pub fn save(&mut self, path: impl AsRef<Path>) -> Result<(), Error> {
-        (self.capture).paint(self.tree.at(self.time), self.viewport, path)
+        let snapshot = self.scene.builder.snapshot();
+        (self.capture).paint(snapshot.at(self.time), self.viewport, path)
     }
 }
+
+/// The scene of an offscreen view, built by a scene builder from every frame of the view.
+#[derive(Default)]
+struct OffscreenScene {
+    builder: SceneBuilder,
+    /// Whether the scene changed or restarted since the last end of a frame.
+    open_frame_changed: bool,
+    /// Whether the last frame that ended changed or restarted the scene.
+    last_frame_changed: bool,
+}
+
+impl ChangeSink for OffscreenScene {
+    type Error = ApplyError;
+
+    fn id(&self) -> SinkId {
+        self.builder.id()
+    }
+
+    fn change(&mut self, change: Change) -> Result<(), ApplyError> {
+        self.open_frame_changed = true;
+        self.builder.change(change)
+    }
+
+    fn end_frame(&mut self) -> Result<(), ApplyError> {
+        self.builder.end_frame()?;
+        self.last_frame_changed = std::mem::take(&mut self.open_frame_changed);
+        Ok(())
+    }
+
+    fn restart(&mut self) -> Result<(), ApplyError> {
+        self.open_frame_changed = true;
+        self.builder.restart()
+    }
+}
+
+#[cfg(test)]
+mod tests;

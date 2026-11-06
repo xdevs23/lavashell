@@ -77,7 +77,7 @@ impl Consumer {
     /// Checks that the tree built in the sink shows `items` after the update ends the frame, and returns the changes
     /// received by the sink.
     fn show(&mut self, items: &[Painted]) -> Result<Vec<Received>, FrameError<TestSinkError>> {
-        self.shown.retarget(Recipient::Sink(self.sink.id()));
+        self.shown.retarget(Some(self.sink.id()));
         self.shown.update(items, &BTreeMap::new(), &mut self.sink)?;
         let mut received = std::mem::take(&mut self.sink.received);
         assert_eq!(received.pop(), Some(Received::End));

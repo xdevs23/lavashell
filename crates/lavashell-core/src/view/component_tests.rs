@@ -3,7 +3,7 @@ use super::*;
 use crate::animation::Animation;
 use crate::image::{Anchor, ImageFit, ImagePlacement};
 use crate::reactive::State;
-use crate::test_error::{Exactly, Required, TestResult, WithoutFailures};
+use crate::test_error::{Exactly, Required, TestResult};
 use crate::ui::{Modifier, TextFieldOptions};
 use crate::units::{Density, DpExt, VhExt, VwExt};
 use std::{cell::Cell, rc::Rc};
@@ -337,13 +337,11 @@ fn a_retained_image_moves_with_the_window_height_by_an_offset_in_vh() -> TestRes
             .collect::<Vec<_>>()
     };
     let mut scene = Scene::default();
-    let window = Size::new(300.dp(), 100.dp());
-    let frame = view.frame(Viewport::new(window, Density::ONE), &mut Measure);
-    scene.show(frame.without_failures()?)?;
+    let window = Viewport::new(Size::new(300.dp(), 100.dp()), Density::ONE);
+    advance_with(&mut scene, &mut view, window, &mut Measure)?;
     assert_eq!(tops(&scene), [10.dp()]);
-    let resized = Size::new(400.dp(), 200.dp());
-    let frame = view.frame(Viewport::new(resized, Density::ONE), &mut Measure);
-    scene.show(frame.without_failures()?)?;
+    let resized = Viewport::new(Size::new(400.dp(), 200.dp()), Density::ONE);
+    advance_with(&mut scene, &mut view, resized, &mut Measure)?;
     assert_eq!(tops(&scene), [20.dp()]);
     Ok(())
 }

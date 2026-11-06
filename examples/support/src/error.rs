@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell::core::scene::tree::ApplyError;
 use lavashell::core::view::{ComponentFailure, FrameError};
 use lavashell::prelude::{NumberError, Role};
 use lavashell::renderer::Error as RendererError;
@@ -46,8 +45,6 @@ pub enum Error {
     NothingMoves,
     #[error("the view asks for another frame after a frame that changed nothing")]
     NoRest,
-    #[error("cannot show the update of a frame in the scene of the capture")]
-    ShowScene(#[source] ApplyError),
     #[error("the view has no control tagged {0}")]
     MissingControl(String),
     #[error("the view shows no {role} named {name}")]

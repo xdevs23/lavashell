@@ -465,8 +465,8 @@ fn a_view_that_was_never_framed_is_composed_at_its_viewport() -> TestResult {
     );
     let mut plain = View::new(crate::platform::fixture::facts(), half_width);
     assert_eq!(
-        painted(view.frame(WINDOW, &mut Wrapping).without_failures()?)?,
-        painted(plain.frame(WINDOW, &mut Wrapping).without_failures()?)?
+        painted(&mut view, WINDOW, &mut Wrapping)?,
+        painted(&mut plain, WINDOW, &mut Wrapping)?
     );
     Ok(())
 }

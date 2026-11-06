@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use lavashell_core::animation::SpringError;
-use lavashell_core::scene::tree::ApplyError;
-use lavashell_test_fixtures::{FrameFailure, WithoutFailures};
+use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
 use std::iter::repeat_n;
 use std::{cell::RefCell, rc::Rc};
 
@@ -11,8 +10,6 @@ use std::{cell::RefCell, rc::Rc};
 pub(crate) enum TestError {
     #[error("a frame of the view failed")]
     Failed(#[from] FrameFailure),
-    #[error("an update of the frame does not fit the scene tree")]
-    Apply(#[from] ApplyError),
     #[error("the spring of the test cannot be built")]
     Spring(#[from] SpringError),
     #[error("a count of the test does not convert to a number")]

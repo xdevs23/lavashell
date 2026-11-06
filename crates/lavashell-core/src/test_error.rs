@@ -7,12 +7,12 @@ use crate::animation::{
     PlaybackRateError, SpringError,
 };
 use crate::scene::test_sink::TestSinkError;
-use crate::scene::tree::{ApplyError, SceneUpdate};
+use crate::scene::tree::ApplyError;
 use crate::scroll::ScrollError;
 use crate::shape::PointsError;
 use crate::transfer::TransferError;
 use crate::units::NumberError;
-use crate::view::{ComponentError, ComponentFailure, Failures, Frame, FrameError};
+use crate::view::{ComponentError, ComponentFailure, Failures, FrameError};
 use std::num::TryFromIntError;
 
 pub(crate) type TestResult = Result<(), TestError>;
@@ -106,38 +106,21 @@ impl<T> Exactly<T> for Vec<T> {
     }
 }
 
-/// Turns the result of a frame into what the frame shows, or into a test failure where the frame failed or a
-/// component failed in it.
+/// Turns the result of a frame into a test failure where the frame failed or a component failed in it.
 pub(crate) trait WithoutFailures {
-    type Shown;
-
-    fn without_failures(self) -> Result<Self::Shown, TestError>;
-}
-
-impl WithoutFailures for Result<Frame, FrameError> {
-    type Shown = SceneUpdate;
-
-    fn without_failures(self) -> Result<SceneUpdate, TestError> {
-        let Frame { update, failures } = self?;
-        failures.without_failures()?;
-        Ok(update)
-    }
+    fn without_failures(self) -> Result<(), TestError>;
 }
 
 impl<E> WithoutFailures for Result<Failures, FrameError<E>>
 where
     TestError: From<FrameError<E>>,
 {
-    type Shown = ();
-
     fn without_failures(self) -> Result<(), TestError> {
         self?.without_failures()
     }
 }
 
 impl WithoutFailures for Failures {
-    type Shown = ();
-
     fn without_failures(self) -> Result<(), TestError> {
         let failures: Vec<_> = self.into_iter().collect();
         if failures.is_empty() {

@@ -42,7 +42,7 @@ pub use frame_error::{
     ComponentError, ComponentFailure, CompositionError, FrameError, LayoutError, LayoutRead,
     LayoutReads, NodeName, NodeValue,
 };
-pub use frame_result::{Failures, Frame};
+pub use frame_result::Failures;
 use interaction::FocusSource;
 pub use layout::Proposal;
 use layout::{Layout, Measuring, Visibility, shown_children};
@@ -73,7 +73,6 @@ use crate::keyboard::{Key, Shortcut};
 use crate::local::{LocalReader, LocalScope, RootValues};
 use crate::platform::PlatformFacts;
 use crate::reactive::{Derived, Phase, Scope};
-use crate::scene::tree::SceneUpdate;
 use crate::scene::{Affine, Brush, DrawCommand, Drawing, TextStyle, Transform};
 use crate::shape::{Corners, DrawnRoundedRect, Radius};
 use crate::text_edit::{FieldGeometry, TextEdit};
@@ -408,7 +407,7 @@ impl View {
     }
 
     /// The earliest time at which a timer fires or a running animation comes to rest, measured from the same start as
-    /// the presentation times passed to `frame_at`. A host that sleeps between frames needs to wake at that time.
+    /// the presentation times passed to `frame_into_at`. A host that sleeps between frames needs to wake at that time.
     #[must_use]
     pub fn next_deadline(&self) -> Option<std::time::Duration> {
         let rest = self.motion.next_rest();

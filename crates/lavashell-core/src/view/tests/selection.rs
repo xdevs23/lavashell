@@ -352,13 +352,13 @@ fn pointer_selection_of_centered_plain_text_repaints_retained_geometry() -> Test
     });
     let window = Viewport::new(Size::new(300.dp(), 100.dp()), Density::ONE);
     let mut scene = Scene::default();
-    scene.show(view.frame(window, &mut Shaped).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
     let before = view.stats();
     view.input(InputEvent::Press(Point::new(1.dp(), 35.dp())));
     view.input(InputEvent::Move(Point::new(31.dp(), 35.dp())));
     view.input(InputEvent::Release(Point::new(31.dp(), 35.dp())));
     assert_eq!(view.copy_selection().as_deref(), Some("abc"));
-    scene.show(view.frame(window, &mut Shaped).without_failures()?)?;
+    advance_with(&mut scene, &mut view, window, &mut Shaped)?;
     assert_eq!(view.stats().root_compositions, before.root_compositions);
     assert!(view.stats().painted_components > before.painted_components);
     assert!(scene.commands().iter().any(|command| matches!(command,

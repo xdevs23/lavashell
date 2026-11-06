@@ -95,7 +95,7 @@ fn a_scoped_component_paints_an_offset_that_reads_bounds_moved_by_a_scroll_outsi
 fn first_frame_error(compose: impl FnMut(&mut Ui) + 'static) -> Result<ComponentError, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), compose);
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let failures = view.frame(viewport, &mut Metrics)?.failures;
+    let failures = view.frame_into(viewport, &mut Metrics, &mut Scene::default())?;
     let failure = failures.into_iter().next();
     Ok(failure.ok_or(TestError::NothingFailed)?.cause)
 }
@@ -427,13 +427,14 @@ fn a_frame_after_a_layout_error_does_not_compose_again() -> TestResult {
         ui.spacer(Dp::ZERO, 10.dp(), Modifier::new().width(missing.width()));
     });
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
-    let first = failure_causes(view.frame(viewport, &mut Metrics).without_failures())?;
+    let mut scene = Scene::default();
+    let first = failure_causes(advance_with(&mut scene, &mut view, viewport, &mut Metrics))?;
     assert!(matches!(
         first.as_slice(),
         [ComponentError::Layout(LayoutError::UnsetNodeRef(_))]
     ));
     let compositions = view.stats().root_compositions;
-    let _shown = view.frame(viewport, &mut Metrics).without_failures()?;
+    advance_with(&mut scene, &mut view, viewport, &mut Metrics)?;
     assert_eq!(view.stats().root_compositions, compositions);
     Ok(())
 }

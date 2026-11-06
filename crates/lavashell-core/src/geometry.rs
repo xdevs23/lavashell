@@ -198,7 +198,7 @@ impl Default for Viewport {
     }
 }
 
-/// The viewport passed to `View::frame`, or the viewport provided by a wrapper for the part of
+/// The viewport passed to `View::frame_into`, or the viewport provided by a wrapper for the part of
 /// the view it wraps.
 pub static VIEWPORT: Local<Viewport> = Local::new(Viewport::default);
 

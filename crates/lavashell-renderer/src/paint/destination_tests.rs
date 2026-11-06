@@ -154,7 +154,7 @@ fn paint_damage(
 
 fn paint_full(painter: &mut Painter, target: &mut Surface, tree: &SceneTree, density: Density) {
     let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
-    crate::test_scenes::paint(painter, target.canvas(), tree, density);
+    crate::test_scenes::paint(painter, target.canvas(), &tree.snapshot(), density);
 }
 
 /// How far a channel of a partial redraw may lie from the same channel `full` of a full redraw on `surface`. Each

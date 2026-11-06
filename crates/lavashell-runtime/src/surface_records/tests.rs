@@ -3,7 +3,7 @@ use super::*;
 use crate::test_error::{TestError, TestResult};
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::DpExt;
-use lavashell_test_fixtures::NoText;
+use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -20,8 +20,7 @@ fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, TestError> {
 fn frame(records: &mut SurfaceRecords, surface: SurfaceId) -> TestResult {
     let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
     let view = records.open_view_mut(surface).ok_or(TestError::NotOpen)?;
-    let framed = view.frame(viewport, &mut NoText)?;
-    assert_eq!(framed.failures.into_iter().count(), 0);
+    (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
     assert!(!view.needs_visual_frame());
     Ok(())
 }

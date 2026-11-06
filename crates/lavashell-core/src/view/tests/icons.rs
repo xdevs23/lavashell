@@ -30,7 +30,9 @@ fn the_options_of_an_icon_give_its_size_and_whether_it_fills_its_closed_paths() 
             ui.icon(&SQUARE, filled, Modifier::new().tag("filled"));
         });
     });
-    let fills = (painted(frame(&mut view, WINDOW_SIZE, 0)?)?.into_iter())
+    let mut scene = Scene::default();
+    advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
+    let fills = (scene.commands().into_iter())
         .filter(|command| matches!(command, DrawCommand::Path { stroke: None, .. }))
         .count();
     let side = view.tagged_bounds("text")?.height;

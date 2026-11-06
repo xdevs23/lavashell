@@ -50,20 +50,21 @@ fn scoped_rows(
     })
 }
 
-fn frame_at(view: &mut View, ms: u64) -> Result<SceneUpdate, FrameFailure> {
+/// Makes a frame of `view` at the time `ms` into `scene`.
+fn frame_at(view: &mut View, scene: &mut RecordedScene, ms: u64) -> Result<(), FrameFailure> {
     let time = Duration::from_millis(ms);
     let timing = FrameTime {
         now: time,
         presentation: time,
         ..FrameTime::default()
     };
-    (view.frame_at(LIST, &mut Metrics, timing)).without_failures()
+    (view.frame_into_at(LIST, &mut Metrics, timing, scene)).without_failures()
 }
 
-/// Makes frames of `view` at the time `ms` until the view needs no frame, and applies every update to `tree`.
-fn settle(view: &mut View, tree: &mut SceneTree, ms: u64) -> Result<(), TestError> {
+/// Makes frames of `view` at the time `ms` into `scene` until the view needs no frame.
+fn settle(view: &mut View, scene: &mut RecordedScene, ms: u64) -> Result<(), TestError> {
     while view.needs_frame() {
-        tree.show(frame_at(view, ms)?)?;
+        frame_at(view, scene, ms)?;
     }
     Ok(())
 }
@@ -75,18 +76,18 @@ fn a_scroll_within_the_window_composes_nothing_and_changes_only_the_content_slot
     let recycler = Recycler::<usize>::new();
     let composed = Rc::default();
     let mut view = scoped_rows(&recycler, &composed, None);
-    let mut tree = SceneTree::default();
-    settle(&mut view, &mut tree, 0)?;
+    let mut scene = RecordedScene::default();
+    settle(&mut view, &mut scene, 0)?;
     recycler.scroll.jump_to(10.dp());
-    settle(&mut view, &mut tree, 0)?;
+    settle(&mut view, &mut scene, 0)?;
     let before = view.stats();
     recycler.scroll.jump_to(30.dp());
-    let update = frame_at(&mut view, 0)?;
+    frame_at(&mut view, &mut scene, 0)?;
     assert_eq!(
         view.stats().component_compositions,
         before.component_compositions
     );
-    assert!(matches!(update.changes[..], [Change::SetSlot { .. }]));
+    assert!(matches!(scene.changes(), [Change::SetSlot { .. }]));
     Ok(())
 }
 
@@ -96,13 +97,13 @@ fn a_scroll_across_a_row_repaints_the_list_and_the_entering_row_only() -> Result
     let recycler = Recycler::<usize>::new();
     let composed = Rc::new(RefCell::new(Vec::new()));
     let mut view = scoped_rows(&recycler, &composed, None);
-    let mut tree = SceneTree::default();
+    let mut scene = RecordedScene::default();
     recycler.scroll.jump_to(30.dp());
-    settle(&mut view, &mut tree, 0)?;
+    settle(&mut view, &mut scene, 0)?;
     let before = view.stats();
     composed.borrow_mut().clear();
     recycler.scroll.jump_to(50.dp());
-    tree.show(frame_at(&mut view, 0)?)?;
+    frame_at(&mut view, &mut scene, 0)?;
     assert_eq!(*composed.borrow(), Vec::from_iter(0..6));
     assert_eq!(
         view.stats().painted_components,
@@ -119,15 +120,15 @@ fn a_move_composes_the_rows_that_it_passed_and_a_jump_no_more_than_a_viewport()
     let recycler = Recycler::<usize>::new();
     let composed = Rc::new(RefCell::new(Vec::new()));
     let mut view = scoped_rows(&recycler, &composed, None);
-    let mut tree = SceneTree::default();
-    settle(&mut view, &mut tree, 0)?;
+    let mut scene = RecordedScene::default();
+    settle(&mut view, &mut scene, 0)?;
     composed.borrow_mut().clear();
     recycler.scroll.jump_to(80.dp());
-    settle(&mut view, &mut tree, 0)?;
+    settle(&mut view, &mut scene, 0)?;
     assert_eq!(*composed.borrow(), Vec::from_iter(0..7));
     composed.borrow_mut().clear();
     recycler.scroll.jump_to(400.dp());
-    settle(&mut view, &mut tree, 0)?;
+    settle(&mut view, &mut scene, 0)?;
     assert_eq!(*composed.borrow(), Vec::from_iter(7..16));
     Ok(())
 }
@@ -142,18 +143,18 @@ fn a_smooth_scroll_composes_the_list_only_when_its_window_changes() -> Result<()
     let recycler = Recycler::<usize>::new();
     let composed = Rc::new(RefCell::new(Vec::new()));
     let mut view = scoped_rows(&recycler, &composed, Some(tween));
-    let mut tree = SceneTree::default();
+    let mut scene = RecordedScene::default();
     recycler.scroll.jump_to(10.dp());
-    settle(&mut view, &mut tree, 0)?;
+    settle(&mut view, &mut scene, 0)?;
     let before = view.stats();
     recycler.scroll.scroll_by(25.dp());
-    tree.show(frame_at(&mut view, 0)?)?;
+    frame_at(&mut view, &mut scene, 0)?;
     for ms in (10..400).step_by(10) {
-        assert!(frame_at(&mut view, ms)?.changes.is_empty(), "at {ms} ms");
+        frame_at(&mut view, &mut scene, ms)?;
+        assert!(scene.changes().is_empty(), "at {ms} ms");
     }
-    let rest = frame_at(&mut view, 400)?;
-    assert!((rest.changes.iter()).all(|change| matches!(change, Change::SetSlot { .. })));
-    tree.show(rest)?;
+    frame_at(&mut view, &mut scene, 400)?;
+    assert!((scene.changes().iter()).all(|change| matches!(change, Change::SetSlot { .. })));
     assert_eq!(recycler.scroll.offset(), 35.dp());
     assert_eq!(
         view.stats().component_compositions,
@@ -163,7 +164,7 @@ fn a_smooth_scroll_composes_the_list_only_when_its_window_changes() -> Result<()
     composed.borrow_mut().clear();
     let mut windows = vec![Vec::from_iter(0..5)];
     for ms in (400..=800).step_by(10) {
-        tree.show(frame_at(&mut view, ms)?)?;
+        frame_at(&mut view, &mut scene, ms)?;
         let window = std::mem::take(&mut *composed.borrow_mut());
         if !window.is_empty() {
             assert_ne!(Some(&window), windows.last(), "at {ms} ms");

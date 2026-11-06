@@ -139,7 +139,7 @@ fn alternating_windows_keep_distinct_draw_identity_and_unchanged_pixels() -> Res
         &context,
     )
     .circle(Point::new(5.dp(), 5.dp()), 3.dp(), Color::WHITE);
-    let tree = SceneTree::with_leaf(commands)?;
+    let tree = SceneTree::with_leaf(commands)?.snapshot();
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((10, 10)).ok_or(TestError::RasterSurface)?;
     for (frame, window) in [(1, 11), (1, 21), (2, 11), (2, 21)] {
@@ -231,7 +231,12 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
     );
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((100, 100)).ok_or(TestError::RasterSurface)?;
-    paint(&mut painter, surface.canvas(), &tree, Density::ONE);
+    paint(
+        &mut painter,
+        surface.canvas(),
+        &tree.snapshot(),
+        Density::ONE,
+    );
     let observed = draws.borrow();
     assert_eq!(
         observed.iter().map(|(id, _)| *id).collect::<Vec<_>>(),

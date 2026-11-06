@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::scene::tree::SceneUpdate;
-use lavashell_core::view::{ComponentError, ComponentFailure, Failures, Frame, FrameError};
+use lavashell_core::view::{ComponentError, ComponentFailure, Failures, FrameError};
 
 /// A frame of a view that failed, or in which a component failed.
 #[derive(Debug, thiserror::Error)]
@@ -11,29 +10,14 @@ pub enum FrameFailure {
     Components(Vec<ComponentFailure>),
 }
 
-/// Turns the result of a frame into what the frame shows, or into a failure where the frame failed or a component
-/// failed in it.
+/// Turns the result of a frame into a failure where the frame failed or a component failed in it.
 pub trait WithoutFailures {
-    type Shown;
-
     /// # Errors
     /// Fails where the frame failed or a component failed in it.
-    fn without_failures(self) -> Result<Self::Shown, FrameFailure>;
-}
-
-impl WithoutFailures for Result<Frame, FrameError> {
-    type Shown = SceneUpdate;
-
-    fn without_failures(self) -> Result<SceneUpdate, FrameFailure> {
-        let Frame { update, failures } = self?;
-        none_failed(failures)?;
-        Ok(update)
-    }
+    fn without_failures(self) -> Result<(), FrameFailure>;
 }
 
 impl WithoutFailures for Result<Failures, FrameError> {
-    type Shown = ();
-
     fn without_failures(self) -> Result<(), FrameFailure> {
         none_failed(self?)
     }
