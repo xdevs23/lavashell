@@ -27,12 +27,12 @@ pub(super) struct NativeSpec {
 
 impl Platform {
     /// Opens the record of a surface with its view in the runtime, creates the native surface under the id of that
-    /// record, and calls `role` to create the role of its Wayland surface.
+    /// record, and calls `role` to create the role of its Wayland surface. Returns the id of the surface.
     pub(super) fn create_surface(
         &mut self,
         spec: NativeSpec,
         role: impl FnOnce(&mut Self, &wl_surface::WlSurface, SurfaceId) -> Result<Role, Error>,
-    ) -> Result<(), Error> {
+    ) -> Result<SurfaceId, Error> {
         let start = self.start;
         spec.view.motion().time_source(move || start.elapsed());
         let size = crate::logical::size(spec.size);
@@ -96,6 +96,6 @@ impl Platform {
             drag_region: spec.drag_region,
         };
         let _replaced_surface = self.surfaces.insert(id, surface);
-        Ok(())
+        Ok(id)
     }
 }

@@ -3,7 +3,7 @@ use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
+use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
 use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
 use sctk::data_device_manager::data_offer::DataOfferError;
@@ -84,8 +84,6 @@ pub enum Error {
     SessionLockEnded,
     #[error("the layer length {0:?} does not fit the protocol")]
     LayerLength(NonNegativeDp),
-    #[error("the measured content length {0:?} of a layer does not fit the protocol")]
-    LayerContentLength(Dp),
     #[error("the exclusive zone {0:?} does not fit the protocol")]
     ExclusiveZone(NonNegativeDp),
     #[error("the extent of a layer is too long to reserve")]
@@ -106,6 +104,8 @@ pub enum Error {
     BuildScene(#[source] ApplyError),
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
+    #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
+    PanelWithoutLayer(SurfaceId),
     #[error("the compositor offers no clipboard")]
     ClipboardUnavailable,
     #[error("the clipboard needs the serial of an input event")]

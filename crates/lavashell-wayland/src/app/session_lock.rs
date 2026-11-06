@@ -213,7 +213,7 @@ impl Platform {
             return Ok(());
         }
         let view = lock.views.view();
-        self.create_surface(NativeSpec::lock(view), |platform, wl, id| {
+        let _lock_surface = self.create_surface(NativeSpec::lock(view), |platform, wl, id| {
             platform.lock_role(wl, output, id)
         })?;
         Ok(())
