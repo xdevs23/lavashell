@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
+use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
-use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, FrameKind, FrameScheduler, InputFilter, InputRouter,
-    OutputRecords, RunEnd, SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
+    ActionQueue, FrameKind, FrameScheduler, InputFilter, InputRouter, OutputRecords, RunEnd,
+    ScenePipeline, SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -38,7 +38,6 @@ use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
-use std::convert::Infallible;
 use std::time::{Duration, Instant};
 
 mod accessibility;
@@ -57,6 +56,7 @@ mod presentation;
 mod protocols;
 mod public;
 mod render;
+mod scene_reports;
 pub(crate) mod session_lock;
 mod shape;
 mod standard_error;
@@ -120,7 +120,7 @@ enum Role {
 
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
-    builder: SceneBuilder,
+    next_draw: render::NextDraw,
     role: Role,
     wl: wl_surface::WlSurface,
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
@@ -139,40 +139,6 @@ impl Surface {
                 .shape
                 .as_ref()
                 .is_some_and(shape::SurfaceShape::needs_frame)
-    }
-
-    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, builds the frames merged
-    /// there into the scene builder, and logs each component that failed in the frame as an error. When a change does
-    /// not fit the scene, the view sends the whole scene with the next frame. The builder restarts with that frame.
-    /// If the builder had a scene before, the failure is logged and the frame ends without error. If the builder was
-    /// empty, the failure ends the frame with an error.
-    fn show(
-        &mut self,
-        id: SurfaceId,
-        view: &mut View,
-        choreographers: &mut Choreographers,
-        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
-    ) -> Result<(), crate::Error> {
-        let showed_nothing = self.builder.is_empty();
-        let error = match frame(view, choreographers.sink(id)) {
-            Ok(failures) => {
-                crate::failures::log_failures(failures);
-                let Err(error) = choreographers.build(id, &mut self.builder) else {
-                    return Ok(());
-                };
-                view.invalidate();
-                crate::Error::BuildScene(error)
-            }
-            Err(error) => crate::Error::ShowScene(error),
-        };
-        if showed_nothing {
-            return Err(error);
-        }
-        log::warn!(
-            "the surface shows the whole scene next: {}",
-            lavashell_core::error::message_chain(&error)
-        );
-        Ok(())
     }
 }
 
@@ -236,9 +202,11 @@ pub(super) struct Platform {
     surface_records: SurfaceRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
-    choreographers: Choreographers,
+    scene: ScenePipeline,
+    /// Whether the scene builder stopped, so that the next render ends the run.
+    scene_stopped: bool,
     scheduler: FrameScheduler,
-    /// The newest frame started by the scheduler for each surface, until a render draws it.
+    /// The newest frame started by the scheduler for each surface, until a render composes or draws it.
     started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
     surfaces: BTreeMap<SurfaceId, Surface>,
     renderer: RendererState<control::Control>,
@@ -327,12 +295,62 @@ impl Platform {
                     self.input.forget_surface(id);
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
-                    self.choreographers.retire(id);
+                    if self.scene.retire(id).is_err() {
+                        self.scene_stopped = true;
+                    }
                     self.surface_records.retire(id);
                     self.config.action_queue.forget_surface(id);
                 }
             }
         }
+    }
+}
+
+/// The outcome of sending a frame from a view to the scene pipeline.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FrameDelivery {
+    Sent,
+    /// The frame failed, and the view sends the whole scene with the next frame.
+    Failed,
+}
+
+/// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
+/// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
+/// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
+fn send_frame(
+    view: &mut View,
+    mut sink: SceneSink<'_>,
+    frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
+) -> Result<FrameDelivery, crate::Error> {
+    let shows_scene = sink.any_frame_ended();
+    match frame(view, &mut sink) {
+        Ok(failures) => {
+            crate::failures::log_failures(failures);
+            Ok(FrameDelivery::Sent)
+        }
+        Err(FrameError::Sink(Closed)) => Err(crate::Error::SceneStopped),
+        Err(error) if shows_scene => {
+            warn_whole_scene_next(&error);
+            Ok(FrameDelivery::Failed)
+        }
+        Err(error) => Err(crate::Error::ShowScene(error)),
+    }
+}
+
+/// Logs `error`, after which the view sends the whole scene with the next frame.
+fn warn_whole_scene_next(error: impl std::error::Error) {
+    log::warn!(
+        "a frame failed, and the whole scene is sent with the next frame: {}",
+        lavashell_core::error::message_chain(error)
+    );
+}
+
+/// Logs `error` from a frame sent outside a compose, or records that the scene pipeline stopped, so that the next
+/// render ends the run.
+fn log_or_record_stop(error: crate::Error, scene_stopped: &mut bool) {
+    match error {
+        crate::Error::SceneStopped => *scene_stopped = true,
+        error => log::error!("{error}"),
     }
 }
 
