@@ -2,6 +2,8 @@
 //! Clipboard and drag-and-drop data in a form independent of the platform. An item has one or more representations,
 //! each a MIME type with bytes. A drop acceptance is the format and the action chosen by the receiving application.
 
+use crate::geometry::Point;
+use crate::surface::SurfaceId;
 use std::sync::Arc;
 
 /// The formats of text in a transfer, in the order of preference: UTF-8 text first.
@@ -185,6 +187,57 @@ impl DropAcceptance {
     #[must_use]
     pub fn accepts(&self, formats: &[String], actions: DragActions) -> bool {
         formats.contains(&self.mime_type) && actions.contains(self.action)
+    }
+}
+
+/// Identifies a drag offered to the app. An id is never reused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TransferId(pub u64);
+
+#[derive(Clone, Debug)]
+pub struct DragOfferInfo {
+    pub id: TransferId,
+    pub surface: SurfaceId,
+    pub position: Point,
+    pub mime_types: Vec<String>,
+    pub actions: DragActions,
+    pub selected_action: Option<DragAction>,
+}
+
+#[derive(Clone, Debug)]
+pub enum DragEvent {
+    Enter(DragOfferInfo),
+    Motion(DragOfferInfo),
+    /// The drag was dropped on the surface. The drop uses the position, the MIME types and the selected action in
+    /// this event. An acceptance returned for it is ignored, because the acceptance from the last enter or motion
+    /// applies.
+    Drop(DragOfferInfo),
+    /// The drag left the surface before a drop. The acceptance returned during enter and motion no longer applies.
+    Leave {
+        id: TransferId,
+        surface: SurfaceId,
+    },
+    Cancelled {
+        id: TransferId,
+        surface: SurfaceId,
+    },
+}
+
+impl DragEvent {
+    #[must_use]
+    pub fn id(&self) -> TransferId {
+        match self {
+            Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.id,
+            Self::Leave { id, .. } | Self::Cancelled { id, .. } => *id,
+        }
+    }
+
+    #[must_use]
+    pub fn surface(&self) -> SurfaceId {
+        match self {
+            Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.surface,
+            Self::Leave { surface, .. } | Self::Cancelled { surface, .. } => *surface,
+        }
     }
 }
 

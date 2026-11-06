@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-mod pipes;
 mod text;
 
+use crate::pipe_transfers::{PipeTransfers, ReadCompletion, Transfer};
 use crate::{Error, SurfaceRecords, Watches};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{Cancellation, ReceivedData, TransferData};
 use lavashell_platform::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
-    SelectionRefusal, WatchId,
+    SelectionRefusal,
 };
-use pipes::Transfer;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 use std::os::fd::OwnedFd;
@@ -18,7 +17,6 @@ use std::rc::Rc;
 pub use text::TextClipboard;
 
 type SetCompletion = Box<dyn FnOnce(Result<(), Error>)>;
-type ReadCompletion = Box<dyn FnOnce(Result<ReceivedData, Error>)>;
 
 enum Request {
     Set(TransferData, SetCompletion),
@@ -60,10 +58,8 @@ struct State {
     next_selection_id: u64,
     reads: BTreeMap<ReceiveId, PendingRead>,
     next_receive_id: u64,
-    /// The transfer through each pipe, under the id of the watch of that pipe.
-    transfers: BTreeMap<WatchId, Transfer>,
+    pipes: PipeTransfers,
     requests: Vec<ClipboardRequest>,
-    watches: Watches,
 }
 
 impl State {
@@ -147,9 +143,8 @@ impl ClipboardTransfers {
             next_selection_id: 0,
             reads: BTreeMap::new(),
             next_receive_id: 0,
-            transfers: BTreeMap::new(),
+            pipes: PipeTransfers::new(watches),
             requests: Vec::new(),
-            watches: watches.clone(),
         })))
     }
 
@@ -203,14 +198,12 @@ impl ClipboardTransfers {
             .extract_if(.., |_, read| read.surface == surface)
             .map(|(_, read)| read.done)
             .collect();
-        let transfers: Vec<_> = (state.transfers)
-            .extract_if(.., |_, transfer| transfer.is_for(surface))
-            .collect();
+        let pipes = state.pipes.clone();
         drop(state);
         for done in reads {
             done(Err(Cancellation::SurfaceClosed.into()));
         }
-        self.cancel(transfers, Cancellation::SurfaceClosed);
+        pipes.forget_surface(surface);
     }
 
     /// Cancels every queued request, every read, every transfer and every request made after that. Each selection not
@@ -221,7 +214,7 @@ impl ClipboardTransfers {
         let queued = std::mem::take(&mut state.queued);
         let selections = std::mem::take(&mut state.selections);
         let reads = std::mem::take(&mut state.reads);
-        let transfers = std::mem::take(&mut state.transfers);
+        let pipes = state.pipes.clone();
         let requests = std::mem::take(&mut state.requests);
         drop(state);
         drop(requests);
@@ -237,7 +230,7 @@ impl ClipboardTransfers {
         for read in reads.into_values() {
             (read.done)(Err(Cancellation::AppClosed.into()));
         }
-        self.cancel(transfers, Cancellation::AppClosed);
+        pipes.close();
     }
 
     fn set_selection(&self, data: TransferData, done: SetCompletion) {
@@ -315,7 +308,10 @@ impl ClipboardTransfers {
             return;
         };
         match result {
-            Ok(pipe) => pipes::start(&self.0, Transfer::receive(pipe, surface, format, done)),
+            Ok(pipe) => {
+                let pipes = self.0.borrow().pipes.clone();
+                let _watched = pipes.start(Transfer::receive(pipe, surface, format, done));
+            }
             Err(refusal) => done(Err(read_error(refusal))),
         }
     }
@@ -325,22 +321,19 @@ impl ClipboardTransfers {
         let bytes = (self.0.borrow().selections.get(&id))
             .and_then(|selection| selection.data.get(&format.0))
             .cloned();
-        if let Some(bytes) = bytes {
-            pipes::start(&self.0, Transfer::send(pipe, bytes));
-        }
-    }
-
-    /// Ends `transfers` with `reason`, and requests the end of the watch of each.
-    fn cancel(
-        &self,
-        transfers: impl IntoIterator<Item = (WatchId, Transfer)>,
-        reason: Cancellation,
-    ) {
-        let watches = self.0.borrow().watches.clone();
-        for (watch, transfer) in transfers {
-            watches.unwatch(watch);
-            transfer.finish(Err(reason.into()));
-        }
+        let Some(bytes) = bytes else {
+            return;
+        };
+        let pipes = self.0.borrow().pipes.clone();
+        let _watched = pipes.start(Transfer::send(
+            pipe,
+            bytes,
+            Box::new(|result| {
+                if let Err(error) = result {
+                    log_failure("the clipboard selection was not sent", &error);
+                }
+            }),
+        ));
     }
 }
 
@@ -362,4 +355,4 @@ fn log_failure(message: &str, error: &Error) {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

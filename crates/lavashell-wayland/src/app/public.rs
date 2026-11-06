@@ -9,11 +9,13 @@ use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::{Fonts, Painter};
 use lavashell_runtime::{
-    Clipboard, ClipboardTransfers, LockConfiguration, RunEnd, SessionLock, ViewActions, Window,
+    Clipboard, ClipboardTransfers, DragGesture, DragRequest, DropEvent, LockConfiguration, RunEnd,
+    SessionLock, ViewActions, Window,
 };
 use sctk::reexports::calloop::EventLoop;
 use sctk::reexports::client::Connection;
@@ -70,24 +72,17 @@ impl App {
     #[must_use]
     pub fn on_drag(
         mut self,
-        callback: impl FnMut(
-            crate::clipboard::DragEvent,
-            &mut View,
-        ) -> Option<lavashell_core::transfer::DropAcceptance>
-        + 'static,
+        callback: impl FnMut(DragEvent, &mut View) -> Option<DropAcceptance> + 'static,
     ) -> Self {
-        self.config.drag_observer = Some(Box::new(callback));
+        self.config.drags.on_drag(callback);
         self
     }
 
     /// Sets `callback`, which runs when the receipt of the data of a drop ends, with the data or the error in the
     /// event, and commits the drop. Returning true finishes the Wayland transfer, but only when the data was received.
     #[must_use]
-    pub fn on_drop(
-        mut self,
-        callback: impl FnMut(crate::clipboard::DropEvent, &mut View) -> bool + 'static,
-    ) -> Self {
-        self.config.drop_observer = Some(Box::new(callback));
+    pub fn on_drop(mut self, callback: impl FnMut(DropEvent, &mut View) -> bool + 'static) -> Self {
+        self.config.drags.on_drop(callback);
         self
     }
 
@@ -97,13 +92,18 @@ impl App {
     #[must_use]
     pub fn on_drag_source(
         mut self,
-        callback: impl FnMut(
-            crate::clipboard::DragGesture,
-            &mut View,
-        ) -> Option<crate::clipboard::DragRequest>
-        + 'static,
+        callback: impl FnMut(DragGesture, &mut View) -> Option<DragRequest> + 'static,
     ) -> Self {
-        self.config.drag_source_observer = Some(Box::new(callback));
+        self.config.drags.on_drag_source(callback);
+        self
+    }
+
+    /// Enables built-in drag and drop of text: dragging selected text out of a text field and dropping text into a
+    /// text field. The drag and drop callbacks registered by the app run first. The built-in handling applies only to
+    /// the drags that the app did not accept.
+    #[must_use]
+    pub fn text_transfers(mut self) -> Self {
+        self.config.drags.enable_text_transfers();
         self
     }
 

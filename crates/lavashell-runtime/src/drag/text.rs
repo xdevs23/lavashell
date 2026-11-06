@@ -1,69 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{App, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId};
+use super::{DragGesture, DragRequest, DropEvent};
 use lavashell_core::{
     prelude::{TextDropTarget, View},
-    surface::SurfaceId,
-    transfer::{DragAction, DragActions, DropAcceptance, TEXT_FORMATS},
+    transfer::{DragAction, DragEvent, DragOfferInfo, DropAcceptance, TEXT_FORMATS, TransferId},
 };
-use std::collections::HashMap;
+use lavashell_platform::DragDevice;
+use std::collections::{HashMap, HashSet};
 
 mod source;
 
 use source::{LocalMove, NativeSources};
 
+/// The built-in drag and drop of text, which drags selected text out of a text field and drops text into a field.
 #[derive(Default)]
-pub(crate) struct TextTransfers {
-    accepted: HashMap<TransferId, Accepted>,
+pub(super) struct TextTransfers {
+    /// The drags that the text drag accepted for their latest enter or motion.
+    accepted: HashSet<TransferId>,
     pending: HashMap<TransferId, Pending>,
     sources: NativeSources,
 }
 
-struct Accepted {
-    surface: SurfaceId,
-    device: u32,
-    choice: DropAcceptance,
-}
-
 struct Pending {
-    surface: SurfaceId,
-    device: u32,
-    choice: DropAcceptance,
+    device: DragDevice,
     target: Option<TextDropTarget>,
-}
-
-impl App {
-    /// Enables built-in drag and drop of text: dragging selected text out of a text field and dropping text into a
-    /// text field. The drag and drop callbacks of the app run first. The built-in handling applies only to the
-    /// drags that the app did not accept.
-    #[must_use]
-    pub fn text_transfers(mut self) -> Self {
-        if self.config.text_transfers.is_none() {
-            self.config.text_transfers = Some(TextTransfers::default());
-        }
-        self
-    }
 }
 
 impl TextTransfers {
     pub fn application_accepted(&mut self, event: &DragEvent) {
-        self.forget(event_id(event));
+        self.forget(event.id());
     }
 
     /// Ends the built-in handling of transfer `id` by removing its acceptance, its pending drop and its link to a
     /// drag source in this app.
-    fn forget(&mut self, id: TransferId) {
-        self.set_acceptance(id, None);
-        self.pending.retain(|pending, _| *pending != id);
+    pub fn forget(&mut self, id: TransferId) {
+        let _accepted = self.accepted.remove(&id);
+        let _pending = self.pending.remove(&id);
         self.sources.close_link(id);
-    }
-
-    /// Replaces the acceptance of transfer `id` with the one computed for the latest enter or motion of the drag,
-    /// or removes it for `None`.
-    fn set_acceptance(&mut self, id: TransferId, acceptance: Option<Accepted>) {
-        match acceptance {
-            Some(acceptance) => self.accepted.extend([(id, acceptance)]),
-            None => self.accepted.retain(|accepted, _| *accepted != id),
-        }
     }
 
     /// Stores the drop of transfer `id` until its data arrives. A second drop of the same transfer replaces the
@@ -74,39 +46,33 @@ impl TextTransfers {
         }
     }
 
-    pub fn drag(&mut self, event: &DragEvent, device: u32, view: &View) -> Option<DropAcceptance> {
+    pub fn drag(
+        &mut self,
+        event: &DragEvent,
+        device: DragDevice,
+        view: &View,
+    ) -> Option<DropAcceptance> {
         match event {
             DragEvent::Enter(info) | DragEvent::Motion(info) => {
                 let choice = text_acceptance(info, view);
-                let accepted = choice.clone().map(|choice| Accepted {
-                    surface: info.surface,
-                    device,
-                    choice,
-                });
-                self.set_acceptance(info.id, accepted);
+                let _changed = if choice.is_some() {
+                    self.accepted.insert(info.id)
+                } else {
+                    self.accepted.remove(&info.id)
+                };
                 choice
             }
             DragEvent::Drop(info) => {
-                let accepted = self.accepted.remove(&info.id)?;
-                let target = (accepted.surface == info.surface
-                    && accepted.device == device
-                    && info.selected_action == Some(accepted.choice.action))
-                .then(|| view.text_drop_target(info.position))
-                .flatten();
+                if !self.accepted.remove(&info.id) {
+                    return None;
+                }
                 self.sources.open_link(info.id);
-                self.hold_drop(
-                    info.id,
-                    Pending {
-                        surface: info.surface,
-                        device: accepted.device,
-                        choice: accepted.choice,
-                        target,
-                    },
-                );
+                let target = view.text_drop_target(info.position);
+                self.hold_drop(info.id, Pending { device, target });
                 None
             }
             DragEvent::Leave { id, .. } => {
-                self.set_acceptance(*id, None);
+                let _left = self.accepted.remove(id);
                 None
             }
             DragEvent::Cancelled { id, .. } => {
@@ -121,8 +87,8 @@ impl TextTransfers {
     }
 
     pub fn owns(&self, event: &DragEvent) -> bool {
-        let id = event_id(event);
-        self.accepted.contains_key(&id) || self.pending.contains_key(&id)
+        let id = event.id();
+        self.accepted.contains(&id) || self.pending.contains_key(&id)
     }
 
     pub fn receive(&mut self, event: DropEvent, view: &mut View) -> bool {
@@ -136,18 +102,12 @@ impl TextTransfers {
         let Some(pending) = self.pending.remove(&event.id) else {
             return false;
         };
-        if event.surface != pending.surface || event.action != pending.choice.action {
-            return false;
-        }
         let Some(data) = (event.data)
             .inspect_err(|error| log::warn!("the dropped text was not received: {error}"))
             .ok()
         else {
             return false;
         };
-        if data.mime_type != pending.choice.mime_type {
-            return false;
-        }
         let Some(text) = String::from_utf8(data.bytes)
             .inspect_err(|error| log::warn!("the dropped text is not UTF-8: {error}"))
             .ok()
@@ -173,8 +133,8 @@ impl TextTransfers {
         view.insert_text_at(&target, &text)
     }
 
-    pub fn source(&self, gesture: &DragGesture, device: u32, view: &View) -> Option<DragRequest> {
-        self.sources.request(gesture, device, view)
+    pub fn source(&self, gesture: &DragGesture, view: &View) -> Option<DragRequest> {
+        self.sources.request(gesture, view)
     }
 }
 
@@ -197,9 +157,5 @@ fn text_acceptance(info: &DragOfferInfo, view: &View) -> Option<DropAcceptance> 
     })
 }
 
-fn event_id(event: &DragEvent) -> TransferId {
-    match event {
-        DragEvent::Enter(info) | DragEvent::Motion(info) | DragEvent::Drop(info) => info.id,
-        DragEvent::Leave { id, .. } | DragEvent::Cancelled { id, .. } => *id,
-    }
-}
+#[cfg(test)]
+mod tests;

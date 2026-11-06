@@ -12,13 +12,11 @@ mod surface;
 mod test_bus;
 #[cfg(test)]
 mod test_error;
-mod text_transfer;
 mod wayland_presentation;
 
 use smithay_client_toolkit as sctk;
 
 pub use app::{App, HostKey, KeyboardFocus};
-pub use clipboard::{DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId};
 pub use error::{ControlError, Error};
 pub use lavashell_core::focus_grab::FocusGrab;
 pub use lavashell_core::output::MonitorInfo;
