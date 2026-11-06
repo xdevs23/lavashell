@@ -2240,7 +2240,8 @@
       {
         "dependencies": [
           "icu_locale_core",
-          "lavashell-core"
+          "lavashell-core",
+          "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
         "version": "0.1.0"
@@ -2271,6 +2272,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "log",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",

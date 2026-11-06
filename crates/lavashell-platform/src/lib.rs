@@ -3,6 +3,7 @@
 //! requests made by the runtime.
 #![forbid(unsafe_code)]
 
+mod clipboard;
 mod input;
 mod lock;
 mod output;
@@ -14,6 +15,10 @@ mod timing;
 mod watch;
 mod window_control;
 
+pub use clipboard::{
+    ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
+    SelectionRefusal,
+};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };
@@ -24,5 +29,5 @@ pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};
 pub use timing::TimingEvent;
-pub use watch::{WatchEvent, WatchId, WatchRequest};
+pub use watch::{Readiness, WatchEvent, WatchId, WatchRequest};
 pub use window_control::WindowControlRequest;

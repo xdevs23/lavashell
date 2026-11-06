@@ -4,6 +4,9 @@
 
 use std::sync::Arc;
 
+/// The formats of text in a transfer, in the order of preference: UTF-8 text first.
+pub const TEXT_FORMATS: [&str; 2] = ["text/plain;charset=utf-8", "text/plain"];
+
 /// Why a representation or a transfer cannot be made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum TransferError {
@@ -88,6 +91,20 @@ impl TransferData {
         Self::new([Representation::new(mime_type, bytes)?])
     }
 
+    /// `text` as UTF-8 bytes in every format of `TEXT_FORMATS`.
+    #[must_use]
+    pub fn text(text: &str) -> Self {
+        let bytes: Arc<[u8]> = text.as_bytes().into();
+        Self(
+            TEXT_FORMATS
+                .map(|format| Representation {
+                    mime_type: format.to_owned(),
+                    bytes: bytes.clone(),
+                })
+                .into(),
+        )
+    }
+
     pub fn formats(&self) -> impl Iterator<Item = &str> {
         self.0.iter().map(Representation::mime_type)
     }
@@ -144,6 +161,19 @@ impl DragAction {
     }
 }
 
+/// Why a transfer ended before it finished.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Cancellation {
+    #[error("the app closed")]
+    AppClosed,
+    #[error("the input device of the transfer disappeared")]
+    InputDeviceGone,
+    #[error("the surface of the transfer closed")]
+    SurfaceClosed,
+    #[error("the host system cancelled the data source")]
+    SourceCancelled,
+}
+
 /// The MIME type and the action with which the receiving application accepts a drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropAcceptance {
@@ -178,6 +208,19 @@ mod tests {
             [0, 255, 1]
         );
         assert!(data.get("image/png").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn text_is_offered_as_utf8_in_every_text_format() -> TestResult {
+        let data = TransferData::text("雪🙂");
+        assert_eq!(data.formats().collect::<Vec<_>>(), TEXT_FORMATS);
+        for format in TEXT_FORMATS {
+            assert_eq!(
+                &**data.get(format).required("text bytes")?,
+                "雪🙂".as_bytes()
+            );
+        }
         Ok(())
     }
 

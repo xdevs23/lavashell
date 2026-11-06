@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
     DragAction, DragActions, DragGesture, DragRequest, HashMap, SurfaceId, TextDropTarget,
-    TransferId, View, text_data,
+    TransferId, View,
 };
 use lavashell_core::prelude::{NodeId, TextSelectionSource};
+use lavashell_core::transfer::TransferData;
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Default)]
@@ -49,7 +50,7 @@ impl NativeSources {
                 .into_iter()
                 .filter(|action| *action == DragAction::Copy || source.can_move()),
         );
-        let data = text_data(source.text())?;
+        let data = TransferData::text(source.text());
         let local = Rc::new(RefCell::new(LocalSource {
             device,
             surface: gesture.surface,

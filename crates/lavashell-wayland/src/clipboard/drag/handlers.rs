@@ -42,7 +42,9 @@ impl DataDeviceHandler for Platform {
         self.drag_motion(device, x, y);
     }
 
-    fn selection(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlDataDevice) {}
+    fn selection(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlDataDevice) {
+        self.report_selection();
+    }
 
     fn drop_performed(&mut self, _: &Connection, _: &QueueHandle<Self>, device: &WlDataDevice) {
         self.drag_drop(device);

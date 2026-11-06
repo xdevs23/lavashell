@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::watches::{AfterReady, Watches};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
-use lavashell_platform::{WatchEvent, WatchId, WatchRequest};
+use lavashell_platform::{Readiness, WatchId};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::os::fd::OwnedFd;
@@ -22,14 +23,11 @@ impl PendingAction {
     }
 }
 
-#[derive(Default)]
 struct Queue {
     pending: VecDeque<PendingAction>,
     /// The actions to queue once the descriptor watched under the same id is readable.
-    watches: BTreeMap<WatchId, PendingAction>,
-    requests: Vec<WatchRequest>,
-    /// The number of watches requested so far, which is the id of the next watch.
-    watch_count: u64,
+    waiting: BTreeMap<WatchId, PendingAction>,
+    watches: Watches,
     forgotten: BTreeSet<SurfaceId>,
     closed: bool,
 }
@@ -61,7 +59,7 @@ impl ViewActions {
     ///
     /// # Errors
     ///
-    /// Fails when the number of the new watch does not fit a watch id.
+    /// Fails when the watches of the run closed, or when the number of the new watch does not fit a watch id.
     pub fn dispatch_when_readable(
         &self,
         source: OwnedFd,
@@ -72,21 +70,40 @@ impl ViewActions {
         if !queue.accepts(surface) {
             return Ok(());
         }
-        let id = WatchId(queue.watch_count);
-        queue.watch_count = id.0.checked_add(1).ok_or(Error::NumberWatch)?;
-        queue.requests.push(WatchRequest::Readable(id, source));
-        let action = PendingAction::new(surface, apply);
-        let _no_watch_had_the_id = queue.watches.insert(id, action);
+        let shared = Rc::downgrade(&self.0);
+        let id = queue
+            .watches
+            .watch(source, Readiness::Readable, move |id| {
+                if let Some(shared) = shared.upgrade() {
+                    let mut queue = shared.borrow_mut();
+                    if let Some(action) = queue.waiting.remove(&id) {
+                        queue.pending.push_back(action);
+                    }
+                }
+                AfterReady::End
+            })?;
+        let _no_watch_had_the_id = queue.waiting.insert(id, PendingAction::new(surface, apply));
         Ok(())
     }
 }
 
 /// A queue of actions. Each action changes the view of one surface. Controls and asynchronous transfer callbacks add
 /// actions to it through `ViewActions`. The runtime runs each action after it composes the view of that surface.
-#[derive(Default)]
 pub struct ActionQueue(Rc<RefCell<Queue>>);
 
 impl ActionQueue {
+    /// A queue whose actions wait for descriptors watched through `watches`.
+    #[must_use]
+    pub fn new(watches: &Watches) -> Self {
+        Self(Rc::new(RefCell::new(Queue {
+            pending: VecDeque::new(),
+            waiting: BTreeMap::new(),
+            watches: watches.clone(),
+            forgotten: BTreeSet::new(),
+            closed: false,
+        })))
+    }
+
     /// A handle that adds actions to this queue.
     #[must_use]
     pub fn view_actions(&self) -> ViewActions {
@@ -123,18 +140,17 @@ impl ActionQueue {
             .into_iter()
             .partition(|action| action.surface != surface);
         queue.pending = kept;
-        let dropped_watches: Vec<_> = queue
-            .watches
+        let dropped_waiting: Vec<_> = queue
+            .waiting
             .extract_if(.., |_, action| action.surface == surface)
             .collect();
-        (queue.requests).extend(
-            dropped_watches
-                .iter()
-                .map(|(id, _)| WatchRequest::Unwatch(*id)),
-        );
+        let watches = queue.watches.clone();
         // Dropping an action can run code that queues another action.
         drop(queue);
-        drop((dropped_pending, dropped_watches));
+        for (id, _) in &dropped_waiting {
+            watches.unwatch(*id);
+        }
+        drop((dropped_pending, dropped_waiting));
     }
 
     #[must_use]
@@ -142,29 +158,13 @@ impl ActionQueue {
         (self.0.borrow().pending.iter()).any(|action| action.surface == surface)
     }
 
-    /// Takes the watch requests made since the last call, for the platform to execute.
-    #[must_use]
-    pub fn take_requests(&self) -> Vec<WatchRequest> {
-        std::mem::take(&mut self.0.borrow_mut().requests)
-    }
-
-    /// Queues the action registered for a watch once the platform reports the watched descriptor as readable.
-    pub fn handle(&self, event: WatchEvent) {
-        let WatchEvent::Readable(id) = event;
-        let mut queue = self.0.borrow_mut();
-        if let Some(action) = queue.watches.remove(&id) {
-            queue.pending.push_back(action);
-        }
-    }
-
-    /// Drops every queued action, watch and request, and every action queued after that.
+    /// Drops every queued and waiting action, and every action queued after that.
     pub fn close(&self) {
         let mut queue = self.0.borrow_mut();
         queue.closed = true;
         let dropped = (
             std::mem::take(&mut queue.pending),
-            std::mem::take(&mut queue.watches),
-            std::mem::take(&mut queue.requests),
+            std::mem::take(&mut queue.waiting),
         );
         drop(queue);
         drop(dropped);
