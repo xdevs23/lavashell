@@ -7,18 +7,19 @@ use crate::{Error, FrameSequence};
 use lavashell_actor::{Closed, Handle, Sender, mailbox, spawn};
 use lavashell_core::scene::tree::{ApplyError, Change, SceneSnapshot};
 use lavashell_core::scene::{ChangeSink, SinkId};
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// What the scene builder reports about the scene for a surface.
 #[derive(Clone, Copy, Debug)]
 pub enum BuilderReport {
-    /// The scene contains every frame that the view composed up to the frame with `sequence`. A scene built from a
-    /// frame sent outside a compose has no sequence.
+    /// The scene and the surface state contain every frame that the view composed up to the frame with `sequence`. A
+    /// scene built from a frame sent outside a compose has no sequence. `change` is what the built frames changed.
     Built {
         surface: SurfaceId,
         sequence: Option<FrameSequence>,
+        change: BuiltChange,
     },
     /// A frame did not fit the scene. The scene shows the last frame that it built, until the view sends the whole
     /// scene to a restarted sink.
@@ -26,6 +27,22 @@ pub enum BuilderReport {
         surface: SurfaceId,
         error: ApplyError,
     },
+}
+
+/// What the frames built for a surface changed in the built scene of that surface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuiltChange {
+    Nothing,
+    /// The surface state changed, and the snapshot is the one built before.
+    State,
+    /// The frames ended in the scene builder with a new snapshot. The surface state can have changed too.
+    Scene,
+}
+
+/// The newest scene built for a surface, with the surface state built from the same frames.
+pub struct BuiltScene {
+    pub snapshot: SceneSnapshot,
+    pub state: SurfaceState,
 }
 
 /// Receives each report of the scene builder. The builder stops once it fails.
@@ -41,7 +58,9 @@ pub struct ScenePipeline {
     actors: Option<(Handle<ChoreographerActor>, Handle<BuilderActor>)>,
 }
 
-/// The change sink that sends one frame from the view of a surface to the choreographer.
+/// The change sink that sends one frame for a surface to the choreographer. A frame contains the changes sent by the
+/// view and the changes of the surface state. It ends with the frame of the view, or with
+/// [`SceneSink::end_state_frame`].
 pub struct SceneSink<'a> {
     surface: SurfaceId,
     /// The sequence of the frame that the view composes, or `None` for a frame sent outside a compose.
@@ -50,11 +69,25 @@ pub struct SceneSink<'a> {
     choreographer: &'a Sender<ChoreographerInput>,
 }
 
-/// What the sink for a surface keeps from one frame to the next.
+/// The record of the sink for a surface across frames.
 #[derive(Default)]
 struct SinkState {
     id: SinkId,
     any_frame_ended: bool,
+    /// The surface state sent so far. A restart sends it again.
+    surface: SurfaceState,
+    open: OpenFrame,
+}
+
+/// What the open frame of a sink contains, apart from the changes sent by the view.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum OpenFrame {
+    #[default]
+    WithoutState,
+    WithState,
+    /// The sink restarted. The open frame contains the whole surface state and waits for the whole scene, sent with
+    /// the next frame of the view.
+    AwaitingScene,
 }
 
 impl ScenePipeline {
@@ -92,7 +125,7 @@ impl ScenePipeline {
         })
     }
 
-    /// The sink for the next frame from the view of `surface`, which ends the frame with `end`.
+    /// The sink for the next frame for `surface`, which ends the frame with `end`.
     pub fn sink(&mut self, surface: SurfaceId, end: Option<FrameSequence>) -> SceneSink<'_> {
         SceneSink {
             surface,
@@ -109,9 +142,9 @@ impl ScenePipeline {
         }
     }
 
-    /// The newest scene that the scene builder built for `surface`.
+    /// The newest scene that the scene builder built for `surface`, with the surface state built from the same frames.
     #[must_use]
-    pub fn snapshot(&self, surface: SurfaceId) -> Arc<SceneSnapshot> {
+    pub fn built(&self, surface: SurfaceId) -> Arc<BuiltScene> {
         self.slots.read(surface)
     }
 
@@ -148,11 +181,57 @@ impl Drop for ScenePipeline {
 }
 
 impl SceneSink<'_> {
-    /// Whether any frame ended into the sink for the surface. A restart keeps the built scene until the next frame
-    /// ends, so it does not reset this.
+    /// Whether any frame of the view ended into the sink for the surface. A restart does not reset this, because the
+    /// slot for the surface contains the built scene until the next frame ends.
     #[must_use]
     pub fn any_frame_ended(&self) -> bool {
         self.state.any_frame_ended
+    }
+
+    /// Sends `change` of the surface state with the open frame, unless the state sent before has the value of
+    /// `change`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the choreographer is gone.
+    pub fn set_state(&mut self, change: SurfaceChange) -> Result<(), Closed> {
+        if self.state.surface.contains(&change) {
+            return Ok(());
+        }
+        self.state.surface.apply(change.clone());
+        self.push(SceneItem::Surface(change))?;
+        if self.state.open == OpenFrame::WithoutState {
+            self.state.open = OpenFrame::WithState;
+        }
+        Ok(())
+    }
+
+    /// Ends the open frame when it contains a change of the surface state or the sink ends frames with a sequence,
+    /// unless the frame waits for the whole scene. Returns whether the frame ended.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the choreographer is gone.
+    pub fn end_state_frame(&mut self) -> Result<bool, Closed> {
+        let ends = match self.state.open {
+            OpenFrame::WithState => true,
+            OpenFrame::WithoutState => self.end.is_some(),
+            OpenFrame::AwaitingScene => false,
+        };
+        if ends {
+            self.end_open_frame()?;
+        }
+        Ok(ends)
+    }
+
+    fn push(&self, item: SceneItem) -> Result<(), Closed> {
+        (self.choreographer).push(ChoreographerInput::Change(self.surface, Box::new(item)))
+    }
+
+    fn end_open_frame(&mut self) -> Result<(), Closed> {
+        (self.choreographer).push(ChoreographerInput::End(self.surface, self.end))?;
+        self.state.open = OpenFrame::WithoutState;
+        Ok(())
     }
 }
 
@@ -164,20 +243,24 @@ impl ChangeSink for SceneSink<'_> {
     }
 
     fn change(&mut self, change: Change) -> Result<(), Closed> {
-        (self.choreographer).push(ChoreographerInput::Change(
-            self.surface,
-            Box::new(SceneItem(change)),
-        ))
+        self.push(SceneItem::Change(change))
     }
 
     fn end_frame(&mut self) -> Result<(), Closed> {
-        (self.choreographer).push(ChoreographerInput::End(self.surface, self.end))?;
+        self.end_open_frame()?;
         self.state.any_frame_ended = true;
         Ok(())
     }
 
+    /// Drops the frames that wait for the scene builder, and sends the whole surface state again, because the dropped
+    /// frames can contain changes of it.
     fn restart(&mut self) -> Result<(), Closed> {
-        (self.choreographer).push(ChoreographerInput::Restart(self.surface))
+        (self.choreographer).push(ChoreographerInput::Restart(self.surface))?;
+        for change in self.state.surface.changes() {
+            self.push(SceneItem::Surface(change))?;
+        }
+        self.state.open = OpenFrame::AwaitingScene;
+        Ok(())
     }
 }
 

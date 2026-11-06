@@ -86,17 +86,6 @@
             },
             {
               "manifest": {
-                "dependencies": {
-                  "thiserror": {
-                    "default-features": false,
-                    "features": [
-                      "default",
-                      "std"
-                    ],
-                    "package": "thiserror",
-                    "version": "=2.0.21"
-                  }
-                },
                 "features": {},
                 "lib": {
                   "path": "src/lib.rs"
@@ -741,15 +730,6 @@
                     "features": [],
                     "package": "lavashell-platform",
                     "path": "../lavashell-platform"
-                  },
-                  "lavashell-renderer": {
-                    "default-features": false,
-                    "features": [
-                      "backdrop",
-                      "default"
-                    ],
-                    "package": "lavashell-renderer",
-                    "path": "../lavashell-renderer"
                   },
                   "thiserror": {
                     "default-features": false,
@@ -2493,9 +2473,6 @@
                 "version": "0.0.0"
               },
               {
-                "dependencies": [
-                  "thiserror"
-                ],
                 "name": "lavashell-actor",
                 "version": "0.0.0"
               },
@@ -2617,7 +2594,6 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-platform",
-                  "lavashell-renderer",
                   "thiserror"
                 ],
                 "name": "lavashell-runtime",
@@ -3930,7 +3906,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "a2434bd26c0a380fb38db9234163e33a7cbcf8c0d507b241f1bb9a79755d059b"
+        "seedHash": "95eb66de056f633dc1e25823c4c5f4b09da6f3a77e009fb44382d5fd18cd97ba"
       }
     }
   },
@@ -4962,9 +4938,6 @@
         "version": "0.1.0"
       },
       {
-        "dependencies": [
-          "thiserror 2.0.21"
-        ],
         "name": "lavashell-actor",
         "version": "0.1.0"
       },
@@ -5105,7 +5078,6 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
-          "lavashell-renderer",
           "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ],

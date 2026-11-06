@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::control::Control;
+use super::control::{Control, RoleControl, SurfaceObjects};
 use super::owned_wl_surface::OwnedWlSurface;
 use super::render::NextDraw;
-use super::{Platform, Role, Surface, detach, shape};
+use super::{Platform, Role, Surface, destroy_objects};
 use crate::Error;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
 use lavashell_platform::Appearance;
-use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
-use lavashell_runtime::{DragRegion, SchedulerInput, WindowShape};
+use lavashell_renderer::{Attach, AttachError, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell_runtime::{DragRegion, SchedulerInput, SurfaceShape, WindowShape};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -22,16 +22,23 @@ pub(super) struct NativeSpec {
     pub shape: Option<WindowShape>,
     pub drag_region: Option<DragRegion>,
     pub accessible_name: String,
+    /// The state of the surface sent to the host with its role.
+    pub role_state: SurfaceState,
 }
 
 impl Platform {
     /// Opens the record of a surface with its view in the runtime, creates the native surface under the id of that
-    /// record, and calls `role` to create the role of its Wayland surface.
+    /// record, and calls `create_role` to create the role of its Wayland surface with the control of the role. Returns
+    /// the id of the surface.
     pub(super) fn create_surface(
         &mut self,
         spec: NativeSpec,
-        role: impl FnOnce(&mut Self, &wl_surface::WlSurface, SurfaceId) -> Result<Role, Error>,
-    ) -> Result<(), Error> {
+        create_role: impl FnOnce(
+            &mut Self,
+            &wl_surface::WlSurface,
+            SurfaceId,
+        ) -> Result<(Role, RoleControl), Error>,
+    ) -> Result<SurfaceId, Error> {
         let start = self.start;
         spec.view.motion().time_source(move || start.elapsed());
         let size = crate::logical::size(spec.size);
@@ -52,8 +59,17 @@ impl Platform {
                 id.0
             );
         }
-        // The Vulkan target is created before the role. A failure of the target then leaves a Wayland surface without
-        // a role, which is safe to destroy.
+        // The control of the Vulkan target needs the layer object of a layer role, so the role is created first.
+        let (role, role_control) = match create_role(self, &wl, id) {
+            Ok(created) => created,
+            Err(error) => {
+                if let Some(viewport) = wp_viewport {
+                    viewport.destroy();
+                }
+                destroy_objects(fractional, background, None);
+                return Err(error);
+            }
+        };
         let alpha = if spec.appearance.transparent {
             SurfaceAlpha::Transparent
         } else {
@@ -69,10 +85,25 @@ impl Platform {
             output: spec.appearance.output,
             hdr_metadata: spec.appearance.hdr_metadata,
             gpu_budget: self.config.ui_budget,
-            control: Control::new(id, wl.clone(), wp_viewport, presentation, self.qh.clone()),
+            control: Control::new(
+                id,
+                SurfaceObjects {
+                    wl: wl.clone(),
+                    viewport: wp_viewport,
+                    presentation,
+                    compositor: self.compositor.wl_compositor().clone(),
+                    background: background.clone(),
+                    role_control,
+                },
+                spec.role_state,
+                self.qh.clone(),
+            ),
         };
-        self.renderer.attach(attach).map_err(Error::Render)?;
-        let role = role(self, &wl, id).inspect_err(|_| detach(&mut self.renderer, id))?;
+        if let Err(AttachError { control, error }) = self.renderer.attach(attach) {
+            control.destroy();
+            destroy_objects(fractional, background, Some(&role));
+            return Err(Error::Render(error));
+        }
         let accessibility = crate::accessibility::Bridge::new(
             id,
             spec.accessible_name,
@@ -87,12 +118,11 @@ impl Platform {
             fractional,
             output: None,
             background,
-            blur_size: None,
-            shape: spec.shape.map(shape::SurfaceShape::new),
+            shape: SurfaceShape::new(spec.shape),
             drag_region: spec.drag_region,
         };
         let _replaced_surface = self.surfaces.insert(id, surface);
         self.schedule(SchedulerInput::Opened(id));
-        Ok(())
+        Ok(id)
     }
 }

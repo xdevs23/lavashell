@@ -21,4 +21,6 @@ pub enum Error {
     RunChoreographer(#[source] JoinError<Infallible>),
     #[error("the scene builder failed")]
     RunBuilder(#[source] JoinError<ApplyError>),
+    #[error("the content of a panel measures a length that is negative or not finite")]
+    PanelContent(#[source] NumberError),
 }

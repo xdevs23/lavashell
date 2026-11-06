@@ -21,6 +21,8 @@ pub(crate) enum TestError {
     #[error(transparent)]
     StateDraw(#[from] crate::DrawError<std::convert::Infallible>),
     #[error(transparent)]
+    StateCommit(#[from] crate::CommitError<std::convert::Infallible>),
+    #[error(transparent)]
     Draw(#[from] FailedDraw),
     #[error(transparent)]
     DrawFailure(#[from] DrawFailure),

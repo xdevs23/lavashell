@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{AppConfig, FrameDelivery, Platform, Role, layer, open_surface, send_frame};
+use super::shape::ShapeGeometry;
+use super::{AppConfig, Platform, Role, open_surface, send_frame, send_surface_state};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
-use lavashell_core::scene::tree::SceneSnapshot;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
 use lavashell_runtime::{
-    ActionBatch, FrameKind, FrameSequence, SceneSink, SchedulerInput, ViewState,
+    ActionBatch, BuiltScene, FrameKind, FrameSequence, PanelContent, SceneSink, SchedulerInput,
+    ViewState,
 };
-use smithay_client_toolkit as sctk;
 use std::mem;
 use std::time::{Duration, Instant};
 
@@ -74,9 +73,10 @@ impl Platform {
         }
     }
 
-    /// Runs the frame started by the frame scheduler for each surface, in composition order. A compose frame sends the
-    /// frames of the view to the scene pipeline, and a render frame draws the newest scene of the surface. Before the
-    /// frame of a surface runs, the surface reports what the view needs. The scheduler samples the frame at that time.
+    /// Commits each surface state in `state_commits` without a frame, then runs the frame started by the frame
+    /// scheduler for each surface, in composition order. A compose frame sends the frames of the view and the surface
+    /// state to the scene pipeline, and a render frame draws the newest scene of the surface. Before the frame of a
+    /// surface runs, the surface reports what the view needs. The scheduler samples the frame at that time.
     /// After the frames, every surface reports again with the deadline after composing, and each drawn surface reports
     /// the rendered frame.
     fn run_started_frames(&mut self) -> Result<(), Error> {
@@ -87,6 +87,7 @@ impl Platform {
         if self.scene_stopped {
             return Err(Error::SceneStopped);
         }
+        self.commit_built_states()?;
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.action_queue.take_batch();
@@ -186,9 +187,10 @@ impl Platform {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `id` for `timing` with its queued actions, and sends the frames of the view to the
-    /// scene pipeline. The frame renders once the scene builder built it. A frame that reached the pipeline is built
-    /// also when a later frame of the compose fails. When no frame reached the pipeline, the frame renders at once.
+    /// Composes the view of surface `id` for `timing` with its queued actions, and sends the frames of the view and
+    /// then the surface state for the frame to the scene pipeline. The frame renders once the scene builder built the
+    /// state. When the state does not end a frame, because the sink waits for the whole scene, the frame renders at
+    /// once.
     fn compose_surface(
         &mut self,
         id: SurfaceId,
@@ -197,33 +199,43 @@ impl Platform {
     ) -> Result<(), Error> {
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
+        let Viewport { size, density } = viewport;
         let start = self.config.start_frame(timing, viewport);
         let sequence = Some(FrameSequence(timing.sequence));
         let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
             view.frame_into_at(viewport, self.renderer.shaper(), timing, sink)
         };
         let mut changed = view.needs_visual_frame();
-        let mut sent =
-            send_frame(view, self.scene.sink(id, sequence), &mut frame)? == FrameDelivery::Sent;
+        send_frame(view, self.scene.sink(id, None), &mut frame)?;
         actions.run(id, view);
         if view.needs_visual_frame() {
             changed = true;
-            sent |=
-                send_frame(view, self.scene.sink(id, sequence), &mut frame)? == FrameDelivery::Sent;
+            send_frame(view, self.scene.sink(id, None), &mut frame)?;
         }
-        if changed
-            && let Role::Layer(layer) = &mut surface.role
-            && let Some(proposal) = layer.content_proposal()
-        {
-            let content =
-                lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
-            layer.content_measured(content);
+        // The composed view can change the size of a panel that fits its content, or the panel layout can
+        // change its margins. The geometry for that is sent with this frame, so that the compositor applies it with
+        // the buffer of this frame.
+        if changed {
+            self.panels.measure(id, view, self.renderer.shaper())?;
         }
+        surface.send_keyboard(id, self.panels.update(id))?;
         if let Some(bridge) = &mut surface.accessibility {
             bridge.publish(view.accessibility(), false);
         }
+        let mut clip = None;
+        let shape_changes = surface.shape.update(size, density, |outline| {
+            let geometry = ShapeGeometry::new(outline, size, density)?;
+            clip = Some(geometry.clip);
+            Ok::<_, Error>(geometry.input_cells)
+        })?;
+        if let Some(path) = clip {
+            let outline = surface.shape.clips_paint().then_some(path);
+            (self.renderer.set_outline(id, outline)).map_err(Error::Render)?;
+        }
+        let sink = self.scene.sink(id, sequence);
+        let ended = send_surface_state(sink, &self.panels, id, shape_changes)?;
         surface.next_draw = NextDraw::Composed(start);
-        if !sent {
+        if !ended {
             self.schedule(SchedulerInput::Built {
                 surface: id,
                 sequence,
@@ -246,15 +258,14 @@ impl Platform {
             NextDraw::Composed(composed) => composed,
             NextDraw::SceneOnly => self.config.start_frame(timing, viewport),
         };
-        self.prepare_surface_for_draw(id, start.viewport)?;
-        let scene = self.scene.snapshot(id);
-        let drawn = self.draw_surface(id, start, &scene)?;
+        let built = self.scene.built(id);
+        let drawn = self.draw_surface(id, start, &built)?;
         let outcome = drawn.outcome;
         let cost = rendering.elapsed();
         self.report_frame(id, drawn, start)?;
         let published = SchedulerInput::Published {
             surface: id,
-            next_change: scene.next_change(timing.presentation),
+            next_change: built.snapshot.next_change(timing.presentation),
         };
         let rendered = SchedulerInput::Rendered {
             surface: id,
@@ -265,62 +276,27 @@ impl Platform {
         Ok([published, rendered])
     }
 
-    /// Updates the role, the shape and the blur region of surface `id` for a frame drawn in `viewport`.
-    fn prepare_surface_for_draw(&mut self, id: SurfaceId, viewport: Viewport) -> Result<(), Error> {
-        let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
-        let Viewport { size, density } = viewport;
-        // The layer layout can change the margins of a layer. The layer-shell requests for that are queued now, so that
-        // the compositor applies them with the buffer of this frame.
-        if let Role::Layer(layer) = &mut surface.role {
-            layer.update();
-        }
-        let shape_changed = match &mut surface.shape {
-            Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
-            None => ShapeUpdate::Unchanged,
-        } == ShapeUpdate::Changed;
-        if shape_changed {
-            let outline = surface.shape.as_ref().and_then(SurfaceShape::path).cloned();
-            (self.renderer.set_outline(id, outline)).map_err(Error::Render)?;
-        }
-        if let Some(background) = &surface.background
-            && (shape_changed || surface.blur_size != Some(size))
-        {
-            let region = if let Some(shape) = &surface.shape {
-                shape.region(&self.compositor)?
-            } else {
-                let region =
-                    sctk::compositor::Region::new(&self.compositor).map_err(Error::CreateRegion)?;
-                let (width, height) =
-                    crate::logical::protocol_size(size).ok_or(Error::SurfaceSize(size))?;
-                region.add(0, 0, width, height);
-                region
-            };
-            background.set_blur_region(Some(region.wl_region()));
-            surface.blur_size = Some(size);
-        }
-        Ok(())
-    }
-
-    /// Draws `scene` as the frame of surface `id` at the time and in the viewport of `start`.
+    /// Draws the scene of `built` as the frame of surface `id` at the time and in the viewport of `start`. The present
+    /// of the frame applies the surface state of `built`.
     fn draw_surface(
         &mut self,
         id: SurfaceId,
         start: FrameStart,
-        scene: &SceneSnapshot,
+        built: &BuiltScene,
     ) -> Result<Drawn, Error> {
         let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         let frame = PresentFrame {
             time: start.timing,
             viewport: start.viewport,
+            state: &built.state,
         };
-        let drawn = (self.renderer.draw(id, frame, scene)).map_err(Error::Draw)?;
-        if let Role::Layer(layer) = &mut surface.role {
-            let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
-            let content = layer::Content {
+        let drawn = (self.renderer.draw(id, frame, &built.snapshot)).map_err(Error::Draw)?;
+        if drawn.outcome == FrameOutcome::Shown {
+            let content = PanelContent {
                 size: start.viewport.size,
-                input,
+                input: surface.shape.accepts_input(),
             };
-            layer.presented(drawn.outcome, content);
+            self.panels.shown(id, content);
         }
         Ok(drawn)
     }

@@ -3,16 +3,17 @@ use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameTime};
-use lavashell_core::geometry::{Size, Viewport};
+use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
     ActionQueue, DragRegion, FrameKind, FrameScheduler, InputFilter, InputRouter, OutputRecords,
-    RunEnd, ScenePipeline, SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
+    PanelRecords, PanelsPerOutput, RunEnd, ScenePipeline, SceneSink, SchedulerInput,
+    SchedulerOutput, SurfaceRecords, SurfaceShape, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -37,7 +38,7 @@ use sctk::seat::pointer::ThemedPointer;
 use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 mod accessibility;
@@ -78,7 +79,7 @@ enum Request {
 
 pub struct App {
     requests: Vec<Request>,
-    output_layers: Option<output_layers::Configuration>,
+    output_layers: Option<PanelsPerOutput<LayerSurface>>,
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
@@ -118,6 +119,16 @@ enum Role {
     Lock(session_lock::LockSurface),
 }
 
+impl Role {
+    fn destroy(&self) {
+        match self {
+            Self::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
+            Self::Lock(surface) if surface.is_alive() => surface.destroy(),
+            _ => {}
+        }
+    }
+}
+
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
     next_draw: render::NextDraw,
@@ -128,35 +139,24 @@ struct Surface {
     fractional: Option<WpFractionalScaleV1>,
     output: Option<OutputInfo>,
     background: Option<ExtBackgroundEffectSurfaceV1>,
-    blur_size: Option<Size>,
-    shape: Option<shape::SurfaceShape>,
+    shape: SurfaceShape,
     drag_region: Option<DragRegion>,
 }
 
 impl Surface {
     fn needs_visual_frame(&self, view: &View) -> bool {
-        view.needs_visual_frame()
-            || self
-                .shape
-                .as_ref()
-                .is_some_and(shape::SurfaceShape::needs_frame)
+        view.needs_visual_frame() || self.shape.needs_frame()
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
         self.accessibility = None;
-        if let Some(background) = self.background.take() {
-            background.destroy();
-        }
-        if let Some(fractional) = self.fractional.take() {
-            fractional.destroy();
-        }
-        match &self.role {
-            Role::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
-            Role::Lock(surface) if surface.is_alive() => surface.destroy(),
-            _ => {}
-        }
+        destroy_objects(
+            self.fractional.take(),
+            self.background.take(),
+            Some(&self.role),
+        );
     }
 }
 
@@ -199,6 +199,7 @@ pub(super) struct Platform {
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
+    panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     scene: ScenePipeline,
@@ -207,6 +208,8 @@ pub(super) struct Platform {
     scheduler: FrameScheduler,
     /// The newest frame started by the scheduler for each surface, until a render composes or draws it.
     started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
+    /// The surfaces whose newest built state the next render commits without a frame.
+    state_commits: BTreeSet<SurfaceId>,
     surfaces: BTreeMap<SurfaceId, Surface>,
     renderer: RendererState<control::Control>,
     connection: Connection,
@@ -288,8 +291,10 @@ impl Platform {
                 SurfaceRequest::Destroy(id) => {
                     self.schedule(SchedulerInput::Closed(id));
                     let _undrawn_frame = self.started_frames.remove(&id);
+                    let _uncommitted_state = self.state_commits.remove(&id);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
+                    self.panels.forget(id);
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     if self.scene.retire(id).is_err() {
@@ -303,14 +308,6 @@ impl Platform {
     }
 }
 
-/// The outcome of sending a frame from a view to the scene pipeline.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FrameDelivery {
-    Sent,
-    /// The frame failed, and the view sends the whole scene with the next frame.
-    Failed,
-}
-
 /// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
 /// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
 /// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
@@ -318,17 +315,17 @@ fn send_frame(
     view: &mut View,
     mut sink: SceneSink<'_>,
     frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
-) -> Result<FrameDelivery, crate::Error> {
+) -> Result<(), crate::Error> {
     let shows_scene = sink.any_frame_ended();
     match frame(view, &mut sink) {
         Ok(failures) => {
             crate::failures::log_failures(failures);
-            Ok(FrameDelivery::Sent)
+            Ok(())
         }
         Err(FrameError::Sink(Closed)) => Err(crate::Error::SceneStopped),
         Err(error) if shows_scene => {
             warn_whole_scene_next(&error);
-            Ok(FrameDelivery::Failed)
+            Ok(())
         }
         Err(error) => Err(crate::Error::ShowScene(error)),
     }
@@ -348,6 +345,38 @@ fn log_or_record_stop(error: crate::Error, scene_stopped: &mut bool) {
     match error {
         crate::Error::SceneStopped => *scene_stopped = true,
         error => log::error!("{error}"),
+    }
+}
+
+/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends the open frame as
+/// [`SceneSink::end_state_frame`] does. Returns whether the frame ended.
+fn send_surface_state(
+    mut sink: SceneSink<'_>,
+    panels: &PanelRecords,
+    id: SurfaceId,
+    changes: impl IntoIterator<Item = SurfaceChange>,
+) -> Result<bool, crate::Error> {
+    let stopped = |Closed| crate::Error::SceneStopped;
+    for change in changes.into_iter().chain(panels.geometry_change(id)) {
+        sink.set_state(change).map_err(stopped)?;
+    }
+    sink.end_state_frame().map_err(stopped)
+}
+
+/// Destroys the protocol objects of a native surface apart from its `wl_surface` and the objects of its control.
+fn destroy_objects(
+    fractional: Option<WpFractionalScaleV1>,
+    background: Option<ExtBackgroundEffectSurfaceV1>,
+    role: Option<&Role>,
+) {
+    if let Some(background) = background {
+        background.destroy();
+    }
+    if let Some(fractional) = fractional {
+        fractional.destroy();
+    }
+    if let Some(role) = role {
+        role.destroy();
     }
 }
 

@@ -8,7 +8,7 @@ const SURFACE: SurfaceId = SurfaceId(0);
 
 fn remove(node: u64) -> ChoreographerInput {
     let id = SceneNodeId(node);
-    ChoreographerInput::Change(SURFACE, Box::new(SceneItem(Change::Remove { id })))
+    ChoreographerInput::Change(SURFACE, Box::new(SceneItem::Change(Change::Remove { id })))
 }
 
 fn end(sequence: u64) -> ChoreographerInput {

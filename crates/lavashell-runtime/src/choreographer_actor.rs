@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::FrameSequence;
 use crate::builder_actor::BuilderInput;
-use crate::scene_item::{SceneFrame, SceneItem};
+use crate::scene_item::{SceneFrame, SceneItem, SceneKey};
 use lavashell_actor::{Actor, Choreographer, Closed, Effect, Flow, Intake, Merge, Sender};
-use lavashell_core::scene::tree::ChangeKey;
 use lavashell_core::surface::SurfaceId;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -22,9 +21,9 @@ pub(crate) enum ChoreographerInput {
 }
 
 impl Merge for ChoreographerInput {
-    type Key = (SurfaceId, ChangeKey);
+    type Key = (SurfaceId, SceneKey);
 
-    fn effect(&self) -> Effect<(SurfaceId, ChangeKey)> {
+    fn effect(&self) -> Effect<(SurfaceId, SceneKey)> {
         match self {
             Self::Change(surface, item) => item.effect().map(|key| (*surface, key)),
             Self::End(..) | Self::Restart(_) | Self::Retire(_) | Self::Ask(_) | Self::Stop => {
