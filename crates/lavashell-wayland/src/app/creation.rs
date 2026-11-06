@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::Control;
 use super::owned_wl_surface::OwnedWlSurface;
+use super::render::NextDraw;
 use super::{Platform, Role, Surface, detach, shape};
 use crate::Error;
-use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
@@ -80,7 +80,7 @@ impl Platform {
         );
         let surface = Surface {
             accessibility: Some(accessibility),
-            builder: SceneBuilder::default(),
+            next_draw: NextDraw::SceneOnly,
             role,
             wl,
             _window: window,

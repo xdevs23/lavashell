@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::tree::{ApplyError, Change, SceneSnapshot, SceneTree};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 
 /// Receives the changes sent by a view for each frame composed by the view, in order. Each frame ends with `end_frame`.
 /// After any error, the view restarts the sink. After `restart`, the next changes build the whole scene from an empty
@@ -77,10 +76,10 @@ impl SceneBuilder {
         self.published.is_empty()
     }
 
-    /// The earliest time, at or after `now`, at which an animated group of the snapshot changes.
+    /// The number of nodes in the scene, with the changes received since the last frame ended.
     #[must_use]
-    pub fn next_change(&self, now: Duration) -> Option<Duration> {
-        self.published.next_change(now)
+    pub fn size(&self) -> usize {
+        self.tree.len()
     }
 }
 

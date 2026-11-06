@@ -1,40 +1,99 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{Platform, Role, layer, open_surface};
+use super::{AppConfig, FrameDelivery, Platform, Role, layer, open_surface, send_frame};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
+use lavashell_core::scene::tree::SceneSnapshot;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
-use lavashell_runtime::{ActionBatch, FrameKind, SceneSink, SchedulerInput, ViewState};
+use lavashell_runtime::{
+    ActionBatch, FrameKind, FrameSequence, SceneSink, SchedulerInput, ViewState,
+};
 use smithay_client_toolkit as sctk;
+use std::mem;
 use std::time::{Duration, Instant};
 
+/// When a frame started on the wall clock and on the CPU clock of the thread, with the time and the viewport of the
+/// frame.
 #[derive(Clone, Copy)]
-struct FrameStart {
+pub(super) struct FrameStart {
     wall: Instant,
     cpu: Option<Duration>,
     timing: FrameTime,
     viewport: Viewport,
 }
 
+/// What the next render of a surface draws.
+#[derive(Clone, Copy)]
+pub(super) enum NextDraw {
+    /// The frame that the view composed. It draws in the viewport of the compose, and observers measure it from the
+    /// start of the compose.
+    Composed(FrameStart),
+    /// The newest scene in the current viewport, without a compose, because the scene moved or was built late.
+    SceneOnly,
+}
+
+impl FrameStart {
+    fn new(timing: FrameTime, viewport: Viewport, cpu: Option<Duration>) -> Self {
+        Self {
+            wall: Instant::now(),
+            cpu,
+            timing,
+            viewport,
+        }
+    }
+}
+
+impl AppConfig {
+    /// Starts the frame for `timing` in `viewport`. Reads the CPU clock of the thread only while an observer watches
+    /// the frames.
+    fn start_frame(&self, timing: FrameTime, viewport: Viewport) -> FrameStart {
+        let cpu = self.observer.as_ref().and_then(|_| thread_cpu_time());
+        FrameStart::new(timing, viewport, cpu)
+    }
+}
+
 impl Platform {
-    /// Draws the frame started by the frame scheduler for each surface, in composition order. A surface reports what
-    /// the view needs right before the surface draws, so the scheduler samples the frame at that time. After the
-    /// draws, every surface reports again with the deadline after composing, and each drawn surface reports the
-    /// rendered frame.
+    /// Runs the frame started by the frame scheduler for each surface, in composition order. Returns an error after
+    /// the scene pipeline has stopped. When an actor failed, the error is the failure that stopped the pipeline.
     pub(super) fn render(&mut self) -> Result<(), Error> {
+        match self.run_started_frames() {
+            Err(Error::SceneStopped) => Err(self.stopped_scene_error()),
+            ran => ran,
+        }
+    }
+
+    /// Joins the threads of the stopped scene pipeline, and returns the failure of the actor that stopped it, or
+    /// `SceneStopped` when neither actor failed.
+    fn stopped_scene_error(&mut self) -> Error {
+        match self.scene.stop() {
+            Ok(()) => Error::SceneStopped,
+            Err(error) => Error::Runtime(error),
+        }
+    }
+
+    /// Runs the frame started by the frame scheduler for each surface, in composition order. A compose frame sends the
+    /// frames of the view to the scene pipeline, and a render frame draws the newest scene of the surface. Before the
+    /// frame of a surface runs, the surface reports what the view needs. The scheduler samples the frame at that time.
+    /// After the frames, every surface reports again with the deadline after composing, and each drawn surface reports
+    /// the rendered frame.
+    fn run_started_frames(&mut self) -> Result<(), Error> {
         // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
         // retires.
         self.cancel_closed_transfers();
         self.execute_surface_requests();
+        if self.scene_stopped {
+            return Err(Error::SceneStopped);
+        }
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.action_queue.take_batch();
         let order = self.composition_order();
         self.begin_frame()?;
-        let mut drawn = Vec::new();
+        let mut composed = false;
+        let mut reports = Vec::new();
         for &id in &order {
             if !self.surface_records.is_open(id) {
                 let _closed_frame = self.started_frames.remove(&id);
@@ -44,14 +103,16 @@ impl Platform {
             let Some((kind, timing)) = self.started_frames.remove(&id) else {
                 continue;
             };
-            if drawn.is_empty() {
-                self.notify_frame(timing);
+            match kind {
+                FrameKind::Compose => {
+                    if !composed {
+                        self.notify_frame(timing);
+                        composed = true;
+                    }
+                    self.compose_surface(id, timing, &mut actions)?;
+                }
+                FrameKind::Render => reports.extend(self.render_surface(id, timing)?),
             }
-            let start = self.prepare_surface(id, kind, timing, &mut actions)?;
-            let frame = self.draw_surface(id, start)?;
-            let outcome = frame.outcome;
-            let cost = self.report_frame(id, frame, start)?;
-            drawn.push((id, timing, outcome, cost));
         }
         self.config.action_queue.requeue(actions);
         // View actions queued during composition run in another frame, started at once by a surface that is ready.
@@ -59,19 +120,8 @@ impl Platform {
             let queued = self.config.action_queue.has_pending_for(id);
             self.want_frame(id, queued);
         }
-        for (id, timing, outcome, cost) in drawn {
-            let next_change = (self.surfaces.get(&id))
-                .and_then(|surface| surface.builder.next_change(timing.presentation));
-            self.schedule(SchedulerInput::Published {
-                surface: id,
-                next_change,
-            });
-            self.schedule(SchedulerInput::Rendered {
-                surface: id,
-                frame: timing,
-                outcome,
-                cost,
-            });
+        for report in reports {
+            self.schedule(report);
         }
         self.connection.flush().map_err(Error::Flush)?;
         Ok(())
@@ -113,7 +163,7 @@ impl Platform {
     }
 
     /// Calls the tick callback of the app, and the frame callback of the app with `timing`, the timing of the first
-    /// frame of a render.
+    /// frame composed in a render.
     fn notify_frame(&mut self, timing: FrameTime) {
         let now = self.start.elapsed();
         if let Some(tick) = self.config.tick.as_mut() {
@@ -136,54 +186,93 @@ impl Platform {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `id` for `timing` with its queued actions, and updates the role, the shape and
-    /// the blur region of the surface for the frame.
-    fn prepare_surface(
+    /// Composes the view of surface `id` for `timing` with its queued actions, and sends the frames of the view to the
+    /// scene pipeline. The frame renders once the scene builder built it. A frame that reached the pipeline is built
+    /// also when a later frame of the compose fails. When no frame reached the pipeline, the frame renders at once.
+    fn compose_surface(
         &mut self,
         id: SurfaceId,
-        kind: FrameKind,
         timing: FrameTime,
         actions: &mut ActionBatch,
-    ) -> Result<FrameStart, Error> {
+    ) -> Result<(), Error> {
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
-        let Viewport { size, density } = viewport;
-        let start = FrameStart {
-            wall: Instant::now(),
-            cpu: self
-                .config
-                .observer
-                .as_ref()
-                .and_then(|_| thread_cpu_time()),
-            timing,
-            viewport,
+        let start = self.config.start_frame(timing, viewport);
+        let sequence = Some(FrameSequence(timing.sequence));
+        let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
+            view.frame_into_at(viewport, self.renderer.shaper(), timing, sink)
         };
-        let mut changed = false;
-        if kind == FrameKind::Compose {
-            let mut frame = |view: &mut View, sink: &mut SceneSink| {
-                view.frame_into_at(viewport, self.renderer.shaper(), start.timing, sink)
-            };
-            changed = view.needs_visual_frame();
-            surface.show(id, view, &mut self.choreographers, &mut frame)?;
-            actions.run(id, view);
-            if view.needs_visual_frame() {
-                changed = true;
-                surface.show(id, view, &mut self.choreographers, &mut frame)?;
-            }
+        let mut changed = view.needs_visual_frame();
+        let mut sent =
+            send_frame(view, self.scene.sink(id, sequence), &mut frame)? == FrameDelivery::Sent;
+        actions.run(id, view);
+        if view.needs_visual_frame() {
+            changed = true;
+            sent |=
+                send_frame(view, self.scene.sink(id, sequence), &mut frame)? == FrameDelivery::Sent;
         }
-        // The composed view can change the size of a layer that fits its content, or the layer layout can
-        // change its margins. The layer-shell requests for that are queued now, so that the compositor
-        // applies them with the buffer of this frame.
-        if let Role::Layer(layer) = &mut surface.role {
-            if changed && let Some(proposal) = layer.content_proposal() {
-                let content =
-                    lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
-                layer.content_measured(content);
-            }
-            layer.update();
+        if changed
+            && let Role::Layer(layer) = &mut surface.role
+            && let Some(proposal) = layer.content_proposal()
+        {
+            let content =
+                lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
+            layer.content_measured(content);
         }
         if let Some(bridge) = &mut surface.accessibility {
             bridge.publish(view.accessibility(), false);
+        }
+        surface.next_draw = NextDraw::Composed(start);
+        if !sent {
+            self.schedule(SchedulerInput::Built {
+                surface: id,
+                sequence,
+            });
+        }
+        Ok(())
+    }
+
+    /// Draws the newest scene of surface `id` as the frame for `timing`, and returns the reports of the frame for the
+    /// frame scheduler. The scheduler receives the cost of the render alone, without the wait for the scene builder.
+    fn render_surface(
+        &mut self,
+        id: SurfaceId,
+        timing: FrameTime,
+    ) -> Result<[SchedulerInput; 2], Error> {
+        let rendering = Instant::now();
+        let (surface, _, viewport) =
+            open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
+        let start = match mem::replace(&mut surface.next_draw, NextDraw::SceneOnly) {
+            NextDraw::Composed(composed) => composed,
+            NextDraw::SceneOnly => self.config.start_frame(timing, viewport),
+        };
+        self.prepare_surface_for_draw(id, start.viewport)?;
+        let scene = self.scene.snapshot(id);
+        let drawn = self.draw_surface(id, start, &scene)?;
+        let outcome = drawn.outcome;
+        let cost = rendering.elapsed();
+        self.report_frame(id, drawn, start)?;
+        let published = SchedulerInput::Published {
+            surface: id,
+            next_change: scene.next_change(timing.presentation),
+        };
+        let rendered = SchedulerInput::Rendered {
+            surface: id,
+            frame: timing,
+            outcome,
+            cost,
+        };
+        Ok([published, rendered])
+    }
+
+    /// Updates the role, the shape and the blur region of surface `id` for a frame drawn in `viewport`.
+    fn prepare_surface_for_draw(&mut self, id: SurfaceId, viewport: Viewport) -> Result<(), Error> {
+        let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
+        let Viewport { size, density } = viewport;
+        // The layer layout can change the margins of a layer. The layer-shell requests for that are queued now, so that
+        // the compositor applies them with the buffer of this frame.
+        if let Role::Layer(layer) = &mut surface.role {
+            layer.update();
         }
         let shape_changed = match &mut surface.shape {
             Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
@@ -209,26 +298,26 @@ impl Platform {
             background.set_blur_region(Some(region.wl_region()));
             surface.blur_size = Some(size);
         }
-        Ok(start)
+        Ok(())
     }
 
-    /// Draws the frame of surface `id` at the time and in the viewport of `start`, from the snapshot of its scene
-    /// builder.
-    fn draw_surface(&mut self, id: SurfaceId, start: FrameStart) -> Result<Drawn, Error> {
-        let FrameStart {
-            timing, viewport, ..
-        } = start;
+    /// Draws `scene` as the frame of surface `id` at the time and in the viewport of `start`.
+    fn draw_surface(
+        &mut self,
+        id: SurfaceId,
+        start: FrameStart,
+        scene: &SceneSnapshot,
+    ) -> Result<Drawn, Error> {
         let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         let frame = PresentFrame {
-            time: timing,
-            viewport,
+            time: start.timing,
+            viewport: start.viewport,
         };
-        let snapshot = surface.builder.snapshot();
-        let drawn = (self.renderer.draw(id, frame, &snapshot)).map_err(Error::Draw)?;
+        let drawn = (self.renderer.draw(id, frame, scene)).map_err(Error::Draw)?;
         if let Role::Layer(layer) = &mut surface.role {
             let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
             let content = layer::Content {
-                size: viewport.size,
+                size: start.viewport.size,
                 input,
             };
             layer.presented(drawn.outcome, content);
@@ -236,14 +325,13 @@ impl Platform {
         Ok(drawn)
     }
 
-    /// Reports the frame of surface `id` to the observers of the app, and returns the render cost of the frame. A
-    /// frame that was not shown invalidates the view.
+    /// Reports the frame of surface `id` to the observers of the app. A frame that was not shown invalidates the view.
     fn report_frame(
         &mut self,
         id: SurfaceId,
         drawn: Drawn,
         start: FrameStart,
-    ) -> Result<Duration, Error> {
+    ) -> Result<(), Error> {
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         if let Some(observer) = &mut self.config.view_observer {
@@ -257,10 +345,9 @@ impl Platform {
                 observer(id, info);
             }
         }
-        let render_cost = start.wall.elapsed();
         if drawn.outcome != FrameOutcome::Shown {
             view.invalidate();
-            return Ok(render_cost);
+            return Ok(());
         }
         view.record_presentation(start.timing.presentation);
         if let Some(observer) = &mut self.config.observer
@@ -276,7 +363,7 @@ impl Platform {
                 metrics: None,
                 flags: None,
                 submission: Some(Submission {
-                    render_cost,
+                    render_cost: start.wall.elapsed(),
                     cpu_time: now.saturating_sub(started),
                     view: view.stats(),
                     render: drawn.stats,
@@ -285,7 +372,7 @@ impl Platform {
                 }),
             });
         }
-        Ok(render_cost)
+        Ok(())
     }
 }
 
