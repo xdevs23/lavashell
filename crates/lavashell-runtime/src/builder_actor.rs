@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::FrameSequence;
 use crate::choreographer_actor::ChoreographerInput;
 use crate::scene_item::{SceneFrame, SceneItem};
 use crate::scene_pipeline::{BuilderObserver, BuilderReport};
@@ -39,6 +40,7 @@ pub(crate) struct BuilderActor {
 #[derive(Default)]
 struct Scene {
     builder: SceneBuilder,
+    sequence: Option<FrameSequence>,
     state: SurfaceState,
     stale: bool,
 }
@@ -157,6 +159,9 @@ impl Scene {
         }
         let built = built.and_then(|()| self.builder.end_frame());
         self.stale = built.is_err();
+        if built.is_ok() {
+            self.sequence = frame.end;
+        }
         Applied {
             scene: built.map(|()| Some(self.builder.size())),
             state_changed,
@@ -165,6 +170,7 @@ impl Scene {
 
     fn built(&self) -> BuiltSurface {
         BuiltSurface {
+            sequence: self.sequence,
             scene: self.builder.snapshot(),
             state: self.state.clone(),
         }

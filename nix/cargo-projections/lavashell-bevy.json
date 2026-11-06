@@ -3672,7 +3672,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "bf0a18eaf03eb56b11bed884a61c90ad54bdfbfa5a8c05713e0673ff46f9db92"
+        "seedHash": "0077ec121abd81a27915629787efac25c1830498793ce72b5884c1eb2dc774fd"
       }
     }
   },
@@ -7246,6 +7246,25 @@
         "version": "0.21.1"
       },
       {
+        "checksum": "ad442f58ee04714aaa0ba0a2768c1ea1935b29507bb22ddece8cbbc76db02932",
+        "dependencies": [
+          "uuid"
+        ],
+        "name": "accesskit",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.25.1"
+      },
+      {
+        "checksum": "8a45e2bb300bea6d5f33a82c3e051c3ddc6f41c209750f68a0acbe991a284344",
+        "dependencies": [
+          "accesskit 0.25.1",
+          "hashbrown 0.17.1"
+        ],
+        "name": "accesskit_consumer",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.39.1"
+      },
+      {
         "checksum": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
         "dependencies": [
           "memchr"
@@ -7441,7 +7460,7 @@
       {
         "checksum": "6702a82db1b383641fc7c503451847cdafb57076c203cd3bfe549d3eeef474c3",
         "dependencies": [
-          "accesskit",
+          "accesskit 0.21.1",
           "bevy_app",
           "bevy_derive",
           "bevy_ecs",
@@ -9209,10 +9228,20 @@
       },
       {
         "dependencies": [
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-actor",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "bevy",
+          "lavashell-actor",
           "lavashell-core",
           "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "thiserror 2.0.21",
@@ -9243,6 +9272,17 @@
       },
       {
         "dependencies": [
+          "accesskit 0.25.1",
+          "icu_locale_core",
+          "lavashell-actor",
+          "lavashell-core",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-platform",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
           "ash",
           "i_overlay",
           "inventory",
@@ -9257,6 +9297,24 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-renderer",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "accesskit 0.25.1",
+          "accesskit_consumer",
+          "icu_locale_core",
+          "lavashell-actor",
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-renderer",
+          "lavashell-test-fixtures",
+          "log",
+          "num-traits",
+          "thiserror 2.0.21",
+          "unicode-segmentation"
+        ],
+        "name": "lavashell-runtime",
         "version": "0.1.0"
       },
       {

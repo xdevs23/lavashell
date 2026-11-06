@@ -15,14 +15,18 @@ const SURFACE: SurfaceId = SurfaceId(0);
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("the scene pipeline failed")]
+    #[error("the scene pipeline failed to start")]
     Pipeline(#[from] Error),
+    #[error("the scene pipeline stopped with a failure")]
+    Stopped(#[from] Arc<Error>),
     #[error("a view failed to send a frame")]
     Frame(#[from] FrameError<Closed>),
     #[error("the choreographer is gone")]
     Closed(#[from] Closed),
     #[error("the scene builder sent no report")]
     Report(#[from] mpsc::RecvError),
+    #[error("the scene builder sent another report: {0:?}")]
+    UnexpectedReport(BuilderReport),
 }
 
 type TestResult = Result<(), TestError>;
@@ -93,7 +97,9 @@ fn a_frame_shows_in_the_scene_of_its_surface_once_the_builder_reports_it_built()
             sequence: Some(FrameSequence(7)),
         }
     ));
-    assert_ne!(leaves(&pipeline.built(SURFACE).scene), 0);
+    let built = pipeline.built(SURFACE);
+    assert_eq!(built.sequence, Some(FrameSequence(7)));
+    assert_ne!(leaves(&built.scene), 0);
     pipeline.stop()?;
     Ok(())
 }
@@ -107,20 +113,19 @@ fn a_stale_scene_skips_each_frame_until_the_view_sends_the_whole_scene_to_the_re
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     let shown = pipeline.built(SURFACE);
     send_bad_frame(&mut pipeline)?;
-    let restart = reports.recv()?;
-    assert!(matches!(
-        restart,
+    let error = match reports.recv()? {
         BuilderReport::Restart {
             surface: SURFACE,
-            ..
-        }
-    ));
+            error,
+        } => error,
+        other => return Err(TestError::UnexpectedReport(other)),
+    };
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     pipeline.sink(SURFACE, None).end_frame()?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     assert!(Arc::ptr_eq(&pipeline.built(SURFACE), &shown));
-    pipeline.restart(SURFACE);
-    view.invalidate();
+    pipeline.restart_view(SURFACE, &mut view, &error);
+    assert!(view.needs_frame());
     frame(&mut view, &mut pipeline, None)?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     let resent = pipeline.built(SURFACE);
@@ -131,14 +136,21 @@ fn a_stale_scene_skips_each_frame_until_the_view_sends_the_whole_scene_to_the_re
 }
 
 #[test]
-fn a_first_frame_that_does_not_fit_stops_the_scene_builder_with_the_failure() -> TestResult {
+fn every_stop_returns_the_failure_of_a_scene_builder_stopped_by_a_first_frame_that_does_not_fit()
+-> TestResult {
     let (mut pipeline, _reports) = start()?;
     send_bad_frame(&mut pipeline)?;
-    let stopped = pipeline.stop();
+    let stopped = pipeline.stop().err();
     assert!(matches!(
-        stopped,
-        Err(Error::RunBuilder(JoinError::Failed(_)))
+        stopped.as_deref(),
+        Some(Error::RunBuilder(JoinError::Failed(_)))
     ));
+    let stopped_again = pipeline.stop().err();
+    assert!(
+        stopped
+            .zip(stopped_again)
+            .is_some_and(|(first, again)| Arc::ptr_eq(&first, &again))
+    );
     let change = Change::Remove { id: SceneNodeId(1) };
     assert_eq!(pipeline.sink(SURFACE, None).change(change), Err(Closed));
     Ok(())

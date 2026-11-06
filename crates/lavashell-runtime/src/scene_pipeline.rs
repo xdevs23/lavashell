@@ -5,10 +5,13 @@ use crate::scene_item::SceneItem;
 use crate::surface_slots::{BuiltSurface, SurfaceSlots};
 use crate::{Error, FrameSequence};
 use lavashell_actor::{Closed, Handle, Sender, mailbox, spawn};
+use lavashell_core::error::message_chain;
 use lavashell_core::scene::tree::{ApplyError, Change};
 use lavashell_core::scene::{ChangeSink, SinkId};
 use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
+use lavashell_core::view::View;
 use std::collections::BTreeMap;
+use std::mem;
 use std::sync::Arc;
 
 /// What the scene builder reports about the scene for a surface.
@@ -23,8 +26,8 @@ pub enum BuilderReport {
     /// A frame sent outside a compose changed the surface state and left the scene as it was. The host commits the
     /// built state without a frame.
     StateChanged { surface: SurfaceId },
-    /// A frame did not fit the scene. The scene shows the last frame that it built, until the view sends the whole
-    /// scene to a restarted sink.
+    /// A frame did not fit the scene. The scene shows the last frame that it built, until the host passes the report
+    /// to `ScenePipeline::restart_view`.
     Restart {
         surface: SurfaceId,
         error: ApplyError,
@@ -41,7 +44,13 @@ pub struct ScenePipeline {
     choreographer: Sender<ChoreographerInput>,
     sinks: BTreeMap<SurfaceId, SinkState>,
     slots: Arc<SurfaceSlots>,
-    actors: Option<(Handle<ChoreographerActor>, Handle<BuilderActor>)>,
+    run: Run,
+}
+
+/// The actors while they run, and how they ended once they stopped.
+enum Run {
+    Running(Handle<ChoreographerActor>, Handle<BuilderActor>),
+    Ended(Result<(), Arc<Error>>),
 }
 
 /// The change sink that sends one frame of a surface to the choreographer. A frame contains the changes sent by the
@@ -107,7 +116,7 @@ impl ScenePipeline {
             choreographer,
             sinks: BTreeMap::new(),
             slots,
-            actors: Some((choreographer_actor, builder_actor)),
+            run: Run::Running(choreographer_actor, builder_actor),
         })
     }
 
@@ -121,11 +130,18 @@ impl ScenePipeline {
         }
     }
 
-    /// Assigns a new id to the sink for `surface`, so the view sends the whole scene with the next frame.
-    pub fn restart(&mut self, surface: SurfaceId) {
+    /// Reacts to a frame that did not fit the scene for `surface`, as reported by `BuilderReport::Restart`. Logs
+    /// `error` as a warning and assigns a new id to the sink for `surface`. `view` then sends the whole scene with
+    /// the next frame.
+    pub fn restart_view(&mut self, surface: SurfaceId, view: &mut View, error: &ApplyError) {
+        log::warn!(
+            "a frame did not fit the built scene. The next frame sends the whole scene: {}",
+            message_chain(error)
+        );
         if let Some(sink) = self.sinks.get_mut(&surface) {
             sink.id = SinkId::default();
         }
+        view.invalidate();
     }
 
     /// The newest scene and surface state that the scene builder built for `surface`.
@@ -148,15 +164,19 @@ impl ScenePipeline {
     ///
     /// # Errors
     ///
-    /// Fails with the failure of either actor.
-    pub fn stop(&mut self) -> Result<(), Error> {
-        let Some((choreographer, builder)) = self.actors.take() else {
-            return Ok(());
+    /// Fails with the failure of either actor, on this call and on every later call.
+    pub fn stop(&mut self) -> Result<(), Arc<Error>> {
+        let ended = match mem::replace(&mut self.run, Run::Ended(Ok(()))) {
+            Run::Running(choreographer, builder) => {
+                let _choreographer_gone = self.choreographer.push(ChoreographerInput::Stop);
+                let choreographer = choreographer.join().map_err(Error::RunChoreographer);
+                let builder = builder.join().map_err(Error::RunBuilder);
+                builder.and(choreographer).map_err(Arc::new)
+            }
+            Run::Ended(ended) => ended,
         };
-        let _choreographer_gone = self.choreographer.push(ChoreographerInput::Stop);
-        let choreographer = choreographer.join().map_err(Error::RunChoreographer);
-        let builder = builder.join().map_err(Error::RunBuilder);
-        builder.and(choreographer)
+        self.run = Run::Ended(ended.clone());
+        ended
     }
 }
 

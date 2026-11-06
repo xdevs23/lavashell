@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::FrameSequence;
 use lavashell_actor::{Latest, lock_ignoring_poison};
 use lavashell_core::scene::tree::{SceneSnapshot, SceneTree};
 use lavashell_core::surface::{SurfaceId, SurfaceState};
@@ -7,6 +8,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 /// The newest scene built for a surface, with the surface state built from the same frames.
 pub struct BuiltSurface {
+    /// The sequence of the frame that the scene built last. A frame sent outside a compose has no sequence.
+    pub sequence: Option<FrameSequence>,
     pub scene: SceneSnapshot,
     pub state: SurfaceState,
 }
@@ -23,6 +26,7 @@ impl Default for SurfaceSlots {
         Self {
             slots: Mutex::default(),
             empty: Arc::new(BuiltSurface {
+                sequence: None,
                 scene: SceneTree::default().snapshot(),
                 state: SurfaceState::default(),
             }),

@@ -6,7 +6,8 @@ use crate::texture_types::{vulkan_format, vulkan_usage};
 use crate::timings::{OverlayImageTrace, OverlayTiming, TimingRecords};
 use crate::vulkan_host::{image_of, shared_device, signal_on_queue};
 use crate::{
-    Error, ExtractedOverlay, OverlayCamera, OverlayFrame, extract_overlay, prepare_overlay_targets,
+    Error, ExtractedOverlay, OverlayCamera, StartOverlayScene, extract_overlay,
+    prepare_overlay_targets,
 };
 use ash::vk;
 use bevy::{
@@ -82,8 +83,10 @@ impl Command<Result<(), Error>> for InstallOverlay {
 
 impl Plugin for LavashellOverlayPlugin {
     fn build(&self, app: &mut App) {
+        let world = app.world_mut();
+        world.commands().queue(StartOverlayScene);
+        world.flush();
         let _chained_app = app
-            .init_resource::<OverlayFrame>()
             .add_plugins(ExtractComponentPlugin::<OverlayCamera>::default())
             .add_systems(PostUpdate, prepare_overlay_targets);
         let _chained_render_app = app
@@ -158,9 +161,9 @@ impl ViewNode for OverlayNode {
         (target, OverlayCamera): (&'w ViewTarget, &'w OverlayCamera),
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        let Some((frame, shown)) = world
+        let Some((frame, sent)) = world
             .get_resource::<ExtractedOverlay>()
-            .and_then(|frame| Some((frame, frame.shown?)))
+            .and_then(|frame| Some((frame, frame.sent?)))
         else {
             return Ok(());
         };
@@ -213,7 +216,11 @@ impl ViewNode for OverlayNode {
         // expects.
         let drawn = unsafe {
             gpu.draw(image, |canvas| {
-                painter.paint_scene(canvas, frame.snapshot.at(shown.presentation), shown.density);
+                painter.paint_scene(
+                    canvas,
+                    frame.built.scene.at(sent.presentation),
+                    sent.density,
+                );
             })
         };
         match drawn {
@@ -230,7 +237,7 @@ impl ViewNode for OverlayNode {
                     overlay_submission: overlay.sequence,
                 };
                 overlay.submitted(OverlayTiming {
-                    sequence: frame.sequence,
+                    sequence: sent.sequence,
                     submit: started.elapsed(),
                     host_flush,
                     image,
