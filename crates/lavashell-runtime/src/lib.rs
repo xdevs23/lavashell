@@ -7,6 +7,7 @@ mod accessibility;
 mod choreographers;
 mod clipboard;
 mod error;
+mod focus_grab;
 mod input;
 mod lifecycle;
 mod output_records;
@@ -32,6 +33,7 @@ mod window_move;
 pub use choreographers::{Choreographers, SceneSink};
 pub use clipboard::{Clipboard, ClipboardTransfers, TextClipboard};
 pub use error::{AccessibilityFailure, Error};
+pub use focus_grab::FocusGrabs;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
 pub use panels::{

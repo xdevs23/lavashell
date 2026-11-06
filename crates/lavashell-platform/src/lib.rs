@@ -5,6 +5,7 @@
 
 mod accessibility;
 mod clipboard;
+mod focus_grab;
 mod input;
 mod lock;
 mod output;
@@ -21,6 +22,7 @@ pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,
 };
+pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };
