@@ -3,6 +3,7 @@
 //! requests made by the runtime.
 #![forbid(unsafe_code)]
 
+mod focus_grab;
 mod input;
 mod output;
 mod panel;
@@ -12,6 +13,7 @@ mod surface;
 mod watch;
 mod window_control;
 
+pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };

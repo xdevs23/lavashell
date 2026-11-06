@@ -24,7 +24,7 @@ pub use clipboard::{
     Clipboard, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, TransferId,
 };
 pub use error::{Cancellation, ControlError, Error};
-pub use focus_grab::FocusGrab;
+pub use lavashell_core::focus_grab::FocusGrab;
 pub use lavashell_core::output::MonitorInfo;
 pub use lavashell_core::panel::{
     AxisPlacement, ExclusiveZone, Extent, LayerLayout, LayerLevel, LayerMargins,

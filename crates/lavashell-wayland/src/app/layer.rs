@@ -23,7 +23,6 @@ use zwlr_layer_surface_v1::Anchor;
 /// The layer-shell role of a surface, with the geometry sent to the compositor last.
 pub(super) struct Runtime {
     pub composition_order: i32,
-    pub focus: Option<super::focus_grab::Runtime>,
     pub proxy: ZwlrLayerSurfaceV1,
     applied: ProtocolLayout,
 }
@@ -40,10 +39,6 @@ impl Runtime {
         apply_keyboard(&proxy, keyboard);
         Self {
             composition_order: options.composition_order,
-            focus: options
-                .focus_grab
-                .clone()
-                .map(super::focus_grab::Runtime::new),
             proxy,
             applied: layout,
         }
@@ -123,6 +118,9 @@ impl Platform {
         self.create_surface(spec, |platform, wl, id| {
             let role = platform.layer_role(wl, output, options, layout, keyboard, id)?;
             platform.panels.open(id, panel);
+            if let Some(grab) = &options.focus_grab {
+                platform.open_focus_grab(id, grab.clone());
+            }
             Ok(role)
         })
     }

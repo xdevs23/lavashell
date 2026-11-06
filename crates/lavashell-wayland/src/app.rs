@@ -246,7 +246,7 @@ struct SurfaceProtocols {
 }
 
 pub(super) struct Platform {
-    focus_grabs: focus_grab::Capability,
+    focus_grabs: Option<focus_grab::Grabs>,
     output_layers: Option<output_layers::Runtime>,
     accessibility_events: sctk::reexports::calloop::channel::Sender<crate::accessibility::Event>,
     session_lock: Option<session_lock::Runtime>,
@@ -314,13 +314,14 @@ impl Platform {
 
     /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires
     /// in the runtime only after the native surface has released everything that presented to it.
-    fn execute_surface_requests(&mut self) {
+    fn execute_surface_requests(&mut self) -> Result<(), crate::Error> {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
                     self.panels.forget(id);
+                    self.forget_focus_grab(id)?;
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     self.choreographers.retire(id);
@@ -329,6 +330,7 @@ impl Platform {
                 }
             }
         }
+        Ok(())
     }
 }
 

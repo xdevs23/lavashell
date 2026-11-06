@@ -104,7 +104,7 @@ impl Platform {
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
         let mut platform = Self {
-            focus_grabs: focus_grab::Capability::bind(globals, &qh),
+            focus_grabs: focus_grab::Grabs::bind(globals, &qh),
             accessibility_events,
             output_layers,
             session_lock,

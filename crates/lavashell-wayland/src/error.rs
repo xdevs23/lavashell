@@ -106,6 +106,10 @@ pub enum Error {
     SurfaceNotOpen(SurfaceId),
     #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
     PanelWithoutLayer(SurfaceId),
+    #[error(
+        "the runtime made a focus grab request for the surface {0:?}, which has no native surface"
+    )]
+    FocusGrabWithoutSurface(SurfaceId),
     #[error("the compositor offers no clipboard")]
     ClipboardUnavailable,
     #[error("the clipboard needs the serial of an input event")]

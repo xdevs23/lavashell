@@ -335,7 +335,7 @@ impl App {
                 break;
             }
             let next = platform.render()?;
-            platform.update_focus_grabs();
+            platform.update_focus_grabs()?;
             if platform.finished() {
                 break;
             }
