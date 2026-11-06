@@ -25,6 +25,7 @@ pub(crate) use reader::{Buffer, Event as StreamEvent, MEDIA, Producer, Writing};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    time::Duration,
 };
 pub(crate) use test_error::TestError;
 
@@ -64,7 +65,7 @@ pub(crate) enum Event {
     NativeAcquired,
     Attached,
     Acquired,
-    Presented(Option<u64>),
+    Presented(Option<Duration>),
     TargetDropped,
     NativeReleased,
 }
@@ -118,7 +119,7 @@ impl NativeSurface {
             .count()
     }
 
-    pub fn presentations(&self) -> Vec<Option<u64>> {
+    pub fn presentations(&self) -> Vec<Option<Duration>> {
         self.0
             .events
             .borrow()
@@ -245,6 +246,25 @@ impl Drop for SurfaceTarget {
     }
 }
 
+/// The presentation backend used by the AOSP renderer. The simulated renderer accepts it and ignores it.
+pub(crate) struct AospPresentation;
+
+pub(crate) fn surface_target(
+    gpu: &VulkanRenderer,
+    window: &crate::NativeWindow,
+    _: SurfaceAlpha,
+) -> Result<SurfaceTarget, RendererError> {
+    gpu.gpu.reachable()?;
+    let native = window.window.clone();
+    native.state.events.borrow_mut().push(Event::Attached);
+    Ok(SurfaceTarget {
+        window: native,
+        timing: window.timing.clone(),
+        request: OutputRequest::default(),
+        output: None,
+    })
+}
+
 pub(crate) struct VulkanRenderer {
     pub device_name: String,
     gpu: Rc<Gpu>,
@@ -257,7 +277,7 @@ pub(crate) struct VulkanRenderer {
 }
 
 impl VulkanRenderer {
-    pub fn for_android() -> Result<Self, RendererError> {
+    pub fn new(_: &AospPresentation) -> Result<Self, RendererError> {
         let size = (SURFACE_SIZE.width, SURFACE_SIZE.height);
         let frame = skia::surfaces::raster(&frame_info(), None, None)
             .ok_or(RendererError::OffscreenSurface(size))?;
@@ -283,22 +303,6 @@ impl VulkanRenderer {
         Ok(ForeignImporter::new(&self.gpu))
     }
 
-    pub fn native_window_target(
-        &self,
-        window: NativeWindow,
-        _: SurfaceAlpha,
-        timing: SurfaceTiming,
-    ) -> Result<SurfaceTarget, RendererError> {
-        self.gpu.reachable()?;
-        window.state.events.borrow_mut().push(Event::Attached);
-        Ok(SurfaceTarget {
-            window,
-            timing,
-            request: OutputRequest::default(),
-            output: None,
-        })
-    }
-
     pub fn draw(
         &mut self,
         target: &mut SurfaceTarget,
@@ -312,7 +316,7 @@ impl VulkanRenderer {
         &mut self,
         target: &mut SurfaceTarget,
         size: (u32, u32),
-        time: u64,
+        time: Duration,
         draw: impl FnOnce(&skia::Canvas),
     ) -> Result<FrameOutcome, RendererError> {
         self.present(target, size, Some(time), draw)
@@ -324,13 +328,10 @@ impl VulkanRenderer {
         &mut self,
         target: &mut SurfaceTarget,
         size: (u32, u32),
-        time: Option<u64>,
+        time: Option<Duration>,
         draw: impl FnOnce(&skia::Canvas),
     ) -> Result<FrameOutcome, RendererError> {
         self.gpu.reachable()?;
-        if let Some(time) = time.filter(|&time| time == 0 || i64::try_from(time).is_err()) {
-            return Err(RendererError::PresentationTimeRange(time));
-        }
         if size.0 == 0 || size.1 == 0 {
             return Ok(FrameOutcome::Pending);
         }

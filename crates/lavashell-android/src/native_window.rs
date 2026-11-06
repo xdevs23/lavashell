@@ -6,6 +6,10 @@ use lavashell_renderer::SurfaceTiming;
 /// The producer end of a buffer queue, together with the timing history of the Surface of that queue. A `NativeWindow`
 /// does not extend the lifetime of the consumer of a `SurfaceView`. Detach the renderer before the callback of the host
 /// for the destruction of the surface returns.
+///
+/// The policy of `SurfaceTiming` applies to the Surface also after the Surface is detached and attached again. Every
+/// native window acquired from the Surface therefore shares one `SurfaceTiming`, and a Surface with an unknown history
+/// starts with `PresentationPolicy::Explicit`.
 pub struct NativeWindow {
     pub(crate) window: ndk::native_window::NativeWindow,
     pub(crate) timing: SurfaceTiming,

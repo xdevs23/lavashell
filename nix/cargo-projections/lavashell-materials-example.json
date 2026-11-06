@@ -2042,7 +2042,6 @@
           "lavashell-vulkan",
           "log",
           "lru",
-          "ndk",
           "num-traits",
           "skia-safe",
           "thiserror 2.0.21"

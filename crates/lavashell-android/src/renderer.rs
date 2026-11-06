@@ -2,10 +2,11 @@
 use crate::error::{Error, Failures};
 use crate::latched_frames::{Latch, LatchedFrames};
 use crate::native_window::NativeWindow;
-use crate::platform::{SurfaceTarget, VulkanRenderer};
+use crate::platform::{AospPresentation, SurfaceTarget, VulkanRenderer, surface_target};
 use crate::surface_stream::SurfaceStream;
 use lavashell_core::prelude::{Density, OutputInfo, OutputRequest, Presented};
 use lavashell_renderer::{Fonts, FrameOutcome, Painter, SurfaceAlpha, skia};
+use std::time::Duration;
 
 struct Attachment {
     target: SurfaceTarget,
@@ -28,7 +29,7 @@ impl AndroidRenderer {
     /// Fails when no Vulkan device suits the renderer, the device cannot import the frames of streams, or the painter
     /// cannot start.
     pub fn new(fonts: &Fonts) -> Result<Self, Error> {
-        let gpu = VulkanRenderer::for_android().map_err(Error::CreateRenderer)?;
+        let gpu = VulkanRenderer::new(&AospPresentation).map_err(Error::CreateRenderer)?;
         let painter = gpu.painter(fonts).map_err(Error::CreatePainter)?;
         Ok(Self {
             attachment: None,
@@ -82,10 +83,7 @@ impl AndroidRenderer {
     /// Fails when the device cannot present to the window. The renderer is then detached.
     pub fn attach(&mut self, window: NativeWindow, alpha: SurfaceAlpha) -> Result<(), Error> {
         self.attachment = None;
-        let target =
-            self.gpu
-                .native_window_target(window.window.clone(), alpha, window.timing.clone());
-        let target = target.map_err(Error::Attach)?;
+        let target = surface_target(&self.gpu, &window, alpha).map_err(Error::Attach)?;
         self.attachment = Some(Attachment { target, window });
         Ok(())
     }
@@ -152,10 +150,11 @@ impl AndroidRenderer {
         self.render_frame(tree, density, clear, None)
     }
 
-    /// Paints like `render` and sets `presentation_time_ns` as the timestamp of the buffer, as described at
-    /// `VulkanRenderer::draw_at`. An attached surface needs `supports_presentation_time`. A detached renderer returns
-    /// `FrameOutcome::Pending`. On a device without presentation times, the call fails before it acquires an image.
-    /// The timestamp is discarded when the frame is `Pending`.
+    /// Paints like `render` and sets `presentation_time_ns` as the timestamp of the buffer, in nanoseconds from 1 to
+    /// `i64::MAX`. For a display Surface, the time is AOSP monotonic time. For an encoder Surface, the time is on the
+    /// media timeline used by the host. An attached surface needs `supports_presentation_time`. A detached renderer
+    /// returns `FrameOutcome::Pending`. On a device without presentation times, the call fails before it acquires an
+    /// image. The timestamp is discarded when the frame is `Pending`. For later frames, see `NativeWindow`.
     ///
     /// # Errors
     /// Fails as `render` does.
@@ -166,7 +165,12 @@ impl AndroidRenderer {
         clear: skia::Color,
         presentation_time_ns: u64,
     ) -> Result<FrameOutcome, Error> {
-        self.render_frame(tree, density, clear, Some(presentation_time_ns))
+        self.render_frame(
+            tree,
+            density,
+            clear,
+            Some(Duration::from_nanos(presentation_time_ns)),
+        )
     }
 
     fn render_frame(
@@ -174,7 +178,7 @@ impl AndroidRenderer {
         tree: Presented<'_>,
         density: Density,
         clear: skia::Color,
-        presentation_time_ns: Option<u64>,
+        presentation_time: Option<Duration>,
     ) -> Result<FrameOutcome, Error> {
         let mut failures = Failures::default();
         failures.add(self.streams.import(&mut self.gpu, &self.painter, tree));
@@ -182,7 +186,7 @@ impl AndroidRenderer {
         let drawn = Self::draw(
             &mut self.gpu,
             &mut self.attachment,
-            presentation_time_ns,
+            presentation_time,
             |canvas| painter.paint_scene_with_streams(canvas.clear(clear), tree, density, frames),
         );
         // A stream that failed to import draws nothing. The other streams draw as usual.
@@ -209,14 +213,14 @@ impl AndroidRenderer {
     fn draw(
         gpu: &mut VulkanRenderer,
         attachment: &mut Option<Attachment>,
-        presentation_time_ns: Option<u64>,
+        presentation_time: Option<Duration>,
         draw: impl FnOnce(&skia::Canvas),
     ) -> Result<FrameOutcome, Error> {
         let Some(attachment) = attachment else {
             return Ok(FrameOutcome::Pending);
         };
         let size = attachment.window.size()?;
-        let drawn = match presentation_time_ns {
+        let drawn = match presentation_time {
             Some(time) => gpu.draw_at(&mut attachment.target, size, time, draw),
             None => gpu.draw(&mut attachment.target, size, draw),
         };

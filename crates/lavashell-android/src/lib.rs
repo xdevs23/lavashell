@@ -14,6 +14,8 @@ mod latched_frames;
 mod native_window;
 #[cfg_attr(not(target_os = "android"), path = "platform/simulated.rs")]
 mod platform;
+#[cfg(target_os = "android")]
+mod presentation;
 mod renderer;
 #[cfg(target_os = "android")]
 mod surface_jni;

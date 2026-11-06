@@ -330,11 +330,10 @@ pub enum Error {
     SignalFrame(#[source] lavashell_vulkan::Error),
     #[error("cannot present a swapchain image")]
     Present(#[source] lavashell_vulkan::Error),
-    #[cfg(any(target_os = "android", test))]
     #[error("the Vulkan device does not support VK_GOOGLE_display_timing")]
     NoDisplayTiming,
-    #[error("the presentation time {0} is outside 1..=i64::MAX nanoseconds")]
-    PresentationTimeRange(u64),
+    #[error("the presentation time {0:?} is outside 1..=i64::MAX nanoseconds")]
+    PresentationTimeRange(std::time::Duration),
     #[error("the surface requires an explicit timestamp on every frame after its first one")]
     ExplicitTimestampRequired,
     /// Several failures of one call, in the order they happened. After each failure, the call continued with the

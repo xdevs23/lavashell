@@ -11,7 +11,6 @@ use lavashell_core::prelude::OutputProfile;
 use lavashell_vulkan::{Acquisition, Fit, Presented, Semaphore};
 use skia_safe::gpu::{self, DirectContext, FlushInfo, SurfaceOrigin, vk as skvk};
 use skia_safe::{Canvas, ColorType, Surface};
-use std::time::Duration;
 
 /// The result of a frame that did not fail.
 enum Frame {
@@ -140,7 +139,7 @@ impl SurfaceTarget {
         chain.layouts[image] = skvk::ImageLayout::PRESENT_SRC_KHR;
         chain.next_slot = (chain.next_slot + 1) % chain.slots.len();
         self.presentation.submitting(presentation_time.is_some());
-        let time = presentation_time.map(|time| Duration::from_nanos(time.nanos()));
+        let time = presentation_time.map(PresentationTime::time);
         // SAFETY: the swapchain API of lavashell-vulkan has no safe presentation, because only the caller can track the
         // acquisition and the semaphore. Image `index` was acquired above and is presented once. The flush above
         // submitted the signal of the semaphore of the image after the writes to the image. Only this presentation
