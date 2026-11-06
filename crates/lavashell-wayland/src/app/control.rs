@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::Platform;
 use super::presentation::Feedback;
-use super::{FrameCallbackData, FrameOutcome, Platform, QueueHandle, WpViewport, wl_surface};
 use crate::ControlError;
 use lavashell_core::prelude::{Density, Viewport};
 use lavashell_core::surface::SurfaceId;
-use lavashell_renderer::{PresentFrame, SurfaceControl};
-use smithay_client_toolkit::reexports::protocols::wp::presentation_time::client::wp_presentation::WpPresentation;
+use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
+use sctk::compositor::FrameCallbackData;
+use sctk::reexports::client::QueueHandle;
+use sctk::reexports::client::protocol::wl_surface;
+use sctk::reexports::protocols::wp::presentation_time::client::wp_presentation::WpPresentation;
+use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use smithay_client_toolkit as sctk;
 
 /// The requests that the draw of each frame of one native surface applies.
 pub(super) struct Control {

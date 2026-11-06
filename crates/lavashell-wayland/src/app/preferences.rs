@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{LoopHandle, Platform, sctk};
+use super::Platform;
 use crate::Error;
 use icu_locale_core::LanguageIdentifier;
 use lavashell_platform::SettingsEvent;
-use sctk::reexports::calloop::RegistrationToken;
 use sctk::reexports::calloop::channel::{self, Event};
+use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
+use smithay_client_toolkit as sctk;
 
 /// The languages the user prefers, read from the locale variables of the environment, most
 /// preferred first.

@@ -4,12 +4,17 @@
 
 use super::creation::NativeSpec;
 use super::outputs::output_id;
-use super::{
-    App, LayerSurface, Platform, State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, wl_output,
-};
+use super::{App, Platform};
 use crate::Error;
+use crate::surface::LayerSurface;
 use lavashell_core::output::MonitorInfo;
-use lavashell_platform::OutputId;
+use lavashell_core::reactive::State;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::View;
+use lavashell_platform::{OutputId, SurfaceEvent};
+use sctk::reexports::client::protocol::wl_output;
+use sctk::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
+use smithay_client_toolkit as sctk;
 use std::{cell::RefCell, rc::Rc};
 
 type Factory = Box<dyn FnMut(State<MonitorInfo>) -> Vec<(LayerSurface, View)>>;

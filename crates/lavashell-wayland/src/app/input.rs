@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::device::{keyboard_device, pointer_device, pointer_event};
-use super::{
-    Capability, Connection, Cursor, CursorIcon, Duration, KeyEvent, KeyboardHandler, Keysym,
-    Modifiers, Platform, PointerEvent, PointerEventKind, PointerHandler, QueueHandle, RawModifiers,
-    SeatDevices, SeatHandler, SeatState, SurfaceId, ThemeSpec, ThemedPointer, key, sctk,
-    wl_keyboard, wl_pointer, wl_seat, wl_surface,
-};
+use super::{Platform, SeatDevices, key};
 use lavashell_core::platform::KeyRepeat;
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::InputModifiers;
+use lavashell_core::view::Cursor;
 use lavashell_platform::SettingsEvent;
 use lavashell_platform::{DeviceEvent, InputRequest, KeyboardDevice, PointerDevice, PressState};
 use lavashell_runtime::{InputRouter, RoutedInput};
-use sctk::seat::keyboard::RepeatInfo;
-use sctk::seat::pointer::BTN_LEFT;
+use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer, wl_seat, wl_surface};
+use sctk::reexports::client::{Connection, QueueHandle};
+use sctk::seat::keyboard::{
+    KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers, RepeatInfo,
+};
+use sctk::seat::pointer::{
+    BTN_LEFT, CursorIcon, PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer,
+};
+use sctk::seat::{Capability, SeatHandler, SeatState};
+use smithay_client_toolkit as sctk;
+use std::time::Duration;
 
 /// A physical key of the focused surface, as a Linux evdev code independent of the keyboard
 /// layout and of text editing.

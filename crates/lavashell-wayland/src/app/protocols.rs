@@ -1,13 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    CompositorHandler, Connection, Density, Dispatch, ExtBackgroundEffectManagerV1,
-    ExtBackgroundEffectSurfaceV1, NativeWindow, OutputHandler, OutputState, Platform,
-    ProvidesRegistryState, QueueHandle, RegistryState, SeatState, Shm, ShmHandler, SurfaceEvent,
-    SurfaceId, WaylandSurface, WindowConfigure, WindowHandler, WpFractionalScaleManagerV1,
-    WpFractionalScaleV1, WpViewport, WpViewporter, ZwlrLayerShellV1, ZwlrLayerSurfaceV1,
-    configure_event, delegate_noop, sctk, wl_output, wl_surface, wp_fractional_scale_v1,
-    zwlr_layer_surface_v1,
+use super::{Platform, configure_event};
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::units::Density;
+use lavashell_platform::SurfaceEvent;
+use sctk::compositor::CompositorHandler;
+use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::client::protocol::{wl_output, wl_surface};
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle, delegate_noop};
+use sctk::reexports::protocols::ext::background_effect::v1::client::{
+    ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
+    ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
+use sctk::reexports::protocols::wp::{
+    fractional_scale::v1::client::{
+        wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+        wp_fractional_scale_v1::{self, WpFractionalScaleV1},
+    },
+    viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
+};
+use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
+    zwlr_layer_shell_v1::ZwlrLayerShellV1,
+    zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
+};
+use sctk::registry::{ProvidesRegistryState, RegistryState};
+use sctk::seat::SeatState;
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::window::{Window as NativeWindow, WindowConfigure, WindowHandler};
+use sctk::shm::{Shm, ShmHandler};
+use smithay_client_toolkit as sctk;
 use std::num::NonZero;
 
 /// wp-fractional-scale-v1 sends the preferred scale as the numerator of a fraction over 120.

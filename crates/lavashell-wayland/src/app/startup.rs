@@ -1,18 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::NativeSpec;
 use super::{
-    App, BTreeMap, Choreographers, ClipboardState, CompositorState, Connection, Duration,
-    EventQueue, GlobalList, InputRouter, Instant, LoopHandle, OutputRecords, OutputState, Platform,
-    QueueHandle, RegistryState, RendererState, Request, Role, SeatDevices, SeatState, Shm,
-    SurfaceProtocols, SurfaceRecords, View, WaylandSurface, Window, WindowDecorations, XdgShell,
-    accessibility, focus_grab, output_layers, preferences, presentation, session_lock, wl_surface,
+    App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
+    output_layers, preferences, presentation, session_lock,
 };
 use crate::Error;
+use crate::clipboard::ClipboardState;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
+use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
-use lavashell_renderer::RendererSetup;
-use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
+use lavashell_renderer::{RendererSetup, RendererState};
+use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use sctk::compositor::CompositorState;
+use sctk::output::OutputState;
+use sctk::reexports::calloop::LoopHandle;
+use sctk::reexports::calloop_wayland_source::WaylandSource;
+use sctk::reexports::client::globals::GlobalList;
+use sctk::reexports::client::protocol::wl_surface;
+use sctk::reexports::client::{Connection, EventQueue, QueueHandle};
+use sctk::registry::RegistryState;
+use sctk::seat::SeatState;
+use sctk::shell::WaylandSurface;
+use sctk::shell::xdg::{XdgShell, window::WindowDecorations};
+use sctk::shm::Shm;
+use smithay_client_toolkit as sctk;
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 
 impl SurfaceProtocols {
     fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Self {

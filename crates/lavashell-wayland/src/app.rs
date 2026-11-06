@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
-use lavashell_core::prelude::*;
+use crate::surface::LayerSurface;
+use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
+use lavashell_core::geometry::{Size, Viewport};
+use lavashell_core::output::OutputInfo;
+use lavashell_core::platform::PlatformFacts;
 use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::{Failures, FrameError};
+use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, PainterSetup, RendererState};
+use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
     ActionQueue, Choreographers, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd,
     SceneSink, SurfaceRecords, Window,
 };
-use sctk::compositor::{CompositorHandler, CompositorState, FrameCallbackData};
-use sctk::output::{OutputHandler, OutputState};
-use sctk::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
-use sctk::reexports::client::protocol::{
-    wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface, wl_touch,
-};
-use sctk::reexports::client::{
-    Connection, Dispatch, EventQueue, Proxy, QueueHandle, delegate_noop,
-    globals::{GlobalList, registry_queue_init},
-};
+use sctk::compositor::CompositorState;
+use sctk::output::OutputState;
+use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
+use sctk::reexports::client::protocol::{wl_keyboard, wl_output, wl_seat, wl_surface, wl_touch};
+use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use sctk::reexports::protocols::ext::background_effect::v1::client::{
     ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
@@ -27,32 +26,20 @@ use sctk::reexports::protocols::ext::background_effect::v1::client::{
 use sctk::reexports::protocols::wp::{
     fractional_scale::v1::client::{
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
-        wp_fractional_scale_v1::{self, WpFractionalScaleV1},
+        wp_fractional_scale_v1::WpFractionalScaleV1,
     },
-    viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
+    viewporter::client::wp_viewporter::WpViewporter,
 };
-use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::{self, ZwlrLayerShellV1},
-    zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
-};
-use sctk::registry::{ProvidesRegistryState, RegistryState};
-use sctk::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers};
-use sctk::seat::pointer::{
-    CursorIcon, PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer,
-};
-use sctk::seat::{Capability, SeatHandler, SeatState};
-use sctk::shell::WaylandSurface;
-use sctk::shell::xdg::{
-    XdgShell,
-    window::{Window as NativeWindow, WindowConfigure, WindowDecorations, WindowHandler},
-};
-use sctk::shm::{Shm, ShmHandler};
+use sctk::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
+use sctk::registry::RegistryState;
+use sctk::seat::SeatState;
+use sctk::seat::pointer::ThemedPointer;
+use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
+use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::time::{Duration, Instant};
-
-use crate::surface::{LayerLevel, LayerSurface};
 
 mod accessibility;
 mod control;

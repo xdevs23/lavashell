@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{
-    Duration, FrameOutcome, FrameReport, FrameStage, FrameTime, Instant, Platform, Role, SceneSink,
-    SurfaceId, View, Viewport, layer, open_surface, sctk,
-};
+use super::{Platform, Role, layer, open_surface};
 use crate::Error;
-use lavashell_core::frame::Submission;
-use lavashell_renderer::{Drawn, PresentFrame};
-use lavashell_runtime::ActionBatch;
+use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
+use lavashell_core::geometry::Viewport;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::View;
+use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
+use lavashell_runtime::{ActionBatch, SceneSink};
+use smithay_client_toolkit as sctk;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
 struct FrameStart {

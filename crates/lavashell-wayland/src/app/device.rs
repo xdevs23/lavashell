@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Point, PointerEventKind, Proxy, SurfaceId, sctk, wl_keyboard, wl_pointer};
+use lavashell_core::geometry::Point;
+use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{Button, DeviceEvent, KeyboardDevice, PointerDevice, PressState};
-use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT};
+use sctk::reexports::client::Proxy;
+use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer};
+use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT, PointerEventKind};
+use smithay_client_toolkit as sctk;
 
 /// The protocol id of `proxy`, which is unique among the live objects on the connection.
 fn protocol_id(proxy: &impl Proxy) -> u64 {

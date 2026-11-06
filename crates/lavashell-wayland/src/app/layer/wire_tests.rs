@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::LayerMargins;
-use crate::app::{Connection, delegate_noop, sctk};
 use crate::test_error::TestError;
 use lavashell_core::units::DpExt;
 use sctk::reexports::client::protocol::{wl_compositor, wl_registry};
+use sctk::reexports::client::{Connection, delegate_noop};
+use smithay_client_toolkit as sctk;
 use std::{io::Read, os::unix::net::UnixStream};
 
 pub(super) struct Client;

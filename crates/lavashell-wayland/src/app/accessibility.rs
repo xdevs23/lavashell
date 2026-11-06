@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{InputEvent, LoopHandle, Platform, SceneSink, View, open_surface, sctk};
+use super::{Platform, open_surface};
 use crate::Error;
 use crate::accessibility::Event;
 use lavashell_core::accessibility::ActionOutcome;
-use sctk::reexports::calloop::RegistrationToken;
+use lavashell_core::view::{InputEvent, View};
+use lavashell_runtime::SceneSink;
 use sctk::reexports::calloop::channel::{self, Event as ChannelEvent, Sender};
+use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
+use smithay_client_toolkit as sctk;
 
 pub(super) fn install(
     handle: &LoopHandle<'static, Platform>,

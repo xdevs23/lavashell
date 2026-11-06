@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    Connection, InputEvent, Platform, Point, PointerKind, QueueHandle, SeatDevices, SurfaceId,
-    TouchId, TouchSample, sctk, wl_seat, wl_surface, wl_touch,
-};
+use super::{Platform, SeatDevices};
+use lavashell_core::geometry::Point;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::ui::{PointerKind, TouchId};
+use lavashell_core::view::{InputEvent, TouchSample};
+use sctk::reexports::client::protocol::{wl_seat, wl_surface, wl_touch};
+use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::seat::touch::TouchHandler;
+use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 
 pub(super) struct TouchPoints {

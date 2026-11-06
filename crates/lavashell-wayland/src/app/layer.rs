@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::NativeSpec;
-use super::{
-    Dp, FiniteDp, FrameOutcome, LayerLevel, LayerSurface, Platform, Proxy, QueueHandle, Role, Size,
-    State, SurfaceEvent, SurfaceId, View, ZwlrLayerShellV1, ZwlrLayerSurfaceV1, configure_event,
-    wl_output, wl_surface, zwlr_layer_shell_v1, zwlr_layer_surface_v1,
-};
+use super::{Platform, Role, configure_event};
 use crate::Error;
 use crate::logical::{extent, whole};
-use crate::surface::{AxisPlacement, ExclusiveZone, Extent, Keyboard, LayerLayout};
-use lavashell_core::view::Proposal;
-use lavashell_platform::Appearance;
-use lavashell_renderer::SurfaceContents;
+use crate::surface::{
+    AxisPlacement, ExclusiveZone, Extent, Keyboard, LayerLayout, LayerLevel, LayerSurface,
+};
+use lavashell_core::geometry::Size;
+use lavashell_core::reactive::State;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::units::{Dp, FiniteDp};
+use lavashell_core::view::{Proposal, View};
+use lavashell_platform::{Appearance, SurfaceEvent};
+use lavashell_renderer::{FrameOutcome, SurfaceContents};
+use sctk::reexports::client::protocol::{wl_output, wl_surface};
+use sctk::reexports::client::{Proxy, QueueHandle};
+use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
+    zwlr_layer_shell_v1::{self, ZwlrLayerShellV1},
+    zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
+};
+use smithay_client_toolkit as sctk;
 use zwlr_layer_surface_v1::Anchor;
 
 #[derive(Clone, Copy)]

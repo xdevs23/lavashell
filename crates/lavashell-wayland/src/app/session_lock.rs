@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::creation::NativeSpec;
-use super::{
-    Connection, Dispatch, GlobalList, OutputRequest, Platform, PlatformFacts, QueueHandle, Request,
-    Role, SurfaceEvent, SurfaceId, Ui, View, configure_event, delegate_noop, sctk, wl_output,
-    wl_surface,
-};
+use super::{Platform, Request, Role, configure_event};
 use crate::Error;
-use lavashell_platform::Appearance;
-use sctk::reexports::client::protocol::wl_callback;
+use lavashell_core::output::OutputRequest;
+use lavashell_core::platform::PlatformFacts;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::ui::Ui;
+use lavashell_core::view::View;
+use lavashell_platform::{Appearance, SurfaceEvent};
+use sctk::reexports::client::globals::GlobalList;
+use sctk::reexports::client::protocol::{wl_callback, wl_output, wl_surface};
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle, delegate_noop};
 use sctk::reexports::protocols::ext::session_lock::v1::client::{
     ext_session_lock_manager_v1::ExtSessionLockManagerV1,
     ext_session_lock_surface_v1::{self, ExtSessionLockSurfaceV1},
     ext_session_lock_v1::{self, ExtSessionLockV1},
 };
+use smithay_client_toolkit as sctk;
 use std::{
     cell::{Cell, RefCell},
     num::NonZeroU32,

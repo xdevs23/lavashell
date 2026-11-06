@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    Connection, Dispatch, Duration, FrameReport, FrameStage, FrameTime, GlobalList, Instant,
-    Platform, PresentedFrame, QueueHandle, SurfaceId, sctk,
+use super::Platform;
+use lavashell_core::frame::{
+    FrameReport, FrameStage, FrameTime, PresentationFlag, PresentationFlags, PresentedFrame,
 };
-use lavashell_core::frame::{PresentationFlag, PresentationFlags};
+use lavashell_core::surface::SurfaceId;
+use sctk::reexports::client::globals::GlobalList;
+use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
 use sctk::reexports::protocols::wp::presentation_time::client::{
     wp_presentation::{self, WpPresentation},
     wp_presentation_feedback::{self, WpPresentationFeedback},
 };
+use smithay_client_toolkit as sctk;
+use std::time::{Duration, Instant};
 
 fn presentation_flags(kind: wp_presentation_feedback::Kind) -> PresentationFlags {
     use wp_presentation_feedback::Kind;

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{InputEvent, Platform, Point, Role, SurfaceId, open_surface, wl_pointer};
+use super::{Platform, Role, open_surface};
+use lavashell_core::geometry::Point;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::InputEvent;
+use sctk::reexports::client::protocol::wl_pointer;
+use smithay_client_toolkit as sctk;
 
 impl Platform {
     pub(super) fn move_window(
