@@ -21,6 +21,7 @@ mod run_end;
 mod scene_item;
 mod scene_pipeline;
 mod scheduler;
+mod scheduler_actor;
 mod session_lock;
 mod settings;
 mod shape;
@@ -47,9 +48,8 @@ pub use panels::{
 };
 pub use run_end::RunEnd;
 pub use scene_pipeline::{BuilderObserver, BuilderReport, ScenePipeline, SceneSink};
-pub use scheduler::{
-    FrameKind, FrameScheduler, FrameSequence, Redraw, SchedulerInput, SchedulerOutput, ViewState,
-};
+pub use scheduler::{FrameKind, FrameSequence, Redraw, SchedulerInput, SchedulerOutput, ViewState};
+pub use scheduler_actor::{SchedulerObserver, SchedulerThread};
 pub use session_lock::{ActiveLock, LockConfiguration, LockStep, SessionLock};
 pub use shape::{SurfaceShape, WindowShape};
 pub use surface_records::{AccessibilityOutcome, SurfaceRecords, measure_content};

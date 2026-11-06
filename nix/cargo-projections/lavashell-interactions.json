@@ -3267,6 +3267,7 @@
         "dependencies": [
           "accesskit",
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-core",
           "thiserror 2.0.21"
         ],
