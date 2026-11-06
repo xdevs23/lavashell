@@ -2750,6 +2750,7 @@ version = "0.1.0"
 dependencies = [
  "icu_locale_core",
  "lavashell-core",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2779,6 +2780,7 @@ dependencies = [
  "lavashell-core",
  "lavashell-platform",
  "lavashell-test-fixtures",
+ "log",
  "thiserror 2.0.21",
 ]
 

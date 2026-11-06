@@ -4,8 +4,8 @@ use crate::{
     model::{ClipboardOffer, Demo, Receipt},
     ui,
 };
+use lavashell::core::transfer::TEXT_FORMATS;
 use lavashell::prelude::*;
-use lavashell::wayland::Error;
 use lavashell_example_support::report;
 use std::{
     cell::{Cell, RefCell},
@@ -196,16 +196,7 @@ fn copy_action(
             else {
                 return;
             };
-            let data =
-                match TransferData::single("text/plain;charset=utf-8", source.text().as_bytes()) {
-                    Ok(data) => data,
-                    Err(error) => {
-                        demo.offered.set(Some(ClipboardOffer::Failed));
-                        report("text clipboard", error);
-                        return;
-                    }
-                };
-            clipboard.set_data(data, move |result| {
+            clipboard.set_data(TransferData::text(source.text()), move |result| {
                 demo.offered.set(Some(ClipboardOffer::of(&result)));
                 if result.is_ok() && cut {
                     completed.dispatch(window, move |view| {
@@ -243,35 +234,32 @@ fn paste_action(
             else {
                 return;
             };
-            clipboard.read(
-                window,
-                ["text/plain;charset=utf-8", "text/plain"],
-                move |data| {
-                    completed.dispatch(window, move |view| {
-                        match data.and_then(|data| {
-                            let size = data.bytes.len();
-                            let text = String::from_utf8(data.bytes).map_err(Error::DecodeText)?;
-                            Ok((data.mime_type, size, text))
-                        }) {
-                            Ok((mime, bytes, text)) => {
-                                demo.receipt.set(if view.paste_text_at(&target, &text) {
-                                    Receipt::Accepted {
-                                        mime,
-                                        bytes,
-                                        preview: None,
-                                    }
-                                } else {
-                                    Receipt::Rejected
-                                });
-                            }
-                            Err(error) => {
-                                demo.receipt.set(Receipt::Rejected);
-                                report("text paste", error);
-                            }
+            clipboard.read(window, TEXT_FORMATS, move |data| {
+                completed.dispatch(window, move |view| {
+                    match data.and_then(|data| {
+                        let size = data.bytes.len();
+                        let text =
+                            String::from_utf8(data.bytes).map_err(RuntimeError::DecodeText)?;
+                        Ok((data.mime_type, size, text))
+                    }) {
+                        Ok((mime, bytes, text)) => {
+                            demo.receipt.set(if view.paste_text_at(&target, &text) {
+                                Receipt::Accepted {
+                                    mime,
+                                    bytes,
+                                    preview: None,
+                                }
+                            } else {
+                                Receipt::Rejected
+                            });
                         }
-                    });
-                },
-            );
+                        Err(error) => {
+                            demo.receipt.set(Receipt::Rejected);
+                            report("text paste", error);
+                        }
+                    }
+                });
+            });
         });
     }
 }

@@ -11,7 +11,9 @@ use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
-use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use lavashell_runtime::{
+    Choreographers, InputRouter, OutputRecords, SurfaceRecords, TextClipboard, Window,
+};
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::LoopHandle;
@@ -102,6 +104,7 @@ impl Platform {
         let mut sources = vec![connection_source];
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
+        let text = TextClipboard::new(clipboard.clipboard(), config.action_queue.view_actions());
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
@@ -119,7 +122,7 @@ impl Platform {
             devices: seats.seats().map(SeatDevices::new).collect(),
             input: InputRouter::new(input_filter),
             input_failure: None,
-            clipboard: ClipboardState::new(globals, &qh, seats.seats(), clipboard),
+            clipboard: ClipboardState::new(globals, &qh, seats.seats(), clipboard, text),
             seats,
             outputs,
             output_records: OutputRecords::default(),

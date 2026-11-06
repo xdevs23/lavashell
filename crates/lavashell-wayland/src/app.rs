@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::clipboard::{Clipboard, ClipboardState};
+use crate::clipboard::ClipboardState;
 use crate::surface::LayerSurface;
 use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
 use lavashell_core::geometry::{Point, Size, Viewport};
@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, ClipboardTransfers, InputFilter, InputRouter, OutputRecords,
+    RunEnd, SceneSink, SurfaceRecords, Watches, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -83,7 +83,7 @@ pub struct App {
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
-    clipboard: Clipboard,
+    clipboard: ClipboardTransfers,
     painter_setup: Option<PainterSetup>,
     scene: Option<Box<dyn lavashell_renderer::vulkan::SceneSource>>,
     gpu_timing: bool,
@@ -95,7 +95,6 @@ pub struct App {
 
 /// The callbacks and settings registered for an app before it runs. The Wayland platform calls and reads them while the
 /// app runs.
-#[derive(Default)]
 pub(crate) struct AppConfig {
     tick: Option<Box<dyn FnMut(Duration)>>,
     on_frame: Option<Box<dyn FnMut(FrameTime)>>,
@@ -103,6 +102,7 @@ pub(crate) struct AppConfig {
     key_observer: Option<Box<dyn FnMut(HostKey) -> bool>>,
     focus_observer: Option<Box<dyn FnMut(KeyboardFocus)>>,
     view_observer: Option<ViewObserver>,
+    pub(crate) watches: Watches,
     pub(crate) action_queue: ActionQueue,
     drag_observer: Option<transfer::DragObserver>,
     drop_observer: Option<transfer::DropObserver>,
@@ -111,6 +111,29 @@ pub(crate) struct AppConfig {
     output_observer: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
     ui_budget: Option<Duration>,
     full_redraw: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        let watches = Watches::default();
+        Self {
+            tick: None,
+            on_frame: None,
+            observer: None,
+            key_observer: None,
+            focus_observer: None,
+            view_observer: None,
+            action_queue: ActionQueue::new(&watches),
+            watches,
+            drag_observer: None,
+            drop_observer: None,
+            drag_source_observer: None,
+            text_transfers: None,
+            output_observer: None,
+            ui_budget: None,
+            full_redraw: false,
+        }
+    }
 }
 
 enum Role {
@@ -287,6 +310,7 @@ impl Drop for Platform {
     fn drop(&mut self) {
         self.config.action_queue.close();
         self.shutdown_transfers();
+        self.config.watches.close();
         for &id in self.surfaces.keys() {
             detach(&mut self.renderer, id);
         }
@@ -324,6 +348,7 @@ impl Platform {
                     self.choreographers.retire(id);
                     self.surface_records.retire(id);
                     self.config.action_queue.forget_surface(id);
+                    self.clipboard.transfers.forget_surface(id);
                 }
             }
         }
