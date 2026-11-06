@@ -8,7 +8,7 @@ use lavashell_core::ui::InputModifiers;
 use lavashell_core::view::Cursor;
 use lavashell_platform::SettingsEvent;
 use lavashell_platform::{
-    DeviceEvent, InputRequest, KeyboardDevice, PlatformRequest, PointerDevice, PressState,
+    Button, DeviceEvent, InputRequest, KeyboardDevice, PlatformRequest, PointerDevice, PressState,
 };
 use lavashell_runtime::{InputRouter, RoutedInput};
 use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer, wl_seat, wl_surface};
@@ -17,7 +17,7 @@ use sctk::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers, RepeatInfo,
 };
 use sctk::seat::pointer::{
-    BTN_LEFT, CursorIcon, PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer,
+    CursorIcon, PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer,
 };
 use sctk::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit as sctk;
@@ -73,11 +73,11 @@ impl Platform {
     }
 
     /// Delivers `routed` to the view of the routed surface and executes the request that follows from it. A cancel
-    /// also ends the drag gesture started by the cancelled pointer on the surface. Returns whether a move of the
-    /// window started.
+    /// also ends the drag gesture of the primary button of the cancelled pointer on the surface. Returns whether a
+    /// move of the window started.
     pub(super) fn deliver(&mut self, routed: RoutedInput) -> bool {
         if let RoutedInput::Cancel { surface, pointer } = routed {
-            self.end_drag_gesture(surface, pointer);
+            self.config.drags.cancel_gesture(pointer, surface);
         }
         let Some(request) = routed.deliver(&mut self.surface_records) else {
             return false;
@@ -119,7 +119,7 @@ impl Platform {
         }
     }
 
-    pub(super) fn pointer_seat(&self, pointer: PointerDevice) -> Option<&wl_seat::WlSeat> {
+    pub(crate) fn pointer_seat(&self, pointer: PointerDevice) -> Option<&wl_seat::WlSeat> {
         (self.devices.iter())
             .find(|seat| seat.pointer_device() == Some(pointer))
             .map(|seat| &seat.seat)
@@ -129,17 +129,6 @@ impl Platform {
         (self.devices.iter())
             .filter_map(|seat| seat.pointer.as_ref())
             .find(|themed| pointer_device(themed.pointer()) == pointer)
-    }
-
-    /// Ends the drag gesture started with the left button by `pointer` on `surface`.
-    fn end_drag_gesture(&mut self, surface: SurfaceId, pointer: PointerDevice) {
-        let wl = (self.surfaces.get(&surface)).map(|known| known.wl.clone());
-        let native = (self.themed_pointer(pointer)).map(|themed| themed.pointer().clone());
-        if let Some(wl) = wl
-            && let Some(native) = native
-        {
-            self.transfer_pointer_release(&native, &wl, BTN_LEFT);
-        }
     }
 
     fn dispatch_key(&mut self, keyboard: &wl_keyboard::WlKeyboard, event: KeyEvent, repeat: bool) {
@@ -248,7 +237,7 @@ impl SeatHandler for Platform {
                         themed.pointer(),
                     )));
                 }
-                self.transfer_pointer_cancel(&seat);
+                self.cancel_drag_sources(&seat);
             }
             Capability::Keyboard => {
                 let removed = self
@@ -301,14 +290,12 @@ impl PointerHandler for Platform {
             let Some(id) = self.find_surface(&event.surface) else {
                 continue;
             };
-            if let PointerEventKind::Release { button, .. } = event.kind {
-                self.transfer_pointer_release(pointer, &event.surface, button);
-            }
             let interacting = self.input.interacting_pointer(id) == Some(device);
             let at = crate::logical::point(event.position.0, event.position.1);
-            let routed = self.input.route(pointer_event(device, id, at, &event.kind));
-            let dragging = matches!(event.kind, PointerEventKind::Motion { .. })
-                && self.transfer_pointer_motion(pointer, at);
+            let input = pointer_event(device, id, at, &event.kind);
+            let dragging = !matches!(event.kind, PointerEventKind::Press { .. })
+                && (self.config.drags).track_gesture(id, &input, &mut self.surface_records);
+            let routed = self.input.route(input);
             let mut moving = false;
             for routed in routed {
                 if !dragging || matches!(routed, RoutedInput::Cancel { .. }) {
@@ -316,15 +303,20 @@ impl PointerHandler for Platform {
                 }
             }
             let serial = match event.kind {
-                PointerEventKind::Press { serial, button, .. } if !moving => {
-                    self.transfer_pointer_press(pointer, &event.surface, serial, button, at);
+                PointerEventKind::Press { serial, .. } if !moving => {
+                    let press = pointer_event(device, id, at, &event.kind);
+                    if is_primary_press(&press) {
+                        self.note_primary_press(device, serial);
+                    }
+                    let _a_press_starts_no_drag =
+                        (self.config.drags).track_gesture(id, &press, &mut self.surface_records);
                     Some(serial)
                 }
                 PointerEventKind::Release { serial, .. } if interacting => Some(serial),
                 _ => None,
             };
             if let Some(serial) = serial
-                && let Some(seat) = self.transfer_pointer_device(pointer)
+                && let Some(seat) = self.pointer_seat(device).cloned()
             {
                 self.note_input_serial(seat, serial);
             }
@@ -464,4 +456,15 @@ impl KeyboardHandler for Platform {
             },
         });
     }
+}
+
+fn is_primary_press(event: &DeviceEvent) -> bool {
+    matches!(
+        event,
+        DeviceEvent::Button {
+            button: Button::Primary,
+            state: PressState::Pressed,
+            ..
+        }
+    )
 }

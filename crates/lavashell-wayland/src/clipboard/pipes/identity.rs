@@ -2,7 +2,7 @@
 use std::os::fd::AsFd;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) struct PipeIdentity {
+pub(in crate::clipboard) struct PipeIdentity {
     device: u64,
     inode: u64,
 }

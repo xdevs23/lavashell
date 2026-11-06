@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 mod clipboard;
+mod drag;
 mod input;
 mod output;
 mod request;
@@ -15,6 +16,10 @@ mod window_control;
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,
+};
+pub use drag::{
+    DragDevice, DragReceiveRefusal, DragRefusal, DragSourceEvent, DragSourceId, DragSourceRequest,
+    DragTargetEvent, DragTargetRequest,
 };
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,

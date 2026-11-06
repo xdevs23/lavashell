@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, ClipboardTransfers, InputFilter, InputRouter, OutputRecords,
-    RunEnd, SceneSink, SurfaceRecords, Watches, Window,
+    ActionQueue, Choreographers, ClipboardTransfers, Drags, InputFilter, InputRouter,
+    OutputRecords, RunEnd, SceneSink, SurfaceRecords, Watches, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -104,10 +104,7 @@ pub(crate) struct AppConfig {
     view_observer: Option<ViewObserver>,
     pub(crate) watches: Watches,
     pub(crate) action_queue: ActionQueue,
-    drag_observer: Option<transfer::DragObserver>,
-    drop_observer: Option<transfer::DropObserver>,
-    drag_source_observer: Option<transfer::DragSourceObserver>,
-    pub(crate) text_transfers: Option<crate::text_transfer::TextTransfers>,
+    pub(crate) drags: Drags,
     output_observer: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
     ui_budget: Option<Duration>,
     full_redraw: bool,
@@ -124,11 +121,8 @@ impl Default for AppConfig {
             focus_observer: None,
             view_observer: None,
             action_queue: ActionQueue::new(&watches),
+            drags: Drags::new(&watches),
             watches,
-            drag_observer: None,
-            drop_observer: None,
-            drag_source_observer: None,
-            text_transfers: None,
             output_observer: None,
             ui_budget: None,
             full_redraw: false,
@@ -278,7 +272,7 @@ pub(super) struct Platform {
     watches: BTreeMap<WatchId, RegistrationToken>,
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
-    surface_records: SurfaceRecords,
+    pub(super) surface_records: SurfaceRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
@@ -341,6 +335,9 @@ impl Platform {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
+                    self.config
+                        .drags
+                        .forget_surface(id, &mut self.surface_records);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
                     detach(&mut self.renderer, id);

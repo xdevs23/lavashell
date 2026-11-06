@@ -99,7 +99,8 @@ pub mod prelude {
         InteractionStyle, PointerState, StateStyles, TooltipStyle,
     };
     pub use crate::transfer::{
-        DragAction, DragActions, DropAcceptance, ReceivedData, Representation, TransferData,
+        DragAction, DragActions, DragEvent, DragOfferInfo, DropAcceptance, ReceivedData,
+        Representation, TransferData, TransferId,
     };
     pub use crate::ui::{
         Activation, Align, Arrangement, ContentSizes, Deferred, DragInput, DragPhase, IconOptions,

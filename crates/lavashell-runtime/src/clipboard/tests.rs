@@ -64,7 +64,7 @@ impl Run {
 }
 
 /// Reports each watched pipe as ready until every watch ended.
-pub(super) fn move_bytes(watches: &Watches) {
+pub(crate) fn move_bytes(watches: &Watches) {
     let mut open = BTreeSet::new();
     loop {
         for request in watches.take_requests() {

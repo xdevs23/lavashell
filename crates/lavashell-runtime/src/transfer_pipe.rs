@@ -3,14 +3,14 @@ use crate::Error;
 use std::io::{self, Read, Write};
 
 /// Whether a transfer through a pipe moved every byte.
-pub enum Progress {
+pub(crate) enum Progress {
     Pending,
     Complete,
 }
 
 /// The bytes read from a pipe so far. The buffer doubles once it is full. The bytes after `filled` are zero and free.
 #[derive(Default)]
-pub struct ReadBuffer {
+pub(crate) struct ReadBuffer {
     buffer: Vec<u8>,
     filled: usize,
 }
@@ -59,7 +59,7 @@ impl ReadBuffer {
 /// # Errors
 ///
 /// Fails when `writer` fails or accepts zero bytes.
-pub fn write_available(
+pub(crate) fn write_available(
     writer: &mut impl Write,
     bytes: &[u8],
     written: &mut usize,
