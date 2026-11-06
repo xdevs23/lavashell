@@ -3,14 +3,13 @@ use super::control::Control;
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{Platform, Role, Surface, detach, shape};
 use crate::Error;
-use lavashell_core::frame::{FrameClock, PresentationTracker};
 use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
 use lavashell_platform::Appearance;
 use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
-use lavashell_runtime::{DragRegion, WindowShape};
+use lavashell_runtime::{DragRegion, SchedulerInput, WindowShape};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -86,9 +85,6 @@ impl Platform {
             wl,
             _window: window,
             fractional,
-            frame_callback_pending: false,
-            clock: FrameClock::default(),
-            telemetry: PresentationTracker::default(),
             output: None,
             background,
             blur_size: None,
@@ -96,6 +92,7 @@ impl Platform {
             drag_region: spec.drag_region,
         };
         let _replaced_surface = self.surfaces.insert(id, surface);
+        self.schedule(SchedulerInput::Opened(id));
         Ok(())
     }
 }

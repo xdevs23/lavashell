@@ -7,7 +7,7 @@ use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
-use lavashell_runtime::{ActionBatch, SceneSink};
+use lavashell_runtime::{ActionBatch, FrameKind, SceneSink, SchedulerInput, ViewState};
 use smithay_client_toolkit as sctk;
 use std::time::{Duration, Instant};
 
@@ -19,15 +19,12 @@ struct FrameStart {
     viewport: Viewport,
 }
 
-/// Whether the event loop renders the surfaces again at once or waits for the next event.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum NextRender {
-    Immediately,
-    AfterEvent,
-}
-
 impl Platform {
-    pub(super) fn render(&mut self) -> Result<NextRender, Error> {
+    /// Draws the frame started by the frame scheduler for each surface, in composition order. A surface reports what
+    /// the view needs right before the surface draws, so the scheduler samples the frame at that time. After the
+    /// draws, every surface reports again with the deadline after composing, and each drawn surface reports the
+    /// rendered frame.
+    pub(super) fn render(&mut self) -> Result<(), Error> {
         // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
         // retires.
         self.cancel_closed_transfers();
@@ -35,71 +32,97 @@ impl Platform {
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.action_queue.take_batch();
-        self.begin_frame(&actions)?;
-        let mut frame_notified = false;
-        let mut next = NextRender::AfterEvent;
-        for id in self.composition_order() {
-            let wanted = self.wants_frame(id, &actions);
-            if wanted == Wanted::Idle {
+        let order = self.composition_order();
+        self.begin_frame()?;
+        let mut drawn = Vec::new();
+        for &id in &order {
+            if !self.surface_records.is_open(id) {
+                let _closed_frame = self.started_frames.remove(&id);
                 continue;
             }
-            let start = self.prepare_surface(id, wanted, &mut actions, &mut frame_notified)?;
-            let drawn = self.draw_surface(id, start)?;
-            if self.report_frame(id, drawn, start)? == NextRender::Immediately {
-                next = NextRender::Immediately;
+            self.want_frame(id, actions.has_actions_for(id));
+            let Some((kind, timing)) = self.started_frames.remove(&id) else {
+                continue;
+            };
+            if drawn.is_empty() {
+                self.notify_frame(timing);
             }
+            let start = self.prepare_surface(id, kind, timing, &mut actions)?;
+            let frame = self.draw_surface(id, start)?;
+            let outcome = frame.outcome;
+            let cost = self.report_frame(id, frame, start)?;
+            drawn.push((id, timing, outcome, cost));
         }
         self.config.action_queue.requeue(actions);
-        // View actions queued during composition run in another frame. A configured surface that waits for no
-        // frame callback can draw that frame at once.
-        if self.config.action_queue.has_pending()
-            && (self.surfaces.iter()).any(|(&id, surface)| {
-                self.surface_records.is_configured(id) && !surface.frame_callback_pending
-            })
-        {
-            next = NextRender::Immediately;
+        // View actions queued during composition run in another frame, started at once by a surface that is ready.
+        for &id in &order {
+            let queued = self.config.action_queue.has_pending_for(id);
+            self.want_frame(id, queued);
+        }
+        for (id, timing, outcome, cost) in drawn {
+            let next_change = (self.surfaces.get(&id))
+                .and_then(|surface| surface.builder.next_change(timing.presentation));
+            self.schedule(SchedulerInput::Published {
+                surface: id,
+                next_change,
+            });
+            self.schedule(SchedulerInput::Rendered {
+                surface: id,
+                frame: timing,
+                outcome,
+                cost,
+            });
         }
         self.connection.flush().map_err(Error::Flush)?;
-        Ok(next)
+        Ok(())
     }
 
-    fn wants_frame(&self, id: SurfaceId, actions: &ActionBatch) -> Wanted {
-        let continuous = self.config.tick.is_some()
-            || self.config.on_frame.is_some()
-            || self.renderer.shows_scene();
+    /// Reports to the frame scheduler what the view of surface `id` needs, while the surface is open. The view of a
+    /// configured surface changed when it needs a visual frame or `actions_queued` is true.
+    fn want_frame(&mut self, id: SurfaceId, actions_queued: bool) {
         let (Some(surface), Some(view)) =
             (self.surfaces.get(&id), self.surface_records.open_view(id))
         else {
-            return Wanted::Idle;
+            return;
         };
-        if !self.surface_records.is_configured(id) || surface.frame_callback_pending {
-            Wanted::Idle
-        } else if continuous || surface.needs_visual_frame(view) || actions.has_actions_for(id) {
-            Wanted::View
-        } else if surface.moving(self.start.elapsed()) {
-            Wanted::Scene
+        let state = if !self.surface_records.is_configured(id) {
+            ViewState::Unconfigured
+        } else if surface.needs_visual_frame(view) || actions_queued {
+            ViewState::Changed
         } else {
-            Wanted::Idle
-        }
+            ViewState::Unchanged
+        };
+        let deadline = view.next_deadline();
+        self.schedule(SchedulerInput::Wants {
+            surface: id,
+            view: state,
+            deadline,
+        });
     }
 
     /// Advances the scene source in the viewport of the first configured surface, so the scene work runs on the GPU
-    /// while the views are composed. Calls the tick callback of the app when at least one surface draws.
-    fn begin_frame(&mut self, actions: &ActionBatch) -> Result<(), Error> {
+    /// while the views are composed.
+    fn begin_frame(&mut self) -> Result<(), Error> {
         let viewport = (self.surfaces.keys())
             .find(|&&id| self.surface_records.is_configured(id))
             .and_then(|&id| self.surface_records.open_viewport(id));
         if let Some(viewport) = viewport {
             (self.renderer.advance_scene(viewport)).map_err(Error::Render)?;
         }
-        if (self.surfaces.keys()).any(|&id| self.wants_frame(id, actions) != Wanted::Idle) {
-            let now = self.start.elapsed();
-            if let Some(tick) = self.config.tick.as_mut() {
-                tick(now.saturating_sub(self.last_tick));
-            }
-            self.last_tick = now;
-        }
         Ok(())
+    }
+
+    /// Calls the tick callback of the app, and the frame callback of the app with `timing`, the timing of the first
+    /// frame of a render.
+    fn notify_frame(&mut self, timing: FrameTime) {
+        let now = self.start.elapsed();
+        if let Some(tick) = self.config.tick.as_mut() {
+            tick(now.saturating_sub(self.last_tick));
+        }
+        self.last_tick = now;
+        if let Some(callback) = self.config.on_frame.as_mut() {
+            callback(timing);
+        }
     }
 
     fn composition_order(&self) -> Vec<SurfaceId> {
@@ -113,14 +136,14 @@ impl Platform {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `id` with its queued actions, and updates the role, the
-    /// shape and the blur region of the surface for the frame.
+    /// Composes the view of surface `id` for `timing` with its queued actions, and updates the role, the shape and
+    /// the blur region of the surface for the frame.
     fn prepare_surface(
         &mut self,
         id: SurfaceId,
-        wanted: Wanted,
+        kind: FrameKind,
+        timing: FrameTime,
         actions: &mut ActionBatch,
-        frame_notified: &mut bool,
     ) -> Result<FrameStart, Error> {
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
@@ -132,17 +155,11 @@ impl Platform {
                 .observer
                 .as_ref()
                 .and_then(|_| thread_cpu_time()),
-            timing: surface.clock.sample(self.start.elapsed()),
+            timing,
             viewport,
         };
-        if !*frame_notified {
-            if let Some(callback) = self.config.on_frame.as_mut() {
-                callback(start.timing);
-            }
-            *frame_notified = true;
-        }
         let mut changed = false;
-        if wanted == Wanted::View {
+        if kind == FrameKind::Compose {
             let mut frame = |view: &mut View, sink: &mut SceneSink| {
                 view.frame_into_at(viewport, self.renderer.shaper(), start.timing, sink)
             };
@@ -219,16 +236,14 @@ impl Platform {
         Ok(drawn)
     }
 
-    /// Reports the frame of surface `id` to the observers of the app. Returns whether the loop renders again
-    /// at once. A stale swapchain is replaced by the next draw, so that draw follows at once. A pending frame
-    /// waits for a configure or a buffer release sent by the compositor. A shown frame waits for its frame
-    /// callback.
+    /// Reports the frame of surface `id` to the observers of the app, and returns the render cost of the frame. A
+    /// frame that was not shown invalidates the view.
     fn report_frame(
         &mut self,
         id: SurfaceId,
         drawn: Drawn,
         start: FrameStart,
-    ) -> Result<NextRender, Error> {
+    ) -> Result<Duration, Error> {
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         if let Some(observer) = &mut self.config.view_observer {
@@ -242,18 +257,12 @@ impl Platform {
                 observer(id, info);
             }
         }
+        let render_cost = start.wall.elapsed();
         if drawn.outcome != FrameOutcome::Shown {
             view.invalidate();
-            return Ok(if drawn.outcome == FrameOutcome::Stale {
-                NextRender::Immediately
-            } else {
-                NextRender::AfterEvent
-            });
+            return Ok(render_cost);
         }
         view.record_presentation(start.timing.presentation);
-        surface.frame_callback_pending = true;
-        let render_cost = start.wall.elapsed();
-        surface.clock.render_cost(render_cost);
         if let Some(observer) = &mut self.config.observer
             && let Some(started) = start.cpu
             && let Some(now) = thread_cpu_time()
@@ -276,16 +285,8 @@ impl Platform {
                 }),
             });
         }
-        Ok(NextRender::AfterEvent)
+        Ok(render_cost)
     }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Wanted {
-    View,
-    /// The view is unchanged, but motions in the scene tree of the surface still play.
-    Scene,
-    Idle,
 }
 
 /// The CPU time of the calling thread, or `None` when the clock reports a negative time.

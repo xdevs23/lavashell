@@ -7,10 +7,12 @@ mod input;
 mod output;
 mod settings;
 mod surface;
+mod timing;
 mod watch;
 
 pub use input::{Button, DeviceEvent, InputRequest, KeyboardDevice, PointerDevice, PressState};
 pub use output::{OutputEvent, OutputId};
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};
+pub use timing::TimingEvent;
 pub use watch::{WatchEvent, WatchId, WatchRequest};

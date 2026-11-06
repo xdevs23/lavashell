@@ -11,7 +11,9 @@ use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
-use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use lavashell_runtime::{
+    Choreographers, FrameScheduler, InputRouter, OutputRecords, Redraw, SurfaceRecords, Window,
+};
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::LoopHandle;
@@ -102,6 +104,12 @@ impl Platform {
         let mut sources = vec![connection_source];
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
+        let redraw = if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene()
+        {
+            Redraw::Continuous
+        } else {
+            Redraw::OnChange
+        };
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
@@ -112,6 +120,8 @@ impl Platform {
             surface_records,
             surface_requests: Vec::new(),
             choreographers: Choreographers::default(),
+            scheduler: FrameScheduler::new(redraw),
+            started_frames: BTreeMap::new(),
             surfaces: BTreeMap::new(),
             renderer,
             connection: connection.clone(),
