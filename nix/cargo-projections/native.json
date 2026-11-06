@@ -731,6 +731,15 @@
                     "package": "lavashell-platform",
                     "path": "../lavashell-platform"
                   },
+                  "lavashell-renderer": {
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "package": "lavashell-renderer",
+                    "path": "../lavashell-renderer"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -2540,6 +2549,7 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-platform",
+                  "lavashell-renderer",
                   "thiserror"
                 ],
                 "name": "lavashell-runtime",
@@ -3851,7 +3861,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "831dfb790f1b99876be176c45fa24196d2606cd219be322029142359a0bbd956"
+        "seedHash": "d263a51d47e46da066192cb7cc00ec540dc33b8017d644f03717cb7dc1f7a23c"
       }
     }
   },
@@ -5014,6 +5024,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
+          "lavashell-renderer",
           "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ],
