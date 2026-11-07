@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Platform;
+use crate::Error;
 use crate::clipboard::{DragEvent, DragGesture, DragRequest, DropEvent};
-use crate::{Cancellation, Error};
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::transfer::DropAcceptance;
+use lavashell_core::transfer::{Cancellation, DropAcceptance};
 use lavashell_core::view::View;
 use sctk::reexports::client::protocol::{wl_pointer, wl_seat, wl_surface};
 use smithay_client_toolkit as sctk;
@@ -118,43 +118,12 @@ impl Platform {
             })
     }
 
-    pub(crate) fn has_surface(&self, surface: SurfaceId) -> bool {
-        self.surfaces.contains_key(&surface)
-    }
-
-    pub(crate) fn clipboard_view(&mut self, surface: SurfaceId) -> Option<&mut View> {
-        self.surface_records.open_view_mut(surface)
-    }
-
-    pub(crate) fn clipboard_surface_for(
-        &self,
-        surface: SurfaceId,
-    ) -> Option<wl_surface::WlSurface> {
-        if !self.surface_records.is_open(surface) {
-            return None;
-        }
-        self.surfaces.get(&surface).map(|native| native.wl.clone())
-    }
-
     pub(crate) fn clipboard_view_for(
         &mut self,
         surface: &wl_surface::WlSurface,
     ) -> Option<&mut View> {
         let id = self.find_surface(surface)?;
         self.surface_records.open_view_mut(id)
-    }
-
-    pub(crate) fn clipboard_input_device(
-        &self,
-        surface: SurfaceId,
-    ) -> Result<wl_seat::WlSeat, Error> {
-        let mut devices =
-            (self.devices.iter()).filter(|device| device.keyboard_focuses(&self.input, surface));
-        let first = devices.next().ok_or(Error::NoFocusedInputDevice)?;
-        if devices.next().is_some() {
-            return Err(Error::SeveralFocusedInputDevices);
-        }
-        Ok(first.seat.clone())
     }
 
     /// The id of the open surface `surface`.

@@ -188,7 +188,7 @@ impl Platform {
             pipe,
             Scope {
                 seat,
-                surface: Some(surface),
+                surface,
                 source: None,
                 incoming: Some(incoming.info.id),
             },

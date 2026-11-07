@@ -64,7 +64,7 @@ impl TouchHandler for Platform {
         }
         let seat = devices.seat.clone();
         let sample = finger_sample(touch_id(&seat, id), at);
-        self.clipboard.note_serial(seat, serial);
+        self.note_input_serial(seat, serial);
         self.route_input(DeviceEvent::TouchDown { surface, sample });
     }
 

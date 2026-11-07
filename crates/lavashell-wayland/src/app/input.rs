@@ -326,7 +326,7 @@ impl PointerHandler for Platform {
             if let Some(serial) = serial
                 && let Some(seat) = self.transfer_pointer_device(pointer)
             {
-                self.clipboard.note_serial(seat, serial);
+                self.note_input_serial(seat, serial);
             }
         }
     }
@@ -410,7 +410,8 @@ impl KeyboardHandler for Platform {
         event: KeyEvent,
     ) {
         if let Some(seat) = self.keyboard_seat(keyboard) {
-            self.clipboard.note_serial(seat.seat.clone(), serial);
+            let seat = seat.seat.clone();
+            self.note_input_serial(seat, serial);
         }
         self.dispatch_key(keyboard, event, false);
     }

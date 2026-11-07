@@ -4,7 +4,6 @@ use super::render::NextRender;
 
 use super::{App, AppConfig, Platform, Request, session_lock};
 use crate::Error;
-use crate::clipboard::Clipboard;
 use crate::logical::{whole_size, window_size};
 use crate::surface::LayerSurface;
 use lavashell_core::frame::{FrameReport, FrameTime};
@@ -15,7 +14,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::{Fonts, Painter};
-use lavashell_runtime::{RunEnd, ViewActions, Window};
+use lavashell_runtime::{Clipboard, ClipboardTransfers, RunEnd, ViewActions, Window};
 use sctk::reexports::calloop::EventLoop;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::globals::registry_queue_init;
@@ -193,19 +192,20 @@ impl App {
     /// reports replaces the supplied one.
     #[must_use]
     pub fn new(platform: PlatformFacts) -> Self {
+        let config = AppConfig::default();
         Self {
             requests: Vec::new(),
             output_layers: None,
             fonts: Fonts::default(),
             session_lock: None,
             run_end: RunEnd::default(),
-            clipboard: Clipboard::default(),
+            clipboard: ClipboardTransfers::new(&config.watches),
             painter_setup: None,
             scene: None,
             gpu_timing: false,
             preference_overrides: lavashell_core::preferences::PreferenceOverrides::default(),
             input_filter: None,
-            config: AppConfig::default(),
+            config,
             platform,
         }
     }
@@ -218,7 +218,7 @@ impl App {
 
     #[must_use]
     pub fn clipboard(&self) -> Clipboard {
-        self.clipboard.clone()
+        self.clipboard.clipboard()
     }
 
     #[must_use]

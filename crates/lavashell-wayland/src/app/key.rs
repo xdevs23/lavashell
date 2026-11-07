@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Platform;
 use super::device::keyboard_device;
-use crate::clipboard::{ClipboardShortcut, clipboard_shortcut};
-use lavashell_core::keyboard::{Key, KeyStroke, Shortcut};
-use lavashell_core::view::InputEvent;
+use lavashell_core::keyboard::{Key, KeyStroke};
 use lavashell_platform::{DeviceEvent, PressState};
 use lavashell_runtime::RoutedInput;
-use sctk::reexports::client::protocol::{wl_keyboard, wl_seat};
+use sctk::reexports::client::protocol::wl_keyboard;
 use sctk::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit as sctk;
 
@@ -37,53 +35,30 @@ pub(super) fn stroke(event: KeyEvent) -> KeyStroke {
 }
 
 impl Platform {
-    /// Routes a pressed key of `keyboard` to the view of the focused surface. Control with C, X or V copies, cuts or
+    /// Routes a pressed key of `keyboard` to the view of the focused surface. A clipboard shortcut copies, cuts or
     /// pastes instead.
     pub(super) fn key(&mut self, keyboard: &wl_keyboard::WlKeyboard, event: KeyEvent) {
-        let Some(seat) = self.keyboard_seat(keyboard).map(|seat| seat.seat.clone()) else {
-            return;
-        };
         let pressed = DeviceEvent::Key {
             keyboard: keyboard_device(keyboard),
             stroke: stroke(event),
             state: PressState::Pressed,
         };
         for routed in self.input.route(pressed) {
-            if !self.run_clipboard_shortcut(&routed, &seat) {
+            if !self.run_clipboard_shortcut(&routed) {
                 let _keys_start_no_move = self.deliver(routed);
             }
         }
     }
 
-    /// Copies, cuts or pastes text for a shortcut of Control with C, X or V, and returns whether it did. The view
-    /// receives the shortcut when there is nothing to copy, cut or paste.
-    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput, seat: &wl_seat::WlSeat) -> bool {
-        let RoutedInput::Input {
-            surface,
-            input:
-                InputEvent::Shortcut(Shortcut {
-                    key,
-                    control: true,
-                    alt: false,
-                    ..
-                }),
-            ..
-        } = *routed
-        else {
+    /// Copies, cuts or pastes text for a clipboard shortcut, and returns whether it did. The view receives the shortcut
+    /// when there is nothing to copy, cut or paste, and when its surface is not open.
+    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput) -> bool {
+        let RoutedInput::Input { surface, input, .. } = routed else {
             return false;
         };
-        let Some(shortcut) = self
-            .clipboard_view(surface)
-            .and_then(|view| clipboard_shortcut(view, key))
-        else {
-            return false;
-        };
-        match shortcut {
-            ClipboardShortcut::Paste => self.paste_selection(surface, seat),
-            ClipboardShortcut::Cut(source, data) => self.cut_text(surface, source, data),
-            ClipboardShortcut::Copy(text) => self.copy_text(&text),
-        }
-        true
+        let text = &self.clipboard.text;
+        (self.surface_records.open_view_mut(*surface))
+            .is_some_and(|view| text.apply_shortcut(*surface, input, view))
     }
 }
 
