@@ -112,6 +112,25 @@ impl NonNegativeDp {
     pub fn halved(self, times: u8) -> Self {
         Self(self.0 * 0.5_f64.powi(i32::from(times)))
     }
+
+    /// The nearest whole length. It is finite and not negative, like this length.
+    #[must_use]
+    pub fn round(self) -> Self {
+        Self(self.0.round())
+    }
+
+    #[must_use]
+    pub fn max(self, other: Self) -> Self {
+        Self(self.0.max(other.0))
+    }
+}
+
+impl FiniteDp {
+    /// The nearest whole length. It is finite, like this length.
+    #[must_use]
+    pub fn round(self) -> Self {
+        Self(self.0.round())
+    }
 }
 
 impl Fraction {

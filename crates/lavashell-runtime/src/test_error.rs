@@ -18,6 +18,8 @@ pub(crate) enum TestError {
     Number(#[from] NumberError),
     #[error("the surface is not open")]
     NotOpen,
+    #[error("the surface has no panel")]
+    NoPanel,
 }
 
 pub(crate) type TestResult = Result<(), TestError>;

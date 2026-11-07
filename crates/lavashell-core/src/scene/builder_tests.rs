@@ -95,3 +95,18 @@ fn a_restart_empties_the_snapshot_once_the_next_frame_ends() -> TestResult {
     assert!(builder.is_empty() && leaves(&builder.snapshot()).is_empty());
     Ok(())
 }
+
+#[test]
+fn the_size_counts_the_nodes_of_the_scene() -> TestResult {
+    let mut builder = SceneBuilder::default();
+    assert_eq!(builder.size(), 0);
+    builder.change(leaf(1))?;
+    builder.change(leaf(2))?;
+    assert_eq!(builder.size(), 2);
+    builder.change(Change::Remove { id: SceneNodeId(1) })?;
+    builder.end_frame()?;
+    assert_eq!(builder.size(), 1);
+    builder.restart()?;
+    assert_eq!(builder.size(), 0);
+    Ok(())
+}

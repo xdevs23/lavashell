@@ -1,105 +1,148 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{Platform, Role, layer, open_surface};
+use super::shape::ShapeGeometry;
+use super::{AppConfig, LastFrame, Platform, Role, open_surface, send_frame, send_surface_state};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
-use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
-use lavashell_runtime::{ActionBatch, SceneSink};
-use smithay_client_toolkit as sctk;
+use lavashell_renderer::{Drawn, FrameOutcome};
+use lavashell_runtime::{
+    ActionBatch, CpuStamp, FrameKind, FrameSequence, PanelContent, PanelRequests, Rendered,
+    RendererInput, SceneSink, SchedulerInput, ViewState,
+};
 use std::time::{Duration, Instant};
 
+/// When a frame started on the wall clock, the CPU time that the views thread spent on the frame, and the time and
+/// the viewport of the frame.
 #[derive(Clone, Copy)]
-struct FrameStart {
+pub(super) struct FrameStart {
     wall: Instant,
-    cpu: Option<Duration>,
+    /// Measured only while an observer watches the frames.
+    view_cpu: Option<Duration>,
     timing: FrameTime,
     viewport: Viewport,
 }
 
-/// Whether the event loop renders the surfaces again at once or waits for the next event.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum NextRender {
-    Immediately,
-    AfterEvent,
+/// How far the frame of a surface got between its compose and the report of its draw.
+#[derive(Clone, Copy)]
+pub(super) enum FrameProgress {
+    Idle,
+    /// The view composed the frame. The frame draws in the viewport of the compose, and observers measure it from the
+    /// start of the compose.
+    Composed(FrameStart),
+    /// The renderer draws the frame. A shown frame applies `panel`.
+    Drawing {
+        start: FrameStart,
+        panel: Option<PanelRequests>,
+    },
+}
+
+impl AppConfig {
+    /// Reads the CPU clock of the thread only while an observer watches the frames.
+    fn cpu_stamp(&self) -> Option<CpuStamp> {
+        self.observer.as_ref().and_then(|_| CpuStamp::now())
+    }
 }
 
 impl Platform {
-    pub(super) fn render(&mut self) -> Result<NextRender, Error> {
+    /// Makes the renderer commit each surface state in `state_commits` without a frame, then runs the frame started by
+    /// the frame scheduler for each surface, in composition order. A compose frame sends the frames of the view and
+    /// the surface state to the scene pipeline, and a render frame makes the renderer draw the newest scene of the
+    /// surface. Before the frame of a surface runs, the surface reports what the view needs. The scheduler samples the
+    /// frame at that time. After the frames, every surface reports again with the deadline after composing. Returns
+    /// an error after the scene pipeline or the renderer has stopped.
+    pub(super) fn render(&mut self) -> Result<(), Error> {
         // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
         // retires.
         self.cancel_closed_transfers();
-        self.execute_surface_requests();
+        self.execute_surface_requests()?;
+        self.stops.check()?;
+        self.commit_built_states()?;
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.action_queue.take_batch();
-        self.begin_frame(&actions)?;
-        let mut frame_notified = false;
-        let mut next = NextRender::AfterEvent;
-        for id in self.composition_order() {
-            let wanted = self.wants_frame(id, &actions);
-            if wanted == Wanted::Idle {
+        let order = self.composition_order();
+        self.advance_scene()?;
+        let mut composed = false;
+        for &id in &order {
+            if !self.surface_records.is_open(id) {
+                let _closed_frame = self.started_frames.remove(&id);
                 continue;
             }
-            let start = self.prepare_surface(id, wanted, &mut actions, &mut frame_notified)?;
-            let drawn = self.draw_surface(id, start)?;
-            if self.report_frame(id, drawn, start)? == NextRender::Immediately {
-                next = NextRender::Immediately;
+            self.want_frame(id, actions.has_actions_for(id));
+            let Some((kind, timing)) = self.started_frames.remove(&id) else {
+                continue;
+            };
+            match kind {
+                FrameKind::Compose => {
+                    if !composed {
+                        self.notify_frame(timing);
+                        composed = true;
+                    }
+                    self.compose_surface(id, timing, &mut actions)?;
+                }
+                FrameKind::Render => self.render_surface(id, timing)?,
             }
         }
         self.config.action_queue.requeue(actions);
-        // View actions queued during composition run in another frame. A configured surface that waits for no
-        // frame callback can draw that frame at once.
-        if self.config.action_queue.has_pending()
-            && (self.surfaces.iter()).any(|(&id, surface)| {
-                self.surface_records.is_configured(id) && !surface.frame_callback_pending
-            })
-        {
-            next = NextRender::Immediately;
+        // View actions queued during composition run in another frame, started at once by a surface that is ready.
+        for &id in &order {
+            let queued = self.config.action_queue.has_pending_for(id);
+            self.want_frame(id, queued);
         }
         self.connection.flush().map_err(Error::Flush)?;
-        Ok(next)
+        Ok(())
     }
 
-    fn wants_frame(&self, id: SurfaceId, actions: &ActionBatch) -> Wanted {
-        let continuous = self.config.tick.is_some()
-            || self.config.on_frame.is_some()
-            || self.renderer.shows_scene();
+    /// Reports to the frame scheduler what the view of surface `id` needs, while the surface is open. The view of a
+    /// configured surface changed when it needs a visual frame or `actions_queued` is true.
+    fn want_frame(&mut self, id: SurfaceId, actions_queued: bool) {
         let (Some(surface), Some(view)) =
             (self.surfaces.get(&id), self.surface_records.open_view(id))
         else {
-            return Wanted::Idle;
+            return;
         };
-        if !self.surface_records.is_configured(id) || surface.frame_callback_pending {
-            Wanted::Idle
-        } else if continuous || surface.needs_visual_frame(view) || actions.has_actions_for(id) {
-            Wanted::View
-        } else if surface.moving(self.start.elapsed()) {
-            Wanted::Scene
+        let state = if !self.surface_records.is_configured(id) {
+            ViewState::Unconfigured
+        } else if surface.needs_visual_frame(view) || actions_queued {
+            ViewState::Changed
         } else {
-            Wanted::Idle
-        }
+            ViewState::Unchanged
+        };
+        let deadline = view.next_deadline();
+        self.schedule(SchedulerInput::Wants {
+            surface: id,
+            view: state,
+            deadline,
+        });
     }
 
-    /// Advances the scene source in the viewport of the first configured surface, so the scene work runs on the GPU
-    /// while the views are composed. Calls the tick callback of the app when at least one surface draws.
-    fn begin_frame(&mut self, actions: &ActionBatch) -> Result<(), Error> {
-        let viewport = (self.surfaces.keys())
-            .find(|&&id| self.surface_records.is_configured(id))
-            .and_then(|&id| self.surface_records.open_viewport(id));
-        if let Some(viewport) = viewport {
-            (self.renderer.advance_scene(viewport)).map_err(Error::Render)?;
-        }
-        if (self.surfaces.keys()).any(|&id| self.wants_frame(id, actions) != Wanted::Idle) {
-            let now = self.start.elapsed();
-            if let Some(tick) = self.config.tick.as_mut() {
-                tick(now.saturating_sub(self.last_tick));
-            }
-            self.last_tick = now;
+    /// Makes the renderer advance the scene source in the viewport of the first configured surface while the source
+    /// is due, so the scene work runs on the GPU while the views are composed.
+    fn advance_scene(&mut self) -> Result<(), Error> {
+        let due = (self.scene_deadline).is_some_and(|deadline| deadline <= Instant::now());
+        if due
+            && let Some(viewport) = (self.surfaces.keys())
+                .find(|&&id| self.surface_records.is_configured(id))
+                .and_then(|&id| self.surface_records.open_viewport(id))
+        {
+            self.renderer.send(RendererInput::AdvanceScene(viewport))?;
         }
         Ok(())
+    }
+
+    /// Calls the tick callback of the app, and the frame callback of the app with `timing`, the timing of the first
+    /// frame composed in a render.
+    fn notify_frame(&mut self, timing: FrameTime) {
+        let now = self.start.elapsed();
+        if let Some(tick) = self.config.tick.as_mut() {
+            tick(now.saturating_sub(self.last_tick));
+        }
+        self.last_tick = now;
+        if let Some(callback) = self.config.on_frame.as_mut() {
+            callback(timing);
+        }
     }
 
     fn composition_order(&self) -> Vec<SurfaceId> {
@@ -113,124 +156,159 @@ impl Platform {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    /// Composes the view of surface `id` with its queued actions, and updates the role, the
-    /// shape and the blur region of the surface for the frame.
-    fn prepare_surface(
+    /// Composes the view of surface `id` for `timing` with its queued actions, and sends the frames of the view and
+    /// then the surface state for the frame to the scene pipeline. The frame renders once the scene builder built the
+    /// state. When the state does not end a frame, because the sink waits for the whole scene, the frame renders at
+    /// once.
+    fn compose_surface(
         &mut self,
         id: SurfaceId,
-        wanted: Wanted,
+        timing: FrameTime,
         actions: &mut ActionBatch,
-        frame_notified: &mut bool,
-    ) -> Result<FrameStart, Error> {
+    ) -> Result<(), Error> {
+        let wall = Instant::now();
+        let cpu = self.config.cpu_stamp();
         let (surface, view, viewport) =
             open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
         let Viewport { size, density } = viewport;
-        let start = FrameStart {
-            wall: Instant::now(),
-            cpu: self
-                .config
-                .observer
-                .as_ref()
-                .and_then(|_| thread_cpu_time()),
-            timing: surface.clock.sample(self.start.elapsed()),
-            viewport,
+        let sequence = Some(FrameSequence(timing.sequence));
+        let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
+            view.frame_into_at(viewport, &mut self.shaper, timing, sink)
         };
-        if !*frame_notified {
-            if let Some(callback) = self.config.on_frame.as_mut() {
-                callback(start.timing);
-            }
-            *frame_notified = true;
+        let mut changed = view.needs_visual_frame();
+        send_frame(view, self.scene.sink(id, None), &mut frame)?;
+        actions.run(id, view);
+        if view.needs_visual_frame() {
+            changed = true;
+            send_frame(view, self.scene.sink(id, None), &mut frame)?;
         }
-        let mut changed = false;
-        if wanted == Wanted::View {
-            let mut frame = |view: &mut View, sink: &mut SceneSink| {
-                view.frame_into_at(viewport, self.renderer.shaper(), start.timing, sink)
-            };
-            changed = view.needs_visual_frame();
-            surface.show(id, view, &mut self.choreographers, &mut frame)?;
-            actions.run(id, view);
-            if view.needs_visual_frame() {
-                changed = true;
-                surface.show(id, view, &mut self.choreographers, &mut frame)?;
-            }
+        // The composed view can change the size of a panel that fits its content, or the panel layout can
+        // change its margins. The geometry for that is sent with this frame, so that the compositor applies it with
+        // the buffer of this frame.
+        if changed {
+            self.panels.measure(id, view, &mut self.shaper)?;
         }
-        // The composed view can change the size of a layer that fits its content, or the layer layout can
-        // change its margins. The layer-shell requests for that are queued now, so that the compositor
-        // applies them with the buffer of this frame.
-        if let Role::Layer(layer) = &mut surface.role {
-            if changed && let Some(proposal) = layer.content_proposal() {
-                let content =
-                    lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
-                layer.content_measured(content);
-            }
-            layer.update();
-        }
+        surface.send_keyboard(id, self.panels.update(id))?;
         if let Some(bridge) = &mut surface.accessibility {
             bridge.publish(view.accessibility(), false);
         }
-        let shape_changed = match &mut surface.shape {
-            Some(shape) => shape.update(size, density, &surface.wl, &self.compositor)?,
-            None => ShapeUpdate::Unchanged,
-        } == ShapeUpdate::Changed;
-        if shape_changed {
-            let outline = surface.shape.as_ref().and_then(SurfaceShape::path).cloned();
-            (self.renderer.set_outline(id, outline)).map_err(Error::Render)?;
+        let mut clip = None;
+        let shape_changes = surface.shape.update(size, density, |outline| {
+            let geometry = ShapeGeometry::new(outline, size, density)?;
+            clip = Some(geometry.clip);
+            Ok::<_, Error>(geometry.input_cells)
+        })?;
+        if let Some(path) = clip {
+            let outline = surface.shape.clips_paint().then_some(path);
+            (self.renderer).send(RendererInput::Outline {
+                surface: id,
+                outline,
+            })?;
         }
-        if let Some(background) = &surface.background
-            && (shape_changed || surface.blur_size != Some(size))
-        {
-            let region = if let Some(shape) = &surface.shape {
-                shape.region(&self.compositor)?
-            } else {
-                let region =
-                    sctk::compositor::Region::new(&self.compositor).map_err(Error::CreateRegion)?;
-                let (width, height) =
-                    crate::logical::protocol_size(size).ok_or(Error::SurfaceSize(size))?;
-                region.add(0, 0, width, height);
-                region
-            };
-            background.set_blur_region(Some(region.wl_region()));
-            surface.blur_size = Some(size);
-        }
-        Ok(start)
-    }
-
-    /// Draws the frame of surface `id` at the time and in the viewport of `start`, from the snapshot of its scene
-    /// builder.
-    fn draw_surface(&mut self, id: SurfaceId, start: FrameStart) -> Result<Drawn, Error> {
-        let FrameStart {
-            timing, viewport, ..
-        } = start;
-        let (surface, _, _) = open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
-        let frame = PresentFrame {
-            time: timing,
+        let sink = self.scene.sink(id, sequence);
+        let ended = send_surface_state(sink, &self.panels, id, shape_changes)?;
+        surface.frame = FrameProgress::Composed(FrameStart {
+            wall,
+            view_cpu: cpu.and_then(CpuStamp::elapsed),
+            timing,
             viewport,
-        };
-        let snapshot = surface.builder.snapshot();
-        let drawn = (self.renderer.draw(id, frame, &snapshot)).map_err(Error::Draw)?;
-        if let Role::Layer(layer) = &mut surface.role {
-            let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
-            let content = layer::Content {
-                size: viewport.size,
-                input,
-            };
-            layer.presented(drawn.outcome, content);
+        });
+        if !ended {
+            self.schedule(SchedulerInput::Built {
+                surface: id,
+                sequence,
+            });
         }
-        Ok(drawn)
+        Ok(())
     }
 
-    /// Reports the frame of surface `id` to the observers of the app. Returns whether the loop renders again
-    /// at once. A stale swapchain is replaced by the next draw, so that draw follows at once. A pending frame
-    /// waits for a configure or a buffer release sent by the compositor. A shown frame waits for its frame
-    /// callback.
+    /// Makes the renderer draw the newest built scene of surface `id`: the frame composed for the surface, or else a
+    /// frame for `timing` that measures zero view CPU time. The renderer reports the frame once it is drawn.
+    fn render_surface(&mut self, id: SurfaceId, timing: FrameTime) -> Result<(), Error> {
+        let (surface, _, viewport) =
+            open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
+        let start = match surface.frame {
+            FrameProgress::Composed(composed) => composed,
+            FrameProgress::Idle | FrameProgress::Drawing { .. } => FrameStart {
+                wall: Instant::now(),
+                view_cpu: Some(Duration::ZERO),
+                timing,
+                viewport,
+            },
+        };
+        let built = self.scene.built(id);
+        let panel = self.panels.requests(id, &built.state);
+        surface.frame = FrameProgress::Drawing { start, panel };
+        self.renderer.send(RendererInput::Render {
+            surface: id,
+            time: start.timing,
+            viewport: start.viewport,
+            built,
+        })?;
+        Ok(())
+    }
+
+    /// Records the frame drawn by the renderer, reports it to the observers of the app while the surface is open, and
+    /// reports it to the frame scheduler. The scheduler receives the cost of the draw alone, without the wait for the
+    /// scene builder.
+    pub(super) fn rendered(&mut self, rendered: &Rendered) {
+        let Rendered {
+            surface: id,
+            time,
+            viewport,
+            drawn,
+            contents,
+            next_change,
+            cost,
+            cpu_time,
+        } = *rendered;
+        let outcome = drawn.outcome;
+        if self.surface_records.is_open(id)
+            && let Some(surface) = self.surfaces.get_mut(&id)
+        {
+            surface.last_frame = Some(LastFrame { viewport, contents });
+            if let FrameProgress::Drawing { start, panel } = surface.frame
+                && start.timing.sequence == time.sequence
+            {
+                surface.frame = FrameProgress::Idle;
+                if outcome == FrameOutcome::Shown
+                    && let Some(requests) = panel
+                {
+                    let content = PanelContent {
+                        size: viewport.size,
+                        input: surface.shape.accepts_input(),
+                    };
+                    self.panels.shown(id, content, requests);
+                }
+                self.report_frame(id, drawn, start, cpu_time);
+            }
+        }
+        self.schedule(SchedulerInput::Published {
+            surface: id,
+            next_change,
+        });
+        self.schedule(SchedulerInput::Rendered {
+            surface: id,
+            frame: time,
+            outcome,
+            cost,
+        });
+    }
+
+    /// Reports the frame of surface `id` to the observers of the app. A frame that was not shown invalidates the view.
+    /// `render_cpu` is the CPU time that the renderer spent on the frame.
     fn report_frame(
         &mut self,
         id: SurfaceId,
         drawn: Drawn,
         start: FrameStart,
-    ) -> Result<NextRender, Error> {
-        let (surface, view, viewport) =
-            open_surface(&mut self.surfaces, &mut self.surface_records, id)?;
+        render_cpu: Option<Duration>,
+    ) {
+        let Ok((surface, view, viewport)) =
+            open_surface(&mut self.surfaces, &mut self.surface_records, id)
+        else {
+            return;
+        };
         if let Some(observer) = &mut self.config.view_observer {
             observer(id, viewport, view);
         }
@@ -244,19 +322,12 @@ impl Platform {
         }
         if drawn.outcome != FrameOutcome::Shown {
             view.invalidate();
-            return Ok(if drawn.outcome == FrameOutcome::Stale {
-                NextRender::Immediately
-            } else {
-                NextRender::AfterEvent
-            });
+            return;
         }
         view.record_presentation(start.timing.presentation);
-        surface.frame_callback_pending = true;
-        let render_cost = start.wall.elapsed();
-        surface.clock.render_cost(render_cost);
         if let Some(observer) = &mut self.config.observer
-            && let Some(started) = start.cpu
-            && let Some(now) = thread_cpu_time()
+            && let Some(view_cpu) = start.view_cpu
+            && let Some(render_cpu) = render_cpu
         {
             observer(FrameReport {
                 surface: id,
@@ -267,8 +338,8 @@ impl Platform {
                 metrics: None,
                 flags: None,
                 submission: Some(Submission {
-                    render_cost,
-                    cpu_time: now.saturating_sub(started),
+                    render_cost: start.wall.elapsed(),
+                    cpu_time: view_cpu + render_cpu,
                     view: view.stats(),
                     render: drawn.stats,
                     scene: drawn.scene,
@@ -276,20 +347,5 @@ impl Platform {
                 }),
             });
         }
-        Ok(NextRender::AfterEvent)
     }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Wanted {
-    View,
-    /// The view is unchanged, but motions in the scene tree of the surface still play.
-    Scene,
-    Idle,
-}
-
-/// The CPU time of the calling thread, or `None` when the clock reports a negative time.
-fn thread_cpu_time() -> Option<Duration> {
-    let stamp = rustix::time::clock_gettime(rustix::time::ClockId::ThreadCPUTime);
-    Duration::try_from(stamp).ok()
 }

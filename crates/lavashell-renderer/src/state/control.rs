@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::FrameOutcome;
 use lavashell_core::prelude::{FrameTime, Viewport};
+use lavashell_core::surface::SurfaceState;
 
-/// The frame that the renderer state draws into a surface.
+/// The frame drawn by the renderer state into a surface, with the state of the surface, applied by the host together
+/// with the frame.
 #[derive(Clone, Copy, Debug)]
-pub struct PresentFrame {
+pub struct PresentFrame<'a> {
     pub time: FrameTime,
     pub viewport: Viewport,
+    pub state: &'a SurfaceState,
 }
 
 /// The requests of a platform that belong to the draw of each frame of one surface.
 pub trait SurfaceControl {
-    type Error: std::error::Error + 'static;
+    type Error: std::error::Error + Send + 'static;
+    /// What the platform sends to the control between frames, for example a report from the host that a later frame
+    /// applies.
+    type Message: Send;
+
+    fn receive(&mut self, message: Self::Message);
 
     /// Runs before every draw of `frame`, whether or not the frame reaches present.
     ///
@@ -26,4 +34,11 @@ pub trait SurfaceControl {
 
     /// Runs after each draw with its outcome. Only a `Shown` frame was presented.
     fn after_present(&mut self, outcome: FrameOutcome);
+
+    /// Makes the host apply `state` at once, without a new frame.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the platform cannot make a request for `state`.
+    fn commit_state(&mut self, state: &SurfaceState) -> Result<(), Self::Error>;
 }

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::{Point, Rect, Size};
+use lavashell_core::reactive::{Phase, Scope};
 use lavashell_core::shape::{Corners, PointsError, Polygon, RoundedRect};
-use lavashell_core::surface::SurfaceOutline;
-use lavashell_core::units::Dp;
+use lavashell_core::surface::{SurfaceChange, SurfaceOutline};
+use lavashell_core::units::{Density, Dp};
 use std::rc::Rc;
 
 /// The outline of a surface in surface-local dp. The same outline clips what the surface paints and sets the region
@@ -91,10 +92,127 @@ impl WindowShape {
     }
 }
 
+/// The shape of a surface: a window shape with its input cells, or the whole surface without a window shape. The input
+/// cells are computed again when the size or the density of the surface or the reactive state read by the window shape
+/// changes.
+#[derive(Default)]
+pub struct SurfaceShape {
+    shape: Option<WindowShape>,
+    key: Option<(Size, Density)>,
+    cells: Vec<Rect>,
+    scope: Scope,
+}
+
+impl SurfaceShape {
+    #[must_use]
+    pub fn new(shape: Option<WindowShape>) -> Self {
+        Self {
+            shape,
+            ..Self::default()
+        }
+    }
+
+    /// Computes the shape for a surface of `size` at `density`, unless it belongs to that size and density already and
+    /// the reactive state read by the window shape is unchanged. `input_cells` returns the input cells in dp for the
+    /// outline of the window shape. Returns the changes of the surface state that follow, or no change when nothing
+    /// was computed. Without a window shape, the blur region follows the size of the surface.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a contour of the window shape is not a valid polygon, or when `input_cells` fails.
+    pub fn update<E: From<PointsError>>(
+        &mut self,
+        size: Size,
+        density: Density,
+        input_cells: impl FnOnce(&SurfaceOutline) -> Result<Vec<Rect>, E>,
+    ) -> Result<Vec<SurfaceChange>, E> {
+        if self.key == Some((size, density)) && !self.needs_frame() {
+            return Ok(Vec::new());
+        }
+        let Some(shape) = &self.shape else {
+            self.key = Some((size, density));
+            return Ok(vec![SurfaceChange::BlurRegion(Some(vec![
+                Rect::from_size(size),
+            ]))]);
+        };
+        let outline = self.scope.track(Phase::Layout, || shape.outline(size))?;
+        self.cells = input_cells(&outline)?;
+        self.key = Some((size, density));
+        let input = if shape.accepts_input() {
+            self.cells.clone()
+        } else {
+            Vec::new()
+        };
+        Ok(vec![
+            SurfaceChange::InputRegion(Some(input)),
+            SurfaceChange::BlurRegion(Some(self.cells.clone())),
+        ])
+    }
+
+    #[must_use]
+    pub fn needs_frame(&self) -> bool {
+        self.scope.dirty().any()
+    }
+
+    /// Whether the surface receives input anywhere.
+    #[must_use]
+    pub fn accepts_input(&self) -> bool {
+        (self.shape.as_ref()).is_none_or(|shape| shape.accepts_input() && !self.cells.is_empty())
+    }
+
+    #[must_use]
+    pub fn clips_paint(&self) -> bool {
+        self.shape.as_ref().is_some_and(WindowShape::clips_paint)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use lavashell_core::units::DpExt;
+
+    #[test]
+    fn a_shape_receives_input_in_its_cells_unless_it_passes_input_through()
+    -> Result<(), PointsError> {
+        let square = Rect::new(0.dp(), 0.dp(), 2.dp(), 2.dp());
+        let shape = WindowShape::rounded_rect(move |_| Some((square, 0.dp())));
+        let size = Size::new(4.dp(), 4.dp());
+        let cells = move |_: &SurfaceOutline| Ok::<_, PointsError>(vec![square]);
+        let mut receiving = SurfaceShape::new(Some(shape.clone()));
+        assert_eq!(
+            receiving.update(size, Density::ONE, cells)?,
+            [
+                SurfaceChange::InputRegion(Some(vec![square])),
+                SurfaceChange::BlurRegion(Some(vec![square])),
+            ]
+        );
+        assert!(receiving.update(size, Density::ONE, cells)?.is_empty());
+        assert!(receiving.accepts_input());
+        let mut passthrough = SurfaceShape::new(Some(shape.input_passthrough()));
+        assert_eq!(
+            passthrough.update(size, Density::ONE, cells)?,
+            [
+                SurfaceChange::InputRegion(Some(Vec::new())),
+                SurfaceChange::BlurRegion(Some(vec![square])),
+            ]
+        );
+        assert!(!passthrough.accepts_input());
+        Ok(())
+    }
+
+    #[test]
+    fn without_a_window_shape_only_the_blur_region_follows_the_size() -> Result<(), PointsError> {
+        let mut whole = SurfaceShape::default();
+        let size = Size::new(4.dp(), 4.dp());
+        let cells = |_: &SurfaceOutline| Ok::<_, PointsError>(Vec::new());
+        assert_eq!(
+            whole.update(size, Density::ONE, cells)?,
+            [SurfaceChange::BlurRegion(Some(vec![Rect::from_size(size)]))]
+        );
+        assert!(whole.update(size, Density::ONE, cells)?.is_empty());
+        assert!(whole.accepts_input() && !whole.clips_paint());
+        Ok(())
+    }
 
     #[test]
     fn contours_follow_the_size_of_the_surface() -> Result<(), PointsError> {

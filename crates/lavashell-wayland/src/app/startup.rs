@@ -1,17 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::{Control, RoleControl};
 use super::creation::NativeSpec;
 use super::{
-    App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation, session_lock,
+    App, AppConfig, Platform, Request, Role, SeatDevices, Stops, SurfaceProtocols, accessibility,
+    focus_grab, output_layers, preferences, presentation, renderer_outputs, scene_reports,
+    session_lock,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
-use lavashell_renderer::{RendererSetup, RendererState};
-use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use lavashell_renderer::RendererSetup;
+use lavashell_renderer::text::Shaper;
+use lavashell_runtime::{
+    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, Renderer, RendererObserver,
+    ScenePipeline, SurfaceRecords, Window,
+};
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::LoopHandle;
@@ -56,7 +63,7 @@ impl Platform {
             session_lock,
             clipboard,
             painter_setup,
-            scene,
+            scene: scene_setup,
             gpu_timing,
             preference_overrides,
             input_filter,
@@ -69,13 +76,12 @@ impl Platform {
         let setup = RendererSetup {
             fonts,
             painter: painter_setup,
-            scene,
+            scene: scene_setup,
             gpu_timing,
             full_redraw: config.full_redraw,
             start,
         };
-        let wayland = WaylandPresentation::new(connection.backend());
-        let renderer = RendererState::new(&wayland, setup).map_err(Error::Render)?;
+        let redraw = redraw_mode(&config, &setup);
         let outputs = OutputState::new(globals, &qh);
         let session_lock = session_lock
             .map(|configuration| {
@@ -89,9 +95,7 @@ impl Platform {
             })
             .transpose()?;
         let output_layers = output_layers
-            .map(|configuration| {
-                output_layers::Runtime::new(configuration, protocols.layers.as_ref())
-            })
+            .map(|panels| output_layers::Runtime::new(panels, protocols.layers.as_ref()))
             .transpose()?;
         let mut surface_records = SurfaceRecords::new(preference_overrides);
         surface_records.change_settings(SettingsEvent::Locales(preferences::user_languages()));
@@ -102,6 +106,11 @@ impl Platform {
         let mut sources = vec![connection_source];
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
+        let builder_reports = scene_reports::install(&loop_handle, &mut sources)?;
+        let renderer_outputs = renderer_outputs::install(&loop_handle, &mut sources)?;
+        let scene = ScenePipeline::start(builder_reports)?;
+        let cpu_timing = config.observer.is_some();
+        let (renderer, shaper) = start_renderer(connection, setup, cpu_timing, renderer_outputs)?;
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
@@ -110,10 +119,18 @@ impl Platform {
             sources,
             watches: BTreeMap::new(),
             surface_records,
+            panels: PanelRecords::default(),
             surface_requests: Vec::new(),
-            choreographers: Choreographers::default(),
-            surfaces: BTreeMap::new(),
+            scene,
             renderer,
+            stops: Stops::default(),
+            shaper,
+            scene_deadline: None,
+            scheduler: FrameScheduler::new(redraw),
+            started_frames: BTreeMap::new(),
+            state_commits: BTreeMap::new(),
+            surfaces: BTreeMap::new(),
+            retiring: BTreeMap::new(),
             connection: connection.clone(),
             registry: RegistryState::new(globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
@@ -134,27 +151,23 @@ impl Platform {
             qh,
         };
         for request in requests {
-            platform.create_requested_surface(request)?;
+            if let Err(error) = platform.create_requested_surface(request) {
+                return Err(platform.stopped_actor_failure(error));
+            }
         }
         Ok(platform)
     }
 
-    fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
+    fn create_requested_surface(&mut self, request: Request) -> Result<SurfaceId, Error> {
         match request {
             Request::Window(window, mut view) => {
-                let spec = window.spec(&mut view, self.renderer.shaper())?;
+                let spec = window.spec(&mut view, &mut self.shaper)?;
                 let native = NativeSpec::window(window, view, &spec)?;
                 self.create_surface(native, |platform, wl, _| {
                     platform.window_role(wl, &spec.role)
                 })
             }
-            Request::Layer(options, mut view) => {
-                let context = self.layer_context(&options, &mut view)?;
-                let spec = NativeSpec::layer(&options, view, context)?;
-                self.create_surface(spec, |platform, wl, id| {
-                    platform.layer_role(wl, None, &options, context, id)
-                })
-            }
+            Request::Layer(options, view) => self.create_layer(&options, view, None),
             Request::Lock(output, view) => self
                 .create_surface(NativeSpec::lock(view), |platform, wl, id| {
                     platform.lock_role(wl, &output, id)
@@ -162,7 +175,11 @@ impl Platform {
         }
     }
 
-    fn window_role(&self, wl: &wl_surface::WlSurface, role: &SurfaceRole) -> Result<Role, Error> {
+    fn window_role(
+        &self,
+        wl: &wl_surface::WlSurface,
+        role: &SurfaceRole,
+    ) -> Result<(Role, RoleControl), Error> {
         let SurfaceRole::Window {
             title,
             app_id,
@@ -187,8 +204,34 @@ impl Platform {
             window.set_fullscreen(None);
         }
         window.commit();
-        Ok(Role::Window { window })
+        Ok((Role::Window { window }, RoleControl::Stateless))
     }
+}
+
+/// Draws continuously while the app ticks, observes every frame or shows a scene, and otherwise only after a change.
+fn redraw_mode(config: &AppConfig, setup: &RendererSetup) -> Redraw {
+    if config.tick.is_some() || config.on_frame.is_some() || setup.shows_scene() {
+        Redraw::Continuous
+    } else {
+        Redraw::OnChange
+    }
+}
+
+/// Starts the renderer for the surfaces of `connection`, and the shaper that measures text with the text rendering of
+/// that renderer.
+fn start_renderer(
+    connection: &Connection,
+    setup: RendererSetup,
+    cpu_timing: bool,
+    outputs: RendererObserver,
+) -> Result<(Renderer<Control>, Shaper), Error> {
+    let fonts = setup.fonts.clone();
+    let wayland = WaylandPresentation::new(connection.backend());
+    let renderer =
+        Renderer::start(wayland, setup, cpu_timing, outputs).map_err(Error::StartRenderer)?;
+    let shaper =
+        Shaper::with_rendering(&fonts, renderer.text_rendering()).map_err(Error::CreateShaper)?;
+    Ok((renderer, shaper))
 }
 
 impl NativeSpec {
@@ -201,6 +244,7 @@ impl NativeSpec {
             shape: window.shape,
             drag_region: window.drag_region,
             accessible_name: window.title,
+            role_state: SurfaceState::default(),
         })
     }
 }

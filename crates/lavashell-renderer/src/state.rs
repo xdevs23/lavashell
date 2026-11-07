@@ -7,26 +7,30 @@ mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
 
-use crate::text::Shaper;
+use crate::text::TextRendering;
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
 use crate::{
     Error, Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents, SurfaceFrame, SurfaceTiming,
 };
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::units::NumberError;
 use lavashell_effect_quality::FrameBudget;
 use lavashell_vulkan::Window;
 use scene_source::SceneImages;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use targets::{AttachedSurface, PixelInputs};
 
 /// Runs on the painter once it exists.
-pub type PainterSetup = Box<dyn FnOnce(&mut Painter)>;
+pub type PainterSetup = Box<dyn FnOnce(&mut Painter) + Send>;
+
+/// Makes the scene source on the thread that draws.
+pub type SceneSetup = Box<dyn FnOnce() -> Box<dyn SceneSource> + Send>;
 
 /// What the renderer state is made from.
 pub struct RendererSetup {
@@ -34,14 +38,22 @@ pub struct RendererSetup {
     /// Runs on the painter once it exists, for example to install effects or to replace the chooser of the effect
     /// quality.
     pub painter: Option<PainterSetup>,
-    /// Draws the latest completed image of the scene source beneath the scene on every surface.
-    pub scene: Option<Box<dyn SceneSource>>,
+    /// Makes the scene source whose latest completed image is drawn beneath the scene on every surface.
+    pub scene: Option<SceneSetup>,
     /// Measures the GPU time of every frame. [`Drawn::gpu`] contains the measured times.
     pub gpu_timing: bool,
     /// Paints the whole surface in every frame instead of the area that changed.
     pub full_redraw: bool,
     /// The instant from which the times passed to the scene source are measured.
     pub start: Instant,
+}
+
+impl RendererSetup {
+    /// Whether the renderer draws a scene source beneath the scene of every surface.
+    #[must_use]
+    pub fn shows_scene(&self) -> bool {
+        self.scene.is_some()
+    }
 }
 
 /// A surface for the renderer state to draw into, with the control that makes the platform requests of each present.
@@ -102,6 +114,32 @@ pub enum StateError {
     PublishScene(#[source] Error),
 }
 
+/// A surface that the renderer state could not attach, with the control handed in for it.
+pub struct AttachError<C> {
+    pub control: C,
+    pub error: StateError,
+}
+
+impl<C> fmt::Debug for AttachError<C> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (formatter.debug_struct("AttachError"))
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<C> fmt::Display for AttachError<C> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a surface could not be attached")
+    }
+}
+
+impl<C> std::error::Error for AttachError<C> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
 /// A failure of the draw of a frame, named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
 pub enum DrawError<E> {
@@ -112,6 +150,15 @@ pub enum DrawError<E> {
     #[error("a frame could not be painted")]
     Paint(#[source] Error),
     #[error("the platform could not prepare the present of a frame")]
+    Control(#[source] E),
+}
+
+/// A failure of the commit of a surface state without a frame, named after the operation that failed.
+#[derive(Debug, thiserror::Error)]
+pub enum CommitError<E> {
+    #[error(transparent)]
+    State(#[from] StateError),
+    #[error("the platform could not commit the state of a surface")]
     Control(#[source] E),
 }
 
@@ -159,7 +206,7 @@ impl<C: SurfaceControl> RendererState<C> {
         Ok(Self {
             painter,
             surfaces: BTreeMap::new(),
-            scene: scene.map(SceneImages::new),
+            scene: scene.map(|make| SceneImages::new(make())),
             gpu,
             start,
             full_redraw,
@@ -171,27 +218,40 @@ impl<C: SurfaceControl> RendererState<C> {
     /// # Errors
     ///
     /// Fails when the surface is attached already, when its target cannot be created, or when its HDR metadata is
-    /// invalid.
-    pub fn attach(&mut self, attach: Attach<C>) -> Result<(), StateError> {
-        let Entry::Vacant(entry) = self.surfaces.entry(attach.surface) else {
-            return Err(StateError::AttachedTwice(attach.surface));
+    /// invalid. The error then contains the control of the surface.
+    pub fn attach(&mut self, attach: Attach<C>) -> Result<(), AttachError<C>> {
+        let Attach {
+            surface,
+            window,
+            alpha,
+            timing,
+            output,
+            hdr_metadata,
+            gpu_budget,
+            control,
+        } = attach;
+        let Entry::Vacant(entry) = self.surfaces.entry(surface) else {
+            let error = StateError::AttachedTwice(surface);
+            return Err(AttachError { control, error });
         };
-        let mut target = (self
-            .gpu
-            .surface_target(attach.window, attach.alpha, attach.timing))
-        .map_err(StateError::CreateTarget)?;
-        target.request_output(attach.output);
-        if let Some(metadata) = attach.hdr_metadata {
-            target
-                .hdr_metadata(metadata)
-                .map_err(StateError::SetHdrMetadata)?;
+        let created = (self.gpu.surface_target(window, alpha, timing))
+            .map_err(StateError::CreateTarget)
+            .and_then(|mut target| {
+                target.request_output(output);
+                if let Some(metadata) = hdr_metadata {
+                    target
+                        .hdr_metadata(metadata)
+                        .map_err(StateError::SetHdrMetadata)?;
+                }
+                Ok(target)
+            });
+        match created {
+            Ok(target) => {
+                let _attached = entry.insert(AttachedSurface::new(target, control, gpu_budget));
+                Ok(())
+            }
+            Err(error) => Err(AttachError { control, error }),
         }
-        let _attached = entry.insert(AttachedSurface::new(
-            target,
-            attach.control,
-            attach.gpu_budget,
-        ));
-        Ok(())
     }
 
     /// Drops the target of `surface` and everything the painter stored for it, and returns the control of the
@@ -237,14 +297,11 @@ impl<C: SurfaceControl> RendererState<C> {
             .map_err(StateError::ReadContents)
     }
 
-    /// The shaper that measures text for views and shapes the text painted by the painter of the state.
-    pub fn shaper(&mut self) -> &mut Shaper {
-        self.painter.shaper()
-    }
-
+    /// The text rendering of the painter, which a shaper made by [`crate::text::Shaper::with_rendering`] follows to
+    /// measure text as the painter shapes it.
     #[must_use]
-    pub fn shows_scene(&self) -> bool {
-        self.scene.is_some()
+    pub fn text_rendering(&self) -> TextRendering {
+        self.painter.text_rendering()
     }
 
     /// The instant at which the scene source produces its next scene, or `None` without a scene source or while it
@@ -285,7 +342,7 @@ impl<C: SurfaceControl> RendererState<C> {
     pub fn draw(
         &mut self,
         surface: SurfaceId,
-        frame: PresentFrame,
+        frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error>> {
         self.advance_scene(frame.viewport)?;
@@ -354,6 +411,27 @@ impl<C: SurfaceControl> RendererState<C> {
             output: attached.target.output(),
             scene: scene.map(|scene| scene.generation),
         })
+    }
+
+    /// Makes the host apply `state` to `surface` at once, without a new frame. The state never applies while a frame
+    /// of the surface is drawn.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `surface` is not attached, or when the control of the surface fails.
+    pub fn commit_state(
+        &mut self,
+        surface: SurfaceId,
+        state: &SurfaceState,
+    ) -> Result<(), CommitError<C::Error>> {
+        let attached =
+            (self.surfaces.get_mut(&surface)).ok_or(StateError::UnknownSurface(surface))?;
+        (attached.control.commit_state(state)).map_err(CommitError::Control)
+    }
+
+    /// The control of `surface`, or `None` when `surface` is not attached.
+    pub fn control_mut(&mut self, surface: SurfaceId) -> Option<&mut C> {
+        (self.surfaces.get_mut(&surface)).map(|attached| &mut attached.control)
     }
 
     /// The smallest number of frames in flight among the swapchains of the attached surfaces, which show the scene.

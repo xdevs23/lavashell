@@ -14,7 +14,11 @@ icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-platform.workspace = true
+lavashell-renderer.workspace = true
+rustix = { workspace = true, features = ["time"] }
 thiserror.workspace = true
 
 [dev-dependencies]
+ash.workspace = true
 lavashell-test-fixtures.workspace = true
+lavashell-vulkan.workspace = true

@@ -36,6 +36,24 @@ impl Shaper {
         })
     }
 
+    /// A shaper that measures text as a painter with the text rendering `rendering` shapes it. `rendering` is the
+    /// policy returned by [`crate::Painter::text_rendering`], which is adjusted to the destination already.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the fonts of `registry` cannot be loaded.
+    pub fn with_rendering(
+        registry: &crate::Fonts,
+        rendering: TextRendering,
+    ) -> Result<Self, crate::Error> {
+        let shaper = Self::new(registry, Failures::default())?;
+        shaper.text_configuration.set(Configuration {
+            rendering,
+            destination: TextDestination::default(),
+        });
+        Ok(shaper)
+    }
+
     /// Sets the text rendering policy, adjusted by [`TextRendering::for_destination`], and where the text is drawn.
     /// Returns whether the policy or the destination changed.
     pub(crate) fn set_text_rendering(

@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
-use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
-use lavashell_core::geometry::{Size, Viewport};
+use lavashell_actor::Closed;
+use lavashell_core::frame::{FrameReport, FrameTime};
+use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
-use lavashell_core::scene::SceneBuilder;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
-use lavashell_renderer::{Fonts, PainterSetup, RendererState};
+use lavashell_renderer::text::Shaper;
+use lavashell_renderer::{Fonts, PainterSetup, SceneSetup, SurfaceContents};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, DragRegion, InputFilter, InputRouter, OutputRecords, RunEnd,
-    SceneSink, SurfaceRecords, Window,
+    ActionQueue, BuiltScene, DragRegion, FrameKind, FrameScheduler, InputFilter, InputRouter,
+    OutputRecords, PanelRecords, PanelRequests, PanelsPerOutput, Renderer, RendererInput,
+    RendererStopped, RunEnd, ScenePipeline, SceneSink, SchedulerInput, SchedulerOutput,
+    SurfaceRecords, SurfaceShape, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -28,7 +31,7 @@ use sctk::reexports::protocols::wp::{
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
         wp_fractional_scale_v1::WpFractionalScaleV1,
     },
-    viewporter::client::wp_viewporter::WpViewporter,
+    viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
 };
 use sctk::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
 use sctk::registry::RegistryState;
@@ -38,7 +41,6 @@ use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
-use std::convert::Infallible;
 use std::time::{Duration, Instant};
 
 mod accessibility;
@@ -57,13 +59,14 @@ mod presentation;
 mod protocols;
 mod public;
 mod render;
+mod renderer_outputs;
+mod scene_reports;
 pub(crate) mod session_lock;
 mod shape;
 mod standard_error;
 mod startup;
 mod touch;
 mod transfer;
-mod wake;
 mod watch;
 mod window_input;
 
@@ -79,13 +82,13 @@ enum Request {
 
 pub struct App {
     requests: Vec<Request>,
-    output_layers: Option<output_layers::Configuration>,
+    output_layers: Option<PanelsPerOutput<LayerSurface>>,
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
     clipboard: Clipboard,
     painter_setup: Option<PainterSetup>,
-    scene: Option<Box<dyn lavashell_renderer::vulkan::SceneSource>>,
+    scene: Option<SceneSetup>,
     gpu_timing: bool,
     preference_overrides: lavashell_core::preferences::PreferenceOverrides,
     input_filter: Option<InputFilter>,
@@ -119,99 +122,92 @@ enum Role {
     Lock(session_lock::LockSurface),
 }
 
+impl Role {
+    fn destroy(&self) {
+        match self {
+            Self::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
+            Self::Lock(surface) if surface.is_alive() => surface.destroy(),
+            _ => {}
+        }
+    }
+}
+
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
-    builder: SceneBuilder,
+    frame: render::FrameProgress,
+    last_frame: Option<LastFrame>,
+    /// The panel requests applied by the commit without a frame that the renderer has not reported yet.
+    committing: Option<PanelRequests>,
     role: Role,
     wl: wl_surface::WlSurface,
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
     _window: std::sync::Arc<owned_wl_surface::OwnedWlSurface>,
+    viewport: Option<WpViewport>,
     fractional: Option<WpFractionalScaleV1>,
-    /// Whether the compositor has not sent the `done` event of the frame callback committed with the last shown frame.
-    frame_callback_pending: bool,
-    clock: FrameClock,
-    telemetry: PresentationTracker,
     output: Option<OutputInfo>,
     background: Option<ExtBackgroundEffectSurfaceV1>,
-    blur_size: Option<Size>,
-    shape: Option<shape::SurfaceShape>,
+    shape: SurfaceShape,
     drag_region: Option<DragRegion>,
 }
 
 impl Surface {
     fn needs_visual_frame(&self, view: &View) -> bool {
-        view.needs_visual_frame()
-            || self
-                .shape
-                .as_ref()
-                .is_some_and(shape::SurfaceShape::needs_frame)
+        view.needs_visual_frame() || self.shape.needs_frame()
     }
 
-    fn moving(&self, now: Duration) -> bool {
-        let shown = self.clock.predict(now);
-        self.builder
-            .next_change(shown)
-            .is_some_and(|change| change <= shown)
-    }
-
-    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, builds the frames merged
-    /// there into the scene builder, and logs each component that failed in the frame as an error. When a change does
-    /// not fit the scene, the view sends the whole scene with the next frame. The builder restarts with that frame.
-    /// If the builder had a scene before, the failure is logged and the frame ends without error. If the builder was
-    /// empty, the failure ends the frame with an error.
-    fn show(
-        &mut self,
-        id: SurfaceId,
-        view: &mut View,
-        choreographers: &mut Choreographers,
-        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
-    ) -> Result<(), crate::Error> {
-        let showed_nothing = self.builder.is_empty();
-        let error = match frame(view, choreographers.sink(id)) {
-            Ok(failures) => {
-                crate::failures::log_failures(failures);
-                let Err(error) = choreographers.build(id, &mut self.builder) else {
-                    return Ok(());
-                };
-                view.invalidate();
-                crate::Error::BuildScene(error)
-            }
-            Err(error) => crate::Error::ShowScene(error),
-        };
-        if showed_nothing {
-            return Err(error);
+    /// Whether the target of the surface contains the frame drawn last at `viewport`.
+    fn contents(&self, viewport: Viewport) -> SurfaceContents {
+        match self.last_frame {
+            Some(last) if last.viewport == viewport => last.contents,
+            _ => SurfaceContents::Outdated,
         }
-        log::warn!(
-            "the surface shows the whole scene next: {}",
-            lavashell_core::error::message_chain(&error)
-        );
-        Ok(())
-    }
-
-    fn wakes(&self, view: &View, now: Duration) -> Option<Duration> {
-        let shown = self.clock.predict(now);
-        wake::next_wake(
-            now,
-            shown,
-            view.next_deadline(),
-            self.builder.next_change(shown),
-        )
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
         self.accessibility = None;
-        if let Some(background) = self.background.take() {
-            background.destroy();
+        destroy_objects(
+            self.viewport.take(),
+            self.fractional.take(),
+            self.background.take(),
+            Some(&self.role),
+        );
+    }
+}
+
+/// The viewport of the frame drawn last for a surface, and whether the target of the surface contains that frame.
+#[derive(Clone, Copy)]
+struct LastFrame {
+    viewport: Viewport,
+    contents: SurfaceContents,
+}
+
+/// Which actors stopped while the platform dispatched events, so that the next render ends the run.
+#[derive(Default)]
+struct Stops {
+    scene: bool,
+    renderer: bool,
+}
+
+impl Stops {
+    /// Records the stop reported by `error`, or logs `error` when it reports another failure.
+    fn record(&mut self, error: crate::Error) {
+        match error {
+            crate::Error::SceneStopped => self.scene = true,
+            crate::Error::RendererStopped(_) => self.renderer = true,
+            error => log::error!("{error}"),
         }
-        if let Some(fractional) = self.fractional.take() {
-            fractional.destroy();
-        }
-        match &self.role {
-            Role::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
-            Role::Lock(surface) if surface.is_alive() => surface.destroy(),
-            _ => {}
+    }
+
+    /// Fails with the stop of the scene pipeline or of the renderer, when one was recorded.
+    fn check(&self) -> Result<(), crate::Error> {
+        if self.scene {
+            Err(crate::Error::SceneStopped)
+        } else if self.renderer {
+            Err(crate::Error::RendererStopped(RendererStopped))
+        } else {
+            Ok(())
         }
     }
 }
@@ -252,14 +248,27 @@ pub(super) struct Platform {
     sources: Vec<RegistrationToken>,
     /// The event loop source of each watched file descriptor.
     watches: BTreeMap<WatchId, RegistrationToken>,
-    // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
-    // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
+    panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
-    choreographers: Choreographers,
+    scene: ScenePipeline,
+    renderer: Renderer<control::Control>,
+    stops: Stops,
+    /// Measures text for the views as the painter of the renderer shapes it.
+    shaper: Shaper,
+    /// The instant at which the scene source on the renderer thread produces the next image, as the renderer
+    /// reported last.
+    scene_deadline: Option<Instant>,
+    scheduler: FrameScheduler,
+    /// The newest frame started by the scheduler for each surface, until a render composes or draws it.
+    started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
+    /// The built state that the next render commits without a frame for each surface. The state is read when the
+    /// frame scheduler starts the commit, while no frame of the surface is composed or drawn.
+    state_commits: BTreeMap<SurfaceId, std::sync::Arc<BuiltScene>>,
     surfaces: BTreeMap<SurfaceId, Surface>,
-    renderer: RendererState<control::Control>,
+    /// The native surfaces destroyed by the runtime, until the renderer reports that nothing presents to them.
+    retiring: BTreeMap<SurfaceId, Surface>,
     connection: Connection,
     pub(super) qh: QueueHandle<Self>,
     registry: RegistryState,
@@ -284,10 +293,12 @@ impl Drop for Platform {
     fn drop(&mut self) {
         self.config.action_queue.close();
         self.shutdown_transfers();
-        for &id in self.surfaces.keys() {
-            detach(&mut self.renderer, id);
+        // Stopping the renderer drops every target and control, so nothing presents to the native surfaces anymore.
+        if let Err(error) = self.renderer.stop() {
+            log::error!("{}", lavashell_core::error::message_chain(error));
         }
         self.surfaces.clear();
+        self.retiring.clear();
         for source in self.sources.drain(..) {
             self.loop_handle.remove(source);
         }
@@ -308,22 +319,121 @@ impl Platform {
         (self.surface_requests).extend(self.surface_records.handle(surface, event));
     }
 
-    /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires
-    /// in the runtime only after the native surface has released everything that presented to it.
-    fn execute_surface_requests(&mut self) {
-        for request in std::mem::take(&mut self.surface_requests) {
-            match request {
-                SurfaceRequest::Destroy(id) => {
-                    self.output_records.forget(id);
-                    self.input.forget_surface(id);
-                    detach(&mut self.renderer, id);
-                    drop(self.surfaces.remove(&id));
-                    self.choreographers.retire(id);
-                    self.surface_records.retire(id);
-                    self.config.action_queue.forget_surface(id);
+    /// Hands `input` to the frame scheduler. Passes each report to the frame observer of the app at once, and records
+    /// each started frame and each commit without a frame for the next render.
+    fn schedule(&mut self, input: SchedulerInput) {
+        let mut outputs = Vec::new();
+        (self.scheduler).handle(self.start.elapsed(), input, &mut outputs);
+        for output in outputs {
+            match output {
+                SchedulerOutput::Frame {
+                    surface,
+                    kind,
+                    time,
+                } => {
+                    let _older_frame = self.started_frames.insert(surface, (kind, time));
+                }
+                SchedulerOutput::CommitState(surface) => {
+                    let built = self.scene.built(surface);
+                    let _replaced = self.state_commits.insert(surface, built);
+                }
+                SchedulerOutput::Report(report) => {
+                    if let Some(observer) = &mut self.config.observer {
+                        observer(*report);
+                    }
                 }
             }
         }
+    }
+
+    /// Executes the requests made by the runtime. A destroyed surface retires in the renderer first. The native surface
+    /// and the record of that surface retire once the renderer reports that nothing presents to the surface.
+    fn execute_surface_requests(&mut self) -> Result<(), crate::Error> {
+        for request in std::mem::take(&mut self.surface_requests) {
+            match request {
+                SurfaceRequest::Destroy(id) => {
+                    self.schedule(SchedulerInput::Closed(id));
+                    let _undrawn_frame = self.started_frames.remove(&id);
+                    let _uncommitted_state = self.state_commits.remove(&id);
+                    self.output_records.forget(id);
+                    self.input.forget_surface(id);
+                    self.panels.forget(id);
+                    self.config.action_queue.forget_surface(id);
+                    if let Some(surface) = self.surfaces.remove(&id) {
+                        let _replaced = self.retiring.insert(id, surface);
+                    }
+                    self.renderer.send(RendererInput::Retire(id))?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
+/// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
+/// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
+fn send_frame(
+    view: &mut View,
+    mut sink: SceneSink<'_>,
+    frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
+) -> Result<(), crate::Error> {
+    let shows_scene = sink.any_frame_ended();
+    match frame(view, &mut sink) {
+        Ok(failures) => {
+            crate::failures::log_failures(failures);
+            Ok(())
+        }
+        Err(FrameError::Sink(Closed)) => Err(crate::Error::SceneStopped),
+        Err(error) if shows_scene => {
+            warn_whole_scene_next(&error);
+            Ok(())
+        }
+        Err(error) => Err(crate::Error::ShowScene(error)),
+    }
+}
+
+/// Logs `error`, after which the view sends the whole scene with the next frame.
+fn warn_whole_scene_next(error: impl std::error::Error) {
+    log::warn!(
+        "a frame failed, and the whole scene is sent with the next frame: {}",
+        lavashell_core::error::message_chain(error)
+    );
+}
+
+/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends the open frame as
+/// [`SceneSink::end_state_frame`] does. Returns whether the frame ended.
+fn send_surface_state(
+    mut sink: SceneSink<'_>,
+    panels: &PanelRecords,
+    id: SurfaceId,
+    changes: impl IntoIterator<Item = SurfaceChange>,
+) -> Result<bool, crate::Error> {
+    let stopped = |Closed| crate::Error::SceneStopped;
+    for change in changes.into_iter().chain(panels.geometry_change(id)) {
+        sink.set_state(change).map_err(stopped)?;
+    }
+    sink.end_state_frame().map_err(stopped)
+}
+
+/// Destroys the protocol objects of a native surface except the `wl_surface`.
+fn destroy_objects(
+    viewport: Option<WpViewport>,
+    fractional: Option<WpFractionalScaleV1>,
+    background: Option<ExtBackgroundEffectSurfaceV1>,
+    role: Option<&Role>,
+) {
+    if let Some(viewport) = viewport {
+        viewport.destroy();
+    }
+    if let Some(background) = background {
+        background.destroy();
+    }
+    if let Some(fractional) = fractional {
+        fractional.destroy();
+    }
+    if let Some(role) = role {
+        role.destroy();
     }
 }
 
@@ -348,14 +458,5 @@ fn configure_event(width: Option<u32>, height: Option<u32>) -> SurfaceEvent {
     SurfaceEvent::Configured {
         width: width.map(length),
         height: height.map(length),
-    }
-}
-
-/// Drops the target of `surface` in `renderer` and destroys the objects of its control. The target drops before the
-/// role objects of the surface are destroyed, because its swapchain presents to the surface. Dropping the swapchain
-/// blocks until the queue used by it is idle.
-fn detach(renderer: &mut RendererState<control::Control>, surface: SurfaceId) {
-    if let Some(control) = renderer.retire(surface) {
-        control.destroy();
     }
 }

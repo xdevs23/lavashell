@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::geometry::Size;
-use lavashell_core::scene::tree::ApplyError;
+use lavashell_actor::{Closed, JoinError, SpawnError};
+use lavashell_core::geometry::{Rect, Size};
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
+use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
-use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
+use lavashell_renderer::{InputSizeError, OutlineError};
+use lavashell_runtime::{RendererError, RendererStopped};
 use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
@@ -14,7 +15,6 @@ use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
 use std::collections::TryReserveError;
-use std::convert::Infallible;
 use std::io;
 use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
@@ -46,6 +46,10 @@ pub enum Error {
     WatchConnection(#[source] calloop::Error),
     #[error("the accessibility requests could not join the event loop")]
     WatchAccessibility(#[source] calloop::Error),
+    #[error("the reports of the scene builder could not join the event loop")]
+    WatchScene(#[source] calloop::Error),
+    #[error("the reports of the renderer could not join the event loop")]
+    WatchRenderer(#[source] calloop::Error),
     #[error("the system preferences could not join the event loop")]
     WatchPreferences(#[source] calloop::Error),
     #[error("the watch of the system preferences could not be created")]
@@ -70,42 +74,36 @@ pub enum Error {
     NoXdgShell,
     #[error("the compositor offers no layer-shell")]
     NoLayerShell,
+    #[error("the renderer could not start")]
+    StartRenderer(#[source] SpawnError<RendererError<ControlError>>),
     #[error("the renderer failed")]
-    Render(#[source] StateError),
-    #[error("a frame could not be drawn")]
-    Draw(#[source] DrawError<ControlError>),
-    #[error("a region could not be created")]
-    CreateRegion(#[source] sctk::error::GlobalError),
+    RunRenderer(#[source] JoinError<RendererError<ControlError>>),
+    #[error("the renderer stopped")]
+    RendererStopped(#[from] RendererStopped),
+    #[error("the shaper that measures text for the views could not be created")]
+    CreateShaper(#[source] lavashell_renderer::Error),
     #[error("a session lock needs an advertised output")]
     SessionLockWithoutOutput,
     #[error("a lock surface was requested without a session lock")]
     LockSurfaceWithoutLock,
     #[error("the compositor refused or ended the session lock")]
     SessionLockEnded,
-    #[error("the layer length {0:?} does not fit the protocol")]
-    LayerLength(NonNegativeDp),
-    #[error("the measured content length {0:?} of a layer does not fit the protocol")]
-    LayerContentLength(Dp),
-    #[error("the exclusive zone {0:?} does not fit the protocol")]
-    ExclusiveZone(NonNegativeDp),
-    #[error("the extent of a layer is too long to reserve")]
-    ReserveLayerExtent(#[source] TryFromIntError),
-    #[error("the layer margin {0:?} does not fit the protocol")]
-    LayerMargin(FiniteDp),
-    #[error("the size {0:?} of a surface does not fit the protocol")]
-    SurfaceSize(Size),
+    #[error("the layout of a new layer does not fit the protocol")]
+    LayerLayout(#[source] LayerLayoutError),
     #[error("a contour of a window shape is not a valid polygon")]
-    ShapeContour(#[source] PointsError),
+    ShapeContour(#[from] PointsError),
     #[error("the path of a window shape could not be built")]
     ShapePath(#[source] OutlineError),
     #[error("the input region of a window shape could not be computed")]
     ShapeInput(#[source] InputSizeError),
     #[error("a surface could not show a frame of its view")]
-    ShowScene(#[source] FrameError<Infallible>),
-    #[error("the merged frames of a view do not fit the scene in the builder")]
-    BuildScene(#[source] ApplyError),
+    ShowScene(#[source] FrameError<Closed>),
+    #[error("the scene builder stopped")]
+    SceneStopped,
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
+    #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
+    PanelWithoutLayer(SurfaceId),
     #[error("the compositor offers no clipboard")]
     ClipboardUnavailable,
     #[error("the clipboard needs the serial of an input event")]
@@ -161,7 +159,8 @@ pub enum Cancellation {
     SourceCancelled,
 }
 
-/// A failure of a request that the present of a frame applies to a native surface.
+/// A failure of a request for the size or the state of a native surface, sent with a frame or with a commit without a
+/// frame.
 #[derive(Debug, thiserror::Error)]
 pub enum ControlError {
     #[error("no buffer of whole pixels covers one logical pixel")]
@@ -170,4 +169,23 @@ pub enum ControlError {
     BufferScale(#[source] TryFromIntError),
     #[error("the size {0:?} of a surface does not fit the viewport destination")]
     Destination(Size),
+    #[error("the rectangle {0:?} of a region does not fit the protocol")]
+    Region(Rect),
+    #[error("the layout of a layer does not fit the protocol")]
+    Layout(#[from] LayerLayoutError),
+    #[error("the requests of a surface could not be sent to the compositor")]
+    Flush(#[source] WaylandError),
+}
+
+/// A layout of a layer whose lengths do not fit the layer-shell protocol.
+#[derive(Debug, thiserror::Error)]
+pub enum LayerLayoutError {
+    #[error("the layer length {0:?} does not fit the protocol")]
+    Length(NonNegativeDp),
+    #[error("the exclusive zone {0:?} does not fit the protocol")]
+    ExclusiveZone(NonNegativeDp),
+    #[error("the extent of a layer is too long to reserve")]
+    ReserveExtent(#[source] TryFromIntError),
+    #[error("the layer margin {0:?} does not fit the protocol")]
+    Margin(FiniteDp),
 }

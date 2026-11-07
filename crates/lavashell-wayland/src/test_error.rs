@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The failures that the tests of this crate return in place of a panic.
 
-use crate::Error;
+use crate::{ControlError, Error, LayerLayoutError};
 use accesskit::{NodeId as NativeId, Role as NativeRole};
 use lavashell_core::prelude::NodeId;
 use lavashell_core::scene::tree::ApplyError;
@@ -95,6 +95,14 @@ pub(crate) enum TestError {
     ConfigureSocket(#[source] io::Error),
     #[error("the layer has no focus grab")]
     NoFocusGrab,
+    #[error("the layer has no panel in the runtime")]
+    NoPanel,
+    #[error("the wire has no layer")]
+    NoLayer,
+    #[error("a request for a native surface does not fit the protocol")]
+    Control(#[from] ControlError),
+    #[error("the layout of a layer does not fit the protocol")]
+    LayerLayout(#[from] LayerLayoutError),
     #[error("the pipe could not be created")]
     CreatePipe(#[source] rustix::io::Errno),
     #[error("the file is not a pipe")]
