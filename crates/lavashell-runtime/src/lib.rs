@@ -12,6 +12,7 @@ mod output_records;
 mod preference_reader;
 mod run_end;
 mod scene_item;
+mod scheduler;
 mod session_lock;
 mod settings;
 mod shape;
@@ -27,6 +28,9 @@ pub use error::Error;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
 pub use run_end::RunEnd;
+pub use scheduler::{
+    FrameKind, FrameScheduler, Redraw, SchedulerInput, SchedulerOutput, ViewState,
+};
 pub use session_lock::{ActiveLock, LockConfiguration, LockStep, SessionLock};
 pub use shape::WindowShape;
 pub use surface_records::{SurfaceRecords, measure_content};
