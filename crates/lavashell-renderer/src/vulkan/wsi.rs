@@ -13,6 +13,8 @@ use std::sync::Arc;
 
 mod draw;
 mod extent;
+#[cfg(test)]
+mod painted;
 pub(super) mod present;
 
 pub(super) use present::PresentationTime;

@@ -3,25 +3,36 @@ use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
 use lavashell_core::error::message_chain;
-use lavashell_renderer::{Error as RendererError, FenceCopyError, FrameOutcome, MultipleFailures};
+use lavashell_renderer::{
+    DrawError, Error as RendererError, FenceCopyError, FrameError, FrameOutcome, MultipleFailures,
+    StartError, StateError,
+};
+use std::convert::Infallible;
 
 /// A failure in the AOSP host integration. Each variant is named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("cannot create the Vulkan renderer")]
-    CreateRenderer(#[source] RendererError),
-    #[error("cannot create the painter of the renderer")]
-    CreatePainter(#[source] RendererError),
+    #[error("cannot start the renderer")]
+    Start(#[source] StateError),
     #[error("cannot attach the native window")]
-    Attach(#[source] RendererError),
-    #[error("no native window is attached")]
-    Detached,
+    Attach(#[source] StateError),
+    #[error("cannot request the output of the native window")]
+    RequestOutput(#[source] StateError),
     #[error(
         "the native window reports {width} × {height} pixels, which is a failure status of AOSP"
     )]
     WindowSize { width: i32, height: i32 },
+    #[error("the viewport covers {viewport:?} pixels, but the native window has {window:?} pixels")]
+    ViewportSize {
+        viewport: (u32, u32),
+        window: (u32, u32),
+    },
+    #[error("the renderer state rejected the frame")]
+    State(#[source] StateError),
     #[error("cannot draw the frame")]
     Draw(#[source] RendererError),
+    #[error("cannot paint the frame")]
+    Paint(#[source] RendererError),
     #[error(
         "the frame was drawn with the outcome {outcome:?}, but the frames of streams it drew failed"
     )]
@@ -113,6 +124,40 @@ impl Error {
         let mut failures = self.into_failures();
         failures.extend(next.into_failures());
         Self::several(failures)
+    }
+}
+
+impl From<StartError<Error>> for Error {
+    fn from(failure: StartError<Self>) -> Self {
+        match failure {
+            StartError::State(cause) => Self::Start(cause),
+            StartError::Streams(cause) => cause,
+        }
+    }
+}
+
+impl From<FrameError<Infallible>> for Error {
+    fn from(failure: FrameError<Infallible>) -> Self {
+        match failure {
+            FrameError::State(cause) => Self::State(cause),
+            FrameError::Draw(cause) => Self::Draw(cause),
+            FrameError::Paint(cause) => Self::Paint(cause),
+            FrameError::Control(never) => match never {},
+        }
+    }
+}
+
+/// A failure of the frame comes first, followed by the failures of the streams drawn by the frame.
+impl From<DrawError<Infallible, Error>> for Error {
+    fn from(failure: DrawError<Infallible, Self>) -> Self {
+        match failure {
+            DrawError::Frame(failure) => failure.into(),
+            DrawError::StreamsOfShownFrame { drawn, streams } => Self::StreamsOfDrawnFrame {
+                outcome: drawn.outcome,
+                streams: Box::new(streams),
+            },
+            DrawError::FrameAndStreams { frame, streams } => Self::from(frame).then(streams),
+        }
     }
 }
 

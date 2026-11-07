@@ -8,10 +8,11 @@ mod release;
 pub use latched::LatchedFrames;
 
 use crate::error::MultipleFailures;
-use crate::vulkan::Status;
-use crate::{Sampling, StreamPixels, StreamRejection};
-use lavashell_core::prelude::{PixelSize, StreamId, StreamImage};
+use crate::vulkan::{Status, VulkanRenderer};
+use crate::{Painter, Sampling, StreamFrames, StreamPixels, StreamRejection};
+use lavashell_core::prelude::{PixelSize, Presented, StreamId, StreamImage};
 use skia_safe::IPoint;
+use std::convert::Infallible;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
@@ -149,6 +150,57 @@ pub trait FrameImporter: Completions {
     /// # Errors
     /// Fails when the GPU cannot report the status of its work or cannot submit a completion.
     fn poll(&mut self) -> Result<(), Self::Error>;
+}
+
+/// What a stream backend hands the draw of a frame: the GPU, the painter and the frames bound for the paints.
+pub struct FrameDevice<'a, G> {
+    pub gpu: &'a mut G,
+    pub painter: &'a mut Painter,
+    pub streams: &'a StreamFrames,
+}
+
+/// The frames of streams, drawn by the renderer together with each frame it paints.
+pub trait StreamBackend {
+    /// The renderer whose GPU reads the frames.
+    type Gpu;
+    type Error: std::error::Error + 'static;
+
+    /// Runs `draw` with the frames bound for the paints. The latched frames that `tree` draws are imported before
+    /// `draw`, and the frames that the GPU has finished reading return to the streams that produced them after
+    /// `draw`. Returns the result of `draw` together with the failures of the streams, which do not stop `draw`.
+    fn draw<T>(
+        &mut self,
+        gpu: &mut Self::Gpu,
+        painter: &mut Painter,
+        tree: Presented<'_>,
+        draw: impl FnOnce(FrameDevice<'_, Self::Gpu>) -> T,
+    ) -> (T, Result<(), Self::Error>);
+}
+
+/// The streams for a renderer that draws only frames without streams.
+#[derive(Default)]
+pub struct NoStreams {
+    frames: StreamFrames,
+}
+
+impl StreamBackend for NoStreams {
+    type Gpu = VulkanRenderer;
+    type Error = Infallible;
+
+    fn draw<T>(
+        &mut self,
+        gpu: &mut Self::Gpu,
+        painter: &mut Painter,
+        _: Presented<'_>,
+        draw: impl FnOnce(FrameDevice<'_, Self::Gpu>) -> T,
+    ) -> (T, Result<(), Infallible>) {
+        let device = FrameDevice {
+            gpu,
+            painter,
+            streams: &self.frames,
+        };
+        (draw(device), Ok(()))
+    }
 }
 
 /// A failure to copy the release fence for a frame from a stream.

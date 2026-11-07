@@ -3,12 +3,14 @@ mod stream_tests;
 
 use crate::Error;
 use crate::native_window::NativeWindow;
-use crate::platform::{Event, NativeSurface, SURFACE_SIZE, TestError};
+use crate::platform::{Event, NativeSurface, SIDE, SURFACE_SIZE, TestError};
 use crate::renderer::AndroidRenderer;
-use lavashell_core::prelude::{Density, OutputProfile, OutputRequest, Precision, SceneTree};
+use lavashell_core::prelude::{
+    Density, DpExt, FrameTime, OutputProfile, OutputRequest, Precision, SceneSnapshot, SceneTree,
+    Size, Viewport,
+};
 use lavashell_renderer::{
     Error as RendererError, Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming,
-    skia,
 };
 use log::SetLoggerError;
 use std::{cell::RefCell, sync::OnceLock, time::Duration};
@@ -52,24 +54,37 @@ fn window(surface: &NativeSurface, timing: SurfaceTiming) -> NativeWindow {
     NativeWindow::new(surface.window(), timing)
 }
 
+/// The whole simulated surface at one pixel per dp.
+fn viewport() -> Viewport {
+    Viewport::new(Size::new(SIDE.dp(), SIDE.dp()), Density::ONE)
+}
+
+fn empty() -> SceneSnapshot {
+    SceneTree::default().snapshot()
+}
+
+fn render(renderer: &mut AndroidRenderer) -> Result<FrameOutcome, Error> {
+    renderer.render(&empty(), FrameTime::default(), viewport())
+}
+
+fn render_at(
+    renderer: &mut AndroidRenderer,
+    presentation_time_ns: u64,
+) -> Result<FrameOutcome, Error> {
+    renderer.render_at(
+        &empty(),
+        FrameTime::default(),
+        viewport(),
+        presentation_time_ns,
+    )
+}
+
 fn assert_untimed_rejected(renderer: &mut AndroidRenderer, surface: &NativeSurface) {
     surface.clear_events();
-    let untimed = renderer.render(
-        SceneTree::default().at(Duration::ZERO),
-        Density::ONE,
-        skia::Color::BLACK,
-    );
     assert!(matches!(
-        untimed,
+        render(renderer),
         Err(Error::Draw(RendererError::ExplicitTimestampRequired))
     ));
-    let mut painted = false;
-    let drawn = renderer.draw_canvas(|_| painted = true);
-    assert!(matches!(
-        drawn,
-        Err(Error::Draw(RendererError::ExplicitTimestampRequired))
-    ));
-    assert!(!painted);
     assert_eq!(surface.acquisitions(), 0);
 }
 
@@ -81,42 +96,19 @@ fn reattaching_a_retained_window_rejects_untimed_draws_before_acquiring() -> Res
     renderer.attach(window(&surface, timing), SurfaceAlpha::Opaque)?;
     // The three references to the surface belong to the fixture, the window and the target of the attachment.
     assert_eq!(surface.references(), 3);
-    assert_eq!(
-        renderer.render_at(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK,
-            5_000
-        )?,
-        FrameOutcome::Shown
-    );
+    assert_eq!(render_at(&mut renderer, 5_000)?, FrameOutcome::Shown);
     assert_eq!(
         surface.presentations(),
         vec![Some(Duration::from_nanos(5_000))]
     );
 
-    let retained = renderer.detach().ok_or(Error::Detached)?;
+    let retained = renderer.detach().ok_or(TestError::NothingAttached)?;
     assert_eq!(surface.references(), 2);
     assert_eq!(surface.last_event(), Some(Event::NativeReleased));
-    assert_eq!(
-        renderer.render(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK
-        )?,
-        FrameOutcome::Pending
-    );
+    assert_eq!(render(&mut renderer)?, FrameOutcome::Pending);
     renderer.attach(retained, SurfaceAlpha::Opaque)?;
     assert_untimed_rejected(&mut renderer, &surface);
-    assert_eq!(
-        renderer.render_at(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK,
-            19_000
-        )?,
-        FrameOutcome::Shown
-    );
+    assert_eq!(render_at(&mut renderer, 19_000)?, FrameOutcome::Shown);
     assert_eq!(
         surface.presentations(),
         vec![Some(Duration::from_micros(19))]
@@ -139,15 +131,8 @@ fn reattaching_a_retained_window_rejects_untimed_draws_before_acquiring() -> Res
         window(&fresh, SurfaceTiming::new(PresentationPolicy::Automatic)),
         SurfaceAlpha::Opaque,
     )?;
-    assert_eq!(
-        renderer.render(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK
-        )?,
-        FrameOutcome::Shown
-    );
-    assert_eq!(renderer.draw_canvas(|_| {})?, FrameOutcome::Shown);
+    assert_eq!(render(&mut renderer)?, FrameOutcome::Shown);
+    assert_eq!(render(&mut renderer)?, FrameOutcome::Shown);
     assert_eq!(fresh.acquisitions(), 2);
     assert_eq!(fresh.presentations(), vec![None, None]);
     assert_eq!(
@@ -159,7 +144,7 @@ fn reattaching_a_retained_window_rejects_untimed_draws_before_acquiring() -> Res
     assert_eq!(renderer.output().map(|output| output.fallback), Some(false));
     let deeper = OutputRequest::new(OutputProfile::DisplayP3, Precision::Ten);
     renderer.request_output(deeper)?;
-    assert_eq!(renderer.draw_canvas(|_| {})?, FrameOutcome::Shown);
+    assert_eq!(render(&mut renderer)?, FrameOutcome::Shown);
     assert_eq!(
         renderer
             .output()
@@ -205,27 +190,11 @@ fn pending_acquisition_does_not_latch_policy_or_reuse_its_timestamp() -> Result<
     let mut renderer = AndroidRenderer::new(&Fonts::new())?;
     renderer.attach(window(&surface, timing), SurfaceAlpha::Opaque)?;
     surface.make_next_acquisition_pending();
-    assert_eq!(
-        renderer.render_at(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK,
-            5_000
-        )?,
-        FrameOutcome::Pending
-    );
+    assert_eq!(render_at(&mut renderer, 5_000)?, FrameOutcome::Pending);
     assert_eq!(surface.presentations(), vec![]);
-    assert_eq!(renderer.draw_canvas(|_| {})?, FrameOutcome::Shown);
+    assert_eq!(render(&mut renderer)?, FrameOutcome::Shown);
     assert_eq!(surface.presentations(), vec![None]);
-    assert_eq!(
-        renderer.render_at(
-            SceneTree::default().at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::BLACK,
-            19_000
-        )?,
-        FrameOutcome::Shown
-    );
+    assert_eq!(render_at(&mut renderer, 19_000)?, FrameOutcome::Shown);
     assert_eq!(
         surface.presentations(),
         vec![None, Some(Duration::from_micros(19))]

@@ -3,7 +3,7 @@ mod failures;
 mod latch;
 mod surfaces;
 
-use super::{warnings, window};
+use super::{viewport, warnings, window};
 use crate::Error;
 use crate::platform::{NativeSurface, Producer, SIDE, SURFACE_SIZE, TestError};
 use crate::renderer::AndroidRenderer;
@@ -14,7 +14,6 @@ use lavashell_renderer::{
     Fonts, FrameOutcome, Latch, PresentationPolicy, Stream, SurfaceAlpha, SurfaceTiming, skia,
 };
 use std::sync::Arc;
-use std::time::Duration;
 
 const RED: [u8; 4] = [255, 0, 0, 255];
 const BLUE: [u8; 4] = [0, 0, 255, 255];
@@ -63,13 +62,7 @@ fn scene(commands: impl Into<Arc<[DrawCommand]>>) -> Result<SceneTree, TestError
 
 fn render(renderer: &mut AndroidRenderer, image: StreamImage) -> Result<FrameOutcome, TestError> {
     let tree = scene(whole_surface(image))?;
-    renderer
-        .render(
-            tree.at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::TRANSPARENT,
-        )
-        .map_err(TestError::from)
+    (renderer.render(&tree.snapshot(), FrameTime::default(), viewport())).map_err(TestError::from)
 }
 
 fn create_stream(sizes: BufferSizes, format: StreamFormat) -> Result<Stream<SurfaceStream>, Error> {

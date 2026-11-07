@@ -32,6 +32,8 @@ pub struct SurfaceFrame<'a> {
     pub scene: Option<&'a SceneImage>,
     /// An outline in physical pixels that clips the drawing, applied after the damaged pixels are cleared.
     pub shape: Option<&'a skia_safe::Path>,
+    /// The frames bound to the streams drawn by `tree`.
+    pub streams: &'a StreamFrames,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -256,6 +258,7 @@ impl Painter {
             clear,
             scene,
             shape,
+            streams,
         } = frame;
         let scene = scene.map(|scene| scene.layer_of(canvas)).transpose()?;
         let surface = self.effect_planner.current_surface();
@@ -292,8 +295,7 @@ impl Painter {
         }
         self.packet_cache.stats.damaged_pixels +=
             (repainted.width_64() * repainted.height_64()).cast_unsigned();
-        let streams = StreamFrames::default();
-        self.paint_tree(canvas, &plan, Area::Pixels(repainted), density, &streams);
+        self.paint_tree(canvas, &plan, Area::Pixels(repainted), density, streams);
         self.paint_configuration.painted(surface);
         let _chained_canvas = canvas.restore_to_count(saved);
         Ok(())

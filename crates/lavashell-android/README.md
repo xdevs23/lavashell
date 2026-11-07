@@ -6,8 +6,8 @@ Requires AOSP 12 (API 31) or later.
 
 ```rust,ignore
 use lavashell::android::{AndroidRenderer, NativeWindow, window_of_surface};
-use lavashell::prelude::FrameTime;
-use lavashell::renderer::{Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming, skia};
+use lavashell::prelude::{FrameTime, Viewport};
+use lavashell::renderer::{Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
 
 // Create, render and drop the renderer on one thread.
 let mut renderer = AndroidRenderer::new(&Fonts::new())?;
@@ -17,12 +17,12 @@ let window = NativeWindow::new(window_of_surface(env, &surface)?, timing);
 renderer.attach(window, SurfaceAlpha::Opaque)?;
 
 // In the frame callback of the host:
-let failures = view.frame_into_at(Viewport::new(size, density), renderer.painter().shaper(), frame, &mut builder)?;
+let viewport = Viewport::new(size, density);
+let failures = view.frame_into_at(viewport, renderer.shaper(), frame, &mut builder)?;
 for failure in failures {
     log::error!("{}", lavashell::core::error::message_chain(failure));
 }
-let snapshot = builder.snapshot();
-let result = renderer.render(snapshot.at(frame.presentation), density, skia::Color::BLACK)?;
+let result = renderer.render(&builder.snapshot(), frame, viewport)?;
 match result {
     FrameOutcome::Shown => view.record_presentation(frame.presentation),
     FrameOutcome::Pending | FrameOutcome::Stale => { /* Request another frame from the host. */ }
@@ -37,7 +37,7 @@ let window = renderer.detach();
 
 ```rust,ignore
 if renderer.supports_presentation_time() {
-    renderer.render_at(snapshot.at(frame.presentation), density, skia::Color::BLACK, timestamp_ns)?;
+    renderer.render_at(&builder.snapshot(), frame, viewport, timestamp_ns)?;
 }
 ```
 

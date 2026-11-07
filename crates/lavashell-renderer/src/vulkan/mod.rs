@@ -205,50 +205,31 @@ impl VulkanRenderer {
         Ok(data.as_bytes().to_vec())
     }
 
-    /// # Errors
-    /// Fails when the target belongs to another renderer, or the swapchain cannot present.
-    pub fn draw(
-        &mut self,
-        target: &mut SurfaceTarget,
-        size: (u32, u32),
-        draw: impl FnOnce(&Canvas),
-    ) -> Result<FrameOutcome, Error> {
-        self.draw_timed_in(SurfaceId::UNSPECIFIED, target, size, 0, draw)
-    }
-
     #[must_use]
     pub fn supports_presentation_time(&self) -> bool {
         self.device.contains(ash::google::display_timing::NAME)
     }
 
-    /// Draws a frame whose buffer has the presentation time `time` on the clock of `VK_GOOGLE_display_timing`, from 1
-    /// to `i64::MAX` nanoseconds. For the frames after this one, see `SurfaceTiming`.
+    /// Draws frame `sequence` of `surface` into `target`. `time`, when set, is the presentation time of the buffer on
+    /// the clock of `VK_GOOGLE_display_timing`, from 1 to `i64::MAX` nanoseconds. For the frames after one with a
+    /// time, see `SurfaceTiming`.
     ///
     /// # Errors
-    /// Fails when the device lacks `VK_GOOGLE_display_timing`, the time is out of range, or the frame fails as
-    /// `draw` does.
-    pub fn draw_at(
-        &mut self,
-        target: &mut SurfaceTarget,
-        size: (u32, u32),
-        time: Duration,
-        draw: impl FnOnce(&Canvas),
-    ) -> Result<FrameOutcome, Error> {
-        let time = wsi::PresentationTime::new(time, self.supports_presentation_time())?;
-        self.draw_frame(target, size, (SurfaceId::UNSPECIFIED, 0), Some(time), draw)
-    }
-
-    /// # Errors
-    /// Fails as `draw` does.
+    /// Fails when the target belongs to another renderer, when the swapchain cannot present, or when `time` is set on
+    /// a device without `VK_GOOGLE_display_timing` or lies out of range.
     pub fn draw_timed_in(
         &mut self,
         surface: SurfaceId,
         target: &mut SurfaceTarget,
         size: (u32, u32),
         sequence: u64,
+        time: Option<Duration>,
         draw: impl FnOnce(&Canvas),
     ) -> Result<FrameOutcome, Error> {
-        self.draw_frame(target, size, (surface, sequence), None, draw)
+        let display_timing = self.supports_presentation_time();
+        let time =
+            (time.map(|time| wsi::PresentationTime::new(time, display_timing))).transpose()?;
+        self.draw_frame(target, size, (surface, sequence), time, draw)
     }
 
     fn draw_frame(

@@ -2,7 +2,7 @@
 use crate::effect_registry::QualityChange;
 use crate::test_error::TestError;
 use crate::test_scenes::{insert, leaves, paint_damage};
-use crate::{Error, Fonts, Painter, SurfaceFrame};
+use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{
     Change, Content, DamageTracker, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
@@ -74,6 +74,7 @@ fn repainted_pixels_on(
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
                 shape,
+                streams: &StreamFrames::default(),
             };
             painter.paint_surface(target.canvas(), frame)?;
             Ok(painter.render_stats().damaged_pixels - before)
@@ -200,6 +201,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
             clear: skia_safe::Color::TRANSPARENT,
             scene: None,
             shape: None,
+            streams: &StreamFrames::default(),
         };
         painter.paint_surface(retained.canvas(), frame)?;
         let _chained_canvas = reference.canvas().clear(skia_safe::Color::TRANSPARENT);

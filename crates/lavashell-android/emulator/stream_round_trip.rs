@@ -13,7 +13,6 @@ use rustix::event::{PollFd, PollFlags, poll};
 use rustix::io::Errno;
 use std::os::fd::BorrowedFd;
 use std::sync::mpsc;
-use std::time::Duration;
 
 /// One round trip of a color. The activity sends a frame filled with a known color into the Surface of `stream`.
 /// `latch` makes the newest frame of the stream the one that the renderer draws. `render` draws that frame over `pane`
@@ -131,7 +130,7 @@ impl StreamRoundTrip {
             index: 0,
             node: Node::Leaf(self.build_pane_content()?),
         };
-        self.present(&build_scene(vec![leaf])?, skia::Color::TRANSPARENT)?;
+        self.present(&build_scene(vec![leaf])?)?;
         let center = find_center(self.pane);
         self.target
             .read_next_frame(|frame| read_pixel(frame, center))
@@ -150,12 +149,22 @@ impl StreamRoundTrip {
             opacity: Slot::Value(opacity),
             clip: None,
         };
-        let (group_id, leaf_id) = (SceneNodeId(1), SceneNodeId(2));
+        let black = DrawCommand::Fill {
+            shape: self.pane_rect().into(),
+            brush: Brush::Solid(Color::rgb(0x00_0000)),
+        };
+        let (background_id, group_id, leaf_id) = (SceneNodeId(1), SceneNodeId(2), SceneNodeId(3));
         let changes = vec![
+            Change::Insert {
+                id: background_id,
+                parent: None,
+                index: 0,
+                node: Node::Leaf(Content::Packet(Packet::new([black].into()))),
+            },
             Change::Insert {
                 id: group_id,
                 parent: None,
-                index: 0,
+                index: 1,
                 node: Node::Group(group),
             },
             Change::Insert {
@@ -165,20 +174,24 @@ impl StreamRoundTrip {
                 node: Node::Leaf(self.build_pane_content()?),
             },
         ];
-        self.present(&build_scene(changes)?, skia::Color::BLACK)?;
+        self.present(&build_scene(changes)?)?;
         let (left, right) = (find_center(left), find_center(right));
         self.target
             .read_next_frame(|frame| Ok([read_pixel(frame, left)?, read_pixel(frame, right)?]))
     }
 
-    fn build_pane_content(&self) -> Result<Content, NativeMethodError> {
-        let image = self.image.ok_or(NativeMethodError::NothingLatched)?;
-        let pane = Rect::new(
+    fn pane_rect(&self) -> Rect {
+        Rect::new(
             self.pane.left.dp(),
             self.pane.top.dp(),
             self.pane.width().dp(),
             self.pane.height().dp(),
-        );
+        )
+    }
+
+    fn build_pane_content(&self) -> Result<Content, NativeMethodError> {
+        let image = self.image.ok_or(NativeMethodError::NothingLatched)?;
+        let pane = self.pane_rect();
         let commands = [DrawCommand::StreamImage {
             image,
             destination: pane,
@@ -188,11 +201,12 @@ impl StreamRoundTrip {
     }
 
     /// Renders `scene` until the renderer shows the frame in the target `ImageReader`.
-    fn present(&mut self, scene: &SceneTree, clear: skia::Color) -> Result<(), NativeMethodError> {
-        let mut outcome = self.render_once(scene, clear)?;
+    fn present(&mut self, scene: &SceneTree) -> Result<(), NativeMethodError> {
+        let snapshot = scene.snapshot();
+        let mut outcome = self.render_once(&snapshot)?;
         if outcome == FrameOutcome::Stale {
             // The swapchain no longer fits the target ImageReader. The next render replaces the swapchain.
-            outcome = self.render_once(scene, clear)?;
+            outcome = self.render_once(&snapshot)?;
         }
         match outcome {
             FrameOutcome::Shown => Ok(()),
@@ -202,14 +216,11 @@ impl StreamRoundTrip {
         }
     }
 
-    fn render_once(
-        &mut self,
-        scene: &SceneTree,
-        clear: skia::Color,
-    ) -> Result<FrameOutcome, NativeMethodError> {
+    fn render_once(&mut self, snapshot: &SceneSnapshot) -> Result<FrameOutcome, NativeMethodError> {
+        let viewport = Viewport::new(self.pane_rect().size(), Density::ONE);
         (self
             .renderer
-            .render(scene.at(Duration::ZERO), Density::ONE, clear))
+            .render(snapshot, FrameTime::default(), viewport))
         .map_err(NativeMethodError::Render)
     }
 }

@@ -2,7 +2,7 @@
 use crate::effect_registry::{DrawTarget, EffectBackend, EffectRequest};
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::{BlendSpace, Error, Fonts, Painter, SurfaceFrame};
+use crate::{BlendSpace, Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_effect_quality::{EffectId, VariantId};
@@ -300,6 +300,7 @@ fn a_card_is_drawn_from_its_image_only_inside_the_surface_shape_corners() -> Res
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
                 shape: Some(&shape),
+                streams: &StreamFrames::default(),
             };
             painter.paint_surface(canvas, frame)?;
             Ok(())

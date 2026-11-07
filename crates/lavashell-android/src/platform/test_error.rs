@@ -15,6 +15,8 @@ pub(crate) enum TestError {
     InstallLogger(#[source] &'static SetLoggerError),
     #[error("the latch found no new frame, but {0:?}")]
     NoNewFrame(Latch),
+    #[error("the renderer has no native window attached")]
+    NothingAttached,
     #[error("the render on a lost device drew with the outcome {0:?}")]
     RenderSucceeded(FrameOutcome),
     #[error("the pixel {x}, {y} lies outside the simulated surface")]

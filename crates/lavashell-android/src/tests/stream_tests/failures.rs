@@ -102,11 +102,7 @@ fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestE
     let mut outcome = None;
     let logged = warnings(|| {
         let tree = scene(&commands[..])?;
-        outcome = Some(renderer.render(
-            tree.at(Duration::ZERO),
-            Density::ONE,
-            skia::Color::TRANSPARENT,
-        )?);
+        outcome = Some(renderer.render(&tree.snapshot(), FrameTime::default(), viewport())?);
         Ok(())
     })?;
     assert_eq!(outcome, Some(FrameOutcome::Shown));
