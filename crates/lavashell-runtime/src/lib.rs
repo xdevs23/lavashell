@@ -8,6 +8,7 @@ mod error;
 mod input;
 mod lifecycle;
 mod output_records;
+mod panels;
 #[cfg(test)]
 mod preference_reader;
 mod run_end;
@@ -25,8 +26,12 @@ pub use choreographers::{Choreographers, SceneSink};
 pub use error::Error;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
+pub use panels::{
+    ContentState, KeyboardPolicy, Panel, PanelContent, PanelOptions, PanelRecords, PanelUpdate,
+    PanelsPerOutput, Transaction,
+};
 pub use run_end::RunEnd;
-pub use shape::WindowShape;
+pub use shape::{SurfaceShape, WindowShape};
 pub use surface_records::{SurfaceRecords, measure_content};
 pub use view_actions::{ActionBatch, ActionQueue, ViewActions};
 pub use window::{DragRegion, Window};

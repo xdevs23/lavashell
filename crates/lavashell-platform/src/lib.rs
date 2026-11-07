@@ -5,6 +5,7 @@
 
 mod input;
 mod output;
+mod panel;
 mod request;
 mod settings;
 mod surface;
@@ -15,6 +16,7 @@ pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };
 pub use output::{OutputEvent, OutputId};
+pub use panel::KeyboardMode;
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};

@@ -7,8 +7,8 @@ use lavashell_core::prelude::OutputRequest;
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
 use lavashell_renderer::{
-    Attach, ForeignMemory, PresentationBackend, RendererState, StateError, StreamBackend,
-    SurfaceAlpha, VulkanRenderer,
+    Attach, AttachError, ForeignMemory, PresentationBackend, RendererState, StateError,
+    StreamBackend, SurfaceAlpha, VulkanRenderer,
 };
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
 use std::ffi::CStr;
@@ -63,16 +63,18 @@ pub(crate) fn attach_window<S: StreamBackend<Gpu = VulkanRenderer>>(
     window: NativeWindow,
     alpha: SurfaceAlpha,
 ) -> Result<(), StateError> {
-    state.attach(Attach {
-        surface,
-        window: Arc::new(AndroidWindow(window.window.clone())),
-        alpha,
-        timing: window.timing.clone(),
-        output: OutputRequest::default(),
-        hdr_metadata: None,
-        gpu_budget: None,
-        control: window,
-    })
+    state
+        .attach(Attach {
+            surface,
+            window: Arc::new(AndroidWindow(window.window.clone())),
+            alpha,
+            timing: window.timing.clone(),
+            output: OutputRequest::default(),
+            hdr_metadata: None,
+            gpu_budget: None,
+            control: window,
+        })
+        .map_err(|AttachError { error, .. }| error)
 }
 
 // SAFETY: A `Surface` destroys the handle that `create_surface` returns and cannot check it, so the trait is unsafe.

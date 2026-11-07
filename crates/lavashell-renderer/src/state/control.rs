@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::FrameOutcome;
 use lavashell_core::prelude::{FrameTime, Viewport};
+use lavashell_core::surface::SurfaceState;
 use std::time::Duration;
 
-/// The frame that the renderer state draws into a surface.
+/// The frame drawn by the renderer state into a surface, with the state of the surface, applied by the host together
+/// with the frame.
 #[derive(Clone, Copy, Debug)]
-pub struct PresentFrame {
+pub struct PresentFrame<'a> {
     pub time: FrameTime,
     pub viewport: Viewport,
     /// The presentation time set on the buffer of the frame, on the clock of `VK_GOOGLE_display_timing`, from 1 to
     /// `i64::MAX` nanoseconds. `None` lets the presentation engine choose. After one frame with a time, every later
     /// frame of the surface needs one, as `SurfaceTiming` describes.
     pub present_at: Option<Duration>,
+    pub state: &'a SurfaceState,
 }
 
 /// The requests of a platform that belong to the draw of each frame of one surface.
@@ -31,4 +34,11 @@ pub trait SurfaceControl {
 
     /// Runs after each draw with its outcome. Only a `Shown` frame was presented.
     fn after_present(&mut self, outcome: FrameOutcome);
+
+    /// Makes the host apply `state` at once, without a new frame.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the platform cannot make a request for `state`.
+    fn commit_state(&mut self, state: &SurfaceState) -> Result<(), Self::Error>;
 }

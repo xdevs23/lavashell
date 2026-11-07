@@ -8,7 +8,7 @@ mod targets;
 mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
-pub use error::{DrawError, FrameError, StartError, StateError};
+pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
 
 use crate::stream::{FrameImporter, FrameSource, LatchedFrames, NoStreams, StreamBackend};
 use crate::text::Shaper;
@@ -18,7 +18,7 @@ use crate::{
 };
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_effect_quality::FrameBudget;
 use lavashell_vulkan::Window;
 use present::{FrameInputs, present_frame};
@@ -154,27 +154,40 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     /// # Errors
     ///
     /// Fails when the surface is attached already, when its target cannot be created, or when its HDR metadata is
-    /// invalid.
-    pub fn attach(&mut self, attach: Attach<C>) -> Result<(), StateError> {
-        let Entry::Vacant(entry) = self.surfaces.entry(attach.surface) else {
-            return Err(StateError::AttachedTwice(attach.surface));
+    /// invalid. The error then contains the control of the surface.
+    pub fn attach(&mut self, attach: Attach<C>) -> Result<(), AttachError<C>> {
+        let Attach {
+            surface,
+            window,
+            alpha,
+            timing,
+            output,
+            hdr_metadata,
+            gpu_budget,
+            control,
+        } = attach;
+        let Entry::Vacant(entry) = self.surfaces.entry(surface) else {
+            let error = StateError::AttachedTwice(surface);
+            return Err(AttachError { control, error });
         };
-        let mut target = (self
-            .gpu
-            .surface_target(attach.window, attach.alpha, attach.timing))
-        .map_err(StateError::CreateTarget)?;
-        target.request_output(attach.output);
-        if let Some(metadata) = attach.hdr_metadata {
-            target
-                .hdr_metadata(metadata)
-                .map_err(StateError::SetHdrMetadata)?;
+        let created = (self.gpu.surface_target(window, alpha, timing))
+            .map_err(StateError::CreateTarget)
+            .and_then(|mut target| {
+                target.request_output(output);
+                if let Some(metadata) = hdr_metadata {
+                    target
+                        .hdr_metadata(metadata)
+                        .map_err(StateError::SetHdrMetadata)?;
+                }
+                Ok(target)
+            });
+        match created {
+            Ok(target) => {
+                let _attached = entry.insert(AttachedSurface::new(target, control, gpu_budget));
+                Ok(())
+            }
+            Err(error) => Err(AttachError { control, error }),
         }
-        let _attached = entry.insert(AttachedSurface::new(
-            target,
-            attach.control,
-            attach.gpu_budget,
-        ));
-        Ok(())
     }
 
     /// Drops the target of `surface` and everything the painter stored for it, and returns the control of the
@@ -317,7 +330,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn draw(
         &mut self,
         surface: SurfaceId,
-        frame: PresentFrame,
+        frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
         self.advance_scene(frame.viewport)?;
@@ -361,6 +374,27 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
                 present_frame(device, frame_inputs)
             });
         DrawError::combine(drawn, streams)
+    }
+
+    /// Makes the host apply `state` to `surface` at once, without a new frame. The state never applies while a frame
+    /// of the surface is drawn.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `surface` is not attached, or when the control of the surface fails.
+    pub fn commit_state(
+        &mut self,
+        surface: SurfaceId,
+        state: &SurfaceState,
+    ) -> Result<(), CommitError<C::Error>> {
+        let attached =
+            (self.surfaces.get_mut(&surface)).ok_or(StateError::UnknownSurface(surface))?;
+        (attached.control.commit_state(state)).map_err(CommitError::Control)
+    }
+
+    /// The control of `surface`, or `None` when `surface` is not attached.
+    pub fn control_mut(&mut self, surface: SurfaceId) -> Option<&mut C> {
+        (self.surfaces.get_mut(&surface)).map(|attached| &mut attached.control)
     }
 
     /// The smallest number of frames in flight among the swapchains of the attached surfaces, which show the scene.

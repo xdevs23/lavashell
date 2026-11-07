@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use crate::platform::ndk;
+use lavashell_core::surface::SurfaceState;
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl, SurfaceTiming};
 use std::convert::Infallible;
 
@@ -38,7 +39,7 @@ impl NativeWindow {
     }
 }
 
-/// `PresentFrame` sets the presentation time, so a native window sends nothing for each frame.
+/// `PresentFrame` sets the presentation time, and a Surface has no surface state, so a native window sends nothing.
 impl SurfaceControl for NativeWindow {
     type Error = Infallible;
 
@@ -49,4 +50,8 @@ impl SurfaceControl for NativeWindow {
     fn before_present(&mut self, _: &PresentFrame) {}
 
     fn after_present(&mut self, _: FrameOutcome) {}
+
+    fn commit_state(&mut self, _: &SurfaceState) -> Result<(), Infallible> {
+        Ok(())
+    }
 }

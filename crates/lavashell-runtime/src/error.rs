@@ -10,4 +10,6 @@ pub enum Error {
     NumberWatch,
     #[error("the content of a surface could not be measured")]
     MeasureView(#[source] NumberError),
+    #[error("the content of a panel measures a length that is negative or not finite")]
+    PanelContent(#[source] NumberError),
 }

@@ -4,6 +4,7 @@ use crate::Error;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::NumberError;
 use std::convert::Infallible;
+use std::fmt;
 
 /// A failure of the renderer state, named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +35,32 @@ pub enum StateError {
     ProduceScene(#[source] Error),
     #[error("the scene mailbox did not accept a produced scene")]
     PublishScene(#[source] Error),
+}
+
+/// A surface that the renderer state could not attach, with the control handed in for it.
+pub struct AttachError<C> {
+    pub control: C,
+    pub error: StateError,
+}
+
+impl<C> fmt::Debug for AttachError<C> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (formatter.debug_struct("AttachError"))
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<C> fmt::Display for AttachError<C> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a surface could not be attached")
+    }
+}
+
+impl<C> std::error::Error for AttachError<C> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
 }
 
 /// A failure of the start of a renderer state with streams.
@@ -112,4 +139,13 @@ impl<C, S> DrawError<C, S> {
             (Err(frame), Err(streams)) => Err(Self::FrameAndStreams { frame, streams }),
         }
     }
+}
+
+/// A failure of the commit of a surface state without a frame, named after the operation that failed.
+#[derive(Debug, thiserror::Error)]
+pub enum CommitError<E> {
+    #[error(transparent)]
+    State(#[from] StateError),
+    #[error("the platform could not commit the state of a surface")]
+    Control(#[source] E),
 }

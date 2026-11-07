@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::control::RoleControl;
 use super::creation::NativeSpec;
 use super::{
     App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
@@ -8,10 +9,13 @@ use crate::Error;
 use crate::clipboard::ClipboardState;
 use crate::logical::{whole_size, window_size};
 use crate::wayland_presentation::WaylandPresentation;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
-use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use lavashell_runtime::{
+    Choreographers, InputRouter, OutputRecords, PanelRecords, SurfaceRecords, Window,
+};
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::LoopHandle;
@@ -89,9 +93,7 @@ impl Platform {
             })
             .transpose()?;
         let output_layers = output_layers
-            .map(|configuration| {
-                output_layers::Runtime::new(configuration, protocols.layers.as_ref())
-            })
+            .map(|panels| output_layers::Runtime::new(panels, protocols.layers.as_ref()))
             .transpose()?;
         let mut surface_records = SurfaceRecords::new(preference_overrides);
         surface_records.change_settings(SettingsEvent::Locales(preferences::user_languages()));
@@ -110,6 +112,7 @@ impl Platform {
             sources,
             watches: BTreeMap::new(),
             surface_records,
+            panels: PanelRecords::default(),
             surface_requests: Vec::new(),
             choreographers: Choreographers::default(),
             surfaces: BTreeMap::new(),
@@ -135,12 +138,12 @@ impl Platform {
             qh,
         };
         for request in requests {
-            platform.create_requested_surface(request)?;
+            let _surface = platform.create_requested_surface(request)?;
         }
         Ok(platform)
     }
 
-    fn create_requested_surface(&mut self, request: Request) -> Result<(), Error> {
+    fn create_requested_surface(&mut self, request: Request) -> Result<SurfaceId, Error> {
         match request {
             Request::Window(window, mut view) => {
                 let spec = window.spec(&mut view, self.renderer.shaper())?;
@@ -149,13 +152,7 @@ impl Platform {
                     platform.window_role(wl, &spec.role)
                 })
             }
-            Request::Layer(options, mut view) => {
-                let context = self.layer_context(&options, &mut view)?;
-                let spec = NativeSpec::layer(&options, view, context)?;
-                self.create_surface(spec, |platform, wl, id| {
-                    platform.layer_role(wl, None, &options, context, id)
-                })
-            }
+            Request::Layer(options, view) => self.create_layer(&options, view, None),
             Request::Lock(output, view) => self
                 .create_surface(NativeSpec::lock(view), |platform, wl, id| {
                     platform.lock_role(wl, &output, id)
@@ -163,7 +160,11 @@ impl Platform {
         }
     }
 
-    fn window_role(&self, wl: &wl_surface::WlSurface, role: &SurfaceRole) -> Result<Role, Error> {
+    fn window_role(
+        &self,
+        wl: &wl_surface::WlSurface,
+        role: &SurfaceRole,
+    ) -> Result<(Role, RoleControl), Error> {
         let SurfaceRole::Window {
             title,
             app_id,
@@ -188,7 +189,7 @@ impl Platform {
             window.set_fullscreen(None);
         }
         window.commit();
-        Ok(Role::Window { window })
+        Ok((Role::Window { window }, RoleControl::Stateless))
     }
 }
 
@@ -202,6 +203,7 @@ impl NativeSpec {
             shape: window.shape,
             drag_region: window.drag_region,
             accessible_name: window.title,
+            role_state: SurfaceState::default(),
         })
     }
 }

@@ -89,7 +89,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn draw(
         &mut self,
         surface: SurfaceId,
-        frame: PresentFrame,
+        frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
         let size = (frame.viewport.size.buffer_size(frame.viewport.density))

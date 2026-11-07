@@ -5,7 +5,7 @@ use lavashell_core::units::Density;
 use lavashell_platform::SurfaceEvent;
 use sctk::compositor::CompositorHandler;
 use sctk::output::{OutputHandler, OutputState};
-use sctk::reexports::client::protocol::{wl_output, wl_surface};
+use sctk::reexports::client::protocol::{wl_output, wl_region::WlRegion, wl_surface};
 use sctk::reexports::client::{Connection, Dispatch, QueueHandle, delegate_noop};
 use sctk::reexports::protocols::ext::background_effect::v1::client::{
     ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
@@ -129,7 +129,7 @@ impl WindowHandler for Platform {
 impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
     fn event(
         state: &mut Self,
-        layer: &ZwlrLayerSurfaceV1,
+        _: &ZwlrLayerSurfaceV1,
         event: zwlr_layer_surface_v1::Event,
         id: &SurfaceId,
         _: &Connection,
@@ -141,8 +141,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
                 width,
                 height,
             } => {
-                layer.ack_configure(serial);
-                let event = state.layer_configure(*id, width, height);
+                let event = state.layer_configure(*id, serial, width, height);
                 state.surface_event(*id, event);
             }
             zwlr_layer_surface_v1::Event::Closed => state.surface_event(*id, SurfaceEvent::Closed),
@@ -227,6 +226,8 @@ delegate_noop!(Platform:ignore ZwlrLayerShellV1);
 delegate_noop!(Platform:ignore WpViewporter);
 
 delegate_noop!(Platform:ignore WpViewport);
+
+delegate_noop!(Platform:ignore WlRegion);
 
 delegate_noop!(Platform:ignore WpFractionalScaleManagerV1);
 

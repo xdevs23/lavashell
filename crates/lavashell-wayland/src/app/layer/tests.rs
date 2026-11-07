@@ -1,40 +1,54 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::LayerMargins;
 use crate::test_error::TestError;
-use lavashell_core::units::{DpExt, NumberError};
+use focus_wire::empty_view;
+use lavashell_core::geometry::Size;
+use lavashell_core::panel::{ContentSize, Extent, LayerLayout, LayerMargins};
+use lavashell_core::reactive::State;
+use lavashell_core::units::{Dp, DpExt};
+use lavashell_test_fixtures::NoText;
 
-const UNMEASURED: LayerContext = LayerContext {
-    content: Size::ZERO,
-};
+fn margins(top: Dp, left: Dp) -> Result<LayerMargins, TestError> {
+    Ok(LayerMargins {
+        top: FiniteDp::try_new(top)?,
+        left: FiniteDp::try_new(left)?,
+        ..LayerMargins::default()
+    })
+}
+
+fn fixed(length: Dp) -> Result<Extent, TestError> {
+    Ok(Extent::dp(length)?)
+}
+
+/// The protocol layout of `layout` for content of `width` by `height`.
+fn measured(layout: LayerLayout, width: Dp, height: Dp) -> Result<ProtocolLayout, TestError> {
+    let content = ContentSize::try_from(Size::new(width, height))?;
+    Ok(ProtocolLayout::new(PanelGeometry::of(layout, content))?)
+}
+
+fn protocol(layout: LayerLayout) -> Result<ProtocolLayout, TestError> {
+    measured(layout, Dp::ZERO, Dp::ZERO)
+}
 
 #[test]
 fn moving_a_bounded_surface_changes_only_margins_without_a_resize_request() -> Result<(), TestError>
 {
     let first = LayerLayout {
-        horizontal: AxisPlacement::Start(Extent::dp(320.dp())?),
-        vertical: AxisPlacement::Start(Extent::dp(344.dp())?),
+        horizontal: AxisPlacement::Start(fixed(320.dp())?),
+        vertical: AxisPlacement::Start(fixed(344.dp())?),
         exclusive_zone: ExclusiveZone::IgnoreOthers,
-        margins: LayerMargins {
-            top: FiniteDp::try_new(48.dp())?,
-            left: FiniteDp::try_new(1592.dp())?,
-            ..Default::default()
-        },
+        margins: margins(48.dp(), 1592.dp())?,
     };
     let moved = LayerLayout {
-        margins: LayerMargins {
-            left: FiniteDp::try_new(-80.dp())?,
-            ..first.margins
-        },
+        margins: margins(48.dp(), -80.dp())?,
         ..first
     };
-    let protocol = |layout| ProtocolLayout::new(layout, UNMEASURED);
     assert_eq!(
         GeometryRequest::needed(Some(protocol(first)?), protocol(moved)?),
         [GeometryRequest::Margin]
     );
     let grown = LayerLayout {
-        vertical: AxisPlacement::Start(Extent::dp(400.dp())?),
+        vertical: AxisPlacement::Start(fixed(400.dp())?),
         ..moved
     };
     assert_eq!(
@@ -43,115 +57,59 @@ fn moving_a_bounded_surface_changes_only_margins_without_a_resize_request() -> R
     );
     assert!(GeometryRequest::needed(Some(protocol(grown)?), protocol(grown)?).is_empty());
     let nudged = LayerLayout {
-        vertical: AxisPlacement::Start(Extent::dp(400.3.dp())?),
-        margins: LayerMargins {
-            left: FiniteDp::try_new(-80.4.dp())?,
-            ..grown.margins
-        },
+        vertical: AxisPlacement::Start(fixed(400.3.dp())?),
+        margins: margins(48.dp(), -80.4.dp())?,
         ..grown
     };
     assert!(GeometryRequest::needed(Some(protocol(grown)?), protocol(nudged)?).is_empty());
     let docked = LayerLayout {
-        horizontal: AxisPlacement::End(Extent::dp(320.dp())?),
+        horizontal: AxisPlacement::End(fixed(320.dp())?),
         ..nudged
     };
     assert_eq!(
         GeometryRequest::needed(Some(protocol(nudged)?), protocol(docked)?),
         [GeometryRequest::Anchor]
     );
-    Ok(())
-}
-
-#[test]
-fn each_native_lifecycle_applies_the_latest_state_and_all_protocol_geometry()
--> Result<(), TestError> {
-    let layout = State::new(LayerLayout {
-        horizontal: AxisPlacement::Start(Extent::dp(321.dp())?),
-        vertical: AxisPlacement::Start(Extent::dp(1.dp())?),
-        exclusive_zone: ExclusiveZone::IgnoreOthers,
-        margins: LayerMargins {
-            left: FiniteDp::try_new(1592.dp())?,
-            top: FiniteDp::try_new(48.dp())?,
-            ..Default::default()
-        },
-    });
-    let options = LayerSurface::new("geometry-test").layout_state(layout.clone());
-    let taller = AxisPlacement::Start(Extent::dp(345.dp())?);
-    let left = FiniteDp::try_new(-327.dp())?;
-    layout.update(|value| {
-        value.vertical = taller;
-        value.margins.left = left;
-    });
-    let configured = options.current_layout();
-    assert_eq!(
-        (configured.horizontal, configured.vertical),
-        (
-            AxisPlacement::Start(Extent::dp(321.dp())?),
-            AxisPlacement::Start(Extent::dp(345.dp())?)
-        )
-    );
-    assert_eq!(configured.margins.left.get(), -327.dp());
-    assert_eq!(
-        GeometryRequest::needed(None, ProtocolLayout::new(configured, UNMEASURED)?),
-        GeometryRequest::ALL
-    );
     // A layer on a reconnected output gets a new protocol object, so every geometry request is sent again in
     // place of only the requests that changed.
     assert_eq!(
-        GeometryRequest::needed(
-            None,
-            ProtocolLayout::new(options.current_layout(), UNMEASURED)?
-        ),
+        GeometryRequest::needed(None, protocol(docked)?),
         GeometryRequest::ALL
     );
     Ok(())
 }
 
 #[test]
-fn keyboard_activation_preserves_static_configuration_and_cannot_enable_a_disabled_layer() {
-    assert!(!LayerSurface::new("default").keyboard_enabled());
-    assert!(
-        LayerSurface::new("interactive")
-            .keyboard(true)
-            .keyboard_enabled()
-    );
-    assert!(
-        !LayerSurface::new("passthrough")
-            .keyboard_when(|| true)
-            .keyboard_enabled()
-    );
-}
-
-#[test]
-fn layer_geometry_in_dp_rounds_to_whole_protocol_units() -> Result<(), TestError> {
+fn layer_geometry_in_dp_becomes_whole_protocol_units() -> Result<(), TestError> {
     let layout = LayerLayout {
         horizontal: AxisPlacement::Fill,
-        vertical: AxisPlacement::Start(Extent::dp(47.6.dp())?),
+        vertical: AxisPlacement::Start(fixed(47.6.dp())?),
         exclusive_zone: ExclusiveZone::reserve(47.4.dp())?,
-        margins: LayerMargins {
-            top: FiniteDp::try_new(-2.5.dp())?,
-            left: FiniteDp::try_new(0.4.dp())?,
-            ..Default::default()
-        },
+        margins: margins(-2.5.dp(), 0.4.dp())?,
     };
-    assert_eq!(protocol_extent(layout.horizontal, Dp::ZERO)?, 0);
-    assert_eq!(protocol_extent(layout.vertical, Dp::ZERO)?, 48);
-    assert_eq!(protocol_zone(layout.exclusive_zone, None)?, 47);
+    let sent = protocol(layout)?;
+    assert_eq!((sent.width, sent.height, sent.zone), (0, 48, 47));
+    assert_eq!((sent.margins.top, sent.margins.left), (-3, 0));
     assert_eq!(protocol_zone(ExclusiveZone::IgnoreOthers, None)?, -1);
-    let margins = ProtocolLayout::new(layout, UNMEASURED)?.margins;
-    assert_eq!((margins.top, margins.left), (-3, 0));
     Ok(())
 }
 
 #[test]
 fn a_layer_length_below_one_logical_pixel_is_sent_as_one_and_never_as_fill() -> Result<(), TestError>
 {
-    let short = AxisPlacement::Start(Extent::dp(0.3.dp())?);
-    assert_eq!(protocol_extent(short, Dp::ZERO)?, 1);
-    let content = AxisPlacement::Center(Extent::Content);
-    assert_eq!(protocol_extent(content, 0.3.dp())?, 1);
-    let options = LayerSurface::new("initial").placement(AxisPlacement::Fill, short);
-    assert_eq!(initial_size(&options, UNMEASURED)?, (1, 1));
+    let thin = LayerLayout {
+        horizontal: AxisPlacement::Center(fixed(0.3.dp())?),
+        vertical: AxisPlacement::Start(fixed(0.3.dp())?),
+        exclusive_zone: ExclusiveZone::IgnoreOthers,
+        margins: LayerMargins::default(),
+    };
+    let sent = protocol(thin)?;
+    assert_eq!((sent.width, sent.height), (1, 1));
+    let bar = LayerLayout {
+        horizontal: AxisPlacement::Fill,
+        ..thin
+    };
+    assert_eq!(initial_size(protocol(bar)?), (1, 1));
     Ok(())
 }
 
@@ -159,100 +117,82 @@ fn a_layer_length_below_one_logical_pixel_is_sent_as_one_and_never_as_fill() -> 
 fn the_initial_size_of_a_layer_follows_the_layout_state_over_the_static_placement()
 -> Result<(), TestError> {
     let layout = LayerLayout {
-        horizontal: AxisPlacement::Start(Extent::dp(321.dp())?),
-        vertical: AxisPlacement::Start(Extent::dp(345.dp())?),
+        horizontal: AxisPlacement::Start(fixed(321.dp())?),
+        vertical: AxisPlacement::Start(fixed(345.dp())?),
         exclusive_zone: ExclusiveZone::IgnoreOthers,
         margins: LayerMargins::default(),
     };
-    let short = AxisPlacement::Start(Extent::dp(10.dp())?);
+    let short = AxisPlacement::Start(fixed(10.dp())?);
     let options = LayerSurface::new("stateful")
         .placement(AxisPlacement::Fill, short)
         .layout_state(State::new(layout));
-    let size = initial_size(&options, UNMEASURED)?;
-    assert_eq!(size, (321, 345));
-    let protocol = ProtocolLayout::new(options.current_layout(), UNMEASURED)?;
-    assert_eq!(size, (protocol.width, protocol.height));
+    let panel =
+        Panel::new(options.panel.clone(), &mut empty_view(), &mut NoText).map_err(Error::from)?;
+    let protocol = ProtocolLayout::new(panel.geometry())?;
+    let spec = NativeSpec::layer(&options, empty_view(), panel.geometry(), protocol);
+    assert_eq!(spec.size, (321, 345));
+    assert_eq!(spec.size, (protocol.width, protocol.height));
     Ok(())
 }
 
 #[test]
-fn a_layer_length_that_is_not_finite_is_rejected() {
-    assert_eq!(Extent::dp(Dp::new(f64::NAN)), Err(NumberError::NotFinite));
-    assert_eq!(
-        ExclusiveZone::reserve(Dp::new(f64::INFINITY)),
-        Err(NumberError::NotFinite)
-    );
-}
-
-#[test]
-fn a_negative_layer_length_is_rejected() {
-    assert_eq!(Extent::dp(-4.dp()), Err(NumberError::Negative));
-    assert_eq!(ExclusiveZone::reserve(-4.dp()), Err(NumberError::Negative));
-}
-
-#[test]
 fn a_layer_length_too_long_for_the_protocol_is_refused() -> Result<(), TestError> {
-    let long = AxisPlacement::End(Extent::dp(1e12.dp())?);
-    assert!(protocol_extent(long, Dp::ZERO).is_err());
-    let content = AxisPlacement::Start(Extent::Content);
-    assert!(protocol_extent(content, 1e12.dp()).is_err());
-    assert!(protocol_zone(ExclusiveZone::reserve(1e12.dp())?, None).is_err());
-    let layout = LayerLayout {
+    let filled = LayerLayout {
         horizontal: AxisPlacement::Fill,
         vertical: AxisPlacement::Fill,
         exclusive_zone: ExclusiveZone::IgnoreOthers,
-        margins: LayerMargins {
-            top: FiniteDp::try_new(-1e12.dp())?,
-            ..Default::default()
-        },
+        margins: LayerMargins::default(),
     };
-    assert!(ProtocolLayout::new(layout, UNMEASURED).is_err());
+    let long = LayerLayout {
+        vertical: AxisPlacement::End(fixed(1e12.dp())?),
+        ..filled
+    };
+    let reserved = LayerLayout {
+        exclusive_zone: ExclusiveZone::reserve(1e12.dp())?,
+        ..filled
+    };
+    let moved = LayerLayout {
+        margins: margins(-1e12.dp(), Dp::ZERO)?,
+        ..filled
+    };
+    for layout in [long, reserved, moved] {
+        assert!(protocol(layout).is_err());
+    }
     Ok(())
 }
 
 #[test]
 fn a_default_layer_takes_and_reserves_the_measured_height_of_its_content() -> Result<(), TestError>
 {
-    let options = LayerSurface::new("measured");
-    let context = LayerContext {
-        content: Size::new(500.dp(), 61.6.dp()),
+    let anchored = |options: LayerSurface, height: Dp| {
+        let sent = measured(options.panel.current_layout(), 500.dp(), height)?;
+        Ok::<_, TestError>((sent.anchor, sent.width, sent.height, sent.zone))
     };
-    let protocol = ProtocolLayout::new(options.current_layout(), context)?;
+    let top = Anchor::Top | Anchor::Left | Anchor::Right;
     assert_eq!(
-        (
-            protocol.anchor,
-            protocol.width,
-            protocol.height,
-            protocol.zone
-        ),
-        (Anchor::Top | Anchor::Left | Anchor::Right, 0, 62, 62)
+        anchored(LayerSurface::new("measured"), 61.6.dp())?,
+        (top, 0, 62, 62)
+    );
+    assert_eq!(
+        anchored(LayerSurface::new("thin"), 0.3.dp())?,
+        (top, 0, 1, 1)
     );
     let side = LayerSurface::new("side")
         .placement(AxisPlacement::Start(Extent::Content), AxisPlacement::Fill);
-    let protocol = ProtocolLayout::new(side.current_layout(), context)?;
-    assert_eq!(
-        (
-            protocol.anchor,
-            protocol.width,
-            protocol.height,
-            protocol.zone
-        ),
-        (Anchor::Left | Anchor::Top | Anchor::Bottom, 500, 0, 500)
-    );
+    let left = Anchor::Left | Anchor::Top | Anchor::Bottom;
+    assert_eq!(anchored(side, 61.6.dp())?, (left, 500, 0, 500));
     let corner = LayerSurface::new("corner").placement(
         AxisPlacement::Start(Extent::Content),
         AxisPlacement::Start(Extent::Content),
     );
-    let protocol = ProtocolLayout::new(corner.current_layout(), context)?;
     assert_eq!(
-        (
-            protocol.anchor,
-            protocol.width,
-            protocol.height,
-            protocol.zone
-        ),
+        anchored(corner, 61.6.dp())?,
         (Anchor::Top | Anchor::Left, 500, 62, 0)
     );
+    let centered = LayerSurface::new("centered")
+        .placement(AxisPlacement::Center(Extent::Content), AxisPlacement::Fill);
+    let column = Anchor::Top | Anchor::Bottom;
+    assert_eq!(anchored(centered, 61.6.dp())?, (column, 500, 0, 0));
     Ok(())
 }
 
@@ -261,15 +201,15 @@ fn an_axis_left_to_the_layer_by_a_configure_event_takes_the_length_requested_las
 -> Result<(), TestError> {
     let first = LayerLayout {
         horizontal: AxisPlacement::Fill,
-        vertical: AxisPlacement::Start(Extent::dp(344.dp())?),
+        vertical: AxisPlacement::Start(fixed(344.dp())?),
         exclusive_zone: ExclusiveZone::IgnoreOthers,
         margins: LayerMargins::default(),
     };
     let grown = LayerLayout {
-        vertical: AxisPlacement::Start(Extent::dp(400.dp())?),
+        vertical: AxisPlacement::Start(fixed(400.dp())?),
         ..first
     };
-    let requested = ProtocolLayout::new(grown, UNMEASURED)?;
+    let requested = protocol(grown)?;
     assert_eq!(configured_length(0, requested.height), Some(400));
     assert_eq!(configured_length(380, requested.height), Some(380));
     assert_eq!(configured_length(1920, requested.width), Some(1920));

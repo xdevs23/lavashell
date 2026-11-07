@@ -1,137 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::geometry::Size;
+use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLayout, LayerLevel};
 use lavashell_core::prelude::{HdrMetadata, OutputRequest};
-use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
-use lavashell_runtime::WindowShape;
-
-#[derive(Clone, Copy)]
-pub enum LayerLevel {
-    Background,
-    Bottom,
-    Top,
-    Overlay,
-}
+use lavashell_platform::KeyboardMode;
+use lavashell_runtime::{KeyboardPolicy, PanelOptions, WindowShape};
 
 #[derive(Clone)]
 pub struct LayerSurface {
     pub composition_order: i32,
     pub focus_grab: Option<crate::FocusGrab>,
     pub shape: Option<WindowShape>,
-    pub layout_state: Option<lavashell_core::reactive::State<LayerLayout>>,
     pub namespace: String,
     pub output: OutputRequest,
     pub hdr_metadata: Option<HdrMetadata>,
     pub background_blur: bool,
     pub level: LayerLevel,
-    pub horizontal: AxisPlacement,
-    pub vertical: AxisPlacement,
-    pub exclusive_zone: ExclusiveZone,
-    pub keyboard: bool,
-    pub(crate) keyboard_active: Option<std::rc::Rc<dyn Fn() -> bool>>,
-}
-
-pub(crate) struct Keyboard {
-    enabled: bool,
-    active: Option<std::rc::Rc<dyn Fn() -> bool>>,
-}
-
-impl Keyboard {
-    pub fn enabled(&self) -> bool {
-        self.enabled && self.active.as_ref().is_none_or(|active| active())
-    }
-}
-
-/// Where a layer sits along one axis of the output. The start edge is the top or the left edge. The end edge is the
-/// bottom or the right edge.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AxisPlacement {
-    /// Anchored to the start edge, with this length.
-    Start(Extent),
-    /// Anchored to the end edge, with this length.
-    End(Extent),
-    /// Anchored to neither edge, so the compositor centers the layer.
-    Center(Extent),
-    /// Anchored to both edges, across the whole distance between them.
-    Fill,
-}
-
-impl AxisPlacement {
-    /// The length of the layer along the axis, or `None` when the layer fills the axis.
-    #[must_use]
-    pub fn extent(self) -> Option<Extent> {
-        match self {
-            Self::Start(extent) | Self::End(extent) | Self::Center(extent) => Some(extent),
-            Self::Fill => None,
-        }
-    }
-}
-
-/// The length of a layer along an axis that it does not fill.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Extent {
-    /// The length that the content measures along this axis, measured again after the view of the layer changes.
-    Content,
-    Dp(NonNegativeDp),
-}
-
-impl Extent {
-    /// # Errors
-    ///
-    /// Fails when `length` is negative or not finite.
-    pub fn dp(length: Dp) -> Result<Self, NumberError> {
-        NonNegativeDp::try_new(length).map(Self::Dp)
-    }
-}
-
-/// The exclusive zone of a layer: the space at its anchored edge that the compositor reserves for the layer and
-/// does not give to other surfaces.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ExclusiveZone {
-    /// Reserves this distance from the anchored edge. The layer is placed outside the space reserved by other
-    /// layers.
-    Reserve(NonNegativeDp),
-    /// Reserves the length of the layer along the axis perpendicular to its anchored edge.
-    LayerExtent,
-    /// Reserves nothing. The layer also extends under the space reserved by other layers.
-    IgnoreOthers,
-}
-
-impl ExclusiveZone {
-    /// # Errors
-    ///
-    /// Fails when `length` is negative or not finite.
-    pub fn reserve(length: Dp) -> Result<Self, NumberError> {
-        NonNegativeDp::try_new(length).map(Self::Reserve)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct LayerMargins {
-    pub top: FiniteDp,
-    pub right: FiniteDp,
-    pub bottom: FiniteDp,
-    pub left: FiniteDp,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LayerLayout {
-    pub margins: LayerMargins,
-    pub horizontal: AxisPlacement,
-    pub vertical: AxisPlacement,
-    pub exclusive_zone: ExclusiveZone,
-}
-
-impl LayerLayout {
-    /// The size of the layer, or `None` when an axis fills or follows the content.
-    #[must_use]
-    pub fn fixed_size(&self) -> Option<Size> {
-        match (self.horizontal.extent(), self.vertical.extent()) {
-            (Some(Extent::Dp(width)), Some(Extent::Dp(height))) => {
-                Some(Size::new(width.get(), height.get()))
-            }
-            _ => None,
-        }
-    }
+    /// The layout of the panel on its output and when it receives the keyboard focus.
+    pub panel: PanelOptions,
 }
 
 impl LayerSurface {
@@ -141,16 +25,11 @@ impl LayerSurface {
             namespace: namespace.into(),
             focus_grab: None,
             shape: None,
-            layout_state: None,
             output: OutputRequest::default(),
             hdr_metadata: None,
             background_blur: false,
             level: LayerLevel::Top,
-            horizontal: AxisPlacement::Fill,
-            vertical: AxisPlacement::Start(Extent::Content),
-            exclusive_zone: ExclusiveZone::LayerExtent,
-            keyboard: false,
-            keyboard_active: None,
+            panel: PanelOptions::default(),
         }
     }
 
@@ -166,20 +45,8 @@ impl LayerSurface {
     /// its exclusive zone. A change of the state is sent to the compositor with the next frame of the layer.
     #[must_use]
     pub fn layout_state(mut self, state: lavashell_core::reactive::State<LayerLayout>) -> Self {
-        self.layout_state = Some(state);
+        self.panel.layout_state = Some(state);
         self
-    }
-
-    pub(crate) fn current_layout(&self) -> LayerLayout {
-        self.layout_state.as_ref().map_or_else(
-            || LayerLayout {
-                margins: LayerMargins::default(),
-                horizontal: self.horizontal,
-                vertical: self.vertical,
-                exclusive_zone: self.exclusive_zone,
-            },
-            lavashell_core::reactive::State::get,
-        )
     }
 
     /// Sets the shape of the layer. Its outline clips painting and sets the input region sent to the compositor.
@@ -215,8 +82,8 @@ impl LayerSurface {
 
     #[must_use]
     pub fn placement(mut self, horizontal: AxisPlacement, vertical: AxisPlacement) -> Self {
-        self.horizontal = horizontal;
-        self.vertical = vertical;
+        self.panel.layout.horizontal = horizontal;
+        self.panel.layout.vertical = vertical;
         self
     }
 
@@ -232,33 +99,52 @@ impl LayerSurface {
 
     #[must_use]
     pub fn exclusive_zone(mut self, zone: ExclusiveZone) -> Self {
-        self.exclusive_zone = zone;
+        self.panel.layout.exclusive_zone = zone;
         self
     }
 
+    /// Allows the keyboard focus on demand, under the condition of `keyboard_when` if one is set, or never.
     #[must_use]
     pub fn keyboard(mut self, enabled: bool) -> Self {
-        self.keyboard = enabled;
+        self.panel.keyboard = match (enabled, self.panel.keyboard) {
+            (false, _) => KeyboardPolicy::Off,
+            (true, KeyboardPolicy::OnDemandWhen(active)) => KeyboardPolicy::OnDemandWhen(active),
+            (true, KeyboardPolicy::Off | KeyboardPolicy::OnDemand) => KeyboardPolicy::OnDemand,
+        };
         self
     }
 
-    /// Allows keyboard focus only while `active` returns true and `keyboard` is enabled. A change of `active` is
-    /// sent to the compositor in the same commit as the next change of the layer geometry and content.
+    /// Allows the keyboard focus on demand only while `active` returns true. A change of `active` is sent to the
+    /// compositor in the same commit as the next change of the layer geometry and content.
     #[must_use]
     pub fn keyboard_when(mut self, active: impl Fn() -> bool + 'static) -> Self {
-        self.keyboard_active = Some(std::rc::Rc::new(active));
+        self.panel.keyboard = KeyboardPolicy::OnDemandWhen(std::rc::Rc::new(active));
         self
     }
 
     #[must_use]
     pub fn keyboard_enabled(&self) -> bool {
-        self.keyboard_configuration().enabled()
+        self.panel.keyboard.mode() == KeyboardMode::OnDemand
     }
+}
 
-    pub(crate) fn keyboard_configuration(&self) -> Keyboard {
-        Keyboard {
-            enabled: self.keyboard,
-            active: self.keyboard_active.clone(),
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enabling_the_keyboard_keeps_a_condition_set_before_it() {
+        let waiting = LayerSurface::new("keyboard")
+            .keyboard_when(|| false)
+            .keyboard(true);
+        let disabled = LayerSurface::new("keyboard")
+            .keyboard_when(|| true)
+            .keyboard(false);
+        let enabled = LayerSurface::new("keyboard")
+            .keyboard_when(|| true)
+            .keyboard(true);
+        assert_eq!(waiting.panel.keyboard.mode(), KeyboardMode::Off);
+        assert_eq!(disabled.panel.keyboard.mode(), KeyboardMode::Off);
+        assert_eq!(enabled.panel.keyboard.mode(), KeyboardMode::OnDemand);
     }
 }

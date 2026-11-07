@@ -2,17 +2,17 @@
 use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
 use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
-use lavashell_core::geometry::{Point, Size, Viewport};
+use lavashell_core::geometry::{Point, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::scene::SceneBuilder;
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, PanelRecords,
+    PanelsPerOutput, RunEnd, SceneSink, SurfaceRecords, SurfaceShape, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -79,7 +79,7 @@ enum Request {
 
 pub struct App {
     requests: Vec<Request>,
-    output_layers: Option<output_layers::Configuration>,
+    output_layers: Option<PanelsPerOutput<LayerSurface>>,
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
@@ -119,9 +119,21 @@ enum Role {
     Lock(session_lock::LockSurface),
 }
 
+impl Role {
+    fn destroy(&self) {
+        match self {
+            Self::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
+            Self::Lock(surface) if surface.is_alive() => surface.destroy(),
+            _ => {}
+        }
+    }
+}
+
 struct Surface {
     accessibility: Option<crate::accessibility::Bridge>,
     builder: SceneBuilder,
+    /// The state of the surface built from the same frames as the scene in `builder`.
+    state: SurfaceState,
     role: Role,
     wl: wl_surface::WlSurface,
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
@@ -133,17 +145,12 @@ struct Surface {
     telemetry: PresentationTracker,
     output: Option<OutputInfo>,
     background: Option<ExtBackgroundEffectSurfaceV1>,
-    blur_size: Option<Size>,
-    shape: Option<shape::SurfaceShape>,
+    shape: SurfaceShape,
 }
 
 impl Surface {
     fn needs_visual_frame(&self, view: &View) -> bool {
-        view.needs_visual_frame()
-            || self
-                .shape
-                .as_ref()
-                .is_some_and(shape::SurfaceShape::needs_frame)
+        view.needs_visual_frame() || self.shape.needs_frame()
     }
 
     fn moving(&self, now: Duration) -> bool {
@@ -153,11 +160,7 @@ impl Surface {
             .is_some_and(|change| change <= shown)
     }
 
-    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, builds the frames merged
-    /// there into the scene builder, and logs each component that failed in the frame as an error. When a change does
-    /// not fit the scene, the view sends the whole scene with the next frame. The builder restarts with that frame.
-    /// If the builder had a scene before, the failure is logged and the frame ends without error. If the builder was
-    /// empty, the failure ends the frame with an error.
+    /// Composes the next frame of `view` and builds it, as `compose` and `build` do.
     fn show(
         &mut self,
         id: SurfaceId,
@@ -165,26 +168,43 @@ impl Surface {
         choreographers: &mut Choreographers,
         frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
     ) -> Result<(), crate::Error> {
-        let showed_nothing = self.builder.is_empty();
-        let error = match frame(view, choreographers.sink(id)) {
+        self.compose(id, view, choreographers, frame)?;
+        self.build(id, view, choreographers)
+    }
+
+    /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, and logs each component
+    /// that failed in the frame as an error. A failure follows the rule of `tolerate`.
+    fn compose(
+        &self,
+        id: SurfaceId,
+        view: &mut View,
+        choreographers: &mut Choreographers,
+        frame: impl FnOnce(&mut View, &mut SceneSink) -> Result<Failures, FrameError<Infallible>>,
+    ) -> Result<(), crate::Error> {
+        match frame(view, choreographers.sink(id)) {
             Ok(failures) => {
                 crate::failures::log_failures(failures);
-                let Err(error) = choreographers.build(id, &mut self.builder) else {
-                    return Ok(());
-                };
-                view.invalidate();
-                crate::Error::BuildScene(error)
+                Ok(())
             }
-            Err(error) => crate::Error::ShowScene(error),
-        };
-        if showed_nothing {
-            return Err(error);
+            Err(error) => tolerate(self.builder.is_empty(), crate::Error::ShowScene(error)),
         }
-        log::warn!(
-            "the surface shows the whole scene next: {}",
-            lavashell_core::error::message_chain(&error)
-        );
-        Ok(())
+    }
+
+    /// Builds the frames of surface `id` that ended in the choreographer into the scene builder and the surface state.
+    /// When a change does not fit the scene, the view sends the whole scene with the next frame. The builder restarts
+    /// with that frame. A failure follows the rule of `tolerate`.
+    fn build(
+        &mut self,
+        id: SurfaceId,
+        view: &mut View,
+        choreographers: &mut Choreographers,
+    ) -> Result<(), crate::Error> {
+        let showed_nothing = self.builder.is_empty();
+        let Err(error) = choreographers.build(id, &mut self.builder, &mut self.state) else {
+            return Ok(());
+        };
+        view.invalidate();
+        tolerate(showed_nothing, crate::Error::BuildScene(error))
     }
 
     fn wakes(&self, view: &View, now: Duration) -> Option<Duration> {
@@ -201,17 +221,11 @@ impl Surface {
 impl Drop for Surface {
     fn drop(&mut self) {
         self.accessibility = None;
-        if let Some(background) = self.background.take() {
-            background.destroy();
-        }
-        if let Some(fractional) = self.fractional.take() {
-            fractional.destroy();
-        }
-        match &self.role {
-            Role::Layer(layer) if layer.proxy.is_alive() => layer.proxy.destroy(),
-            Role::Lock(surface) if surface.is_alive() => surface.destroy(),
-            _ => {}
-        }
+        destroy_objects(
+            self.fractional.take(),
+            self.background.take(),
+            Some(&self.role),
+        );
     }
 }
 
@@ -256,6 +270,7 @@ pub(super) struct Platform {
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
+    panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
@@ -319,6 +334,7 @@ impl Platform {
                 SurfaceRequest::Destroy(id) => {
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
+                    self.panels.forget(id);
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     self.choreographers.retire(id);
@@ -328,6 +344,50 @@ impl Platform {
             }
         }
     }
+}
+
+/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends a frame that contains them unless
+/// the frame waits for the whole scene.
+fn send_surface_state(
+    sink: &mut SceneSink,
+    panels: &PanelRecords,
+    id: SurfaceId,
+    changes: impl IntoIterator<Item = SurfaceChange>,
+) {
+    for change in changes.into_iter().chain(panels.geometry_change(id)) {
+        sink.set_state(change);
+    }
+    sink.end_state_frame();
+}
+
+/// Destroys the protocol objects of a native surface apart from its `wl_surface` and the objects of its control.
+fn destroy_objects(
+    fractional: Option<WpFractionalScaleV1>,
+    background: Option<ExtBackgroundEffectSurfaceV1>,
+    role: Option<&Role>,
+) {
+    if let Some(background) = background {
+        background.destroy();
+    }
+    if let Some(fractional) = fractional {
+        fractional.destroy();
+    }
+    if let Some(role) = role {
+        role.destroy();
+    }
+}
+
+/// Returns `error` when the surface showed nothing before. Otherwise the error is logged, and the surface shows the
+/// whole scene with the next frame.
+fn tolerate(showed_nothing: bool, error: crate::Error) -> Result<(), crate::Error> {
+    if showed_nothing {
+        return Err(error);
+    }
+    log::warn!(
+        "the surface shows the whole scene next: {}",
+        lavashell_core::error::message_chain(&error)
+    );
+    Ok(())
 }
 
 /// The native surface `id`, its view and its viewport, while the surface is open.
