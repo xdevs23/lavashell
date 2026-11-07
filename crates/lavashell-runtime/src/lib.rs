@@ -19,6 +19,7 @@ mod surface_records;
 mod test_error;
 mod view_actions;
 mod window;
+mod window_move;
 
 pub use choreographers::{Choreographers, SceneSink};
 pub use error::Error;

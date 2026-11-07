@@ -1,106 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Platform, SeatDevices};
 use lavashell_core::geometry::Point;
-use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
-use lavashell_core::view::{InputEvent, TouchSample};
+use lavashell_core::view::TouchSample;
+use lavashell_platform::DeviceEvent;
 use sctk::reexports::client::protocol::{wl_seat, wl_surface, wl_touch};
-use sctk::reexports::client::{Connection, QueueHandle};
+use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use sctk::seat::touch::TouchHandler;
 use smithay_client_toolkit as sctk;
-use std::collections::BTreeMap;
 
-pub(super) struct TouchPoints {
-    /// The seat number contained in the touch ids passed to the views, which distinguishes touches on different
-    /// seats.
-    seat: u32,
-    points: BTreeMap<i32, Down>,
+fn touch_id(seat: &wl_seat::WlSeat, point: i32) -> TouchId {
+    TouchId {
+        seat: seat.id().protocol_id(),
+        point,
+    }
 }
 
-/// A touch point that is down: the surface on which it went down and its last reported position. The position is
-/// stored here because the `up` event of the protocol has no position.
-struct Down {
-    surface: SurfaceId,
-    at: Point,
-}
-
-impl TouchPoints {
-    pub(super) fn new(seat: u32) -> Self {
-        Self {
-            seat,
-            points: BTreeMap::new(),
-        }
-    }
-
-    fn id(&self, point: i32) -> TouchId {
-        TouchId {
-            seat: self.seat,
-            point,
-        }
-    }
-
-    fn sample(&self, point: i32, at: Point) -> TouchSample {
-        TouchSample {
-            id: self.id(point),
-            at,
-            kind: PointerKind::Finger,
-        }
-    }
-
-    fn down(&mut self, point: i32, surface: SurfaceId, at: Point) -> (SurfaceId, InputEvent) {
-        if self.points.insert(point, Down { surface, at }).is_some() {
-            log::debug!("touch point {point} went down again before it went up");
-        }
-        (surface, InputEvent::TouchDown(self.sample(point, at)))
-    }
-
-    fn motion(&mut self, point: i32, at: Point) -> Option<(SurfaceId, InputEvent)> {
-        let down = self.points.get_mut(&point)?;
-        down.at = at;
-        let surface = down.surface;
-        Some((surface, InputEvent::TouchMove(self.sample(point, at))))
-    }
-
-    fn up(&mut self, point: i32) -> Option<(SurfaceId, InputEvent)> {
-        let down = self.points.remove(&point)?;
-        Some((
-            down.surface,
-            InputEvent::TouchUp(self.sample(point, down.at)),
-        ))
-    }
-
-    /// Removes every touch point and returns a cancel event for each, together with the surface that receives the
-    /// event.
-    pub(super) fn cancel(&mut self) -> Vec<(SurfaceId, InputEvent)> {
-        let points = std::mem::take(&mut self.points);
-        (points.into_iter())
-            .map(|(point, down)| (down.surface, InputEvent::TouchCancel(self.id(point))))
-            .collect()
+fn finger_sample(id: TouchId, at: Point) -> TouchSample {
+    TouchSample {
+        id,
+        at,
+        kind: PointerKind::Finger,
     }
 }
 
 impl Platform {
-    fn touch_seat(&mut self, touch: &wl_touch::WlTouch) -> Option<&mut SeatDevices> {
+    fn touch_devices(&mut self, touch: &wl_touch::WlTouch) -> Option<&mut SeatDevices> {
         (self.devices.iter_mut()).find(|seat| seat.touch.as_ref() == Some(touch))
     }
 
-    fn touch_input(&mut self, input: Option<(SurfaceId, InputEvent)>) {
-        if let Some((surface, input)) = input
-            && let Some(view) = self.surface_records.open_view_mut(surface)
-        {
-            view.input(input);
-        }
-    }
-
-    /// Sends a cancel event for every touch point of `seat` to its surface. Touch points of other seats remain
-    /// down.
+    /// Reports that every touch point on the touch screen of `seat` ended without going up.
     pub(super) fn cancel_touches(&mut self, seat: &wl_seat::WlSeat) {
-        let cancels = (self.devices.iter_mut())
-            .find(|device| &device.seat == seat)
-            .map(|device| device.touches.cancel())
+        let positions = (self.seat_devices(seat))
+            .map(|devices| std::mem::take(&mut devices.touch_positions))
             .unwrap_or_default();
-        for cancel in cancels {
-            self.touch_input(Some(cancel));
+        for point in positions.into_keys() {
+            self.route_input(DeviceEvent::TouchCancel(touch_id(seat, point)));
         }
     }
 }
@@ -120,14 +55,17 @@ impl TouchHandler for Platform {
         let Some(surface) = self.find_surface(&surface) else {
             return;
         };
-        let at = crate::logical::point(position.0, position.1);
-        let Some(seat) = self.touch_seat(touch) else {
+        let Some(devices) = self.touch_devices(touch) else {
             return;
         };
-        let input = seat.touches.down(id, surface, at);
-        let seat = seat.seat.clone();
+        let at = crate::logical::point(position.0, position.1);
+        if devices.touch_positions.insert(id, at).is_some() {
+            log::debug!("touch point {id} went down again before it went up");
+        }
+        let seat = devices.seat.clone();
+        let sample = finger_sample(touch_id(&seat, id), at);
         self.clipboard.note_serial(seat, serial);
-        self.touch_input(Some(input));
+        self.route_input(DeviceEvent::TouchDown { surface, sample });
     }
 
     fn up(
@@ -139,8 +77,12 @@ impl TouchHandler for Platform {
         _: u32,
         id: i32,
     ) {
-        let input = (self.touch_seat(touch)).and_then(|seat| seat.touches.up(id));
-        self.touch_input(input);
+        if let Some(devices) = self.touch_devices(touch)
+            && let Some(at) = devices.touch_positions.remove(&id)
+        {
+            let sample = finger_sample(touch_id(&devices.seat, id), at);
+            self.route_input(DeviceEvent::TouchUp(sample));
+        }
     }
 
     fn motion(
@@ -153,8 +95,13 @@ impl TouchHandler for Platform {
         position: (f64, f64),
     ) {
         let at = crate::logical::point(position.0, position.1);
-        let input = (self.touch_seat(touch)).and_then(|seat| seat.touches.motion(id, at));
-        self.touch_input(input);
+        if let Some(devices) = self.touch_devices(touch)
+            && let Some(last) = devices.touch_positions.get_mut(&id)
+        {
+            *last = at;
+            let sample = finger_sample(touch_id(&devices.seat, id), at);
+            self.route_input(DeviceEvent::TouchMotion(sample));
+        }
     }
 
     fn shape(
@@ -179,11 +126,9 @@ impl TouchHandler for Platform {
     }
 
     fn cancel(&mut self, _: &Connection, _: &QueueHandle<Self>, touch: &wl_touch::WlTouch) {
-        if let Some(seat) = self.touch_seat(touch).map(|seat| seat.seat.clone()) {
+        let seat = (self.touch_devices(touch)).map(|devices| devices.seat.clone());
+        if let Some(seat) = seat {
             self.cancel_touches(&seat);
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

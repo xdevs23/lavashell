@@ -36,7 +36,9 @@ impl Platform {
         let start = self.start;
         spec.view.motion().time_source(move || start.elapsed());
         let size = crate::logical::size(spec.size);
-        let id = self.surface_records.open(spec.view, size, Density::ONE)?;
+        let id = self
+            .surface_records
+            .open(spec.view, size, Density::ONE, spec.drag_region)?;
         let wl = self.compositor.create_surface(&self.qh);
         let window = Arc::new(OwnedWlSurface::new(wl.clone(), self.connection.backend()));
         let protocols = &self.protocols;
@@ -93,7 +95,6 @@ impl Platform {
             background,
             blur_size: None,
             shape: spec.shape.map(shape::SurfaceShape::new),
-            drag_region: spec.drag_region,
         };
         let _replaced_surface = self.surfaces.insert(id, surface);
         Ok(())

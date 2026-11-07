@@ -69,8 +69,6 @@ pub(crate) enum TestError {
     RequestsClosed,
     #[error("the bridge sent another event than the awaited one")]
     UnexpectedEvent,
-    #[error("cancelling the touch points sent an input other than a touch cancel")]
-    NotTouchCancel,
     #[error("the portal watch closed its updates before the test ended")]
     UpdatesClosed,
     #[error("the portal watch ended before the test did")]

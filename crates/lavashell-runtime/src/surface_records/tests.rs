@@ -13,7 +13,7 @@ fn empty_view() -> View {
 
 fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, TestError> {
     let size = Size::new(100.dp(), 50.dp());
-    Ok(records.open(empty_view(), size, Density::ONE)?)
+    Ok(records.open(empty_view(), size, Density::ONE, None)?)
 }
 
 /// Frames the view of `surface`, so that it needs no frame until something invalidates it.
@@ -118,7 +118,7 @@ fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestR
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.spacer(*captured, *captured, Modifier::new());
     });
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     assert_eq!(Rc::strong_count(&held), 2);
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     assert_eq!(Rc::strong_count(&held), 2);
@@ -175,9 +175,9 @@ fn opening_fails_once_every_surface_id_is_used() {
         last_id: Some(u64::MAX - 1),
         ..SurfaceRecords::new(PreferenceOverrides::default())
     };
-    let last = records.open(empty_view(), Size::ZERO, Density::ONE);
+    let last = records.open(empty_view(), Size::ZERO, Density::ONE, None);
     assert!(matches!(last, Ok(SurfaceId(u64::MAX))));
-    let opened = records.open(empty_view(), Size::ZERO, Density::ONE);
+    let opened = records.open(empty_view(), Size::ZERO, Density::ONE, None);
     assert!(matches!(opened, Err(Error::NumberSurface)));
     assert_eq!(records.records.len(), 1);
 }
