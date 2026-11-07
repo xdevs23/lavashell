@@ -118,8 +118,7 @@ fn the_next_change_of_a_tree_follows_the_motions_in_its_slots() -> TestResult {
         index: 0,
         node: Node::Group(fading),
     };
-    let changes = vec![insert];
-    tree.show(SceneUpdate { changes })?;
+    tree.show_change(insert)?;
     let after = |millis| START + Duration::from_millis(millis);
     assert_eq!(tree.next_change(Duration::from_millis(400)), Some(START));
     assert_eq!(tree.next_change(after(100)), Some(after(100)));
@@ -136,8 +135,7 @@ fn the_next_change_of_a_tree_follows_the_motions_in_its_slots() -> TestResult {
             paused,
         )?))),
     };
-    let changes = vec![pause];
-    tree.show(SceneUpdate { changes })?;
+    tree.show_change(pause)?;
     assert_eq!(tree.next_change(after(100)), None);
     let playing = Change::SetSlot {
         id: SceneNodeId(1),
@@ -145,8 +143,7 @@ fn the_next_change_of_a_tree_follows_the_motions_in_its_slots() -> TestResult {
     };
     let removed = Change::Remove { id: SceneNodeId(1) };
     for (change, next) in [(playing, Some(after(100))), (removed, None)] {
-        let changes = vec![change];
-        tree.show(SceneUpdate { changes })?;
+        tree.show_change(change)?;
         assert_eq!(tree.next_change(after(100)), next);
     }
     Ok(())

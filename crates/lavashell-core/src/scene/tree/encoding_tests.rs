@@ -31,7 +31,7 @@ fn a_packet_reads_back_with_its_commands_and_their_footprint() -> TestResult {
 }
 
 #[test]
-fn an_update_reads_back_as_the_same_changes() -> TestResult {
+fn changes_read_back_one_at_a_time_as_the_same_changes() -> TestResult {
     let program = Program::target(
         Vector([0.0]),
         Vector([40.0]),
@@ -60,32 +60,32 @@ fn an_update_reads_back_as_the_same_changes() -> TestResult {
         clip: None,
     };
     let leaf = Node::Leaf(Content::Packet(Packet::new(Arc::from([fill()]))));
-    let update = SceneUpdate {
-        changes: vec![
-            Change::Insert {
-                id: SceneNodeId(1),
-                parent: None,
-                index: 0,
-                node: Node::Group(Group::default()),
-            },
-            Change::Insert {
-                id: SceneNodeId(2),
-                parent: Some(SceneNodeId(1)),
-                index: 0,
-                node: leaf,
-            },
-            Change::SetSlot {
-                id: SceneNodeId(1),
-                slot: SlotChange::Transform(group.transform.clone()),
-            },
-            Change::SetSlot {
-                id: SceneNodeId(1),
-                slot: SlotChange::Opacity(group.opacity.clone()),
-            },
-        ],
-    };
+    let changes = [
+        Change::Insert {
+            id: SceneNodeId(1),
+            parent: None,
+            index: 0,
+            node: Node::Group(Group::default()),
+        },
+        Change::Insert {
+            id: SceneNodeId(2),
+            parent: Some(SceneNodeId(1)),
+            index: 0,
+            node: leaf,
+        },
+        Change::SetSlot {
+            id: SceneNodeId(1),
+            slot: SlotChange::Transform(group.transform.clone()),
+        },
+        Change::SetSlot {
+            id: SceneNodeId(1),
+            slot: SlotChange::Opacity(group.opacity.clone()),
+        },
+    ];
     let mut tree = SceneTree::default();
-    tree.show(read(&update)?)?;
+    for change in &changes {
+        tree.show_change(read(change)?)?;
+    }
     let key = |node| NodeKey::new(SceneTree::ROOT, SceneNodeId(node));
     assert!(tree.group(key(1)) == Some(&group));
     assert_eq!(
@@ -127,10 +127,7 @@ fn a_graft_is_not_written() {
         id: SceneNodeId(1),
         content: Content::Graft(tree.create_namespace()),
     };
-    let update = SceneUpdate {
-        changes: vec![graft],
-    };
-    assert!(postcard::to_allocvec(&update).is_err());
+    assert!(postcard::to_allocvec(&graft).is_err());
 }
 
 #[test]

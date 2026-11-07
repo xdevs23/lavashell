@@ -54,9 +54,7 @@ fn scene(commands: impl Into<Arc<[DrawCommand]>>) -> Result<SceneTree, TestError
         node: leaf,
     };
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate {
-        changes: vec![insert],
-    })?;
+    tree.show_change(insert)?;
     Ok(tree)
 }
 
