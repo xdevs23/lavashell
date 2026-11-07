@@ -2,8 +2,6 @@
 //! The failures that the tests of this crate return in place of a panic.
 
 use crate::Error;
-use accesskit::{NodeId as NativeId, Role as NativeRole};
-use lavashell_core::prelude::NodeId;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
 use lavashell_test_fixtures::FrameFailure;
@@ -51,20 +49,6 @@ pub(crate) enum TestError {
     NoUniqueName,
     #[error("the fixture received no message")]
     Receive(#[from] mpsc::RecvError),
-    #[error("the tree has no node {0:?}")]
-    MissingNode(NodeId),
-    #[error("the node {0:?} has no text")]
-    MissingText(NodeId),
-    #[error("the native tree has no node with the role {0:?}")]
-    MissingNativeRole(NativeRole),
-    #[error("the native tree has no node {0:?}")]
-    MissingNativeNode(NativeId),
-    #[error("the native tree has no tree information")]
-    MissingTreeInfo,
-    #[error("the native node has no text selection")]
-    MissingSelection,
-    #[error("the action request maps to no action of Lavashell")]
-    RefusedAction,
     #[error("the bridge closed its requests before the awaited one arrived")]
     RequestsClosed,
     #[error("the bridge sent another event than the awaited one")]
@@ -75,10 +59,6 @@ pub(crate) enum TestError {
     WatchEnded,
     #[error("the portal watch failed before the test ended")]
     WatchFailed(#[source] zbus::Error),
-    #[error("the native text has no position at index {0}")]
-    MissingPosition(usize),
-    #[error("the native text has no line {0}")]
-    MissingLine(usize),
     #[error("a number could not be converted")]
     Number(#[from] NumberError),
     #[error("a number does not fit its type")]

@@ -3,6 +3,7 @@
 //! the bus of the desktop session.
 
 use super::*;
+use accesskit::{ActionData, ActionRequest, TextPosition, TextSelection};
 use sctk::reexports::calloop::{EventLoop, channel};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -14,7 +15,7 @@ type Address = (String, OwnedObjectPath);
 /// The requests that the bridge sent to the event loop, and whether the bridge closed the channel of those requests.
 #[derive(Default)]
 struct Requests {
-    events: Vec<Event>,
+    events: Vec<AccessibilityEvent>,
     closed: bool,
 }
 
@@ -91,8 +92,8 @@ fn proxy<'a>(
 fn wait_event(
     loop_: &mut EventLoop<Requests>,
     requests: &mut Requests,
-    predicate: impl Fn(&Event) -> bool,
-) -> Result<Event, TestError> {
+    predicate: impl Fn(&AccessibilityEvent) -> bool,
+) -> Result<AccessibilityEvent, TestError> {
     loop {
         if let Some(index) = requests.events.iter().position(&predicate) {
             return Ok(requests.events.remove(index));
@@ -176,15 +177,17 @@ fn child() -> Result<(), TestError> {
             channel::Event::Msg(event) => requests.events.push(event),
             channel::Event::Closed => requests.closed = true,
         })?;
-    let mut bridge = Bridge::new(SurfaceId(0), "Fixture".into(), sender);
+    let mut bridge = Bridge::new(SurfaceId(0), sender);
     let mut requests = Requests::default();
     let activation = wait_event(&mut loop_, &mut requests, |event| {
-        matches!(event, Event::Activate(_))
+        matches!(event, AccessibilityEvent::Activate(_))
     })?;
-    assert!(matches!(activation, Event::Activate(SurfaceId(0))));
-    let mut tree = tree();
-    bridge.activate();
-    bridge.publish(&tree, true);
+    assert!(matches!(
+        activation,
+        AccessibilityEvent::Activate(SurfaceId(0))
+    ));
+    let initial = tree(&[Run::line("a💡é", &[0])])?;
+    bridge.publish(initial.clone());
     bridge.window_focus(true);
     let app = embeds.recv()?;
     let mut windows = wait_for(
@@ -195,14 +198,7 @@ fn child() -> Result<(), TestError> {
     let window = windows.remove(0);
     let nodes = children(&client, &window)?;
     assert_eq!(nodes.len(), 2);
-    check_button(
-        &client,
-        &nodes[0],
-        &mut bridge,
-        &mut loop_,
-        &mut requests,
-        &tree,
-    )?;
+    check_button(&client, &nodes[0], &mut bridge, &mut loop_, &mut requests)?;
     let text = &nodes[1];
     let text_proxy = proxy(&client, text, "org.a11y.atspi.Text")?;
     assert_eq!(
@@ -212,24 +208,31 @@ fn child() -> Result<(), TestError> {
     assert_eq!(text_proxy.get_property::<i32>("CharacterCount")?, 3);
     let selection: bool = text_proxy.call("SetSelection", &(0i32, 1i32, 3i32))?;
     assert!(selection);
-    let Event::Action(_, action) = wait_event(&mut loop_, &mut requests, |event| {
-        matches!(event, Event::Action(SurfaceId(0), _))
+    let AccessibilityEvent::Action(_, action) = wait_event(&mut loop_, &mut requests, |event| {
+        matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
         return Err(TestError::UnexpectedEvent);
     };
+    let run = |character_index| TextPosition {
+        node: NodeId(FIRST_RUN),
+        character_index,
+    };
+    let selection = TextSelection {
+        anchor: run(1),
+        focus: run(3),
+    };
     assert_eq!(
-        bridge
-            .action(action, &tree)
-            .ok_or(TestError::RefusedAction)?
-            .action,
-        AccessibilityAction::SetTextSelection(TextSelection {
-            anchor: 1,
-            focus: 3
-        })
+        action,
+        ActionRequest {
+            action: Action::SetTextSelection,
+            target_tree: TreeId::ROOT,
+            target_node: FIELD,
+            data: Some(ActionData::SetTextSelection(selection)),
+        }
     );
-    text_navigation(&text_proxy, &mut signals, &mut bridge, &mut tree)?;
-    lifecycle(&client, &mut loop_, &mut requests, &mut bridge, &tree)?;
+    text_navigation(&text_proxy, &mut signals, &mut bridge)?;
+    lifecycle(&client, &mut loop_, &mut requests, &mut bridge, initial)?;
     // Reactivation reconnects the accessibility bus and registers a fresh unique name.
     let app = embeds.recv()?;
     let _window = wait_for(
@@ -253,7 +256,6 @@ fn check_button(
     bridge: &mut Bridge,
     loop_: &mut EventLoop<Requests>,
     requests: &mut Requests,
-    tree: &AccessibilityTree,
 ) -> Result<(), TestError> {
     let accessible = proxy(client, button, "org.a11y.atspi.Accessible")?;
     assert_eq!(accessible.get_property::<String>("Name")?, "Start");
@@ -263,12 +265,11 @@ fn check_button(
     let inspect: Vec<u32> = accessible.call("GetState", &())?;
     assert_eq!(inspect[0] & (1 << 12), 0);
     bridge.window_focus(true);
-    assert_eq!(tree.focus, Some(NodeId(1))); // Querying semantics never focuses another node.
     let accepted: bool =
         proxy(client, button, "org.a11y.atspi.Action")?.call("DoAction", &(0i32,))?;
     assert!(accepted);
-    let Event::Action(_, action) = wait_event(loop_, requests, |event| {
-        matches!(event, Event::Action(SurfaceId(0), _))
+    let AccessibilityEvent::Action(_, action) = wait_event(loop_, requests, |event| {
+        matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
         return Err(TestError::UnexpectedEvent);
@@ -279,15 +280,15 @@ fn check_button(
         !requests
             .events
             .iter()
-            .any(|event| matches!(event, Event::Action(_, _)))
+            .any(|event| matches!(event, AccessibilityEvent::Action(_, _)))
     );
     assert_eq!(
-        bridge
-            .action(action, tree)
-            .ok_or(TestError::RefusedAction)?,
+        action,
         ActionRequest {
-            target: NodeId(1),
-            action: AccessibilityAction::Activate,
+            action: Action::Click,
+            target_tree: TreeId::ROOT,
+            target_node: BUTTON,
+            data: None,
         }
     );
     Ok(())
@@ -297,26 +298,21 @@ fn text_navigation(
     proxy: &Proxy<'_>,
     signals: &mut MessageIterator,
     bridge: &mut Bridge,
-    tree: &mut AccessibilityTree,
 ) -> Result<(), TestError> {
-    for (value, runs) in [
-        ("one two three", Vec::new()),
-        (
-            "abcאבג\nnext",
-            vec![
-                super::text::run(0, "abc", TextDirection::LeftToRight, 0.dp())?,
-                super::text::run(3, "אבג\n", TextDirection::RightToLeft, 0.dp())?,
-                super::text::run(7, "next", TextDirection::LeftToRight, 20.dp())?,
-            ],
-        ),
-    ] {
-        node_mut(tree, NodeId(1 << 63))?.text = Some(AccessibleText {
-            value: value.into(),
-            runs,
-            ..Default::default()
-        });
-        tree.revision += 1;
-        bridge.publish(tree, false);
+    let words = [Run::line("one two three", &[0, 4, 8])];
+    let lines = [
+        Run {
+            continues_line: true,
+            ..Run::line("abc", &[0])
+        },
+        Run {
+            direction: TextDirection::RightToLeft,
+            ..Run::line("אבג\n", &[])
+        },
+        Run::line("next", &[0]),
+    ];
+    for (value, runs) in [("one two three", &words[..]), ("abcאבג\nnext", &lines[..])] {
+        bridge.publish(tree(runs)?);
         let _text = wait_for(
             signals,
             || Ok(proxy.call::<_, _, String>("GetText", &(0i32, -1i32))?),
@@ -340,19 +336,26 @@ fn lifecycle(
     loop_: &mut EventLoop<Requests>,
     requests: &mut Requests,
     bridge: &mut Bridge,
-    tree: &AccessibilityTree,
+    initial: TreeUpdate,
 ) -> Result<(), TestError> {
     let status = Proxy::new(client, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Status")?;
     status.set_property("IsEnabled", false)?;
     let deactivation = wait_event(loop_, requests, |event| {
-        matches!(event, Event::Deactivate(_))
+        matches!(event, AccessibilityEvent::Deactivate(_))
     })?;
-    assert!(matches!(deactivation, Event::Deactivate(SurfaceId(0))));
+    assert!(matches!(
+        deactivation,
+        AccessibilityEvent::Deactivate(SurfaceId(0))
+    ));
     bridge.deactivate();
     status.set_property("IsEnabled", true)?;
-    let activation = wait_event(loop_, requests, |event| matches!(event, Event::Activate(_)))?;
-    assert!(matches!(activation, Event::Activate(SurfaceId(0))));
-    bridge.activate();
-    bridge.publish(tree, true);
+    let activation = wait_event(loop_, requests, |event| {
+        matches!(event, AccessibilityEvent::Activate(_))
+    })?;
+    assert!(matches!(
+        activation,
+        AccessibilityEvent::Activate(SurfaceId(0))
+    ));
+    bridge.publish(initial);
     Ok(())
 }

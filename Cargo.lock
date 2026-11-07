@@ -2748,6 +2748,7 @@ dependencies = [
 name = "lavashell-platform"
 version = "0.1.0"
 dependencies = [
+ "accesskit 0.25.1",
  "icu_locale_core",
  "lavashell-core",
 ]
@@ -2774,12 +2775,16 @@ dependencies = [
 name = "lavashell-runtime"
 version = "0.1.0"
 dependencies = [
+ "accesskit 0.25.1",
+ "accesskit_consumer",
  "icu_locale_core",
  "lavashell-actor",
  "lavashell-core",
  "lavashell-platform",
  "lavashell-test-fixtures",
+ "num-traits",
  "thiserror 2.0.21",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -2830,7 +2835,6 @@ name = "lavashell-wayland"
 version = "0.1.0"
 dependencies = [
  "accesskit 0.25.1",
- "accesskit_consumer",
  "accesskit_unix",
  "ash",
  "calloop",
@@ -2853,7 +2857,6 @@ dependencies = [
  "smithay-client-toolkit",
  "sys-locale",
  "thiserror 2.0.21",
- "unicode-segmentation",
  "wayland-backend",
  "wayland-scanner",
  "zbus",

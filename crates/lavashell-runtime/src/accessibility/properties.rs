@@ -22,8 +22,8 @@ pub(super) fn apply(source: &AccessibleNode, node: &mut Node, ids: &mut Ids) {
         Some(AccessibleValue::Number(value)) if value.is_finite() => node.set_numeric_value(*value),
         _ => {}
     }
-    // The bounds are in logical coordinates of the surface, because a Wayland client cannot learn where its window is
-    // on the screen.
+    // The bounds are in logical coordinates of the surface, because not every host tells a surface where it is on the
+    // screen.
     node.set_bounds(mapping::rect(
         source.visible_bounds.unwrap_or(source.bounds),
     ));

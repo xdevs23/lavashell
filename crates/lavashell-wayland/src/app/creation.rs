@@ -36,9 +36,13 @@ impl Platform {
         let start = self.start;
         spec.view.motion().time_source(move || start.elapsed());
         let size = crate::logical::size(spec.size);
-        let id = self
-            .surface_records
-            .open(spec.view, size, Density::ONE, spec.drag_region)?;
+        let id = (self.surface_records).open(
+            spec.view,
+            size,
+            Density::ONE,
+            spec.drag_region,
+            spec.accessible_name,
+        )?;
         let wl = self.compositor.create_surface(&self.qh);
         let window = Arc::new(OwnedWlSurface::new(wl.clone(), self.connection.backend()));
         let protocols = &self.protocols;
@@ -76,11 +80,8 @@ impl Platform {
         };
         self.renderer.attach(attach).map_err(Error::Render)?;
         let role = role(self, &wl, id).inspect_err(|_| detach(&mut self.renderer, id))?;
-        let accessibility = crate::accessibility::Bridge::new(
-            id,
-            spec.accessible_name,
-            self.accessibility_events.clone(),
-        );
+        let accessibility =
+            crate::accessibility::Bridge::new(id, self.accessibility_events.clone());
         let surface = Surface {
             accessibility: Some(accessibility),
             builder: SceneBuilder::default(),

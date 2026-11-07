@@ -3,6 +3,7 @@
 //! requests made by the runtime.
 #![forbid(unsafe_code)]
 
+mod accessibility;
 mod input;
 mod output;
 mod request;
@@ -11,6 +12,7 @@ mod surface;
 mod watch;
 mod window_control;
 
+pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_difference};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };

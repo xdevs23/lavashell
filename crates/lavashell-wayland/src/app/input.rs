@@ -270,7 +270,7 @@ impl SeatHandler for Platform {
             }
             _ => {}
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
@@ -284,7 +284,7 @@ impl SeatHandler for Platform {
                 self.route_input(removal);
             }
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 }
 
@@ -373,7 +373,7 @@ impl KeyboardHandler for Platform {
             keyboard: keyboard_device(keyboard),
             surface: focus,
         });
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn leave(
@@ -398,7 +398,7 @@ impl KeyboardHandler for Platform {
                 focused: false,
             });
         }
-        self.accessibility_focus();
+        self.update_window_focus();
     }
 
     fn press_key(
