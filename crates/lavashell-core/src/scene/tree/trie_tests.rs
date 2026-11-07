@@ -95,3 +95,14 @@ fn removing_every_key_below_a_shared_branch_leaves_the_clone_whole() {
         assert_eq!(clone.get(key), Some(&key));
     }
 }
+
+#[test]
+fn the_length_counts_each_present_key_once() {
+    let mut trie = filled();
+    assert_eq!(trie.len(), keys().len());
+    trie.insert(64, 1);
+    assert_eq!(trie.remove(2), None);
+    assert_eq!(trie.len(), keys().len());
+    assert_eq!(trie.remove(64).as_deref(), Some(&1));
+    assert_eq!(trie.len(), keys().len() - 1);
+}

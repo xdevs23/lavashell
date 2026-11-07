@@ -11,6 +11,7 @@ const STEP: u32 = u64::BITS.trailing_zeros();
 #[derive(Clone)]
 pub(super) struct Trie<V> {
     root: Arc<Branch<V>>,
+    len: usize,
 }
 
 #[derive(Clone)]
@@ -54,6 +55,7 @@ impl<V> Default for Trie<V> {
     fn default() -> Self {
         Self {
             root: Arc::new(Branch::default()),
+            len: 0,
         }
     }
 }
@@ -79,6 +81,10 @@ impl<V> Trie<V> {
     pub(super) fn is_empty(&self) -> bool {
         self.root.children.is_empty()
     }
+
+    pub(super) fn len(&self) -> usize {
+        self.len
+    }
 }
 
 impl<V: Clone> Trie<V> {
@@ -92,6 +98,7 @@ impl<V: Clone> Trie<V> {
 
     /// Puts `value` under `key`, in place of the value that `key` had.
     pub(super) fn insert(&mut self, key: u64, value: V) {
+        self.len += usize::from(!self.contains_key(key));
         Arc::make_mut(&mut self.root).insert(key, Arc::new(value), Depth::ROOT);
     }
 
@@ -99,7 +106,9 @@ impl<V: Clone> Trie<V> {
         if !self.contains_key(key) {
             return None;
         }
-        Arc::make_mut(&mut self.root).remove(key, Depth::ROOT)
+        let removed = Arc::make_mut(&mut self.root).remove(key, Depth::ROOT);
+        self.len -= usize::from(removed.is_some());
+        removed
     }
 }
 

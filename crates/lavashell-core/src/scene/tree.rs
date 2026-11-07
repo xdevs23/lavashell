@@ -219,6 +219,11 @@ impl SceneTree {
         self.namespaces.is_empty()
     }
 
+    /// The number of nodes in every namespace of the tree.
+    pub(crate) fn len(&self) -> usize {
+        self.namespaces.len()
+    }
+
     /// The leaf of a tree made by [`SceneTree::with_leaf`].
     pub const LEAF: NodeKey = NodeKey::new(Self::ROOT, SceneNodeId(1));
 
@@ -297,6 +302,12 @@ impl Namespace {
 impl Namespaces {
     fn is_empty(&self) -> bool {
         (self.0.values()).all(|namespace| namespace.nodes.is_empty())
+    }
+
+    fn len(&self) -> usize {
+        (self.0.values())
+            .map(|namespace| namespace.nodes.len())
+            .sum()
     }
 
     fn node(&self, key: NodeKey) -> Option<&StoredNode> {
