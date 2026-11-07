@@ -5,7 +5,6 @@ use crate::ControlError;
 use lavashell_core::prelude::{Density, Viewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
-use sctk::compositor::FrameCallbackData;
 use sctk::reexports::client::QueueHandle;
 use sctk::reexports::client::protocol::wl_surface;
 use sctk::reexports::protocols::wp::presentation_time::client::wp_presentation::WpPresentation;
@@ -68,8 +67,7 @@ impl SurfaceControl for Control {
     /// Requests the frame callback and the presentation feedback that the present of `frame` commits.
     fn before_present(&mut self, frame: &PresentFrame) {
         if !self.frame_requested {
-            let data = FrameCallbackData(self.wl.clone());
-            let _dispatched_on_done = self.wl.frame(&self.qh, data);
+            let _dispatched_on_done = self.wl.frame(&self.qh, self.surface);
             self.frame_requested = true;
         }
         if let Some(presentation) = &self.presentation {

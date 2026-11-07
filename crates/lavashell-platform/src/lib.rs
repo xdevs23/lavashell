@@ -8,6 +8,7 @@ mod output;
 mod request;
 mod settings;
 mod surface;
+mod timing;
 mod watch;
 mod window_control;
 
@@ -18,5 +19,6 @@ pub use output::{OutputEvent, OutputId};
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};
+pub use timing::TimingEvent;
 pub use watch::{WatchEvent, WatchId, WatchRequest};
 pub use window_control::WindowControlRequest;

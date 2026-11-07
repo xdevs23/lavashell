@@ -138,8 +138,8 @@ impl ActionQueue {
     }
 
     #[must_use]
-    pub fn has_pending(&self) -> bool {
-        !self.0.borrow().pending.is_empty()
+    pub fn has_pending_for(&self, surface: SurfaceId) -> bool {
+        (self.0.borrow().pending.iter()).any(|action| action.surface == surface)
     }
 
     /// Takes the watch requests made since the last call, for the platform to execute.

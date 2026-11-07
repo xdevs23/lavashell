@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Platform;
-use lavashell_core::frame::{
-    FrameReport, FrameStage, FrameTime, PresentationFlag, PresentationFlags, PresentedFrame,
-};
+use lavashell_core::frame::{FrameTime, PresentationFlag, PresentationFlags};
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::TimingEvent;
+use lavashell_runtime::SchedulerInput;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
 use sctk::reexports::protocols::wp::presentation_time::client::{
@@ -104,7 +104,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        match event {
+        let timing = match event {
             wp_presentation_feedback::Event::Presented {
                 tv_sec_hi,
                 tv_sec_lo,
@@ -115,61 +115,24 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
             } => {
                 let absolute =
                     Duration::new((u64::from(tv_sec_hi) << 32) | u64::from(tv_sec_lo), tv_nsec);
-                let observed = state
-                    .presentation
-                    .as_ref()
-                    .and_then(|presentation| presentation.observed(absolute, state.start));
-                let interval = (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh)));
-                let mut metrics = None;
-                if let Some(surface) = state.surfaces.get_mut(&data.surface) {
-                    if let Some(time) = observed {
-                        surface
-                            .clock
-                            .presentation_delay(time.saturating_sub(data.timing.now));
-                        surface.clock.presented(time, interval);
-                        if state.config.observer.is_some() {
-                            metrics = surface.telemetry.presented(PresentedFrame {
-                                sequence: data.timing.sequence,
-                                animation_time: data.timing.presentation,
-                                presentation_time: time,
-                            });
-                        }
-                    } else {
-                        surface.clock.output_refresh(interval);
-                        surface.telemetry.reset();
-                    }
-                }
-                if let Some(observer) = &mut state.config.observer {
-                    observer(FrameReport {
-                        surface: data.surface,
-                        timing: data.timing,
-                        stage: FrameStage::Presented,
-                        observed: observed.unwrap_or_else(|| state.start.elapsed()),
-                        presentation_time: observed,
-                        metrics,
-                        flags: Some(presentation_flags(
-                            wp_presentation_feedback::Kind::from_bits_truncate(flags.into()),
-                        )),
-                        submission: None,
-                    });
+                TimingEvent::Presented {
+                    surface: data.surface,
+                    frame: data.timing,
+                    time: (state.presentation.as_ref())
+                        .and_then(|presentation| presentation.observed(absolute, state.start)),
+                    refresh: (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh))),
+                    flags: presentation_flags(wp_presentation_feedback::Kind::from_bits_truncate(
+                        flags.into(),
+                    )),
                 }
             }
-            wp_presentation_feedback::Event::Discarded => {
-                if let Some(observer) = &mut state.config.observer {
-                    observer(FrameReport {
-                        surface: data.surface,
-                        timing: data.timing,
-                        stage: FrameStage::Discarded,
-                        observed: state.start.elapsed(),
-                        presentation_time: None,
-                        metrics: None,
-                        flags: None,
-                        submission: None,
-                    });
-                }
-            }
-            _ => {}
-        }
+            wp_presentation_feedback::Event::Discarded => TimingEvent::Discarded {
+                surface: data.surface,
+                frame: data.timing,
+            },
+            _ => return,
+        };
+        state.schedule(SchedulerInput::Timing(timing));
     }
 }
 

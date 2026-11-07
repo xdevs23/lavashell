@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::clipboard::{Clipboard, ClipboardState};
 use crate::surface::LayerSurface;
-use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
+use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, FrameKind, FrameScheduler, InputFilter, InputRouter,
+    OutputRecords, RunEnd, SceneSink, SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -63,7 +63,6 @@ mod standard_error;
 mod startup;
 mod touch;
 mod transfer;
-mod wake;
 mod watch;
 mod window_input;
 
@@ -127,10 +126,6 @@ struct Surface {
     /// Destroys the `wl_surface` when it drops. It is declared after `role`, so the role is destroyed first.
     _window: std::sync::Arc<owned_wl_surface::OwnedWlSurface>,
     fractional: Option<WpFractionalScaleV1>,
-    /// Whether the compositor has not sent the `done` event of the frame callback committed with the last shown frame.
-    frame_callback_pending: bool,
-    clock: FrameClock,
-    telemetry: PresentationTracker,
     output: Option<OutputInfo>,
     background: Option<ExtBackgroundEffectSurfaceV1>,
     blur_size: Option<Size>,
@@ -144,13 +139,6 @@ impl Surface {
                 .shape
                 .as_ref()
                 .is_some_and(shape::SurfaceShape::needs_frame)
-    }
-
-    fn moving(&self, now: Duration) -> bool {
-        let shown = self.clock.predict(now);
-        self.builder
-            .next_change(shown)
-            .is_some_and(|change| change <= shown)
     }
 
     /// Runs `frame` to send the next frame of `view` to the choreographer for surface `id`, builds the frames merged
@@ -185,16 +173,6 @@ impl Surface {
             lavashell_core::error::message_chain(&error)
         );
         Ok(())
-    }
-
-    fn wakes(&self, view: &View, now: Duration) -> Option<Duration> {
-        let shown = self.clock.predict(now);
-        wake::next_wake(
-            now,
-            shown,
-            view.next_deadline(),
-            self.builder.next_change(shown),
-        )
     }
 }
 
@@ -259,6 +237,9 @@ pub(super) struct Platform {
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
+    scheduler: FrameScheduler,
+    /// The newest frame started by the scheduler for each surface, until a render draws it.
+    started_frames: BTreeMap<SurfaceId, (FrameKind, FrameTime)>,
     surfaces: BTreeMap<SurfaceId, Surface>,
     renderer: RendererState<control::Control>,
     connection: Connection,
@@ -311,12 +292,37 @@ impl Platform {
         (self.surface_requests).extend(self.surface_records.handle(surface, event));
     }
 
+    /// Hands `input` to the frame scheduler. Passes each report to the frame observer of the app at once, and keeps
+    /// each started frame for the next render.
+    fn schedule(&mut self, input: SchedulerInput) {
+        let mut outputs = Vec::new();
+        (self.scheduler).handle(self.start.elapsed(), input, &mut outputs);
+        for output in outputs {
+            match output {
+                SchedulerOutput::Frame {
+                    surface,
+                    kind,
+                    time,
+                } => {
+                    let _older_frame = self.started_frames.insert(surface, (kind, time));
+                }
+                SchedulerOutput::Report(report) => {
+                    if let Some(observer) = &mut self.config.observer {
+                        observer(*report);
+                    }
+                }
+            }
+        }
+    }
+
     /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires
     /// in the runtime only after the native surface has released everything that presented to it.
     fn execute_surface_requests(&mut self) {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
+                    self.schedule(SchedulerInput::Closed(id));
+                    let _undrawn_frame = self.started_frames.remove(&id);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
                     detach(&mut self.renderer, id);
