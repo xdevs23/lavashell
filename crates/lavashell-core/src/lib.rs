@@ -9,6 +9,7 @@ pub mod effects;
 #[cfg(feature = "serde")]
 pub mod encoding;
 pub mod error;
+pub mod focus_grab;
 pub mod frame;
 pub mod geometry;
 pub mod gradient;
@@ -18,6 +19,7 @@ pub mod keyboard;
 pub mod local;
 pub mod numbers;
 pub mod output;
+pub mod panel;
 pub mod platform;
 pub mod preferences;
 pub mod protected_text;

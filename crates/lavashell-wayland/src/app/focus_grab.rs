@@ -1,152 +1,165 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, Role};
+use super::Platform;
+use crate::Error;
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
     hyprland_focus_grab_v1::{self, HyprlandFocusGrabV1 as Grab},
 };
-use lavashell_core::geometry::Size;
+use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::{FocusGrabEvent, FocusGrabRequest};
+use lavashell_runtime::{FocusGrabs, PanelRecords, SurfaceRecords};
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_surface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop};
 use smithay_client_toolkit as sctk;
+use std::collections::BTreeMap;
 
-/// Whether a layer has its Hyprland focus grab.
-enum GrabState {
-    Released,
-    Held(Grab),
-    /// The compositor cleared the grab while the layer was still active. The layer can take a new grab only after it
-    /// becomes inactive.
-    Blocked,
+/// The focus grabs of the layers: the rules from the runtime, and the grabs made by the compositor for them.
+pub(super) struct Grabs {
+    rules: FocusGrabs,
+    manager: Manager,
+    proxies: BTreeMap<SurfaceId, Grab>,
 }
 
-/// What a layer can do with its focus grab in an update.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Readiness {
-    /// The layer releases its grab, if it has one.
-    Unavailable,
-    /// The layer does not release a grab that it has, and does not take a new one.
-    Holdable,
-    /// The layer takes a grab when it has none.
-    Acquirable,
-}
+impl Grabs {
+    /// The focus grabs through the manager of the compositor, or `None` when the compositor offers no focus grab.
+    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Option<Self> {
+        globals.bind(qh, 1..=1, ()).ok().map(Self::new)
+    }
 
-pub(super) struct Runtime {
-    configuration: crate::FocusGrab,
-    state: GrabState,
-}
-
-impl Runtime {
-    pub fn new(configuration: crate::FocusGrab) -> Self {
+    pub fn new(manager: Manager) -> Self {
         Self {
-            configuration,
-            state: GrabState::Released,
+            rules: FocusGrabs::default(),
+            manager,
+            proxies: BTreeMap::new(),
         }
     }
 
-    fn holds(&self, grab: &Grab) -> bool {
-        matches!(&self.state, GrabState::Held(held) if held == grab)
+    pub fn open(&mut self, surface: SurfaceId, grab: FocusGrab) {
+        self.rules.open(surface, grab);
     }
 
-    /// Destroys the grab when the layer has one. A blocked state is left unchanged.
-    fn release(&mut self) {
-        if let GrabState::Held(proxy) = &self.state {
-            if proxy.is_alive() {
-                proxy.destroy();
+    /// Removes the focus grab of `surface` and ends the grab of the compositor, if the surface held one. `native`
+    /// returns the native surface of a layer.
+    pub fn forget<'a>(
+        &mut self,
+        surface: SurfaceId,
+        qh: &QueueHandle<Platform>,
+        native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
+    ) -> Result<(), Error> {
+        if let Some(request) = self.rules.forget(surface) {
+            self.execute(request, qh, &native)?;
+        }
+        Ok(())
+    }
+
+    /// Updates the focus grabs of the layers and executes the requests of the runtime. `native` returns the native
+    /// surface of a layer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the runtime asks for a grab on a surface without a native surface.
+    pub fn update<'a>(
+        &mut self,
+        panels: &PanelRecords,
+        surfaces: &SurfaceRecords,
+        qh: &QueueHandle<Platform>,
+        native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
+    ) -> Result<(), Error> {
+        for request in self.rules.update(panels, surfaces) {
+            self.execute(request, qh, &native)?;
+        }
+        Ok(())
+    }
+
+    pub fn cleared(&mut self, surface: SurfaceId) {
+        self.release(surface);
+        self.rules.handle(FocusGrabEvent::Cleared(surface));
+    }
+
+    pub fn cleared_by(&mut self, surface: SurfaceId, grab: &Grab) {
+        if self.holds(surface, grab) {
+            self.cleared(surface);
+        }
+    }
+
+    /// Whether `grab` is the grab of the compositor for `surface`. A grab that was released before the compositor
+    /// cleared it is not.
+    fn holds(&self, surface: SurfaceId, grab: &Grab) -> bool {
+        self.proxies.get(&surface) == Some(grab)
+    }
+
+    fn execute<'a>(
+        &mut self,
+        request: FocusGrabRequest,
+        qh: &QueueHandle<Platform>,
+        native: &impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
+    ) -> Result<(), Error> {
+        match request {
+            FocusGrabRequest::Acquire(surface) => {
+                let wl = native(surface).ok_or(Error::FocusGrabWithoutSurface(surface))?;
+                self.acquire(surface, wl, qh);
             }
-            self.state = GrabState::Released;
+            FocusGrabRequest::Release(surface) => self.release(surface),
         }
+        Ok(())
     }
 
-    pub(super) fn cleared(&mut self) {
-        self.release();
-        (self.configuration.cleared)();
-        // `active` is read after the `cleared` callback, because the callback can make the layer inactive. A layer
-        // that is still active is blocked until it becomes inactive, so a new grab cannot follow the cleared one at
-        // once.
-        if (self.configuration.active)() {
-            self.state = GrabState::Blocked;
-        }
-    }
-
-    fn update(
+    fn acquire(
         &mut self,
-        manager: Option<&Manager>,
+        surface: SurfaceId,
         wl: &wl_surface::WlSurface,
         qh: &QueueHandle<Platform>,
-        surface: SurfaceId,
-        readiness: Readiness,
     ) {
-        if !(self.configuration.active)() {
-            self.release();
-            self.state = GrabState::Released;
-        } else if readiness == Readiness::Unavailable {
-            self.release();
-        } else if readiness == Readiness::Acquirable
-            && matches!(self.state, GrabState::Released)
-            && let Some(manager) = manager
-        {
-            let proxy = manager.create_grab(qh, surface);
-            proxy.add_surface(wl);
-            proxy.commit();
-            self.state = GrabState::Held(proxy);
+        let grab = self.manager.create_grab(qh, surface);
+        grab.add_surface(wl);
+        grab.commit();
+        let _replaced_grab = self.proxies.insert(surface, grab);
+    }
+
+    fn release(&mut self, surface: SurfaceId) {
+        if let Some(grab) = self.proxies.remove(&surface) {
+            destroy(&grab);
         }
     }
 }
 
-impl Drop for Runtime {
+impl Drop for Grabs {
     fn drop(&mut self) {
-        self.release();
+        self.proxies.values().for_each(destroy);
     }
 }
 
-pub(super) struct Capability(Option<Manager>);
-
-impl Capability {
-    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Self {
-        Self(globals.bind(qh, 1..=1, ()).ok())
-    }
-}
-
-impl super::layer::Runtime {
-    pub(super) fn update_focus_grab(
-        &mut self,
-        manager: Option<&Manager>,
-        wl: &wl_surface::WlSurface,
-        qh: &QueueHandle<Platform>,
-        surface: SurfaceId,
-        configured: bool,
-        size: Size,
-    ) {
-        let readiness = if !(configured && self.keyboard_active() && self.input_enabled()) {
-            Readiness::Unavailable
-        } else if self.keyboard_enabled() && self.content_current(size) {
-            Readiness::Acquirable
-        } else {
-            Readiness::Holdable
-        };
-        if let Some(grab) = &mut self.focus {
-            grab.update(manager, wl, qh, surface, readiness);
-        }
+fn destroy(grab: &Grab) {
+    if grab.is_alive() {
+        grab.destroy();
     }
 }
 
 impl Platform {
-    pub(super) fn update_focus_grabs(&mut self) {
-        for (&id, surface) in &mut self.surfaces {
-            if let Role::Layer(layer) = &mut surface.role
-                && let Some(viewport) = self.surface_records.open_viewport(id)
-            {
-                layer.update_focus_grab(
-                    self.focus_grabs.0.as_ref(),
-                    &surface.wl,
-                    &self.qh,
-                    id,
-                    self.surface_records.is_configured(id),
-                    viewport.size,
-                );
-            }
+    pub(super) fn open_focus_grab(&mut self, surface: SurfaceId, grab: FocusGrab) {
+        if let Some(grabs) = &mut self.focus_grabs {
+            grabs.open(surface, grab);
         }
+    }
+
+    pub(super) fn forget_focus_grab(&mut self, surface: SurfaceId) -> Result<(), Error> {
+        let Some(grabs) = &mut self.focus_grabs else {
+            return Ok(());
+        };
+        grabs.forget(surface, &self.qh, |surface| {
+            self.surfaces.get(&surface).map(|native| &native.wl)
+        })
+    }
+
+    pub(super) fn update_focus_grabs(&mut self) -> Result<(), Error> {
+        let Some(grabs) = &mut self.focus_grabs else {
+            return Ok(());
+        };
+        grabs.update(&self.panels, &self.surface_records, &self.qh, |surface| {
+            self.surfaces.get(&surface).map(|native| &native.wl)
+        })
     }
 }
 
@@ -160,44 +173,11 @@ impl Dispatch<Grab, SurfaceId> for Platform {
         _: &QueueHandle<Self>,
     ) {
         if let hyprland_focus_grab_v1::Event::Cleared = event
-            && let Some(native) = state.surfaces.get_mut(surface)
-            && let Role::Layer(layer) = &mut native.role
-            && let Some(grab) = &mut layer.focus
-            && grab.holds(proxy)
+            && let Some(grabs) = &mut state.focus_grabs
         {
-            grab.cleared();
+            grabs.cleared_by(*surface, proxy);
         }
     }
 }
 
 delegate_noop!(Platform: ignore Manager);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{cell::Cell, rc::Rc};
-
-    #[test]
-    fn cleared_observes_release_before_a_replacement_without_an_intermediate_update() {
-        let active = Rc::new(Cell::new(true));
-        let observed = active.clone();
-        let closed = active.clone();
-        let mut grab = Runtime::new(crate::FocusGrab::new(
-            move || observed.get(),
-            move || closed.set(false),
-        ));
-        grab.cleared();
-        active.set(true);
-        assert!(matches!(grab.state, GrabState::Released));
-        assert!((grab.configuration.active)());
-        grab.cleared();
-        assert!(!active.get());
-    }
-
-    #[test]
-    fn a_cleared_owner_that_stays_active_cannot_reacquire() {
-        let mut grab = Runtime::new(crate::FocusGrab::new(|| true, || {}));
-        grab.cleared();
-        assert!(matches!(grab.state, GrabState::Blocked));
-    }
-}

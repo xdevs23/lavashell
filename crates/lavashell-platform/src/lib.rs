@@ -3,18 +3,22 @@
 //! requests made by the runtime.
 #![forbid(unsafe_code)]
 
+mod focus_grab;
 mod input;
 mod output;
+mod panel;
 mod request;
 mod settings;
 mod surface;
 mod watch;
 mod window_control;
 
+pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PointerDevice, PressState,
 };
 pub use output::{OutputEvent, OutputId};
+pub use panel::{KeyboardMode, PanelRequest};
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
 pub use surface::{Appearance, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec};

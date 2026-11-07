@@ -91,8 +91,6 @@ pub(crate) enum TestError {
     CreateSocketPair(#[source] io::Error),
     #[error("the socket could not be made non-blocking")]
     ConfigureSocket(#[source] io::Error),
-    #[error("the layer has no focus grab")]
-    NoFocusGrab,
     #[error("the pipe could not be created")]
     CreatePipe(#[source] rustix::io::Errno),
     #[error("the file is not a pipe")]

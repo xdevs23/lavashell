@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, PanelRecords,
+    PanelsPerOutput, RunEnd, SceneSink, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -79,7 +79,7 @@ enum Request {
 
 pub struct App {
     requests: Vec<Request>,
-    output_layers: Option<output_layers::Configuration>,
+    output_layers: Option<PanelsPerOutput<LayerSurface>>,
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
@@ -246,7 +246,7 @@ struct SurfaceProtocols {
 }
 
 pub(super) struct Platform {
-    focus_grabs: focus_grab::Capability,
+    focus_grabs: Option<focus_grab::Grabs>,
     output_layers: Option<output_layers::Runtime>,
     accessibility_events: sctk::reexports::calloop::channel::Sender<crate::accessibility::Event>,
     session_lock: Option<session_lock::Runtime>,
@@ -256,6 +256,7 @@ pub(super) struct Platform {
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
+    panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
@@ -313,12 +314,14 @@ impl Platform {
 
     /// Executes the requests made by the runtime. A destroyed surface is removed from the map of surfaces. It retires
     /// in the runtime only after the native surface has released everything that presented to it.
-    fn execute_surface_requests(&mut self) {
+    fn execute_surface_requests(&mut self) -> Result<(), crate::Error> {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
+                    self.panels.forget(id);
+                    self.forget_focus_grab(id)?;
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     self.choreographers.retire(id);
@@ -327,6 +330,7 @@ impl Platform {
                 }
             }
         }
+        Ok(())
     }
 }
 
