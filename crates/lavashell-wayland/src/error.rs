@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_actor::Closed;
 use lavashell_core::geometry::Size;
-use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Dp, FiniteDp, NonNegativeDp, NumberError};
@@ -14,10 +14,10 @@ use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
 use std::collections::TryReserveError;
-use std::convert::Infallible;
 use std::io;
 use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
+use std::sync::Arc;
 
 /// A failure of the Wayland host, named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +46,8 @@ pub enum Error {
     WatchConnection(#[source] calloop::Error),
     #[error("the accessibility requests could not join the event loop")]
     WatchAccessibility(#[source] calloop::Error),
+    #[error("the reports of the scene builder could not join the event loop")]
+    WatchScene(#[source] calloop::Error),
     #[error("the system preferences could not join the event loop")]
     WatchPreferences(#[source] calloop::Error),
     #[error("the watch of the system preferences could not be created")]
@@ -101,9 +103,11 @@ pub enum Error {
     #[error("the input region of a window shape could not be computed")]
     ShapeInput(#[source] InputSizeError),
     #[error("a surface could not show a frame of its view")]
-    ShowScene(#[source] FrameError<Infallible>),
-    #[error("the merged frames of a view do not fit the scene in the builder")]
-    BuildScene(#[source] ApplyError),
+    ShowScene(#[source] FrameError<Closed>),
+    #[error("the scene builder stopped")]
+    SceneStopped,
+    #[error("the choreographer or the scene builder failed")]
+    SceneFailed(#[source] Arc<lavashell_runtime::Error>),
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
     #[error("the compositor offers no clipboard")]

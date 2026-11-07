@@ -2,7 +2,7 @@
 use super::creation::NativeSpec;
 use super::{
     App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation, session_lock,
+    output_layers, preferences, presentation, scene_reports, session_lock,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
@@ -11,7 +11,9 @@ use crate::wayland_presentation::WaylandPresentation;
 use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
-use lavashell_runtime::{Choreographers, InputRouter, OutputRecords, SurfaceRecords, Window};
+use lavashell_runtime::{
+    FrameScheduler, InputRouter, OutputRecords, Redraw, ScenePipeline, SurfaceRecords, Window,
+};
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::LoopHandle;
@@ -102,6 +104,13 @@ impl Platform {
         let mut sources = vec![connection_source];
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
+        let builder_reports = scene_reports::install(&loop_handle, &mut sources)?;
+        let redraw = if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene()
+        {
+            Redraw::Continuous
+        } else {
+            Redraw::OnChange
+        };
         let mut platform = Self {
             focus_grabs: focus_grab::Capability::bind(globals, &qh),
             accessibility_events,
@@ -111,7 +120,10 @@ impl Platform {
             watches: BTreeMap::new(),
             surface_records,
             surface_requests: Vec::new(),
-            choreographers: Choreographers::default(),
+            scene: ScenePipeline::start(builder_reports)?,
+            scene_stopped: false,
+            scheduler: FrameScheduler::new(redraw),
+            started_frames: BTreeMap::new(),
             surfaces: BTreeMap::new(),
             renderer,
             connection: connection.clone(),

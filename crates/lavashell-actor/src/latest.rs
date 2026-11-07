@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::lock_ignoring_poison;
 use std::mem;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// A slot that stores the newest value published by any thread. Publishing replaces the previous value, whether or
 /// not anyone read it.
@@ -26,6 +27,12 @@ impl<T> Latest<T> {
         self.lock().clone()
     }
 
+    /// Empties the slot and returns the newest value, so a value is taken once even while another thread publishes.
+    #[must_use]
+    pub fn take(&self) -> Option<Arc<T>> {
+        self.lock().take()
+    }
+
     pub fn clear(&self) {
         self.replace(None);
     }
@@ -34,9 +41,9 @@ impl<T> Latest<T> {
         let _replaced = mem::replace(&mut *self.lock(), value);
     }
 
-    /// Ignores lock poisoning, because the slot is replaced as a whole and is valid after a panic.
+    /// The slot is replaced as a whole, so it is valid after a panic.
     fn lock(&self) -> MutexGuard<'_, Option<Arc<T>>> {
-        self.slot.lock().unwrap_or_else(PoisonError::into_inner)
+        lock_ignoring_poison(&self.slot)
     }
 }
 

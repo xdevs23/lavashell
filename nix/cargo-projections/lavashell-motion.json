@@ -1902,6 +1902,9 @@
         "version": "0.1.0"
       },
       {
+        "dependencies": [
+          "thiserror 2.0.21"
+        ],
         "name": "lavashell-actor",
         "version": "0.1.0"
       },
@@ -2055,7 +2058,9 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
+          "lavashell-renderer",
           "lavashell-test-fixtures",
+          "log",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",

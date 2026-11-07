@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, open_surface};
+use super::{Platform, log_or_record_stop, open_surface, send_frame};
 use crate::Error;
 use crate::accessibility::Event;
 use lavashell_core::accessibility::ActionOutcome;
@@ -53,13 +53,13 @@ impl Platform {
             // The first frame after the compositor configures the surface publishes the complete initial tree.
             return;
         }
-        let mut frame = |view: &mut View, sink: &mut SceneSink| {
+        let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
             view.frame_into(viewport, self.renderer.shaper(), sink)
         };
         let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
         if shown {
-            if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame) {
-                log::error!("{error}");
+            if let Err(error) = send_frame(view, self.scene.sink(id, None), &mut frame) {
+                log_or_record_stop(error, &mut self.scene_stopped);
             }
             view.invalidate();
         }
@@ -73,12 +73,10 @@ impl Platform {
         {
             match view.accessibility_action(request) {
                 Ok(ActionOutcome::Performed) => {
-                    // Show the frame now, even while a frame callback of the compositor is pending, so that the changed
-                    // semantics are published at once. Showing a frame updates only the scene tree. It acquires no
-                    // swapchain image and does not wait for the scene queue.
-                    if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame)
-                    {
-                        log::error!("{error}");
+                    // Send the frame now, even while the compositor has a frame callback pending, so that the changed
+                    // semantics are published at once. Sending a frame does not acquire a swapchain image.
+                    if let Err(error) = send_frame(view, self.scene.sink(id, None), &mut frame) {
+                        log_or_record_stop(error, &mut self.scene_stopped);
                     }
                     view.invalidate();
                 }

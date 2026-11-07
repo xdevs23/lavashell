@@ -2552,6 +2552,9 @@ dependencies = [
 [[package]]
 name = "lavashell-actor"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "lavashell-android"
@@ -2574,8 +2577,11 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "bevy",
+ "lavashell-actor",
  "lavashell-core",
  "lavashell-renderer",
+ "lavashell-runtime",
+ "lavashell-test-fixtures",
  "lavashell-vulkan",
  "log",
  "thiserror 2.0.21",
@@ -2778,7 +2784,9 @@ dependencies = [
  "lavashell-actor",
  "lavashell-core",
  "lavashell-platform",
+ "lavashell-renderer",
  "lavashell-test-fixtures",
+ "log",
  "thiserror 2.0.21",
 ]
 
