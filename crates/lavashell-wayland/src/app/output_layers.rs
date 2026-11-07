@@ -102,10 +102,9 @@ impl Platform {
         for (options, mut view) in requests {
             let context = self.layer_context(&options, &mut view)?;
             let spec = NativeSpec::layer(&options, view, context)?;
-            self.create_surface(spec, |platform, wl, surface| {
-                surfaces.push(surface);
+            surfaces.push(self.create_surface(spec, |platform, wl, surface| {
                 platform.layer_role(wl, Some(output), &options, context, surface)
-            })?;
+            })?);
         }
         if let Some(runtime) = &mut self.output_layers {
             runtime.groups.push(Group {
