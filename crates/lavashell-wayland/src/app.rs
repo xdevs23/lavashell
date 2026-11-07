@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::clipboard::{Clipboard, ClipboardState};
+use crate::clipboard::ClipboardState;
 use crate::surface::LayerSurface;
 use lavashell_core::frame::{FrameClock, FrameReport, FrameTime, PresentationTracker};
 use lavashell_core::geometry::{Point, Size, Viewport};
@@ -11,8 +11,8 @@ use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
-    ActionQueue, Choreographers, InputFilter, InputRouter, OutputRecords, RunEnd, SceneSink,
-    SurfaceRecords, Window,
+    ActionQueue, Choreographers, ClipboardTransfers, Drags, InputFilter, InputRouter,
+    OutputRecords, RunEnd, SceneSink, SurfaceRecords, Watches, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -83,7 +83,7 @@ pub struct App {
     fonts: Fonts,
     session_lock: Option<session_lock::Configuration>,
     run_end: RunEnd,
-    clipboard: Clipboard,
+    clipboard: ClipboardTransfers,
     painter_setup: Option<PainterSetup>,
     scene: Option<Box<dyn lavashell_renderer::vulkan::SceneSource>>,
     gpu_timing: bool,
@@ -95,7 +95,6 @@ pub struct App {
 
 /// The callbacks and settings registered for an app before it runs. The Wayland platform calls and reads them while the
 /// app runs.
-#[derive(Default)]
 pub(crate) struct AppConfig {
     tick: Option<Box<dyn FnMut(Duration)>>,
     on_frame: Option<Box<dyn FnMut(FrameTime)>>,
@@ -103,14 +102,32 @@ pub(crate) struct AppConfig {
     key_observer: Option<Box<dyn FnMut(HostKey) -> bool>>,
     focus_observer: Option<Box<dyn FnMut(KeyboardFocus)>>,
     view_observer: Option<ViewObserver>,
+    pub(crate) watches: Watches,
     pub(crate) action_queue: ActionQueue,
-    drag_observer: Option<transfer::DragObserver>,
-    drop_observer: Option<transfer::DropObserver>,
-    drag_source_observer: Option<transfer::DragSourceObserver>,
-    pub(crate) text_transfers: Option<crate::text_transfer::TextTransfers>,
+    pub(crate) drags: Drags,
     output_observer: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
     ui_budget: Option<Duration>,
     full_redraw: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        let watches = Watches::default();
+        Self {
+            tick: None,
+            on_frame: None,
+            observer: None,
+            key_observer: None,
+            focus_observer: None,
+            view_observer: None,
+            action_queue: ActionQueue::new(&watches),
+            drags: Drags::new(&watches),
+            watches,
+            output_observer: None,
+            ui_budget: None,
+            full_redraw: false,
+        }
+    }
 }
 
 enum Role {
@@ -255,7 +272,7 @@ pub(super) struct Platform {
     watches: BTreeMap<WatchId, RegistrationToken>,
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
-    surface_records: SurfaceRecords,
+    pub(super) surface_records: SurfaceRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
@@ -287,6 +304,7 @@ impl Drop for Platform {
     fn drop(&mut self) {
         self.config.action_queue.close();
         self.shutdown_transfers();
+        self.config.watches.close();
         for &id in self.surfaces.keys() {
             detach(&mut self.renderer, id);
         }
@@ -317,6 +335,9 @@ impl Platform {
         for request in std::mem::take(&mut self.surface_requests) {
             match request {
                 SurfaceRequest::Destroy(id) => {
+                    self.config
+                        .drags
+                        .forget_surface(id, &mut self.surface_records);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
                     detach(&mut self.renderer, id);
@@ -324,6 +345,7 @@ impl Platform {
                     self.choreographers.retire(id);
                     self.surface_records.retire(id);
                     self.config.action_queue.forget_surface(id);
+                    self.clipboard.transfers.forget_surface(id);
                 }
             }
         }

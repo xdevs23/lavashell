@@ -2,7 +2,12 @@
 //! Clipboard and drag-and-drop data in a form independent of the platform. An item has one or more representations,
 //! each a MIME type with bytes. A drop acceptance is the format and the action chosen by the receiving application.
 
+use crate::geometry::Point;
+use crate::surface::SurfaceId;
 use std::sync::Arc;
+
+/// The formats of text in a transfer, in the order of preference: UTF-8 text first.
+pub const TEXT_FORMATS: [&str; 2] = ["text/plain;charset=utf-8", "text/plain"];
 
 /// Why a representation or a transfer cannot be made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -88,6 +93,20 @@ impl TransferData {
         Self::new([Representation::new(mime_type, bytes)?])
     }
 
+    /// `text` as UTF-8 bytes in every format of `TEXT_FORMATS`.
+    #[must_use]
+    pub fn text(text: &str) -> Self {
+        let bytes: Arc<[u8]> = text.as_bytes().into();
+        Self(
+            TEXT_FORMATS
+                .map(|format| Representation {
+                    mime_type: format.to_owned(),
+                    bytes: bytes.clone(),
+                })
+                .into(),
+        )
+    }
+
     pub fn formats(&self) -> impl Iterator<Item = &str> {
         self.0.iter().map(Representation::mime_type)
     }
@@ -144,6 +163,19 @@ impl DragAction {
     }
 }
 
+/// Why a transfer ended before it finished.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Cancellation {
+    #[error("the app closed")]
+    AppClosed,
+    #[error("the input device of the transfer disappeared")]
+    InputDeviceGone,
+    #[error("the surface of the transfer closed")]
+    SurfaceClosed,
+    #[error("the host system cancelled the data source")]
+    SourceCancelled,
+}
+
 /// The MIME type and the action with which the receiving application accepts a drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropAcceptance {
@@ -155,6 +187,57 @@ impl DropAcceptance {
     #[must_use]
     pub fn accepts(&self, formats: &[String], actions: DragActions) -> bool {
         formats.contains(&self.mime_type) && actions.contains(self.action)
+    }
+}
+
+/// Identifies a drag offered to the app. An id is never reused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TransferId(pub u64);
+
+#[derive(Clone, Debug)]
+pub struct DragOfferInfo {
+    pub id: TransferId,
+    pub surface: SurfaceId,
+    pub position: Point,
+    pub mime_types: Vec<String>,
+    pub actions: DragActions,
+    pub selected_action: Option<DragAction>,
+}
+
+#[derive(Clone, Debug)]
+pub enum DragEvent {
+    Enter(DragOfferInfo),
+    Motion(DragOfferInfo),
+    /// The drag was dropped on the surface. The drop uses the position, the MIME types and the selected action in
+    /// this event. An acceptance returned for it is ignored, because the acceptance from the last enter or motion
+    /// applies.
+    Drop(DragOfferInfo),
+    /// The drag left the surface before a drop. The acceptance returned during enter and motion no longer applies.
+    Leave {
+        id: TransferId,
+        surface: SurfaceId,
+    },
+    Cancelled {
+        id: TransferId,
+        surface: SurfaceId,
+    },
+}
+
+impl DragEvent {
+    #[must_use]
+    pub fn id(&self) -> TransferId {
+        match self {
+            Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.id,
+            Self::Leave { id, .. } | Self::Cancelled { id, .. } => *id,
+        }
+    }
+
+    #[must_use]
+    pub fn surface(&self) -> SurfaceId {
+        match self {
+            Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.surface,
+            Self::Leave { surface, .. } | Self::Cancelled { surface, .. } => *surface,
+        }
     }
 }
 
@@ -178,6 +261,19 @@ mod tests {
             [0, 255, 1]
         );
         assert!(data.get("image/png").is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn text_is_offered_as_utf8_in_every_text_format() -> TestResult {
+        let data = TransferData::text("雪🙂");
+        assert_eq!(data.formats().collect::<Vec<_>>(), TEXT_FORMATS);
+        for format in TEXT_FORMATS {
+            assert_eq!(
+                &**data.get(format).required("text bytes")?,
+                "雪🙂".as_bytes()
+            );
+        }
         Ok(())
     }
 

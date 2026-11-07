@@ -1,222 +1,119 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    drag::{DragCompletion, DragReceipt, portable_action},
-    pipes::Scope,
-};
+use super::drag::{drag_device, native_actions, portable_action};
+use super::pipes::{PipeIdentity, nonblocking};
+use super::state::SourceDrag;
 use crate::app::Platform;
-use crate::{Cancellation, Error};
-use lavashell_core::transfer::{DragAction, TransferData};
-use sctk::{
-    data_device_manager::{
-        WritePipe,
-        data_source::{CopyPasteSource, DataSourceHandler, DragSource},
-    },
-    reexports::client::{
-        Connection, QueueHandle,
-        protocol::{
-            wl_data_device_manager::DndAction, wl_data_source::WlDataSource, wl_seat::WlSeat,
-            wl_surface::WlSurface,
-        },
-    },
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::{Cancellation, DragActions, TransferId};
+use lavashell_platform::{
+    DragDevice, DragRefusal, DragSourceEvent, DragSourceId, DragSourceRequest, FormatId,
+    PointerDevice,
 };
+use sctk::data_device_manager::{WritePipe, data_source::DataSourceHandler};
+use sctk::reexports::client::protocol::{
+    wl_data_device_manager::DndAction, wl_data_source::WlDataSource, wl_seat::WlSeat,
+};
+use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use smithay_client_toolkit as sctk;
-
-pub(super) enum Source {
-    Selection(CopyPasteSource),
-    Drag(DragSource),
-}
-
-impl Source {
-    pub fn inner(&self) -> &WlDataSource {
-        match self {
-            Self::Selection(source) => source.inner(),
-            Self::Drag(source) => source.inner(),
-        }
-    }
-}
-
-pub(super) struct Payload {
-    pub source: Source,
-    pub data: TransferData,
-    pub seat: WlSeat,
-    pub drag: Option<Drag>,
-}
-
-pub(super) struct Drag {
-    /// The surface that the drag started from.
-    pub surface: WlSurface,
-    pub progress: DragProgress,
-}
-
-pub(super) struct DragProgress {
-    pub pending: usize,
-    pub sent: usize,
-    pub failure: Option<Error>,
-    pub finished: bool,
-    pub action: Option<DragAction>,
-    pub done: DragCompletion,
-    pub received: Option<DragReceipt>,
-}
-
-impl DragProgress {
-    /// The result of the drag, or `None` until the destination finished the drop and every requested transfer
-    /// ended. The drag fails when a transfer failed or when nothing was sent.
-    fn take_result(&mut self) -> Option<Result<DragAction, Error>> {
-        if !self.finished || self.pending != 0 {
-            return None;
-        }
-        Some(match (self.failure.take(), self.action, self.sent) {
-            (Some(error), _, _) => Err(error),
-            (None, Some(action), sent) if sent > 0 => Ok(action),
-            _ => Err(Error::DragWithoutTransfer),
-        })
-    }
-}
+use std::io;
+use std::os::fd::AsFd;
 
 impl Platform {
-    fn source_send(&mut self, source: &WlDataSource, mime_type: &str, pipe: WritePipe) {
-        let incoming = self
-            .clipboard
-            .payloads
-            .iter()
-            .find(|payload| {
-                payload.source.inner() == source
-                    && payload
-                        .drag
-                        .as_ref()
-                        .is_some_and(|drag| drag.progress.received.is_some())
-            })
-            .and_then(|payload| self.local_receiving_transfer(&pipe, &payload.seat));
-        let Some(payload) = self
-            .clipboard
-            .payloads
-            .iter_mut()
-            .find(|payload| payload.source.inner() == source)
-        else {
-            return;
-        };
-        let Some(bytes) = payload.data.get(mime_type).cloned() else {
-            if let Some(drag) = &mut payload.drag {
-                drag.progress.failure = Some(Error::UnadvertisedFormat);
+    pub(super) fn execute_source_request(&mut self, request: DragSourceRequest) {
+        match request {
+            DragSourceRequest::Start {
+                drag,
+                pointer,
+                surface,
+                formats,
+                actions,
+            } => {
+                let started = self.start_drag(drag, pointer, surface, formats, actions);
+                self.drag_source_event(DragSourceEvent::Started(drag, started));
             }
-            return;
-        };
-        if let Some(drag) = &mut payload.drag {
-            drag.progress.pending += 1;
-            if let Some(id) = incoming
-                && let Some(received) = &mut drag.progress.received
-            {
-                received(id);
+            DragSourceRequest::Cancel(drag) => {
+                let _cancelled = self.clipboard.drags.remove(&drag);
             }
         }
-        let scope = Scope {
-            seat: payload.seat.clone(),
-            surface: payload.drag.as_ref().map(|drag| drag.surface.clone()),
-            source: Some(source.clone()),
-            incoming: None,
-        };
-        let source = source.clone();
-        self.send_transfer(
-            pipe,
-            scope,
-            bytes,
-            Box::new(move |platform, result| {
-                platform.source_sent(&source, result);
-            }),
-        );
     }
 
-    fn source_sent(&mut self, source: &WlDataSource, result: Result<(), Error>) {
-        let Some(drag) = self
-            .clipboard
-            .payloads
-            .iter_mut()
-            .find(|payload| payload.source.inner() == source)
-            .and_then(|payload| payload.drag.as_mut())
-        else {
-            return;
-        };
-        let progress = &mut drag.progress;
-        progress.pending -= 1;
-        match result {
-            Ok(()) => progress.sent += 1,
-            Err(error) => progress.failure = Some(error),
+    /// Starts the drag `drag` from `surface` with the pointer `pointer`, and returns the device of the seat of that
+    /// pointer.
+    fn start_drag(
+        &mut self,
+        drag: DragSourceId,
+        pointer: PointerDevice,
+        surface: SurfaceId,
+        formats: Vec<FormatId>,
+        actions: DragActions,
+    ) -> Result<DragDevice, DragRefusal> {
+        let manager = (self.clipboard.manager.as_ref()).ok_or(DragRefusal::Unavailable)?;
+        if manager.data_device_manager().version() < 3 {
+            return Err(DragRefusal::CompletionUnavailable);
         }
-        self.finish_drag_source(source);
+        let origin = self
+            .open_wl_surface(surface)
+            .ok_or(DragRefusal::SurfaceClosed)?;
+        let seat = self
+            .pointer_seat(pointer)
+            .cloned()
+            .ok_or(DragRefusal::InputDeviceGone)?;
+        let transfers = (self.clipboard.devices.iter())
+            .find(|device| device.seat == seat)
+            .ok_or(DragRefusal::InputDeviceGone)?;
+        let serial = transfers.primary_press.ok_or(DragRefusal::NoPress)?;
+        let formats = formats.into_iter().map(|format| format.0);
+        let actions = native_actions(actions);
+        let source = manager.create_drag_and_drop_source(&self.qh, formats, actions);
+        source.start_drag(&transfers.device, &origin, None, serial);
+        let device = drag_device(transfers.device.inner());
+        let _no_drag_had_the_id = (self.clipboard.drags).insert(drag, SourceDrag { seat, source });
+        Ok(device)
     }
 
-    fn finish_drag_source(&mut self, source: &WlDataSource) {
-        let Some(index) = self
-            .clipboard
-            .payloads
-            .iter()
-            .position(|payload| payload.source.inner() == source)
-        else {
-            return;
-        };
-        let result = self.clipboard.payloads[index]
-            .drag
-            .as_mut()
-            .and_then(|drag| drag.progress.take_result());
-        if let Some(result) = result
-            && let Some(drag) = self.clipboard.payloads.remove(index).drag
-        {
-            self.complete_drag_request(&drag.surface, drag.progress.done, result);
-        }
-    }
-
-    fn cancel_drag_source(&mut self, source: &WlDataSource, reason: Cancellation) {
-        let Some(index) = self
-            .clipboard
-            .payloads
-            .iter()
-            .position(|payload| payload.source.inner() == source)
-        else {
-            return;
-        };
-        let payload = self.clipboard.payloads.remove(index);
-        if let Some(drag) = payload.drag {
-            let jobs: Vec<_> = self
-                .clipboard
-                .jobs
-                .iter()
-                .filter(|job| job.source.as_ref() == Some(source))
-                .map(|job| job.id)
-                .collect();
-            for id in jobs {
-                self.cancel_transfer(id, reason);
-            }
-            self.complete_drag_request(&drag.surface, drag.progress.done, Err(reason.into()));
-        }
-    }
-
+    /// Cancels each drag started by the runtime with a pointer of `seat`, whose pointer disappeared.
     pub(crate) fn cancel_drag_sources(&mut self, seat: &WlSeat) {
-        let sources: Vec<_> = self
-            .clipboard
-            .payloads
-            .iter()
-            .filter(|payload| &payload.seat == seat && payload.drag.is_some())
-            .map(|payload| payload.source.inner().clone())
+        let cancelled: Vec<_> = (self.clipboard.drags)
+            .extract_if(.., |_, drag| &drag.seat == seat)
+            .map(|(id, _)| id)
             .collect();
-        for source in sources {
-            self.cancel_drag_source(&source, Cancellation::InputDeviceGone);
+        for id in cancelled {
+            let gone = Cancellation::InputDeviceGone;
+            self.drag_source_event(DragSourceEvent::Cancelled(id, gone));
         }
     }
 
-    pub(crate) fn cancel_closed_drag_sources(&mut self) {
-        let sources: Vec<_> = self
-            .clipboard
-            .payloads
-            .iter()
-            .filter(|payload| {
-                (payload.drag.as_ref())
-                    .is_some_and(|drag| !self.transfer_surface_live(&drag.surface))
-            })
-            .map(|payload| payload.source.inner().clone())
-            .collect();
-        for source in sources {
-            self.cancel_drag_source(&source, Cancellation::SurfaceClosed);
-        }
+    fn source_drag(&self, source: &WlDataSource) -> Option<DragSourceId> {
+        (self.clipboard.drags.iter())
+            .find(|(_, drag)| drag.source.inner() == source)
+            .map(|(id, _)| *id)
+    }
+
+    /// The drag offered to the app on `seat` whose data arrives through `pipe`, when exactly one such drag exists. A
+    /// drag from the app to itself sends its data through that pipe.
+    fn local_offer(&self, pipe: &impl AsFd, seat: &WlSeat) -> Option<TransferId> {
+        let identity = PipeIdentity::read(pipe)?;
+        let mut matches = (self.clipboard.offers.iter())
+            .filter(|(_, offer)| offer.pipe == Some(identity) && &offer.seat == seat)
+            .map(|(id, _)| *id);
+        let id = matches.next()?;
+        matches.next().is_none().then_some(id)
+    }
+
+    /// Hands the pipe of a client that receives the drag `drag` in `format` to the runtime, which writes the dragged
+    /// data to it, or the failure to make the pipe nonblocking.
+    fn send_drag(&mut self, drag: DragSourceId, format: String, pipe: WritePipe) {
+        let local = (self.clipboard.drags.get(&drag))
+            .and_then(|known| self.local_offer(&pipe, &known.seat));
+        let pipe = nonblocking(&pipe)
+            .map(|()| pipe.into())
+            .map_err(io::Error::from);
+        self.drag_source_event(DragSourceEvent::Send {
+            drag,
+            format: FormatId(format),
+            pipe,
+            local,
+        });
     }
 }
 
@@ -238,26 +135,30 @@ impl DataSourceHandler for Platform {
         mime: String,
         pipe: WritePipe,
     ) {
-        self.source_send(source, &mime, pipe);
+        if let Some(id) = self.selection_id(source) {
+            self.send_selection(id, mime, pipe);
+        } else if let Some(drag) = self.source_drag(source) {
+            self.send_drag(drag, mime, pipe);
+        }
     }
 
     fn cancelled(&mut self, _: &Connection, _: &QueueHandle<Self>, source: &WlDataSource) {
-        self.cancel_drag_source(source, Cancellation::SourceCancelled);
+        if let Some(id) = self.selection_id(source) {
+            self.cancel_selection(id);
+        } else if let Some(drag) = self.source_drag(source) {
+            let _cancelled = self.clipboard.drags.remove(&drag);
+            let reason = Cancellation::SourceCancelled;
+            self.drag_source_event(DragSourceEvent::Cancelled(drag, reason));
+        }
     }
 
     fn dnd_dropped(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlDataSource) {}
 
     fn dnd_finished(&mut self, _: &Connection, _: &QueueHandle<Self>, source: &WlDataSource) {
-        if let Some(drag) = self
-            .clipboard
-            .payloads
-            .iter_mut()
-            .find(|payload| payload.source.inner() == source)
-            .and_then(|payload| payload.drag.as_mut())
-        {
-            drag.progress.finished = true;
+        if let Some(drag) = self.source_drag(source) {
+            let _finished = self.clipboard.drags.remove(&drag);
+            self.drag_source_event(DragSourceEvent::Finished(drag));
         }
-        self.finish_drag_source(source);
     }
 
     fn action(
@@ -267,65 +168,9 @@ impl DataSourceHandler for Platform {
         source: &WlDataSource,
         action: DndAction,
     ) {
-        if let Some(drag) = self
-            .clipboard
-            .payloads
-            .iter_mut()
-            .find(|payload| payload.source.inner() == source)
-            .and_then(|payload| payload.drag.as_mut())
-        {
-            drag.progress.action = portable_action(action);
+        if let Some(drag) = self.source_drag(source) {
+            let action = portable_action(action);
+            self.drag_source_event(DragSourceEvent::ActionSelected(drag, action));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn progress() -> DragProgress {
-        DragProgress {
-            pending: 1,
-            sent: 0,
-            failure: None,
-            finished: false,
-            action: Some(DragAction::Move),
-            done: Box::new(|_, _| {}),
-            received: None,
-        }
-    }
-
-    #[test]
-    fn physical_drop_and_finish_cannot_complete_move_before_transmission() {
-        let mut progress = progress();
-        assert!(progress.take_result().is_none());
-        progress.finished = true;
-        assert!(progress.take_result().is_none());
-        progress.pending = 0;
-        assert!(matches!(
-            progress.take_result(),
-            Some(Err(Error::DragWithoutTransfer))
-        ));
-        progress.sent = 1;
-        assert!(matches!(progress.take_result(), Some(Ok(DragAction::Move))));
-    }
-
-    #[test]
-    fn successful_send_requires_finish_and_failed_send_prevents_move() {
-        let mut progress = progress();
-        progress.pending = 0;
-        progress.sent = 1;
-        assert!(progress.take_result().is_none());
-        progress.finished = true;
-        progress.failure = Some(Error::WritePipe(std::io::ErrorKind::BrokenPipe.into()));
-        assert!(matches!(
-            progress.take_result(),
-            Some(Err(Error::WritePipe(_)))
-        ));
-        progress.action = None;
-        assert!(matches!(
-            progress.take_result(),
-            Some(Err(Error::DragWithoutTransfer))
-        ));
     }
 }

@@ -1,163 +1,83 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod destination;
-mod gesture;
 mod handlers;
 
-use crate::Error;
-use lavashell_core::{
-    geometry::Point,
-    surface::SurfaceId,
-    transfer::{DragAction, DragActions, DropAcceptance, ReceivedData, TransferData},
-    units::Dp,
-};
-use sctk::{
-    data_device_manager::data_offer::DragOffer,
-    reexports::client::protocol::wl_data_device::WlDataDevice,
+use super::state::{ClipboardState, SeatTransfers};
+use crate::app::Platform;
+use lavashell_core::transfer::{DragAction, DragActions, TransferId};
+use lavashell_platform::{DragDevice, PointerDevice};
+use sctk::reexports::client::Proxy;
+use sctk::reexports::client::protocol::{
+    wl_data_device::WlDataDevice, wl_data_device_manager::DndAction,
 };
 use smithay_client_toolkit as sctk;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TransferId(pub(super) u64);
+impl Platform {
+    /// Reports the drag transfers that ended to the runtime and executes the drag and drop requests made by it, until
+    /// executing them makes no new request.
+    pub(super) fn execute_drag_requests(&mut self) {
+        loop {
+            self.config.drags.submit(&mut self.surface_records);
+            let targets = self.config.drags.take_target_requests();
+            let sources = self.config.drags.take_source_requests();
+            if targets.is_empty() && sources.is_empty() {
+                return;
+            }
+            for request in targets {
+                self.execute_target_request(request);
+            }
+            for request in sources {
+                self.execute_source_request(request);
+            }
+        }
+    }
 
-#[derive(Clone, Debug)]
-pub struct DragOfferInfo {
-    pub id: TransferId,
-    pub surface: SurfaceId,
-    pub position: Point,
-    pub mime_types: Vec<String>,
-    pub actions: DragActions,
-    pub selected_action: Option<DragAction>,
-}
-
-#[derive(Clone, Debug)]
-pub enum DragEvent {
-    Enter(DragOfferInfo),
-    Motion(DragOfferInfo),
-    /// The drag was dropped on the surface. The drop uses the position, the MIME types and the selected action in
-    /// this event. An acceptance returned for it is ignored, because the acceptance from the last enter or motion
-    /// applies.
-    Drop(DragOfferInfo),
-    /// The drag left the surface before a drop. The acceptance returned during enter and motion no longer applies.
-    Leave {
-        id: TransferId,
-        surface: SurfaceId,
-    },
-    Cancelled {
-        id: TransferId,
-        surface: SurfaceId,
-    },
-}
-
-impl DragEvent {
-    pub(crate) fn surface(&self) -> SurfaceId {
-        match self {
-            Self::Enter(info) | Self::Motion(info) | Self::Drop(info) => info.surface,
-            Self::Leave { surface, .. } | Self::Cancelled { surface, .. } => *surface,
+    /// Notes the serial of a press of the primary button of `pointer`, which a drag started by the app needs.
+    pub(crate) fn note_primary_press(&mut self, pointer: PointerDevice, serial: u32) {
+        let Some(seat) = self.pointer_seat(pointer).cloned() else {
+            return;
+        };
+        let device = (self.clipboard.devices.iter_mut()).find(|device| device.seat == seat);
+        if let Some(device) = device {
+            device.primary_press = Some(serial);
         }
     }
 }
 
-#[derive(Debug)]
-pub struct DropEvent {
-    pub id: TransferId,
-    pub surface: SurfaceId,
-    pub position: Point,
-    pub action: DragAction,
-    pub data: Result<ReceivedData, Error>,
-}
+impl ClipboardState {
+    /// The transfers of the seat whose data device is `device`.
+    fn seat_of(&mut self, device: &WlDataDevice) -> Option<&mut SeatTransfers> {
+        (self.devices.iter_mut()).find(|current| current.device.inner() == device)
+    }
 
-/// A pointer motion while the left button pressed on `surface` is held, passed to the drag source callback of the
-/// app. When the callback returns a `DragRequest`, the drag starts and that button press creates no more gestures.
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct DragGesture {
-    pub surface: SurfaceId,
-    pub origin: Point,
-    pub position: Point,
-}
-
-impl DragGesture {
-    /// Whether the pointer moved at least `distance` from `origin`, in logical pixels. A `distance` that is negative
-    /// or not finite is never passed.
-    #[must_use]
-    pub fn passed_threshold(&self, distance: Dp) -> bool {
-        distance.is_finite()
-            && distance >= Dp::ZERO
-            && (self.position.x - self.origin.x).hypot(self.position.y - self.origin.y) >= distance
+    /// Removes and returns the drag over a surface on the seat whose data device is `device`, once it left or was
+    /// dropped.
+    fn take_entered(&mut self, device: &WlDataDevice) -> Option<TransferId> {
+        self.seat_of(device)?.entered.take()
     }
 }
 
-pub struct DragRequest {
-    pub(super) data: TransferData,
-    pub(super) actions: DragActions,
-    pub(super) done: DragCompletion,
-    pub(super) started: Option<DragStarted>,
-    pub(super) received: Option<DragReceipt>,
+pub(super) fn drag_device(device: &WlDataDevice) -> DragDevice {
+    DragDevice(u64::from(device.id().protocol_id()))
 }
 
-pub(crate) type DragCompletion =
-    Box<dyn FnOnce(Result<DragAction, Error>, &mut lavashell_core::view::View)>;
-
-type DragStarted = Box<dyn FnOnce(&mut lavashell_core::view::View)>;
-pub(super) type DragReceipt = Box<dyn FnMut(TransferId)>;
-
-impl DragRequest {
-    /// Creates a drag of `data` that allows `actions`. `done` runs with the view of the surface where the drag
-    /// started. It reports the action only after every requested transfer was sent and the destination finished the
-    /// drop. The drag never deletes files or app data. After a successful move, `done` removes the moved data itself.
-    pub fn new(
-        data: TransferData,
-        actions: DragActions,
-        done: impl FnOnce(Result<DragAction, Error>, &mut lavashell_core::view::View) + 'static,
-    ) -> Self {
-        Self {
-            data,
-            actions,
-            done: Box::new(done),
-            started: None,
-            received: None,
-        }
-    }
-
-    /// Sets `started`, which runs with the view of the source surface after the local checks passed and the
-    /// `start_drag` request was sent. The compositor does not confirm `start_drag`, so `started` does not wait for
-    /// a confirmation.
-    #[must_use]
-    pub fn on_start(
-        mut self,
-        started: impl FnOnce(&mut lavashell_core::view::View) + 'static,
-    ) -> Self {
-        self.started = Some(Box::new(started));
-        self
-    }
-
-    pub(crate) fn on_local_receive(mut self, received: impl FnMut(TransferId) + 'static) -> Self {
-        self.received = Some(Box::new(received));
-        self
-    }
-}
-
-pub(super) struct Incoming {
-    pub device: WlDataDevice,
-    pub offer: DragOffer,
-    pub info: DragOfferInfo,
-    pub acceptance: Option<DropAcceptance>,
-}
-
-pub(crate) fn native_action(
-    action: DragAction,
-) -> sctk::reexports::client::protocol::wl_data_device_manager::DndAction {
-    use sctk::reexports::client::protocol::wl_data_device_manager::DndAction;
+fn native_action(action: DragAction) -> DndAction {
     match action {
         DragAction::Copy => DndAction::Copy,
         DragAction::Move => DndAction::Move,
     }
 }
 
-pub(crate) fn portable_action(
-    action: sctk::reexports::client::protocol::wl_data_device_manager::DndAction,
-) -> Option<DragAction> {
-    use sctk::reexports::client::protocol::wl_data_device_manager::DndAction;
+pub(super) fn native_actions(actions: DragActions) -> DndAction {
+    [DragAction::Copy, DragAction::Move]
+        .into_iter()
+        .filter(|action| actions.contains(*action))
+        .fold(DndAction::empty(), |bits, action| {
+            bits | native_action(action)
+        })
+}
+
+pub(super) fn portable_action(action: DndAction) -> Option<DragAction> {
     match action {
         DndAction::Copy => Some(DragAction::Copy),
         DndAction::Move => Some(DragAction::Move),
@@ -165,9 +85,7 @@ pub(crate) fn portable_action(
     }
 }
 
-pub(crate) fn portable_actions(
-    actions: sctk::reexports::client::protocol::wl_data_device_manager::DndAction,
-) -> DragActions {
+fn portable_actions(actions: DndAction) -> DragActions {
     DragActions::new(
         [DragAction::Copy, DragAction::Move]
             .into_iter()

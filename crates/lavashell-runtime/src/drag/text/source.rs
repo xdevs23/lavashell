@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    DragAction, DragActions, DragGesture, DragRequest, HashMap, SurfaceId, TextDropTarget,
-    TransferId, View, text_data,
-};
-use lavashell_core::prelude::{NodeId, TextSelectionSource};
+use crate::{DragGesture, DragRequest};
+use lavashell_core::prelude::{NodeId, TextDropTarget, TextSelectionSource, View};
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::{DragAction, DragActions, TransferData, TransferId};
+use lavashell_platform::DragDevice;
+use std::collections::HashMap;
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Default)]
@@ -28,16 +29,16 @@ pub(super) enum LocalMove {
 }
 
 struct LocalSource {
-    device: u32,
+    /// The device of the drag, once the drag started.
+    device: Option<DragDevice>,
     surface: SurfaceId,
     source: TextSelectionSource,
-    submitted: bool,
     finished: bool,
     moved: bool,
 }
 
 impl NativeSources {
-    pub fn request(&self, gesture: &DragGesture, device: u32, view: &View) -> Option<DragRequest> {
+    pub fn request(&self, gesture: &DragGesture, view: &View) -> Option<DragRequest> {
         let source = view.text_selection_source_at(gesture.origin)?;
         if view.text_source_contains(&source, gesture.position)
             || !view.text_source_drag_ready(&source, gesture.position)
@@ -49,12 +50,11 @@ impl NativeSources {
                 .into_iter()
                 .filter(|action| *action == DragAction::Copy || source.can_move()),
         );
-        let data = text_data(source.text())?;
+        let data = TransferData::text(source.text());
         let local = Rc::new(RefCell::new(LocalSource {
-            device,
+            device: None,
             surface: gesture.surface,
             source,
-            submitted: false,
             finished: false,
             moved: false,
         }));
@@ -76,14 +76,14 @@ impl NativeSources {
                 let mut sources = sources.0.borrow_mut();
                 sources.active.retain(|item| !Rc::ptr_eq(item, &completing));
             })
-            .on_start(move |view| {
-                local.borrow_mut().submitted = true;
+            .on_start_with_device(move |device, view| {
+                local.borrow_mut().device = Some(device);
                 starting.0.borrow_mut().active.push(local.clone());
                 view.cancel_pending_text_drag();
             })
             .on_local_receive(move |id| {
                 let source = receiving.borrow();
-                if source.submitted
+                if source.device.is_some()
                     && !source.finished
                     && let Some(pending) = linked.0.borrow_mut().linked.get_mut(&id)
                 {
@@ -105,7 +105,11 @@ impl NativeSources {
             return LocalMove::NotLocal;
         };
         let mut source = local.borrow_mut();
-        if !source.submitted || source.finished || source.moved || source.source.text() != text {
+        if source.device.is_none()
+            || source.finished
+            || source.moved
+            || source.source.text() != text
+        {
             return LocalMove::Refused;
         }
         if source.surface != surface || source.source.id() != target.id() {
@@ -119,13 +123,12 @@ impl NativeSources {
         }
     }
 
-    pub fn ambiguous(&self, device: u32, surface: SurfaceId, target: NodeId) -> bool {
+    pub fn ambiguous(&self, device: DragDevice, surface: SurfaceId, target: NodeId) -> bool {
         self.0.borrow().active.iter().any(|source| {
             let source = source.borrow();
-            source.device == device
+            source.device == Some(device)
                 && source.surface == surface
                 && source.source.id() == target
-                && source.submitted
                 && !source.finished
         })
     }
@@ -149,6 +152,6 @@ impl NativeSources {
 
     /// Unlinks transfer `id` from the local drag source that it came from, if any.
     pub fn close_link(&self, id: TransferId) {
-        self.0.borrow_mut().linked.retain(|linked, _| *linked != id);
+        let _unlinked = self.0.borrow_mut().linked.remove(&id);
     }
 }

@@ -28,10 +28,8 @@ pub(super) enum NextRender {
 
 impl Platform {
     pub(super) fn render(&mut self) -> Result<NextRender, Error> {
-        // Cancelling a transfer calls the app callback with the view of the surface, so it runs before the surface
-        // retires.
-        self.cancel_closed_transfers();
         self.execute_surface_requests();
+        self.clipboard.transfers.submit(&self.surface_records);
         self.submit_transfers();
         self.accessibility_updates();
         let mut actions = self.config.action_queue.take_batch();

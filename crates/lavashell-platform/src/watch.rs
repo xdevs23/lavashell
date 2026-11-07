@@ -5,11 +5,18 @@ use std::os::fd::OwnedFd;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WatchId(pub u64);
 
+/// What a watch waits for on its file descriptor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Readiness {
+    Readable,
+    Writable,
+}
+
 /// What the runtime asks a platform to do with a file descriptor.
 #[derive(Debug)]
 pub enum WatchRequest {
-    /// Watches the descriptor until it is readable once, and closes it after that.
-    Readable(WatchId, OwnedFd),
+    /// Watches the descriptor and reports each time it is ready, until `Unwatch` closes it.
+    Watch(WatchId, OwnedFd, Readiness),
     /// Stops the watch and closes its descriptor.
     Unwatch(WatchId),
 }
@@ -17,5 +24,5 @@ pub enum WatchRequest {
 /// What a platform observed on a watched file descriptor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WatchEvent {
-    Readable(WatchId),
+    Ready(WatchId),
 }

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::drag::TransferId;
-use super::{ClipboardShortcut, clipboard_shortcut};
-use crate::test_error::TestError;
-use crate::text_transfer::*;
-use crate::{DragEvent, DragGesture, DragOfferInfo, DropEvent};
+use super::*;
+use crate::drag::tests::TestError;
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::ReceivedData;
@@ -21,6 +18,8 @@ impl TextMeasurer for Metrics {
     }
 }
 
+const DEVICE: DragDevice = DragDevice(1);
+
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
 
 struct Editor {
@@ -31,10 +30,6 @@ struct Editor {
 }
 
 fn editor() -> Result<Editor, TestError> {
-    editor_with(Modifier::new())
-}
-
-fn editor_with(modifier: Modifier) -> Result<Editor, TestError> {
     let text = State::new("abc def".to_string());
     let value = text.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -42,8 +37,7 @@ fn editor_with(modifier: Modifier) -> Result<Editor, TestError> {
         ui.text_area(
             value.get(),
             TextFieldOptions::default(),
-            modifier
-                .clone()
+            Modifier::new()
                 .accessible_name("field")
                 .size(140.dp(), 60.dp()),
             move |text| value.set(text),
@@ -66,7 +60,7 @@ fn field_id(view: &View) -> Result<NodeId, TestError> {
     (view.accessibility().nodes.values())
         .find(|node| node.name.as_deref() == Some("field"))
         .map(|node| node.id)
-        .ok_or(TestError::MissingField)
+        .ok_or(TestError::Missing("the field"))
 }
 
 fn offer(id: u64, position: Point, action: DragAction) -> DragOfferInfo {
@@ -88,7 +82,9 @@ fn received(info: &DragOfferInfo, bytes: &[u8]) -> Result<DropEvent, TestError> 
         id: info.id,
         surface: info.surface,
         position: info.position,
-        action: info.selected_action.ok_or(TestError::NoSelectedAction)?,
+        action: info
+            .selected_action
+            .ok_or(TestError::Missing("the selected action"))?,
         data: Ok(ReceivedData {
             mime_type: TEXT_FORMATS[0].to_string(),
             bytes: bytes.to_vec(),
@@ -97,19 +93,13 @@ fn received(info: &DragOfferInfo, bytes: &[u8]) -> Result<DropEvent, TestError> 
 }
 
 #[test]
-fn text_formats_preserve_utf8_and_choose_preferred_format() -> Result<(), TestError> {
-    let data = text_data("雪🙂").ok_or(TestError::TextNotTransferable)?;
-    assert_eq!(data.formats().collect::<Vec<_>>(), TEXT_FORMATS);
-    for format in TEXT_FORMATS {
-        let bytes = data.get(format).ok_or(TestError::MissingFormat(format))?;
-        assert_eq!(bytes.as_ref(), "雪🙂".as_bytes());
-    }
+fn a_text_drag_is_accepted_in_the_preferred_text_format() -> Result<(), TestError> {
     let Editor { view, .. } = editor()?;
     let mut adapter = TextTransfers::default();
     let info = offer(1, Point::new(21.dp(), 5.dp()), DragAction::Copy);
     let acceptance = adapter
-        .drag(&DragEvent::Enter(info), 1, &view)
-        .ok_or(TestError::DragNotAccepted)?;
+        .drag(&DragEvent::Enter(info), DEVICE, &view)
+        .ok_or(TestError::Missing("an acceptance of the drag"))?;
     assert_eq!(acceptance.mime_type, TEXT_FORMATS[0]);
     Ok(())
 }
@@ -122,18 +112,18 @@ fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target(
     let mut info = offer(1, Point::new(11.dp(), 5.dp()), DragAction::Copy);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     info.position = Point::new(31.dp(), 5.dp());
     assert!(
         adapter
-            .drag(&DragEvent::Motion(info.clone()), 1, &view)
+            .drag(&DragEvent::Motion(info.clone()), DEVICE, &view)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     assert!(
@@ -143,7 +133,7 @@ fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target(
                     id: info.id,
                     surface: SurfaceId(0),
                 },
-                1,
+                DEVICE,
                 &view,
             )
             .is_none()
@@ -164,12 +154,12 @@ fn invalid_utf8_stale_destination_and_wrong_transfer_are_rejected() -> Result<()
         let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
         assert!(
             adapter
-                .drag(&DragEvent::Enter(info.clone()), 1, &view)
+                .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
                 .is_some()
         );
         assert!(
             adapter
-                .drag(&DragEvent::Drop(info.clone()), 1, &view)
+                .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
                 .is_none()
         );
         let unrelated = offer(2, Point::new(31.dp(), 5.dp()), DragAction::Copy);
@@ -194,24 +184,24 @@ fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), 
     let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     adapter.application_accepted(&DragEvent::Motion(info.clone()));
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     assert!(!adapter.has_pending(info.id));
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     assert!(
@@ -221,7 +211,7 @@ fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), 
                     id: info.id,
                     surface: SurfaceId(0),
                 },
-                1,
+                DEVICE,
                 &view,
             )
             .is_none()
@@ -238,14 +228,14 @@ fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result
     let mut info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     info.position = Point::new(180.dp(), 5.dp());
     assert!(adapter.owns(&DragEvent::Drop(info.clone())));
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     assert!(
@@ -255,7 +245,7 @@ fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result
                     id: info.id,
                     surface: SurfaceId(0),
                 },
-                1,
+                DEVICE,
                 &view,
             )
             .is_none()
@@ -295,7 +285,6 @@ fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result
                     origin: Point::new(11.dp(), 5.dp()),
                     position: Point::new(31.dp(), 5.dp())
                 },
-                1,
                 &view
             )
             .is_none()
@@ -308,72 +297,10 @@ fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result
                     origin: Point::new(11.dp(), 5.dp()),
                     position: Point::new(150.dp(), 5.dp())
                 },
-                1,
                 &view
             )
             .is_some()
     );
     assert_eq!(text.get(), "abc def");
-    Ok(())
-}
-
-fn focus_field(view: &mut View) {
-    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
-    view.input(InputEvent::Release(Point::new(11.dp(), 5.dp())));
-}
-
-fn select_all(view: &mut View) {
-    view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
-}
-
-fn read_only(semantics: &mut Semantics) {
-    semantics.state.form.read_only = true;
-}
-
-#[test]
-fn a_cut_needs_selected_text_in_the_focused_field() -> Result<(), TestError> {
-    let cut = Key::Character('x');
-    let Editor { mut view, .. } = editor()?;
-    assert!(clipboard_shortcut(&mut view, cut).is_none());
-    focus_field(&mut view);
-    assert!(clipboard_shortcut(&mut view, cut).is_none());
-    select_all(&mut view);
-    assert!(matches!(
-        clipboard_shortcut(&mut view, cut),
-        Some(ClipboardShortcut::Cut(source, _)) if source.text() == "abc def"
-    ));
-    Ok(())
-}
-
-#[test]
-fn a_read_only_field_copies_but_does_not_cut() -> Result<(), TestError> {
-    let Editor {
-        mut view, field, ..
-    } = editor_with(Modifier::new().semantics_with(read_only))?;
-    focus_field(&mut view);
-    select_all(&mut view);
-    let source = view
-        .text_selection_source(field)
-        .ok_or(TestError::MissingField)?;
-    assert_eq!(source.text(), "abc def");
-    assert!(!source.can_move());
-    assert!(clipboard_shortcut(&mut view, Key::Character('x')).is_none());
-    assert!(matches!(
-        clipboard_shortcut(&mut view, Key::Character('c')),
-        Some(ClipboardShortcut::Copy(text)) if text == "abc def"
-    ));
-    Ok(())
-}
-
-#[test]
-fn a_paste_needs_an_editable_focused_field() -> Result<(), TestError> {
-    let paste = Key::Character('v');
-    let Editor { mut view, .. } = editor()?;
-    assert!(clipboard_shortcut(&mut view, paste).is_none());
-    focus_field(&mut view);
-    assert!(matches!(
-        clipboard_shortcut(&mut view, paste),
-        Some(ClipboardShortcut::Paste)
-    ));
     Ok(())
 }

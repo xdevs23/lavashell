@@ -8,7 +8,6 @@ use crate::{
 };
 use lavashell::prelude::*;
 use lavashell::renderer::encoded_image;
-use lavashell::wayland;
 use lavashell_example_support::report;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
@@ -104,7 +103,7 @@ fn accept(info: &DragOfferInfo) -> Option<DropAcceptance> {
     })
 }
 
-fn receipt(result: Result<ReceivedData, wayland::Error>) -> Receipt {
+fn receipt(result: Result<ReceivedData, impl std::error::Error>) -> Receipt {
     match result {
         Ok(data) => match preview(&data) {
             Ok(preview) => Receipt::Accepted {
