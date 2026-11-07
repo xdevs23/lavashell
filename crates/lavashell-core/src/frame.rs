@@ -98,6 +98,28 @@ impl FrameClock {
         };
         target.max(self.last_sample)
     }
+
+    /// The earliest start time of a frame whose predicted presentation is not earlier than `presentation`.
+    #[must_use]
+    pub fn start_for(&self, presentation: Duration) -> Duration {
+        if self.last_sample >= presentation {
+            return Duration::ZERO;
+        }
+        match (self.last_presented, self.refresh) {
+            (Some(last_presented), Some(interval)) => {
+                let since_presented = presentation.saturating_sub(last_presented).as_nanos();
+                let refreshes = since_presented
+                    .div_ceil(interval.as_nanos())
+                    .saturating_sub(1);
+                if refreshes == 0 {
+                    return Duration::ZERO;
+                }
+                let refresh_start = last_presented.as_nanos() + interval.as_nanos() * refreshes;
+                duration_from_nanos(refresh_start).saturating_sub(self.render_cost)
+            }
+            _ => presentation.saturating_sub(self.presentation_delay),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +161,21 @@ mod tests {
             clock.predict(Duration::from_millis(101)),
             Duration::from_millis(130)
         );
+    }
+
+    #[test]
+    fn fixed_refresh_starts_a_frame_for_a_presentation_at_the_first_start_that_reaches_it() {
+        let mut clock = FrameClock::default();
+        clock.presented(Duration::from_millis(16), Some(Duration::from_millis(10)));
+        clock.render_cost(Duration::from_millis(1));
+        let start = clock.start_for(Duration::from_millis(150));
+        assert_eq!(start, Duration::from_millis(145));
+        assert_eq!(clock.predict(start), Duration::from_millis(156));
+        assert_eq!(
+            clock.predict(start.saturating_sub(Duration::from_nanos(1))),
+            Duration::from_millis(146)
+        );
+        assert_eq!(clock.start_for(Duration::from_millis(26)), Duration::ZERO);
     }
 
     #[test]

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::input::{HostKey, KeyboardFocus};
-use super::render::NextRender;
-
 use super::{App, AppConfig, Platform, Request, session_lock};
 use crate::Error;
 use crate::clipboard::Clipboard;
@@ -334,40 +332,40 @@ impl App {
             if platform.update_lock()? == session_lock::LockState::Released {
                 break;
             }
-            let next = platform.render()?;
+            platform.render()?;
             platform.update_focus_grabs();
             if platform.finished() {
                 break;
             }
             platform.execute_watch_requests()?;
-            let timeout = match next {
-                NextRender::Immediately => Some(Duration::ZERO),
-                NextRender::AfterEvent => platform.timeout(),
-            };
             event_loop
-                .dispatch(timeout, &mut platform)
+                .dispatch(platform.timeout(), &mut platform)
                 .map_err(Error::DispatchEvents)?;
         }
-        Ok(())
+        platform.drain_scheduler(&mut event_loop)
     }
 }
 
 impl Platform {
-    /// The time for which the event loop waits: until the earliest of the exit time, the next scene image
-    /// and the next change of a surface. A scene deadline that has passed is left out, because the render
-    /// before this wait handled it. The loop then waits for the frame callback of the surface that was drawn.
-    fn timeout(&self) -> Option<Duration> {
+    /// How long the event loop waits: not at all while started frames wait for the next render, and otherwise until
+    /// the earliest of the exit time, the next scene image and the time at which the scheduler asks the views to report
+    /// again. A scene deadline that has passed is left out, because the render before this wait handled it. A wake
+    /// time that is due ends the wait at once and is used up by the next render. The loop then waits for the timing
+    /// events of the surfaces that were drawn and the outputs of the scheduler.
+    fn timeout(&mut self) -> Option<Duration> {
+        if !self.started_frames.is_empty() {
+            return Some(Duration::ZERO);
+        }
         let elapsed = self.start.elapsed();
         let exit = self.run_end.exit_in(elapsed);
         let scene = (self.renderer.scene_deadline())
             .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
             .filter(|wait| !wait.is_zero());
-        let surfaces = (self.surfaces.iter())
-            .filter_map(|(&id, surface)| {
-                surface.wakes(self.surface_records.open_view(id)?, elapsed)
-            })
-            .map(|deadline| deadline.saturating_sub(elapsed));
-        exit.into_iter().chain(scene).chain(surfaces).min()
+        let wake = (self.scheduler_wake).map(|wake| wake.saturating_sub(elapsed));
+        if wake.is_some_and(|wait| wait.is_zero()) {
+            self.scheduler_wake = None;
+        }
+        exit.into_iter().chain(scene).chain(wake).min()
     }
 
     /// Whether the run ends now. The session lock and the per-output layers count as open until they end.

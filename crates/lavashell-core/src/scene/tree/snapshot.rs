@@ -48,13 +48,13 @@ impl SceneSnapshot {
     }
 
     #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.namespaces.is_empty()
     }
 
     /// The earliest time, at or after `now`, at which an animated group of the snapshot changes.
     #[must_use]
-    pub(crate) fn next_change(&self, now: Duration) -> Option<Duration> {
+    pub fn next_change(&self, now: Duration) -> Option<Duration> {
         self.namespaces.next_change(&self.moving, now)
     }
 }

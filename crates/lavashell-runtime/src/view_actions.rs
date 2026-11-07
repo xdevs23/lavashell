@@ -138,8 +138,8 @@ impl ActionQueue {
     }
 
     #[must_use]
-    pub fn has_pending(&self) -> bool {
-        !self.0.borrow().pending.is_empty()
+    pub fn has_pending_for(&self, surface: SurfaceId) -> bool {
+        (self.0.borrow().pending.iter()).any(|action| action.surface == surface)
     }
 
     /// Takes the watch requests made since the last call, for the platform to execute.
@@ -177,11 +177,6 @@ impl ActionQueue {
 pub struct ActionBatch(Vec<PendingAction>);
 
 impl ActionBatch {
-    #[must_use]
-    pub fn has_actions_for(&self, surface: SurfaceId) -> bool {
-        self.0.iter().any(|action| action.surface == surface)
-    }
-
     /// Runs the actions of the batch for `surface` on `view`, in the order in which they were queued.
     pub fn run(&mut self, surface: SurfaceId, view: &mut View) {
         for action in self.0.extract_if(.., |action| action.surface == surface) {
