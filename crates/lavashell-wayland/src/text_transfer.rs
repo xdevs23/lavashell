@@ -3,15 +3,13 @@ use crate::{App, DragEvent, DragGesture, DragOfferInfo, DragRequest, DropEvent, 
 use lavashell_core::{
     prelude::{TextDropTarget, View},
     surface::SurfaceId,
-    transfer::{DragAction, DragActions, DropAcceptance, Representation, TransferData},
+    transfer::{DragAction, DragActions, DropAcceptance, TEXT_FORMATS},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 mod source;
 
 use source::{LocalMove, NativeSources};
-
-pub(crate) const TEXT_FORMATS: [&str; 2] = ["text/plain;charset=utf-8", "text/plain"];
 
 #[derive(Default)]
 pub(crate) struct TextTransfers {
@@ -197,17 +195,6 @@ fn text_acceptance(info: &DragOfferInfo, view: &View) -> Option<DropAcceptance> 
         mime_type: (*mime_type).to_string(),
         action,
     })
-}
-
-/// Transfer data that contains `text` in every format of `TEXT_FORMATS`, or `None` when `TransferData` rejects the
-/// text. The reason for the rejection is logged.
-pub(crate) fn text_data(text: &str) -> Option<TransferData> {
-    let bytes: Arc<[u8]> = text.as_bytes().into();
-    let representations = TEXT_FORMATS.map(|format| Representation::new(format, bytes.clone()));
-    (representations.into_iter().collect::<Result<Vec<_>, _>>())
-        .and_then(TransferData::new)
-        .inspect_err(|error| log::warn!("the text cannot be transferred: {error}"))
-        .ok()
 }
 
 fn event_id(event: &DragEvent) -> TransferId {

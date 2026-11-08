@@ -107,10 +107,6 @@ pub(crate) enum TestError {
     MissingField,
     #[error("the drop has no selected action")]
     NoSelectedAction,
-    #[error("the text cannot be transferred")]
-    TextNotTransferable,
-    #[error("the transfer data has no format {0}")]
-    MissingFormat(&'static str),
     #[error("no field accepts the drag")]
     DragNotAccepted,
     #[error("the selected text starts no drag")]

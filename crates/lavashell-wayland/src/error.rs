@@ -3,21 +3,19 @@ use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
 use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
-use sctk::data_device_manager::data_offer::DataOfferError;
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
 use sctk::reexports::client::ConnectError;
 use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
-use std::collections::TryReserveError;
 use std::convert::Infallible;
 use std::io;
 use std::num::TryFromIntError;
-use std::string::FromUtf8Error;
 
 /// A failure of the Wayland host, named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
@@ -100,36 +98,12 @@ pub enum Error {
     SurfaceNotOpen(SurfaceId),
     #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
     PanelWithoutLayer(SurfaceId),
-    #[error("the compositor offers no clipboard")]
-    ClipboardUnavailable,
-    #[error("the clipboard needs the serial of an input event")]
-    NoInputSerial,
     #[error("the serial of an input event does not fit a Wayland serial")]
     ProtocolSerial(#[source] TryFromIntError),
-    #[error("the surface has no focused input device")]
-    NoFocusedInputDevice,
-    #[error("the surface has more than one focused input device")]
-    SeveralFocusedInputDevices,
-    #[error("the clipboard is empty")]
-    ClipboardEmpty,
-    #[error("the clipboard has none of the requested formats")]
-    NoRequestedFormat,
     #[error("the dragged data could not be received")]
     ReceiveDrag(#[source] io::Error),
-    #[error("the clipboard data could not be received")]
-    ReceiveSelection(#[source] DataOfferError),
     #[error("the transfer pipe could not be made non-blocking")]
     ConfigurePipe(#[source] rustix::io::Errno),
-    #[error("the capacity of the transfer pipe could not be read")]
-    PipeCapacity(#[source] rustix::io::Errno),
-    #[error("the transfer pipe could not be read")]
-    ReadPipe(#[source] io::Error),
-    #[error("the transfer pipe could not be written")]
-    WritePipe(#[source] io::Error),
-    #[error("the memory for the transfer could not be reserved")]
-    ReserveTransfer(#[source] TryReserveError),
-    #[error("the transferred text is not UTF-8")]
-    DecodeText(#[source] FromUtf8Error),
     #[error("the compositor offers no drag and drop")]
     DragUnavailable,
     #[error("the compositor cannot report the end of a drag")]
@@ -142,19 +116,6 @@ pub enum Error {
     DragWithoutTransfer,
     #[error("the transfer was cancelled")]
     Cancelled(#[from] Cancellation),
-}
-
-/// Why a transfer ended before it finished.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Cancellation {
-    #[error("the app closed")]
-    AppClosed,
-    #[error("the input device of the transfer disappeared")]
-    InputDeviceGone,
-    #[error("the surface of the transfer closed")]
-    SurfaceClosed,
-    #[error("the compositor cancelled the data source")]
-    SourceCancelled,
 }
 
 /// A failure of a request that the present of a frame applies to a native surface.

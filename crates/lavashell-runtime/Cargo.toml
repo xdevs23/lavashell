@@ -15,6 +15,7 @@ lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
+log.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

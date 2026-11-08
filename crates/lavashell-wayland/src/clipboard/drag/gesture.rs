@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{DragGesture, DragRequest, native_action};
 use crate::{
-    Cancellation, Error,
+    Error,
     app::Platform,
     clipboard::{
-        sources::{Drag, DragProgress, Payload, Source},
+        sources::{Drag, DragProgress, Payload},
         state::PointerGrab,
     },
 };
-use lavashell_core::{geometry::Point, transfer::DragAction};
+use lavashell_core::{
+    geometry::Point,
+    transfer::{Cancellation, DragAction},
+};
 use sctk::reexports::client::{
     Proxy,
     protocol::{wl_pointer::WlPointer, wl_seat::WlSeat, wl_surface::WlSurface},
@@ -163,10 +166,10 @@ impl Platform {
                     }
                 }
                 self.clipboard.payloads.push(Payload {
-                    source: Source::Drag(source),
+                    source,
                     data: request.data,
                     seat,
-                    drag: Some(Drag {
+                    drag: Drag {
                         surface: grab.surface,
                         progress: DragProgress {
                             pending: 0,
@@ -177,7 +180,7 @@ impl Platform {
                             done: request.done,
                             received: request.received,
                         },
-                    }),
+                    },
                 });
             }
             Err(error) => self.complete_drag_request(&grab.surface, request.done, Err(error)),

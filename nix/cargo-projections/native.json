@@ -551,6 +551,15 @@
                     ],
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
+                  },
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
                   }
                 },
                 "features": {},
@@ -739,6 +748,15 @@
                     ],
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
+                  },
+                  "log": {
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "package": "log",
+                    "version": "=0.4.34"
                   },
                   "thiserror": {
                     "default-features": false,
@@ -2521,7 +2539,8 @@
               {
                 "dependencies": [
                   "icu_locale_core",
-                  "lavashell-core"
+                  "lavashell-core",
+                  "thiserror"
                 ],
                 "name": "lavashell-platform",
                 "version": "0.0.0"
@@ -2550,6 +2569,7 @@
                   "lavashell-core",
                   "lavashell-platform",
                   "lavashell-renderer",
+                  "log",
                   "thiserror"
                 ],
                 "name": "lavashell-runtime",
@@ -3861,7 +3881,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "d263a51d47e46da066192cb7cc00ec540dc33b8017d644f03717cb7dc1f7a23c"
+        "seedHash": "e0f2143d9683960fe3e764d8baa98d921a4d676511d92aed33844ce531a0aa55"
       }
     }
   },
@@ -4995,7 +5015,8 @@
       {
         "dependencies": [
           "icu_locale_core",
-          "lavashell-core"
+          "lavashell-core",
+          "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
         "version": "0.1.0"
@@ -5026,6 +5047,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "log",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-runtime",

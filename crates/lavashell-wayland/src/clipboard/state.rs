@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Clipboard, drag::Incoming, pipes::Job, sources::Payload};
-use crate::Cancellation;
+use super::{drag::Incoming, pipes::Job, sources::Payload};
 use crate::app::Platform;
+use lavashell_core::transfer::Cancellation;
+use lavashell_platform::{ClipboardEvent, SelectionId};
+use lavashell_runtime::{ClipboardTransfers, TextClipboard};
+use sctk::data_device_manager::data_source::CopyPasteSource;
 use sctk::data_device_manager::{DataDeviceManagerState, data_device::DataDevice};
 use sctk::reexports::client::{
     Proxy, QueueHandle,
@@ -23,15 +26,25 @@ pub(super) struct SeatTransfers {
     pub grab: Option<PointerGrab>,
 }
 
+/// A selection set by the runtime, until the compositor cancels it.
+pub(super) struct SelectionSource {
+    pub id: SelectionId,
+    pub source: CopyPasteSource,
+    pub seat: WlSeat,
+}
+
 pub(crate) struct ClipboardState {
     pub(super) manager: Option<DataDeviceManagerState>,
     pub(super) devices: Vec<SeatTransfers>,
+    /// The seat and the serial of the last input event. The clipboard of that seat is the one used by the runtime.
     pub(super) serial: Option<(WlSeat, u32)>,
+    pub(super) selections: Vec<SelectionSource>,
     pub(super) payloads: Vec<Payload>,
     pub(super) incoming: Vec<Incoming>,
     pub(super) jobs: Vec<Job>,
     pub(super) next_id: u64,
-    pub(super) queue: Clipboard,
+    pub(crate) transfers: ClipboardTransfers,
+    pub(crate) text: TextClipboard,
 }
 
 impl ClipboardState {
@@ -39,17 +52,20 @@ impl ClipboardState {
         globals: &GlobalList,
         qh: &QueueHandle<Platform>,
         seats: impl Iterator<Item = WlSeat>,
-        queue: Clipboard,
+        transfers: ClipboardTransfers,
+        text: TextClipboard,
     ) -> Self {
         let mut state = Self {
             manager: DataDeviceManagerState::bind(globals, qh).ok(),
             devices: Vec::new(),
             serial: None,
+            selections: Vec::new(),
             payloads: Vec::new(),
             incoming: Vec::new(),
             jobs: Vec::new(),
             next_id: 0,
-            queue,
+            transfers,
+            text,
         };
         for seat in seats {
             state.add_seat(qh, seat);
@@ -67,10 +83,6 @@ impl ClipboardState {
         }
     }
 
-    pub fn note_serial(&mut self, seat: WlSeat, serial: u32) {
-        self.serial = Some((seat, serial));
-    }
-
     pub(crate) fn id(&mut self) -> u64 {
         self.next_id += 1;
         self.next_id
@@ -85,22 +97,15 @@ impl Platform {
         }
         let payloads = std::mem::take(&mut self.clipboard.payloads);
         for payload in payloads {
-            if let Some(drag) = payload.drag {
-                self.complete_drag_request(
-                    &drag.surface,
-                    drag.progress.done,
-                    Err(Cancellation::AppClosed.into()),
-                );
-            }
+            let drag = payload.drag;
+            self.complete_drag_request(
+                &drag.surface,
+                drag.progress.done,
+                Err(Cancellation::AppClosed.into()),
+            );
         }
-        let requests: Vec<_> = {
-            let mut queue = self.clipboard.queue.0.borrow_mut();
-            queue.closed = true;
-            queue.requests.drain(..).collect()
-        };
-        for request in requests {
-            super::Queue::reject(request);
-        }
+        self.clipboard.transfers.close();
+        self.clipboard.selections.clear();
         self.clipboard.incoming.clear();
         self.clipboard.devices.clear();
     }
@@ -153,6 +158,13 @@ impl Platform {
         self.clipboard
             .payloads
             .retain(|payload| &payload.seat != seat);
+        let cancelled: Vec<_> = (self.clipboard.selections)
+            .extract_if(.., |selection| &selection.seat == seat)
+            .map(|selection| selection.id)
+            .collect();
+        for id in cancelled {
+            (self.clipboard.transfers).handle(ClipboardEvent::SourceCancelled(id));
+        }
         self.clipboard.devices.retain(|device| &device.seat != seat);
         if self
             .clipboard
@@ -161,6 +173,7 @@ impl Platform {
             .is_some_and(|(current, _)| current == seat)
         {
             self.clipboard.serial = None;
+            self.report_selection();
         }
     }
 
@@ -169,11 +182,7 @@ impl Platform {
             .clipboard
             .jobs
             .iter()
-            .filter(|job| {
-                job.surface
-                    .as_ref()
-                    .is_some_and(|surface| !self.transfer_surface_live(surface))
-            })
+            .filter(|job| !self.transfer_surface_live(&job.surface))
             .map(|job| job.id)
             .collect();
         for id in jobs {

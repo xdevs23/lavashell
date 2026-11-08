@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::DragRequest;
+use lavashell_core::transfer::Cancellation;
 use std::{cell::Cell, rc::Rc};
 
 fn native_source(adapter: &TextTransfers, view: &mut View) -> Result<DragRequest, TestError> {
@@ -134,7 +135,7 @@ fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
                 "abc abc xyzabc"
             }
         );
-        (request.done)(Err(crate::Cancellation::SourceCancelled.into()), &mut view);
+        (request.done)(Err(Cancellation::SourceCancelled.into()), &mut view);
         assert_eq!(
             text.get(),
             if device == 1 {
@@ -174,7 +175,7 @@ fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
             .is_none()
     );
     link_receipt(&mut request, info.id)?;
-    (request.done)(Err(crate::Cancellation::SourceCancelled.into()), &mut view);
+    (request.done)(Err(Cancellation::SourceCancelled.into()), &mut view);
     assert!(!adapter.receive(received(&info, b"abc")?, &mut view));
     assert_eq!(text.get(), "abc abc xyz");
     Ok(())
@@ -245,10 +246,7 @@ fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Resul
             .is_none()
     );
     link_receipt(&mut request, info.id)?;
-    (request.done)(
-        Err(crate::Cancellation::SourceCancelled.into()),
-        &mut origin,
-    );
+    (request.done)(Err(Cancellation::SourceCancelled.into()), &mut origin);
     assert!(!adapter.receive(received(&info, b"abc")?, &mut destination));
     assert_eq!(text.get(), "abc abc xyz");
     assert_eq!(target.get(), "abc def");
