@@ -20,6 +20,8 @@ pub(crate) enum TestError {
     NotOpen,
     #[error("the session lock offered no view for the output")]
     NoLockView,
+    #[error("the surface has no panel")]
+    NoPanel,
 }
 
 pub(crate) type TestResult = Result<(), TestError>;

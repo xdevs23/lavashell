@@ -13,7 +13,8 @@ use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
 use lavashell_runtime::{
-    Choreographers, FrameScheduler, InputRouter, OutputRecords, Redraw, SurfaceRecords, Window,
+    Choreographers, FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw,
+    SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -81,9 +82,7 @@ impl Platform {
         let renderer = RendererState::new(&wayland, setup).map_err(Error::Render)?;
         let outputs = OutputState::new(globals, &qh);
         let output_layers = output_layers
-            .map(|configuration| {
-                output_layers::Runtime::new(configuration, protocols.layers.as_ref())
-            })
+            .map(|panels| output_layers::Runtime::new(panels, protocols.layers.as_ref()))
             .transpose()?;
         let mut surface_records = SurfaceRecords::new(preference_overrides);
         surface_records.change_settings(SettingsEvent::Locales(preferences::user_languages()));
@@ -108,6 +107,7 @@ impl Platform {
             sources,
             watches: BTreeMap::new(),
             surface_records,
+            panels: PanelRecords::default(),
             surface_requests: Vec::new(),
             choreographers: Choreographers::default(),
             scheduler: FrameScheduler::new(redraw),
@@ -152,13 +152,7 @@ impl Platform {
                     platform.window_role(wl, &spec.role)
                 })
             }
-            Request::Layer(options, mut view) => {
-                let context = self.layer_context(&options, &mut view)?;
-                let spec = NativeSpec::layer(&options, view, context)?;
-                self.create_surface(spec, |platform, wl, id| {
-                    platform.layer_role(wl, None, &options, context, id)
-                })
-            }
+            Request::Layer(options, view) => self.create_layer(&options, view, None),
         }
     }
 

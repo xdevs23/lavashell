@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::LayerMargins;
 use crate::app::wire_messages::requests;
 use crate::test_error::TestError;
-use focus_wire::Wire;
-use lavashell_core::prelude::{
-    Density, DpExt, Modifier, NonNegativeDp, TextMeasurer, TextStyle, Viewport,
-};
-use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
+use focus_wire::{Wire, empty_view};
+use lavashell_core::panel::{Extent, LayerMargins};
+use lavashell_core::prelude::{Density, DpExt, Modifier, NonNegativeDp, Size, State, Viewport};
+use lavashell_renderer::FrameOutcome;
+use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 
 #[test]
 fn private_wire_empty_submitted_input_cannot_grab_before_a_nonempty_frame_is_shown()
@@ -19,15 +18,15 @@ fn private_wire_empty_submitted_input_cannot_grab_before_a_nonempty_frame_is_sho
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
     wire.input = false;
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
-    assert!(layer.keyboard_enabled());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
+    assert!(wire.keyboard_granted());
     assert!(wire.focus(&mut layer)?.is_empty());
     wire.input = true;
     for frame in [FrameOutcome::Pending, FrameOutcome::Stale] {
-        assert!(wire.present(&mut layer, frame)?.is_empty());
+        assert!(wire.present(frame)?.is_empty());
         assert!(wire.focus(&mut layer)?.is_empty());
     }
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     let surface = wire.surface.id().protocol_id();
     let manager = wire.manager.id().protocol_id();
     let started = wire.focus(&mut layer)?;
@@ -52,18 +51,18 @@ fn private_wire_old_extent_blocks_acquisition_and_committed_empty_input_releases
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     wire.size = crate::logical::size((321, 101));
     assert!(wire.focus(&mut layer)?.is_empty());
-    assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
+    assert!(wire.present(FrameOutcome::Pending)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     let grab = wire.focus(&mut layer)?[0].2[0];
     wire.size = crate::logical::size((321, 141));
     wire.input = false;
-    assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
+    assert!(wire.present(FrameOutcome::Pending)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert_eq!(wire.focus(&mut layer)?, vec![(grab, 3, vec![])]);
     assert!(wire.focus(&mut layer)?.is_empty());
     Ok(())
@@ -80,7 +79,7 @@ fn private_wire_cleared_active_request_stays_blocked_across_empty_and_nonempty_s
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     let grab = wire.focus(&mut layer)?[0].2[0];
     layer
         .focus
@@ -89,7 +88,7 @@ fn private_wire_cleared_active_request_stays_blocked_across_empty_and_nonempty_s
         .cleared();
     assert_eq!(wire.flush()?, vec![(grab, 3, vec![])]);
     wire.input = false;
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
     wire.input = true;
     for frame in [
@@ -98,7 +97,7 @@ fn private_wire_cleared_active_request_stays_blocked_across_empty_and_nonempty_s
         FrameOutcome::Shown,
     ] {
         // Only a shown frame commits the surface.
-        let sent = wire.present(&mut layer, frame)?;
+        let sent = wire.present(frame)?;
         assert_eq!(sent.is_empty(), frame != FrameOutcome::Shown);
         assert!(wire.focus(&mut layer)?.is_empty());
         assert!(active.get());
@@ -137,35 +136,31 @@ fn private_wire_keyboard_changes_commit_without_geometry_and_replay_for_a_new_ro
         wire.connection.flush().map_err(Error::Flush)?;
         let initial = requests(&mut wire.peer, layer.proxy.id().protocol_id())?;
         assert!(initial.contains(&(4, vec![0])));
-        assert!(!layer.keyboard_enabled());
-        assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+        assert!(!wire.keyboard_granted());
+        assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
         visible.set(true);
         let enabled = if version >= 4 { 2 } else { 1 };
         assert_eq!(wire.commit(&mut layer)?, vec![(4, vec![enabled])]);
-        assert!(layer.keyboard_enabled());
+        assert!(wire.keyboard_granted());
         assert!(wire.commit(&mut layer)?.is_empty());
         visible.set(false);
-        assert!(!layer.keyboard_enabled());
+        assert!(!wire.keyboard_granted());
         assert_eq!(wire.commit(&mut layer)?, vec![(4, vec![0])]);
         assert!(wire.commit(&mut layer)?.is_empty());
         layer.proxy.destroy();
         wire.replace_surface();
         assert!(!wire.flush()?.is_empty());
         visible.set(true);
-        let mut replacement = wire.layer(&options)?;
+        let replacement = wire.layer(&options)?;
         wire.connection.flush().map_err(Error::Flush)?;
         let replay = requests(&mut wire.peer, replacement.proxy.id().protocol_id())?;
         assert!(replay.contains(&(4, vec![enabled])));
-        assert!(!replacement.keyboard_enabled());
+        assert!(!wire.keyboard_granted());
         wire.surface.commit();
         assert!(!wire.flush()?.is_empty());
-        assert!(!replacement.keyboard_enabled());
-        assert!(
-            !wire
-                .present(&mut replacement, FrameOutcome::Shown)?
-                .is_empty()
-        );
-        assert!(replacement.keyboard_enabled());
+        assert!(!wire.keyboard_granted());
+        assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
+        assert!(wire.keyboard_granted());
     }
     Ok(())
 }
@@ -182,10 +177,10 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     visible.set(true);
-    layer.update();
-    assert!(layer.pending);
+    wire.update(&mut layer)?;
+    assert!(!wire.keyboard_granted());
     assert_eq!(
         wire.focus(&mut layer)?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![2])]
@@ -195,15 +190,16 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
         FrameOutcome::Stale,
         FrameOutcome::Pending,
     ] {
-        assert!(wire.present(&mut layer, frame)?.is_empty());
-        layer.update();
-        assert!(layer.pending);
-        assert!(!layer.commit(&wire.surface, false));
+        assert!(wire.present(frame)?.is_empty());
+        assert_eq!(
+            wire.transaction(&mut layer, &mut empty_view(), ContentState::Stale)?,
+            Transaction::NeedsFrame
+        );
         assert!(wire.focus(&mut layer)?.is_empty());
     }
     let surface = wire.surface.id().protocol_id();
     assert_eq!(
-        wire.present(&mut layer, FrameOutcome::Shown)?,
+        wire.present(FrameOutcome::Shown)?,
         vec![(surface, 6, vec![])]
     );
     let manager = wire.manager.id().protocol_id();
@@ -217,9 +213,10 @@ fn private_wire_queued_activation_cannot_grab_until_the_content_transaction_is_s
             (grab, 2, vec![])
         ]
     );
-    layer.update();
-    assert!(!layer.pending);
-    assert!(!layer.commit(&wire.surface, true));
+    assert_eq!(
+        wire.transaction(&mut layer, &mut empty_view(), ContentState::Current)?,
+        Transaction::Settled
+    );
     assert!(wire.flush()?.is_empty());
     Ok(())
 }
@@ -243,37 +240,33 @@ fn private_wire_pending_content_keeps_a_live_grab_but_false_releases_before_any_
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     let grab = wire.focus(&mut layer)?[0].2[0];
     let taller = AxisPlacement::Start(Extent::dp(2.dp())?);
     layout.update(|layout| layout.vertical = taller);
-    layer.update();
-    assert!(layer.pending);
+    wire.update(&mut layer)?;
     assert_eq!(
         wire.flush()?,
         vec![(layer.proxy.id().protocol_id(), 0, vec![1, 2])]
     );
-    assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
+    assert!(wire.present(FrameOutcome::Pending)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
     visible.set(false);
     assert_eq!(wire.focus(&mut layer)?, vec![(grab, 3, vec![])]);
-    layer.update();
-    assert!(layer.pending);
+    wire.update(&mut layer)?;
     assert_eq!(
         wire.flush()?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![0])]
     );
     visible.set(true);
-    layer.update();
-    assert!(layer.pending);
+    wire.update(&mut layer)?;
     assert_eq!(
         wire.focus(&mut layer)?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![2])]
     );
-    assert!(wire.present(&mut layer, FrameOutcome::Stale)?.is_empty());
-    layer.update();
-    assert!(layer.pending);
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(wire.present(FrameOutcome::Stale)?.is_empty());
+    wire.update(&mut layer)?;
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert_eq!(wire.focus(&mut layer)?.len(), 3);
     Ok(())
 }
@@ -293,12 +286,13 @@ fn private_wire_initial_and_replacement_configure_commits_do_not_admit_focus()
             wire.focus(&mut layer)?,
             vec![(wire.surface.id().protocol_id(), 6, vec![])]
         );
-        layer.update();
-        assert!(layer.pending);
-        assert!(!layer.commit(&wire.surface, false));
-        assert!(wire.present(&mut layer, FrameOutcome::Pending)?.is_empty());
+        assert_eq!(
+            wire.transaction(&mut layer, &mut empty_view(), ContentState::Stale)?,
+            Transaction::NeedsFrame
+        );
+        assert!(wire.present(FrameOutcome::Pending)?.is_empty());
         assert!(wire.focus(&mut layer)?.is_empty());
-        assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+        assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
         let grab = wire.focus(&mut layer)?[0].2[0];
         if generation == 0 {
             layer.proxy.destroy();
@@ -315,12 +309,6 @@ fn private_wire_initial_and_replacement_configure_commits_do_not_admit_focus()
 #[test]
 fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refuse_commit()
 -> Result<(), TestError> {
-    struct Metrics;
-    impl TextMeasurer for Metrics {
-        fn measure(&mut self, _: &str, _: &TextStyle<Dp>, _: Dp) -> Size {
-            Size::ZERO
-        }
-    }
     let visible = State::new(false);
     let active = visible.clone();
     let options = LayerSurface::new("idle-focus")
@@ -335,10 +323,10 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
     let viewport = Viewport::new(Size::new(1.dp(), 1.dp()), Density::ONE);
     // A spacer draws nothing.
     let mut scene = RecordedScene::default();
-    (view.frame_into(viewport, &mut Metrics, &mut scene)).without_failures()?;
+    (view.frame_into(viewport, &mut NoText, &mut scene)).without_failures()?;
     assert!(scene.changes().is_empty());
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     let mut grab = None;
     for (enabled, keyboard) in [(true, 2), (false, 0)] {
         assert!(!view.needs_visual_frame());
@@ -348,19 +336,22 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
             assert_eq!(wire.focus(&mut layer)?, vec![(grab, 3, vec![])]);
         }
         // After a suboptimal frame is shown, the renderer reports the contents of the target as outdated. The
-        // test passes that value, `false`, to `update_transaction` as the renderer would.
-        layer.update_transaction(&wire.surface, &mut view, false);
+        // test passes `ContentState::Stale` to the transaction as the loop would.
+        assert_eq!(
+            wire.transaction(&mut layer, &mut view, ContentState::Stale)?,
+            Transaction::NeedsFrame
+        );
         assert_eq!(
             wire.flush()?,
             vec![(layer.proxy.id().protocol_id(), 4, vec![keyboard])]
         );
         assert!(view.needs_visual_frame());
         assert!(wire.focus(&mut layer)?.is_empty());
-        (view.frame_into(viewport, &mut Metrics, &mut scene)).without_failures()?;
+        (view.frame_into(viewport, &mut NoText, &mut scene)).without_failures()?;
         assert!(scene.changes().is_empty());
         assert!(!view.needs_visual_frame());
         assert_eq!(
-            wire.present(&mut layer, FrameOutcome::Shown)?,
+            wire.present(FrameOutcome::Shown)?,
             vec![(wire.surface.id().protocol_id(), 6, vec![])]
         );
         let focused = wire.focus(&mut layer)?;
@@ -370,7 +361,10 @@ fn private_wire_idle_role_changes_request_a_frame_when_suboptimal_contents_refus
         } else {
             assert!(focused.is_empty());
         }
-        layer.update_transaction(&wire.surface, &mut view, false);
+        assert_eq!(
+            wire.transaction(&mut layer, &mut view, ContentState::Stale)?,
+            Transaction::Settled
+        );
         assert!(!view.needs_visual_frame());
         assert!(wire.flush()?.is_empty());
     }
@@ -389,16 +383,18 @@ fn private_wire_hidden_layer_cannot_grab_and_releases_even_if_the_request_stays_
     let mut wire = Wire::new(4)?;
     let mut layer = wire.layer(&options)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(!wire.present(&mut layer, FrameOutcome::Shown)?.is_empty());
+    assert!(!wire.present(FrameOutcome::Shown)?.is_empty());
     assert!(wire.focus(&mut layer)?.is_empty());
     visible.set(true);
-    layer.update();
-    assert!(layer.pending);
+    wire.update(&mut layer)?;
     assert_eq!(
         wire.focus(&mut layer)?,
         vec![(layer.proxy.id().protocol_id(), 4, vec![2])]
     );
-    assert!(layer.commit(&wire.surface, true));
+    assert_eq!(
+        wire.transaction(&mut layer, &mut empty_view(), ContentState::Current)?,
+        Transaction::Committed
+    );
     assert_eq!(
         wire.flush()?,
         vec![(wire.surface.id().protocol_id(), 6, vec![])]

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::shape::{ShapeUpdate, SurfaceShape};
-use super::{Platform, Role, layer, open_surface};
+use super::{Platform, Role, open_surface};
 use crate::Error;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_renderer::{Drawn, FrameOutcome, PresentFrame};
-use lavashell_runtime::{ActionBatch, FrameKind, SceneSink, SchedulerInput, ViewState};
+use lavashell_runtime::{
+    ActionBatch, FrameKind, PanelContent, SceneSink, SchedulerInput, ViewState,
+};
 use smithay_client_toolkit as sctk;
 use std::time::{Duration, Instant};
 
@@ -171,17 +173,15 @@ impl Platform {
                 surface.show(id, view, &mut self.choreographers, &mut frame)?;
             }
         }
-        // The composed view can change the size of a layer that fits its content, or the layer layout can
-        // change its margins. The layer-shell requests for that are queued now, so that the compositor
-        // applies them with the buffer of this frame.
-        if let Role::Layer(layer) = &mut surface.role {
-            if changed && let Some(proposal) = layer.content_proposal() {
-                let content =
-                    lavashell_runtime::measure_content(view, proposal, self.renderer.shaper())?;
-                layer.content_measured(content);
-            }
-            layer.update();
+        // The composed view can change the size of a panel that fits its content, or the panel layout can
+        // change its margins. The requests for that are sent now, so that the compositor applies them with the
+        // buffer of this frame.
+        if changed {
+            self.panels.measure(id, view, self.renderer.shaper())?;
         }
+        let mut panel_requests = Vec::new();
+        self.panels.update(id, &mut panel_requests);
+        surface.execute_panel_requests(id, panel_requests)?;
         if let Some(bridge) = &mut surface.accessibility {
             bridge.publish(view.accessibility(), false);
         }
@@ -226,13 +226,13 @@ impl Platform {
         };
         let snapshot = surface.builder.snapshot();
         let drawn = (self.renderer.draw(id, frame, &snapshot)).map_err(Error::Draw)?;
-        if let Role::Layer(layer) = &mut surface.role {
+        if drawn.outcome == FrameOutcome::Shown {
             let input = (surface.shape.as_ref()).is_none_or(SurfaceShape::accepts_input);
-            let content = layer::Content {
+            let content = PanelContent {
                 size: viewport.size,
                 input,
             };
-            layer.presented(drawn.outcome, content);
+            self.panels.shown(id, content);
         }
         Ok(drawn)
     }

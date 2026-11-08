@@ -12,8 +12,8 @@ use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
     ActionQueue, Choreographers, FrameKind, FrameScheduler, InputFilter, InputRouter,
-    LockConfiguration, OutputRecords, RunEnd, SceneSink, SchedulerInput, SchedulerOutput,
-    SurfaceRecords, Window,
+    LockConfiguration, OutputRecords, PanelRecords, PanelsPerOutput, RunEnd, SceneSink,
+    SchedulerInput, SchedulerOutput, SurfaceRecords, Window,
 };
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
@@ -80,7 +80,7 @@ enum Request {
 
 pub struct App {
     requests: Vec<Request>,
-    output_layers: Option<output_layers::Configuration>,
+    output_layers: Option<PanelsPerOutput<LayerSurface>>,
     fonts: Fonts,
     session_lock: Option<LockConfiguration>,
     run_end: RunEnd,
@@ -236,6 +236,7 @@ pub(super) struct Platform {
     // `drop` releases the native surfaces first. `surface_records` is declared before `renderer`, so the views drop
     // after the native surfaces and before the painter.
     surface_records: SurfaceRecords,
+    panels: PanelRecords,
     /// The requests made by the runtime and executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     choreographers: Choreographers,
@@ -327,6 +328,7 @@ impl Platform {
                     let _undrawn_frame = self.started_frames.remove(&id);
                     self.output_records.forget(id);
                     self.input.forget_surface(id);
+                    self.panels.forget(id);
                     detach(&mut self.renderer, id);
                     drop(self.surfaces.remove(&id));
                     self.choreographers.retire(id);
