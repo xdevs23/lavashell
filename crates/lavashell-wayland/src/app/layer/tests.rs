@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::protocol_layout::{GeometryRequest, protocol_zone};
 use super::*;
 use crate::test_error::TestError;
 use focus_wire::empty_view;
 use lavashell_core::geometry::Size;
-use lavashell_core::panel::{ContentSize, Extent, LayerLayout, LayerMargins};
+use lavashell_core::panel::{
+    AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
+};
 use lavashell_core::reactive::State;
-use lavashell_core::units::{Dp, DpExt};
+use lavashell_core::units::{Dp, DpExt, FiniteDp};
 use lavashell_test_fixtures::NoText;
+use zwlr_layer_surface_v1::Anchor;
 
 fn margins(top: Dp, left: Dp) -> Result<LayerMargins, TestError> {
     Ok(LayerMargins {
