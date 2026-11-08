@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{pipes::nonblocking, state::SelectionSource};
-use crate::Error;
-use crate::app::Platform;
+use crate::translator::Translator;
 use lavashell_platform::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveRefusal, SelectionId, SelectionRefusal,
 };
@@ -11,24 +10,21 @@ use sctk::data_device_manager::{
 };
 use sctk::reexports::client::protocol::{wl_data_source::WlDataSource, wl_seat::WlSeat};
 use smithay_client_toolkit as sctk;
+use std::io;
 use std::os::fd::OwnedFd;
 
-impl Platform {
-    /// Executes the clipboard requests and the drag and drop requests made by the runtime.
-    pub(crate) fn submit_transfers(&mut self) {
-        for request in self.clipboard.transfers.take_requests() {
-            match request {
-                ClipboardRequest::SetSelection(id, formats) => {
-                    let result = self.offer_selection(id, formats);
-                    (self.clipboard.transfers).handle(ClipboardEvent::SelectionSet(id, result));
-                }
-                ClipboardRequest::Receive(id, format) => {
-                    let result = self.receive_selection(format);
-                    (self.clipboard.transfers).handle(ClipboardEvent::ReceiveStarted(id, result));
-                }
+impl Translator {
+    /// Executes `request` of the runtime and reports its outcome.
+    pub(crate) fn execute_clipboard(&mut self, request: ClipboardRequest) {
+        let event = match request {
+            ClipboardRequest::SetSelection(id, formats) => {
+                ClipboardEvent::SelectionSet(id, self.offer_selection(id, formats))
             }
-        }
-        self.execute_drag_requests();
+            ClipboardRequest::Receive(id, format) => {
+                ClipboardEvent::ReceiveStarted(id, self.receive_selection(format))
+            }
+        };
+        self.links.report(event);
     }
 
     /// Notes the serial of an input event of `seat`. When the input comes from another seat than the last input, the
@@ -46,7 +42,7 @@ impl Platform {
         let formats = self.selection_offer().map_or_else(Vec::new, |offer| {
             offer.with_mime_types(|types| types.iter().cloned().map(FormatId).collect())
         });
-        (self.clipboard.transfers).handle(ClipboardEvent::SelectionOffered(formats));
+        self.links.report(ClipboardEvent::SelectionOffered(formats));
     }
 
     /// The id of the selection set through `source`, or `None` for a drag source.
@@ -57,15 +53,13 @@ impl Platform {
     }
 
     /// Hands the pipe of a client that pastes the selection `id` in `format` to the runtime, which writes the
-    /// selection to it.
+    /// selection to it, or the failure to make the pipe nonblocking.
     pub(super) fn send_selection(&self, id: SelectionId, format: String, pipe: WritePipe) {
-        match nonblocking(&pipe).map_err(Error::ConfigurePipe) {
-            Ok(()) => {
-                let event = ClipboardEvent::SourceSend(id, FormatId(format), pipe.into());
-                self.clipboard.transfers.handle(event);
-            }
-            Err(error) => log::warn!("the clipboard selection was not sent: {error}"),
-        }
+        let pipe = nonblocking(&pipe)
+            .map(|()| pipe.into())
+            .map_err(io::Error::from);
+        let send = ClipboardEvent::SourceSend(id, FormatId(format), pipe);
+        self.links.report(send);
     }
 
     /// Destroys the source of the selection `id`, which the compositor cancelled.
@@ -73,7 +67,7 @@ impl Platform {
         self.clipboard
             .selections
             .retain(|selection| selection.id != id);
-        (self.clipboard.transfers).handle(ClipboardEvent::SourceCancelled(id));
+        self.links.report(ClipboardEvent::SourceCancelled(id));
     }
 
     fn offer_selection(

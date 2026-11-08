@@ -1,51 +1,84 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
 use crate::Error;
+use crate::translator::{Translator, ViewLink};
 use lavashell_platform::{Readiness, WatchEvent, WatchId, WatchRequest};
-use sctk::reexports::calloop::PostAction;
 use sctk::reexports::calloop::generic::Generic;
-use sctk::reexports::calloop::{Interest, Mode};
+use sctk::reexports::calloop::{Interest, LoopHandle, Mode, PostAction, RegistrationToken};
 use smithay_client_toolkit as sctk;
+use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;
 
-impl Platform {
-    /// Executes the watch requests made by the runtime.
-    pub(super) fn execute_watch_requests(&mut self) -> Result<(), Error> {
-        for request in self.config.watches.take_requests() {
-            match request {
-                WatchRequest::Watch(id, source, readiness) => {
-                    self.watch_descriptor(id, source, readiness)?;
+/// The event loop source of each watched file descriptor.
+#[derive(Default)]
+pub(crate) struct WatchSources(BTreeMap<WatchId, RegistrationToken>);
+
+impl Translator {
+    /// Executes `request` of the runtime on the watched file descriptors.
+    pub(crate) fn execute_watch(&mut self, request: WatchRequest) -> Result<(), Error> {
+        self.watches
+            .execute(&self.loop_handle, request, &self.links.view())
+    }
+}
+
+impl WatchSources {
+    /// Executes `request` on the event loop of `handle`. A watch reports through `view`.
+    fn execute<D>(
+        &mut self,
+        handle: &LoopHandle<'static, D>,
+        request: WatchRequest,
+        view: &ViewLink,
+    ) -> Result<(), Error> {
+        match request {
+            WatchRequest::Watch(id, source, readiness) => {
+                self.watch(handle, id, source, readiness, view.clone())
+            }
+            WatchRequest::Resume(id) => {
+                if let Some(token) = self.0.get(&id) {
+                    handle.enable(token).map_err(Error::ResumeWatch)?;
                 }
-                WatchRequest::Unwatch(id) => {
-                    if let Some(token) = self.watches.remove(&id) {
-                        self.loop_handle.remove(token);
-                    }
+                Ok(())
+            }
+            WatchRequest::Unwatch(id) => {
+                if let Some(token) = self.0.remove(&id) {
+                    handle.remove(token);
                 }
+                Ok(())
             }
         }
-        Ok(())
     }
 
-    /// Watches `source` for `readiness` and reports each time it is ready. `Unwatch` removes the source of the watch,
-    /// and dropping the source closes the descriptor.
-    fn watch_descriptor(
+    /// Watches `source` for `readiness` and reports through `view` once it is ready. The source then pauses until the
+    /// runtime handled the report and resumes the watch. Removing the source closes the descriptor.
+    fn watch<D>(
         &mut self,
+        handle: &LoopHandle<'static, D>,
         id: WatchId,
         source: OwnedFd,
         readiness: Readiness,
+        view: ViewLink,
     ) -> Result<(), Error> {
         let interest = match readiness {
             Readiness::Readable => Interest::READ,
             Readiness::Writable => Interest::WRITE,
         };
         let source = Generic::new(source, interest, Mode::Level);
-        let token = (self.loop_handle)
-            .insert_source(source, move |_, _, platform| {
-                platform.config.watches.handle(WatchEvent::Ready(id));
-                Ok(PostAction::Continue)
+        let token = handle
+            .insert_source(source, move |_, _, _| {
+                view.report(WatchEvent::Ready(id));
+                Ok(PostAction::Disable)
             })
             .map_err(|failure| Error::WatchFd(failure.error))?;
-        let _no_source_had_the_id = self.watches.insert(id, token);
+        let _no_source_had_the_id = self.0.insert(id, token);
         Ok(())
     }
+
+    /// Removes every watched source from the event loop of `handle`, which closes their descriptors.
+    pub(crate) fn remove_all<D>(&mut self, handle: &LoopHandle<'static, D>) {
+        for token in std::mem::take(&mut self.0).into_values() {
+            handle.remove(token);
+        }
+    }
 }
+
+#[cfg(test)]
+mod tests;

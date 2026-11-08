@@ -575,6 +575,15 @@
                     "package": "lavashell-core",
                     "path": "../lavashell-core"
                   },
+                  "lavashell-renderer": {
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "package": "lavashell-renderer",
+                    "path": "../lavashell-renderer"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -2600,6 +2609,7 @@
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-core",
+                  "lavashell-renderer",
                   "thiserror"
                 ],
                 "name": "lavashell-platform",
@@ -3944,7 +3954,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "360f78c9e33aebad62ce23357a8b3977eea86c865b238f221f7a34f0d6d32adb"
+        "seedHash": "706ae0be8c9c556f44374e6b8c0f420b8be16a8159f0cc435c070903192941b6"
       }
     }
   },
@@ -5084,6 +5094,7 @@
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-renderer",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
@@ -5163,7 +5174,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
-          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "num-traits",

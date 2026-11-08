@@ -3,25 +3,24 @@ mod accessibility;
 mod app;
 mod clipboard;
 mod error;
-mod failures;
 mod focus_grab;
 mod logical;
 mod preferences;
-mod surface;
 #[cfg(test)]
 mod test_bus;
 #[cfg(test)]
 mod test_error;
+mod translator;
 mod wayland_presentation;
 
 use smithay_client_toolkit as sctk;
 
-pub use app::{App, HostKey, KeyboardFocus};
-pub use error::{ControlError, Error, LayerLayoutError};
+pub use app::App;
+pub use error::{ControlError, Error, LayerLayoutError, RunError, SetupError};
 pub use lavashell_core::focus_grab::FocusGrab;
 pub use lavashell_core::output::MonitorInfo;
 pub use lavashell_core::panel::{
     AxisPlacement, ExclusiveZone, Extent, LayerLayout, LayerLevel, LayerMargins,
 };
-pub use lavashell_runtime::SessionLock;
-pub use surface::LayerSurface;
+pub use lavashell_runtime::{HostKey, KeyboardFocus, LayerSurface, SessionLock};
+pub use translator::Wayland;

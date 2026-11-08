@@ -2,10 +2,7 @@
 //! The failures that the tests of this crate return in place of a panic.
 
 use crate::{ControlError, Error, LayerLayoutError};
-use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
-use lavashell_test_fixtures::FrameFailure;
-use log::SetLoggerError;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
 use std::array::TryFromSliceError;
 use std::env::VarError;
@@ -17,10 +14,14 @@ use std::{io, sync::mpsc};
 pub(crate) enum TestError {
     #[error("the host failed")]
     Host(#[from] Error),
+    #[error("the runtime failed")]
+    Runtime(#[from] lavashell_runtime::Error),
     #[error("the renderer failed")]
     Renderer(#[from] lavashell_renderer::Error),
     #[error("the event loop failed")]
     EventLoop(#[from] calloop::Error),
+    #[error("the other end of a link is gone")]
+    LinkClosed(#[from] lavashell_actor::Closed),
     #[error("the bus failed")]
     Bus(#[from] zbus::Error),
     #[error("a property of the bus could not be set")]
@@ -49,8 +50,8 @@ pub(crate) enum TestError {
     NoUniqueName,
     #[error("the fixture received no message")]
     Receive(#[from] mpsc::RecvError),
-    #[error("the bridge closed its requests before the awaited one arrived")]
-    RequestsClosed,
+    #[error("the bridge stopped reporting events before the awaited one arrived")]
+    EventsClosed,
     #[error("the bridge sent another event than the awaited one")]
     UnexpectedEvent,
     #[error("the portal watch closed its updates before the test ended")]
@@ -71,8 +72,6 @@ pub(crate) enum TestError {
     CreateSocketPair(#[source] io::Error),
     #[error("the socket could not be made non-blocking")]
     ConfigureSocket(#[source] io::Error),
-    #[error("the layer has no panel in the runtime")]
-    NoPanel,
     #[error("the wire has no layer")]
     NoLayer,
     #[error("a request for a native surface does not fit the protocol")]
@@ -83,12 +82,6 @@ pub(crate) enum TestError {
     CreatePipe(#[source] rustix::io::Errno),
     #[error("the file is not a pipe")]
     NotPipe,
-    #[error(transparent)]
-    Failed(#[from] FrameFailure),
-    #[error("the scene could not be built")]
-    Scene(#[from] ApplyError),
-    #[error("the test process has a logger that is not the recorder of the test")]
-    Logger(#[source] &'static SetLoggerError),
 }
 
 impl<T> From<InsertError<T>> for TestError {

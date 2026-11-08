@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{drag_device, native_action, portable_action, portable_actions};
-use crate::app::Platform;
 use crate::clipboard::pipes::{PipeIdentity, nonblocking};
 use crate::clipboard::state::Offer;
+use crate::translator::Translator;
 use lavashell_core::transfer::{DragOfferInfo, DropAcceptance, TransferId};
 use lavashell_platform::{DragReceiveRefusal, DragTargetEvent, DragTargetRequest, FormatId};
 use sctk::data_device_manager::data_offer::DragOffer;
@@ -13,7 +13,8 @@ use sctk::reexports::client::protocol::{
 use smithay_client_toolkit as sctk;
 use std::os::fd::OwnedFd;
 
-impl Platform {
+impl Translator {
+    /// Reports a drag that entered `surface` on `device`. A drag is refused once the transfer ids are used up.
     pub(crate) fn drag_enter(
         &mut self,
         device: &WlDataDevice,
@@ -21,15 +22,12 @@ impl Platform {
         x: f64,
         y: f64,
     ) {
-        let Some(surface) = self.transfer_surface(surface) else {
+        let Some(surface) = self.find_surface(surface) else {
             return;
         };
-        let id = match self.clipboard.new_offer_id() {
-            Ok(id) => id,
-            Err(error) => {
-                log::warn!("the drag is refused: {error}");
-                return;
-            }
+        let Some(id) = self.clipboard.new_offer_id() else {
+            log::warn!("a drag was refused because every transfer id is used up");
+            return;
         };
         let Some(current) = self.clipboard.seat_of(device) else {
             return;
@@ -52,7 +50,7 @@ impl Platform {
             pipe: None,
         };
         let _no_offer_had_the_id = self.clipboard.offers.insert(id, entered);
-        self.drag_target_event(DragTargetEvent::Enter {
+        self.links.report(DragTargetEvent::Enter {
             device: drag_device(device),
             offer,
         });
@@ -61,7 +59,7 @@ impl Platform {
     pub(crate) fn drag_motion(&mut self, device: &WlDataDevice, x: f64, y: f64) {
         if let Some(id) = (self.clipboard.seat_of(device)).and_then(|current| current.entered) {
             let at = crate::logical::point(x, y);
-            self.drag_target_event(DragTargetEvent::Motion(id, at));
+            self.links.report(DragTargetEvent::Motion(id, at));
         }
     }
 
@@ -71,30 +69,33 @@ impl Platform {
         };
         // SCTK destroys the offer of a drag that leaves before a drop. After a drop, the drag is no longer entered.
         let _left = self.clipboard.offers.remove(&id);
-        self.drag_target_event(DragTargetEvent::Leave(id));
+        self.links.report(DragTargetEvent::Leave(id));
     }
 
     pub(crate) fn drag_drop(&mut self, device: &WlDataDevice) {
         if let Some(id) = self.clipboard.take_entered(device) {
-            self.drag_target_event(DragTargetEvent::Drop(id));
+            self.links.report(DragTargetEvent::Drop(id));
         }
     }
 
     pub(crate) fn drag_source_actions(&mut self, offer: &DragOffer) {
         if let Some(id) = self.offer_id(offer) {
             let actions = portable_actions(offer.source_actions);
-            self.drag_target_event(DragTargetEvent::ActionsChanged(id, actions));
+            self.links
+                .report(DragTargetEvent::ActionsChanged(id, actions));
         }
     }
 
     pub(crate) fn drag_selected_action(&mut self, offer: &DragOffer) {
         if let Some(id) = self.offer_id(offer) {
             let action = portable_action(offer.selected_action);
-            self.drag_target_event(DragTargetEvent::ActionSelected(id, action));
+            self.links
+                .report(DragTargetEvent::ActionSelected(id, action));
         }
     }
 
-    pub(super) fn execute_target_request(&mut self, request: DragTargetRequest) {
+    /// Executes `request` of the runtime about a drag offered to the app.
+    pub(crate) fn execute_drag_target(&mut self, request: DragTargetRequest) {
         match request {
             DragTargetRequest::Answer(id, acceptance) => {
                 if let Some(offer) = self.clipboard.offers.get(&id) {
@@ -103,7 +104,7 @@ impl Platform {
             }
             DragTargetRequest::Receive(id, format) => {
                 let pipe = self.receive_drop(id, format);
-                self.drag_target_event(DragTargetEvent::ReceiveStarted(id, pipe));
+                self.links.report(DragTargetEvent::ReceiveStarted(id, pipe));
             }
             DragTargetRequest::Finish(id) => {
                 if let Some(offer) = self.clipboard.offers.remove(&id) {

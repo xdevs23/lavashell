@@ -7,11 +7,10 @@ use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGr
 use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
-use lavashell_core::preferences::PreferenceOverrides;
-use lavashell_core::units::Density;
-use lavashell_renderer::{FrameOutcome, SurfaceControl};
-use lavashell_runtime::{PanelContent, PanelRecords, PanelRequests, PanelUpdate, SurfaceRecords};
-use lavashell_test_fixtures::NoText;
+use lavashell_core::panel::{
+    AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
+};
+use lavashell_platform::{FocusGrabEvent, FocusGrabRequest};
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
 use smithay_client_toolkit as sctk;
@@ -20,29 +19,34 @@ use std::os::unix::net::UnixStream;
 /// The surface id of the layer in the runtime.
 pub(super) const LAYER: SurfaceId = SurfaceId(0);
 
-pub(super) fn empty_view() -> View {
-    View::new(lavashell_test_fixtures::facts(), |_| {})
+type Messages = Vec<(u32, u16, Vec<u32>)>;
+
+/// The geometry of a bar across the top edge of the output, as tall as content of the size `content`, which reserves
+/// its height.
+pub(super) fn top_bar(content: Size) -> Result<PanelGeometry, TestError> {
+    let layout = LayerLayout {
+        margins: LayerMargins::default(),
+        horizontal: AxisPlacement::Fill,
+        vertical: AxisPlacement::Start(Extent::Content),
+        exclusive_zone: ExclusiveZone::LayerExtent,
+    };
+    Ok(PanelGeometry::of(layout, ContentSize::try_from(content)?))
 }
 
-/// A layer and a focus grab manager whose requests a test reads back from the other end of
-/// a socket, with the surface, the panel and the focus grab of the layer in the runtime.
+/// A layer and a focus grab manager whose requests a test reads back from the other end of a socket. The test passes
+/// the surface states and the focus grab requests that the runtime sends.
 pub(super) struct Wire {
     pub(super) connection: Connection,
     pub(super) peer: UnixStream,
-    qh: QueueHandle<Platform>,
+    qh: QueueHandle<Translator>,
     pub(super) surface: wl_surface::WlSurface,
     shell: ZwlrLayerShellV1,
     pub(super) manager: HyprlandFocusGrabManagerV1,
     compositor: wl_compositor::WlCompositor,
     client_qh: QueueHandle<wire_tests::Client>,
-    size: Size,
-    pub(super) input: bool,
-    panels: PanelRecords,
-    surfaces: SurfaceRecords,
-    grabs: Grabs,
-    state: SurfaceState,
     /// The control of the layer created last by `layer`.
     pub(super) control: Option<Control>,
+    grabs: Grabs,
 }
 
 impl Wire {
@@ -51,22 +55,14 @@ impl Wire {
         peer.set_nonblocking(true)
             .map_err(TestError::ConfigureSocket)?;
         let connection = Connection::from_socket(socket).map_err(Error::Connect)?;
-        let queue = connection.new_event_queue::<Platform>();
-        let qh = queue.handle();
-        let client_queue = connection.new_event_queue::<wire_tests::Client>();
-        let client_qh = client_queue.handle();
+        let qh = connection.new_event_queue::<Translator>().handle();
+        let client_qh = connection.new_event_queue::<wire_tests::Client>().handle();
         let registry = connection.display().get_registry(&client_qh, ());
         let compositor = registry.bind::<wl_compositor::WlCompositor, _, _>(1, 4, &client_qh, ());
         let shell = registry.bind::<ZwlrLayerShellV1, _, _>(2, version, &qh, ());
         let manager = registry.bind::<HyprlandFocusGrabManagerV1, _, _>(3, 1, &qh, ());
         let surface = compositor.create_surface(&client_qh, ());
-        let size = crate::logical::size((1, 1));
-        let mut surfaces = SurfaceRecords::new(PreferenceOverrides::default());
-        let opened = surfaces
-            .open(empty_view(), size, Density::ONE, None, String::new())
-            .map_err(Error::from)?;
-        assert_eq!(opened, LAYER);
-        let mut wire = Self {
+        Ok(Self {
             connection,
             peer,
             qh,
@@ -76,40 +72,27 @@ impl Wire {
             manager,
             compositor,
             client_qh,
-            size,
-            input: true,
-            panels: PanelRecords::default(),
-            surfaces,
-            state: SurfaceState::default(),
             control: None,
-        };
-        wire.configure();
-        Ok(wire)
+        })
     }
 
-    /// Reports the configure event of the compositor with the size of the layer.
-    fn configure(&mut self) {
-        let event = SurfaceEvent::Configured {
-            width: Some(self.size.width),
-            height: Some(self.size.height),
-        };
-        assert_eq!(self.surfaces.handle(LAYER, event), None);
-    }
-
-    /// Gives the layer the size `size`, in logical pixels, as the compositor does with a configure event.
-    pub(super) fn resize(&mut self, size: (u32, u32)) {
-        self.size = crate::logical::size(size);
-        self.configure();
-    }
-
-    /// Creates the layer of `options` with empty content, and opens its panel in the runtime in place of an
-    /// earlier one.
-    pub(super) fn layer(&mut self, options: &LayerSurface) -> Result<Runtime, TestError> {
-        let panel = Panel::new(options.panel.clone(), &mut empty_view(), &mut NoText)
-            .map_err(Error::from)?;
-        let geometry = panel.geometry();
+    /// Creates the layer of a panel with `geometry` and `keyboard` on the surface, with the control of the layer.
+    pub(super) fn layer(
+        &mut self,
+        geometry: PanelGeometry,
+        keyboard: KeyboardMode,
+    ) -> Result<Runtime, TestError> {
         let layout = ProtocolLayout::new(geometry)?;
-        let proxy = create(&self.shell, &self.surface, None, options, &self.qh, LAYER);
+        let level = LayerLevel::Top;
+        let proxy = create(
+            &self.shell,
+            &self.surface,
+            None,
+            level,
+            "wire",
+            &self.qh,
+            LAYER,
+        );
         let objects = SurfaceObjects {
             connection: self.connection.clone(),
             wl: self.surface.clone(),
@@ -121,162 +104,43 @@ impl Wire {
         };
         let control = Control::new(LAYER, objects, role_state(geometry), self.qh.clone());
         self.control = Some(control);
-        self.state = SurfaceState::default();
-        let layer = Runtime::new(proxy, options, layout, panel.keyboard_mode());
-        self.panels.open(LAYER, panel);
-        if let Some(grab) = &options.focus_grab {
-            self.grabs.open(LAYER, grab.clone());
-        }
-        Ok(layer)
+        Ok(Runtime::new(proxy, layout, keyboard))
     }
 
-    /// Retires `layer` as the app does when the surface closes. The runtime removes the panel and the focus grab.
-    /// The layer role is destroyed.
-    pub(super) fn retire(&mut self, layer: &Runtime) -> Result<(), TestError> {
-        layer.proxy.destroy();
-        self.panels.forget(LAYER);
-        let surface = &self.surface;
-        self.grabs.forget(LAYER, &self.qh, |_| Some(surface))?;
-        Ok(())
-    }
-
-    /// Sends the keyboard mode set by the runtime for the panel and the surface state with the geometry of the panel,
-    /// as the frame of a layer does before its present.
-    pub(super) fn update(&mut self, layer: &Runtime) -> Result<(), TestError> {
-        send_keyboard(layer, self.panels.update(LAYER));
-        self.build_state();
-        self.send_state()
-    }
-
-    /// Applies the geometry of the panel to the surface state, as the scene builder does with the state that the app
-    /// sends before a frame or a commit without a frame.
-    fn build_state(&mut self) {
-        if let Some(geometry) = self.panels.geometry_change(LAYER) {
-            self.state.apply(geometry);
-        }
-    }
-
-    /// Sends the requests for the parts of `geometry` that differ from the geometry applied last.
-    pub(super) fn send_geometry(&mut self, geometry: PanelGeometry) -> Result<(), TestError> {
-        self.state.apply(SurfaceChange::Panel(geometry));
-        self.send_state()
-    }
-
-    fn send_state(&mut self) -> Result<(), TestError> {
+    /// Sends the requests for the parts of `state` that differ from the state applied last.
+    pub(super) fn send_state(&mut self, state: &SurfaceState) -> Result<(), TestError> {
         let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
-        control.send_state(&self.state)?;
+        control.send_state(state)?;
         Ok(())
     }
 
-    /// Runs the transaction of the panel with `view` while the host shows `content`, as the loop does before a
-    /// render.
-    pub(super) fn transaction(
-        &mut self,
-        layer: &Runtime,
-        view: &mut View,
-        content: ContentState,
-    ) -> Result<Transaction, TestError> {
-        let PanelUpdate {
-            keyboard,
-            transaction,
-        } = self.panels.update_transaction(LAYER, content);
-        send_keyboard(layer, keyboard);
-        match transaction {
-            Transaction::Settled | Transaction::Committing => {}
-            Transaction::NeedsFrame => view.invalidate(),
-            Transaction::Committed => {
-                self.build_state();
-                let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
-                control.commit_state(&self.state)?;
-                let requests = self.requests()?;
-                self.panels.committed(LAYER, requests);
-            }
-        }
-        Ok(transaction)
-    }
-
-    /// The panel requests that a commit of the built surface state applies.
-    fn requests(&self) -> Result<PanelRequests, TestError> {
-        (self.panels.requests(LAYER, &self.state)).ok_or(TestError::NoPanel)
-    }
-
-    pub(super) fn keyboard_granted(&self) -> bool {
-        self.panels.get(LAYER).is_some_and(Panel::keyboard_granted)
-    }
-
-    pub(super) fn flush(&mut self) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
+    pub(super) fn flush(&mut self) -> Result<Messages, TestError> {
         self.connection.flush().map_err(Error::Flush)?;
         messages(&mut self.peer)
     }
 
-    pub(super) fn commit(&mut self, layer: &Runtime) -> Result<Vec<(u16, Vec<u32>)>, TestError> {
-        let transaction = self.transaction(layer, &mut empty_view(), ContentState::Current)?;
-        let messages = self.flush()?;
-        let surface = self.surface.id().protocol_id();
-        let commits: Vec<_> = messages
-            .iter()
-            .filter(|(id, _, _)| *id == surface)
-            .collect();
-        if transaction == Transaction::Committed {
-            assert_eq!(commits, vec![&(surface, 6, vec![])]);
-        } else {
-            assert!(messages.is_empty());
-        }
-        let role = layer.proxy.id().protocol_id();
-        Ok(messages
-            .into_iter()
-            .filter_map(|(id, opcode, words)| (id == role).then_some((opcode, words)))
-            .collect())
-    }
-
-    /// Updates the focus grab of the layer, as the loop does after a render, and returns the requests sent.
-    pub(super) fn focus(&mut self) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
+    /// Executes `request` of the runtime on the grabs of the layer, and returns the requests sent.
+    pub(super) fn execute(&mut self, request: FocusGrabRequest) -> Result<Messages, TestError> {
         let surface = &self.surface;
-        self.grabs
-            .update(&self.panels, &self.surfaces, &self.qh, |_| Some(surface))?;
+        self.grabs.execute(request, &self.qh, |_| Some(surface))?;
         self.flush()
     }
 
-    /// Reports that the compositor cleared the focus grab of the layer.
-    pub(super) fn clear_focus(&mut self) {
-        self.grabs.cleared(LAYER);
+    /// Ends the grab of the layer as the compositor clears it, and returns the event reported for the clear.
+    pub(super) fn clear_focus(&mut self) -> FocusGrabEvent {
+        self.grabs.cleared(LAYER)
     }
 
-    /// Reports that the compositor cleared a grab other than the one that the layer holds, and returns that grab.
-    pub(super) fn clear_focus_from_other_grab(&mut self) -> HyprlandFocusGrabV1 {
+    /// Ends the grab of the layer when the compositor clears another grab, and returns that grab with the event
+    /// reported for the clear.
+    pub(super) fn clear_other_grab(&mut self) -> (HyprlandFocusGrabV1, Option<FocusGrabEvent>) {
         let other = self.manager.create_grab(&self.qh, LAYER);
-        self.grabs.cleared_by(LAYER, &other);
-        other
-    }
-
-    pub(super) fn present(
-        &mut self,
-        frame: FrameOutcome,
-    ) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
-        // This fixture has no renderer. The test builds the surface state of the frame and commits the surface where
-        // the renderer commits a shown frame, then reports the frame to the runtime, as the app does after the
-        // renderer presents.
-        self.build_state();
-        if frame == FrameOutcome::Shown {
-            self.surface.commit();
-            let content = PanelContent {
-                size: self.size,
-                input: self.input,
-            };
-            let requests = self.requests()?;
-            self.panels.shown(LAYER, content, requests);
-        }
-        self.flush()
+        let cleared = self.grabs.cleared_by(LAYER, &other);
+        (other, cleared)
     }
 
     pub(super) fn replace_surface(&mut self) {
         self.surface.destroy();
         self.surface = self.compositor.create_surface(&self.client_qh, ());
-    }
-}
-
-fn send_keyboard(layer: &Runtime, keyboard: Option<KeyboardMode>) {
-    if let Some(keyboard) = keyboard {
-        layer.send_keyboard(keyboard);
     }
 }

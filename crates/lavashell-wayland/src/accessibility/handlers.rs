@@ -1,29 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::translator::ViewLink;
 use accesskit::{ActionHandler, ActivationHandler, DeactivationHandler, TreeUpdate};
 use lavashell_actor::Latest;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::AccessibilityEvent;
-use sctk::reexports::calloop::channel::Sender;
-use smithay_client_toolkit as sctk;
 use std::sync::Arc;
 
 pub(super) type SharedSnapshot = Arc<Latest<TreeUpdate>>;
 
 pub(super) struct Activation {
     surface: SurfaceId,
-    events: Sender<AccessibilityEvent>,
+    view: ViewLink,
     snapshot: SharedSnapshot,
 }
 
 impl Activation {
-    pub(super) fn new(
-        surface: SurfaceId,
-        events: Sender<AccessibilityEvent>,
-        snapshot: SharedSnapshot,
-    ) -> Self {
+    pub(super) fn new(surface: SurfaceId, view: ViewLink, snapshot: SharedSnapshot) -> Self {
         Self {
             surface,
-            events,
+            view,
             snapshot,
         }
     }
@@ -32,54 +27,50 @@ impl Activation {
 impl ActivationHandler for Activation {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
         let snapshot = self.snapshot.read().map(Arc::unwrap_or_clone);
-        // A channel event wakes calloop even when no visual frame or scene frame is due.
-        let activated = AccessibilityEvent::Activate(self.surface);
-        if self.events.send(activated).is_err() {
-            log::debug!("an accessibility request arrived after the app closed");
-        }
+        self.view.report(AccessibilityEvent::Activate(self.surface));
         snapshot
     }
 }
 
 pub(super) struct Actions {
     surface: SurfaceId,
-    events: Sender<AccessibilityEvent>,
+    view: ViewLink,
 }
 
 impl Actions {
-    pub(super) fn new(surface: SurfaceId, events: Sender<AccessibilityEvent>) -> Self {
-        Self { surface, events }
+    pub(super) fn new(surface: SurfaceId, view: ViewLink) -> Self {
+        Self { surface, view }
     }
 }
 
 impl ActionHandler for Actions {
     fn do_action(&mut self, request: accesskit::ActionRequest) {
-        if self
-            .events
-            .send(AccessibilityEvent::Action(self.surface, request))
-            .is_err()
-        {
-            log::debug!("an accessibility request arrived after the app closed");
-        }
+        self.view
+            .report(AccessibilityEvent::Action(self.surface, request));
     }
 }
 
 pub(super) struct Deactivation {
     surface: SurfaceId,
-    events: Sender<AccessibilityEvent>,
+    view: ViewLink,
+    snapshot: SharedSnapshot,
 }
 
 impl Deactivation {
-    pub(super) fn new(surface: SurfaceId, events: Sender<AccessibilityEvent>) -> Self {
-        Self { surface, events }
+    pub(super) fn new(surface: SurfaceId, view: ViewLink, snapshot: SharedSnapshot) -> Self {
+        Self {
+            surface,
+            view,
+            snapshot,
+        }
     }
 }
 
 impl DeactivationHandler for Deactivation {
+    /// Drops the tree stored for the assistive technologies before the view learns that none reads the surface.
     fn deactivate_accessibility(&mut self) {
-        let deactivated = AccessibilityEvent::Deactivate(self.surface);
-        if self.events.send(deactivated).is_err() {
-            log::debug!("an accessibility request arrived after the app closed");
-        }
+        self.snapshot.clear();
+        self.view
+            .report(AccessibilityEvent::Deactivate(self.surface));
     }
 }

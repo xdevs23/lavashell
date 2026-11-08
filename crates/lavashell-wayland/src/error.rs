@@ -1,24 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_actor::{Closed, JoinError, SpawnError};
 use lavashell_core::geometry::{Rect, Size};
-use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
-use lavashell_core::view::FrameError;
-use lavashell_renderer::{InputSizeError, OutlineError};
-use lavashell_runtime::{RendererError, RendererStopped};
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
 use sctk::reexports::client::ConnectError;
 use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
+use std::io;
 use std::num::TryFromIntError;
-use std::sync::Arc;
 
-/// A failure of the Wayland host, named after the operation that failed.
+/// A setup of an app that cannot run on Wayland, named after the part of the setup that is wrong.
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum SetupError {
     #[error("the app has a session lock already")]
     SessionLockConfigured,
     #[error("the app has a per-output layer factory already")]
@@ -29,8 +24,13 @@ pub enum Error {
     MinimumWindowSize(Size),
     #[error("the app did not request any surface")]
     NoSurfaces,
-    #[error(transparent)]
-    Runtime(#[from] lavashell_runtime::Error),
+}
+
+/// A failure of the Wayland host, named after the operation that failed.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("the runtime requested a window whose minimum size {0:?} does not fit the protocol")]
+    MinimumWindowSize(Size),
     #[error("the connection to the compositor could not be opened")]
     Connect(#[source] ConnectError),
     #[error("the globals of the compositor could not be read")]
@@ -39,14 +39,6 @@ pub enum Error {
     CreateEventLoop(#[source] calloop::Error),
     #[error("the Wayland connection could not join the event loop")]
     WatchConnection(#[source] calloop::Error),
-    #[error("the accessibility requests could not join the event loop")]
-    WatchAccessibility(#[source] calloop::Error),
-    #[error("the reports of the scene builder could not join the event loop")]
-    WatchScene(#[source] calloop::Error),
-    #[error("the outputs of the frame scheduler could not join the event loop")]
-    WatchScheduler(#[source] calloop::Error),
-    #[error("the reports of the renderer could not join the event loop")]
-    WatchRenderer(#[source] calloop::Error),
     #[error("the system preferences could not join the event loop")]
     WatchPreferences(#[source] calloop::Error),
     #[error("the watch of the system preferences could not be created")]
@@ -55,8 +47,22 @@ pub enum Error {
     SchedulePreferenceWatch(#[source] ExecutorDestroyed),
     #[error("a file descriptor could not join the event loop")]
     WatchFd(#[source] calloop::Error),
+    #[error("a watched file descriptor could not be watched again")]
+    ResumeWatch(#[source] calloop::Error),
     #[error("the event loop failed to dispatch")]
     DispatchEvents(#[source] calloop::Error),
+    #[error("the wake for the requests of the runtime could not be created")]
+    CreateRequestWake(#[source] io::Error),
+    #[error("the requests of the runtime could not join the event loop")]
+    WatchRequests(#[source] calloop::Error),
+    #[error("the requests of the runtime could not be paused")]
+    PauseRequests(#[source] calloop::Error),
+    #[error("the requests of the runtime could not be resumed")]
+    ResumeRequests(#[source] calloop::Error),
+    #[error("the socket of the connection could not be duplicated")]
+    DuplicateSocket(#[source] io::Error),
+    #[error("the writability of the connection could not join the event loop")]
+    WatchWritable(#[source] calloop::Error),
     #[error("the requests could not be sent to the compositor")]
     Flush(#[source] WaylandError),
     #[error("wl_shm could not be bound")]
@@ -65,38 +71,16 @@ pub enum Error {
     BindCompositor(#[source] BindError),
     #[error("ext-session-lock-v1 could not be bound")]
     BindSessionLock(#[source] BindError),
-    #[error("an output has no id from the output state")]
-    OutputWithoutId,
     #[error("the compositor offers no xdg-shell")]
     NoXdgShell,
     #[error("the compositor offers no layer-shell")]
     NoLayerShell,
-    #[error("the renderer could not start")]
-    StartRenderer(#[source] SpawnError<RendererError<ControlError>>),
-    #[error("the renderer failed")]
-    RunRenderer(#[source] JoinError<RendererError<ControlError>>),
-    #[error("the renderer stopped")]
-    RendererStopped(#[from] RendererStopped),
-    #[error("the shaper that measures text for the views could not be created")]
-    CreateShaper(#[source] lavashell_renderer::Error),
+    #[error("the runtime requested the lock surface {0:?} while the session is not locked")]
+    LockSurfaceWithoutLock(SurfaceId),
+    #[error("the runtime requested an unlock while the session is not locked")]
+    UnlockWithoutLock,
     #[error("the layout of a new layer does not fit the protocol")]
     LayerLayout(#[source] LayerLayoutError),
-    #[error("a contour of a window shape is not a valid polygon")]
-    ShapeContour(#[from] PointsError),
-    #[error("the path of a window shape could not be built")]
-    ShapePath(#[source] OutlineError),
-    #[error("the input region of a window shape could not be computed")]
-    ShapeInput(#[source] InputSizeError),
-    #[error("a surface could not show a frame of its view")]
-    ShowScene(#[source] FrameError<Closed>),
-    #[error("the scene builder stopped")]
-    SceneStopped,
-    #[error("the choreographer or the scene builder failed")]
-    SceneFailed(#[source] Arc<lavashell_runtime::Error>),
-    #[error("the frame scheduler stopped")]
-    SchedulerStopped,
-    #[error("surface {0:?} is not open")]
-    SurfaceNotOpen(SurfaceId),
     #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
     PanelWithoutLayer(SurfaceId),
     #[error(
@@ -105,10 +89,15 @@ pub enum Error {
     FocusGrabWithoutSurface(SurfaceId),
     #[error("the serial of an input event does not fit a Wayland serial")]
     ProtocolSerial(#[source] TryFromIntError),
-    #[error("the transfer pipe could not be made non-blocking")]
-    ConfigurePipe(#[source] rustix::io::Errno),
-    #[error("a new drag offer has a number too large for a transfer id")]
-    NumberDragOffer,
+}
+
+/// A failure of a run of an app on Wayland.
+#[derive(Debug, thiserror::Error)]
+pub enum RunError {
+    #[error("the app is not set up to run")]
+    Setup(#[source] SetupError),
+    #[error("the run of the app failed")]
+    Run(#[source] lavashell_runtime::RunError<Error, ControlError>),
 }
 
 /// A failure of a request for the size or the state of a native surface, sent with a frame or with a commit without a

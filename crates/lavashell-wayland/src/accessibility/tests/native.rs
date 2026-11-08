@@ -4,7 +4,7 @@
 
 use super::*;
 use accesskit::{ActionData, ActionRequest, TextPosition, TextSelection};
-use sctk::reexports::calloop::{EventLoop, channel};
+use lavashell_actor::{Closed, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use zbus::blocking::{Connection, MessageIterator, Proxy, connection::Builder};
@@ -12,11 +12,10 @@ use zbus::zvariant::OwnedObjectPath;
 
 type Address = (String, OwnedObjectPath);
 
-/// The requests that the bridge sent to the event loop, and whether the bridge closed the channel of those requests.
-#[derive(Default)]
-struct Requests {
+/// The events that the bridge reported to the view, and those among them that the test has not waited for yet.
+struct Reported {
+    view: Receiver<PlatformEvent>,
     events: Vec<AccessibilityEvent>,
-    closed: bool,
 }
 
 struct Status(Arc<AtomicBool>);
@@ -90,18 +89,18 @@ fn proxy<'a>(
 }
 
 fn wait_event(
-    loop_: &mut EventLoop<Requests>,
-    requests: &mut Requests,
+    reported: &mut Reported,
     predicate: impl Fn(&AccessibilityEvent) -> bool,
 ) -> Result<AccessibilityEvent, TestError> {
     loop {
-        if let Some(index) = requests.events.iter().position(&predicate) {
-            return Ok(requests.events.remove(index));
+        if let Some(index) = reported.events.iter().position(&predicate) {
+            return Ok(reported.events.remove(index));
         }
-        if requests.closed {
-            return Err(TestError::RequestsClosed);
-        }
-        loop_.dispatch(None, requests)?;
+        let arrived = reported
+            .view
+            .take()
+            .map_err(|Closed| TestError::EventsClosed)?;
+        reported.events.extend(accessibility_events(arrived));
     }
 }
 
@@ -169,17 +168,14 @@ fn child() -> Result<(), TestError> {
     let (_status, _registry, embeds) = serve_fixture(&address)?;
     let client = Builder::address(address.as_str())?.build()?;
     let mut signals = signals(&client)?;
-    let mut loop_: EventLoop<Requests> = EventLoop::try_new()?;
-    let (sender, receiver) = channel::channel();
-    let source = loop_
-        .handle()
-        .insert_source(receiver, |event, (), requests| match event {
-            channel::Event::Msg(event) => requests.events.push(event),
-            channel::Event::Closed => requests.closed = true,
-        })?;
-    let mut bridge = Bridge::new(SurfaceId(0), sender);
-    let mut requests = Requests::default();
-    let activation = wait_event(&mut loop_, &mut requests, |event| {
+    let (sender, view) = mailbox::<PlatformEvent>();
+    let mut bridge = Bridge::new(SurfaceId(0), ViewLink::new(sender.outlet(|event| event)));
+    drop(sender);
+    let mut reported = Reported {
+        view,
+        events: Vec::new(),
+    };
+    let activation = wait_event(&mut reported, |event| {
         matches!(event, AccessibilityEvent::Activate(_))
     })?;
     assert!(matches!(
@@ -198,7 +194,7 @@ fn child() -> Result<(), TestError> {
     let window = windows.remove(0);
     let nodes = children(&client, &window)?;
     assert_eq!(nodes.len(), 2);
-    check_button(&client, &nodes[0], &mut bridge, &mut loop_, &mut requests)?;
+    check_button(&client, &nodes[0], &mut bridge, &mut reported)?;
     let text = &nodes[1];
     let text_proxy = proxy(&client, text, "org.a11y.atspi.Text")?;
     assert_eq!(
@@ -208,7 +204,7 @@ fn child() -> Result<(), TestError> {
     assert_eq!(text_proxy.get_property::<i32>("CharacterCount")?, 3);
     let selection: bool = text_proxy.call("SetSelection", &(0i32, 1i32, 3i32))?;
     assert!(selection);
-    let AccessibilityEvent::Action(_, action) = wait_event(&mut loop_, &mut requests, |event| {
+    let AccessibilityEvent::Action(_, action) = wait_event(&mut reported, |event| {
         matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
@@ -232,7 +228,7 @@ fn child() -> Result<(), TestError> {
         }
     );
     text_navigation(&text_proxy, &mut signals, &mut bridge)?;
-    lifecycle(&client, &mut loop_, &mut requests, &mut bridge, initial)?;
+    lifecycle(&client, &mut reported, &mut bridge, initial)?;
     // Reactivation reconnects the accessibility bus and registers a fresh unique name.
     let app = embeds.recv()?;
     let _window = wait_for(
@@ -242,7 +238,6 @@ fn child() -> Result<(), TestError> {
     )?;
     drop(bridge);
     let _no_window = wait_for(&mut signals, || children(&client, &app), Vec::is_empty)?;
-    loop_.handle().remove(source);
     eprintln!(
         "AT-SPI private bus passed: name, state, click, Unicode selection, word/line navigation, wake, lifecycle"
     );
@@ -254,8 +249,7 @@ fn check_button(
     client: &Connection,
     button: &Address,
     bridge: &mut Bridge,
-    loop_: &mut EventLoop<Requests>,
-    requests: &mut Requests,
+    reported: &mut Reported,
 ) -> Result<(), TestError> {
     let accessible = proxy(client, button, "org.a11y.atspi.Accessible")?;
     assert_eq!(accessible.get_property::<String>("Name")?, "Start");
@@ -268,7 +262,7 @@ fn check_button(
     let accepted: bool =
         proxy(client, button, "org.a11y.atspi.Action")?.call("DoAction", &(0i32,))?;
     assert!(accepted);
-    let AccessibilityEvent::Action(_, action) = wait_event(loop_, requests, |event| {
+    let AccessibilityEvent::Action(_, action) = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
@@ -277,7 +271,7 @@ fn check_button(
     // The bridge queues the click action before it replies to `DoAction`. An action caused by the earlier focus
     // changes would have been queued before the click, so the queue would contain it now.
     assert!(
-        !requests
+        !reported
             .events
             .iter()
             .any(|event| matches!(event, AccessibilityEvent::Action(_, _)))
@@ -333,23 +327,21 @@ fn text_navigation(
 
 fn lifecycle(
     client: &Connection,
-    loop_: &mut EventLoop<Requests>,
-    requests: &mut Requests,
+    reported: &mut Reported,
     bridge: &mut Bridge,
     initial: TreeUpdate,
 ) -> Result<(), TestError> {
     let status = Proxy::new(client, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Status")?;
     status.set_property("IsEnabled", false)?;
-    let deactivation = wait_event(loop_, requests, |event| {
+    let deactivation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Deactivate(_))
     })?;
     assert!(matches!(
         deactivation,
         AccessibilityEvent::Deactivate(SurfaceId(0))
     ));
-    bridge.deactivate();
     status.set_property("IsEnabled", true)?;
-    let activation = wait_event(loop_, requests, |event| {
+    let activation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Activate(_))
     })?;
     assert!(matches!(

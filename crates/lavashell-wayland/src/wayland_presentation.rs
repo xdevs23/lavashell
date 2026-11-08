@@ -8,7 +8,7 @@ use smithay_client_toolkit as sctk;
 use std::ffi::CStr;
 
 /// The presentation backend for the surfaces on one Wayland display.
-pub(crate) struct WaylandPresentation {
+pub struct WaylandPresentation {
     display: Backend,
 }
 

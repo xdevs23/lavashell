@@ -75,7 +75,7 @@ fn platform() -> PlatformFacts {
     }
 }
 
-fn main() -> Result<(), lavashell::wayland::Error> {
+fn main() -> Result<(), lavashell::wayland::RunError> {
     let window = Window::new("Counter", "org.example.Counter");
     App::new(platform()).run(|app| app.window(window, counter))
 }

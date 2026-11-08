@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::pipes::PipeIdentity;
-use crate::Error;
-use crate::app::Platform;
+use crate::translator::Translator;
 use lavashell_core::transfer::TransferId;
 use lavashell_platform::{ClipboardEvent, DragSourceId, DragTargetEvent, SelectionId};
-use lavashell_runtime::{ClipboardTransfers, TextClipboard};
 use sctk::data_device_manager::data_offer::DragOffer;
 use sctk::data_device_manager::data_source::{CopyPasteSource, DragSource};
 use sctk::data_device_manager::{DataDeviceManagerState, data_device::DataDevice};
@@ -51,17 +49,13 @@ pub(crate) struct ClipboardState {
     pub(super) offers: BTreeMap<TransferId, Offer>,
     next_offer_id: u64,
     pub(super) drags: BTreeMap<DragSourceId, SourceDrag>,
-    pub(crate) transfers: ClipboardTransfers,
-    pub(crate) text: TextClipboard,
 }
 
 impl ClipboardState {
     pub fn new(
         globals: &GlobalList,
-        qh: &QueueHandle<Platform>,
+        qh: &QueueHandle<Translator>,
         seats: impl Iterator<Item = WlSeat>,
-        transfers: ClipboardTransfers,
-        text: TextClipboard,
     ) -> Self {
         let mut state = Self {
             manager: DataDeviceManagerState::bind(globals, qh).ok(),
@@ -71,8 +65,6 @@ impl ClipboardState {
             offers: BTreeMap::new(),
             next_offer_id: 0,
             drags: BTreeMap::new(),
-            transfers,
-            text,
         };
         for seat in seats {
             state.add_seat(qh, seat);
@@ -80,7 +72,7 @@ impl ClipboardState {
         state
     }
 
-    pub fn add_seat(&mut self, qh: &QueueHandle<Platform>, seat: WlSeat) {
+    pub fn add_seat(&mut self, qh: &QueueHandle<Translator>, seat: WlSeat) {
         if let Some(manager) = &self.manager {
             self.devices.push(SeatTransfers {
                 device: manager.get_data_device(qh, &seat),
@@ -91,30 +83,22 @@ impl ClipboardState {
         }
     }
 
-    pub(super) fn new_offer_id(&mut self) -> Result<TransferId, Error> {
+    /// A transfer id given to no drag before, or `None` once every id was given.
+    pub(super) fn new_offer_id(&mut self) -> Option<TransferId> {
         let id = TransferId(self.next_offer_id);
-        self.next_offer_id = id.0.checked_add(1).ok_or(Error::NumberDragOffer)?;
-        Ok(id)
+        self.next_offer_id = id.0.checked_add(1)?;
+        Some(id)
     }
 }
 
-impl Platform {
-    pub(crate) fn shutdown_transfers(&mut self) {
-        self.close_drags();
-        self.clipboard.transfers.close();
-        self.clipboard.selections.clear();
-        self.clipboard.offers.clear();
-        self.clipboard.drags.clear();
-        self.clipboard.devices.clear();
-    }
-
+impl Translator {
     pub(crate) fn remove_transfer_seat(&mut self, seat: &WlSeat) {
         let offers: Vec<_> = (self.clipboard.offers)
             .extract_if(.., |_, offer| &offer.seat == seat)
             .collect();
         for (id, offer) in offers {
             offer.native.destroy();
-            self.drag_target_event(DragTargetEvent::Cancelled(id));
+            self.links.report(DragTargetEvent::Cancelled(id));
         }
         for device in self
             .clipboard
@@ -132,7 +116,7 @@ impl Platform {
             .map(|selection| selection.id)
             .collect();
         for id in cancelled {
-            (self.clipboard.transfers).handle(ClipboardEvent::SourceCancelled(id));
+            self.links.report(ClipboardEvent::SourceCancelled(id));
         }
         self.clipboard.devices.retain(|device| &device.seat != seat);
         if self

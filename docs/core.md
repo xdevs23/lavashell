@@ -23,7 +23,7 @@ enum Error {
     #[error("cannot decode an icon")]
     Icon(#[from] lavashell_lucide::Error),
     #[error("the app failed")]
-    App(#[from] lavashell::wayland::Error),
+    App(#[from] lavashell::wayland::RunError),
 }
 
 fn main() -> Result<(), Error> {

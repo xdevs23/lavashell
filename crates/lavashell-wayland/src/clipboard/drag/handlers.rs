@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::app::Platform;
+use crate::translator::Translator;
 use sctk::{
     data_device_manager::{
         data_device::DataDeviceHandler,
@@ -14,7 +14,7 @@ use sctk::{
 };
 use smithay_client_toolkit as sctk;
 
-impl DataDeviceHandler for Platform {
+impl DataDeviceHandler for Translator {
     fn enter(
         &mut self,
         _: &Connection,
@@ -51,7 +51,7 @@ impl DataDeviceHandler for Platform {
     }
 }
 
-impl DataOfferHandler for Platform {
+impl DataOfferHandler for Translator {
     fn source_actions(
         &mut self,
         _: &Connection,

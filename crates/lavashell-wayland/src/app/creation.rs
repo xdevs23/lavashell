@@ -1,73 +1,75 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::{Control, RoleControl, SurfaceObjects};
+use super::layer::{self, ProtocolLayout};
 use super::owned_wl_surface::OwnedWlSurface;
-use super::render::FrameProgress;
-use super::{Platform, Role, Surface, destroy_objects};
+use super::{NativeRole, Surface, destroy_objects};
 use crate::Error;
+use crate::translator::Translator;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
-use lavashell_core::units::Density;
-use lavashell_core::view::View;
-use lavashell_platform::Appearance;
+use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
 use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
-use lavashell_runtime::{DragRegion, RendererInput, SchedulerInput, SurfaceShape, WindowShape};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
+use std::time::Duration;
 
-/// The view and the settings of a new native surface, apart from its role.
-pub(super) struct NativeSpec {
-    pub view: View,
-    pub size: (u32, u32),
-    pub appearance: Appearance,
-    pub shape: Option<WindowShape>,
-    pub drag_region: Option<DragRegion>,
-    pub accessible_name: String,
-    /// The state of the surface sent to the host with its role.
-    pub role_state: SurfaceState,
-}
+impl Translator {
+    /// Executes a request of the runtime for a native surface. A destroyed surface reports no more events and
+    /// detaches from the renderer. The native surface remains until `Release` arrives, after nothing presents to it
+    /// anymore.
+    pub(crate) fn execute_surface(&mut self, request: SurfaceRequest) -> Result<(), Error> {
+        match request {
+            SurfaceRequest::Create {
+                surface,
+                spec,
+                gpu_budget,
+            } => self.create_surface(surface, &spec, gpu_budget),
+            SurfaceRequest::Destroy(surface) => {
+                if let Some(retired) = self.surfaces.retire(surface) {
+                    retired.accessibility = None;
+                }
+                self.links.attach(SurfaceAttachment::Detach(surface));
+                Ok(())
+            }
+            SurfaceRequest::Release(surface) => {
+                let _released = self.surfaces.release(surface);
+                Ok(())
+            }
+        }
+    }
 
-impl Platform {
-    /// Opens the record of a surface with its view in the runtime, creates the native surface under the id of that
-    /// record, calls `create_role` to create the role of its Wayland surface with the control of the role, and attaches
-    /// the surface to the renderer. Returns the id of the new surface.
-    pub(super) fn create_surface(
+    /// Creates the native surface of `surface` as `spec` describes, and attaches it to the renderer with
+    /// `gpu_budget`. A surface whose output is gone closes at once.
+    fn create_surface(
         &mut self,
-        spec: NativeSpec,
-        create_role: impl FnOnce(
-            &mut Self,
-            &wl_surface::WlSurface,
-            SurfaceId,
-        ) -> Result<(Role, RoleControl), Error>,
-    ) -> Result<SurfaceId, Error> {
-        let start = self.start;
-        spec.view.motion().time_source(move || start.elapsed());
-        let size = crate::logical::size(spec.size);
-        let id = (self.surface_records).open(
-            spec.view,
-            size,
-            Density::ONE,
-            spec.drag_region,
-            spec.accessible_name,
-        )?;
+        surface: SurfaceId,
+        spec: &SurfaceSpec,
+        gpu_budget: Option<Duration>,
+    ) -> Result<(), Error> {
         let wl = self.compositor.create_surface(&self.qh);
         let window = Arc::new(OwnedWlSurface::new(wl.clone(), self.connection.backend()));
         let protocols = &self.protocols;
         let wp_viewport = (protocols.viewporter.as_ref())
             .map(|viewporter| viewporter.get_viewport(&wl, &self.qh, ()));
         let fractional = (wp_viewport.as_ref().and(protocols.fractional.as_ref()))
-            .map(|manager| manager.get_fractional_scale(&wl, &self.qh, id));
+            .map(|manager| manager.get_fractional_scale(&wl, &self.qh, surface));
         let background = (protocols.background.as_ref())
             .filter(|_| spec.appearance.background_blur)
             .map(|manager| manager.get_background_effect(&wl, &self.qh, ()));
         if spec.appearance.background_blur && background.is_none() {
             log::warn!(
                 "the compositor offers no background blur for surface {}",
-                id.0
+                surface.0
             );
         }
         // The control of the Vulkan target needs the layer object of a layer role, so the role is created first.
-        let (role, role_control) = match create_role(self, &wl, id) {
-            Ok(created) => created,
+        let (role, role_control) = match self.create_role(&wl, surface, &spec.role) {
+            Ok(Some(created)) => created,
+            Ok(None) => {
+                destroy_objects(wp_viewport, fractional, background, None);
+                self.links.report((surface, SurfaceEvent::Closed));
+                return Ok(());
+            }
             Err(error) => {
                 destroy_objects(wp_viewport, fractional, background, None);
                 return Err(error);
@@ -81,15 +83,15 @@ impl Platform {
         let presentation =
             (self.presentation.as_ref()).map(|presentation| presentation.proxy.clone());
         let attach = Attach {
-            surface: id,
+            surface,
             window: window.clone(),
             alpha,
             timing: SurfaceTiming::new(PresentationPolicy::Automatic),
             output: spec.appearance.output,
             hdr_metadata: spec.appearance.hdr_metadata,
-            gpu_budget: self.config.ui_budget,
+            gpu_budget,
             control: Control::new(
-                id,
+                surface,
                 SurfaceObjects {
                     connection: self.connection.clone(),
                     wl: wl.clone(),
@@ -99,30 +101,59 @@ impl Platform {
                     background: background.clone(),
                     role_control,
                 },
-                spec.role_state,
+                role_state(&spec.role),
                 self.qh.clone(),
             ),
         };
-        let accessibility =
-            crate::accessibility::Bridge::new(id, self.accessibility_events.clone());
-        let surface = Surface {
+        let accessibility = crate::accessibility::Bridge::new(surface, self.links.view());
+        let native = Surface {
             accessibility: Some(accessibility),
-            frame: FrameProgress::Idle,
-            last_frame: None,
-            committing: None,
             role,
             wl,
             _window: window,
             viewport: wp_viewport,
             fractional,
-            output: None,
             background,
-            shape: SurfaceShape::new(spec.shape),
         };
-        let _replaced_surface = self.surfaces.insert(id, surface);
-        self.schedule(SchedulerInput::Opened(id));
-        self.renderer
-            .send(RendererInput::Attach(Box::new(attach)))?;
-        Ok(id)
+        self.surfaces.insert(surface, native);
+        self.links
+            .attach(SurfaceAttachment::Attach(Box::new(attach)));
+        Ok(())
+    }
+
+    /// Gives `wl` the role that `role` describes, with the control of its state. Returns `None` when the output of
+    /// the role is gone.
+    fn create_role(
+        &self,
+        wl: &wl_surface::WlSurface,
+        surface: SurfaceId,
+        role: &Role,
+    ) -> Result<Option<(NativeRole, RoleControl)>, Error> {
+        Ok(Some(match role {
+            Role::Window(window) => self.window_role(wl, window)?,
+            Role::Panel(panel) => {
+                let output = match panel.output.map(|output| self.find_output(output)) {
+                    Some(None) => return Ok(None),
+                    chosen => chosen.flatten(),
+                };
+                let layout = ProtocolLayout::new(panel.geometry).map_err(Error::LayerLayout)?;
+                let proxy = self.layer_surface(wl, surface, output.as_ref(), panel)?;
+                layer::panel_role(wl, proxy, layout, panel.keyboard)
+            }
+            Role::Lock { output } => {
+                let Some(output) = self.find_output(*output) else {
+                    return Ok(None);
+                };
+                self.lock_role(wl, &output, surface)?
+            }
+        }))
+    }
+}
+
+/// The state that the role of a native surface sends to the host when it is created.
+fn role_state(role: &Role) -> SurfaceState {
+    match role {
+        Role::Panel(panel) => layer::role_state(panel.geometry),
+        Role::Window(_) | Role::Lock { .. } => SurfaceState::default(),
     }
 }

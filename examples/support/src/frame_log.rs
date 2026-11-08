@@ -10,7 +10,7 @@ use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 /// Returns an error when the app fails or the frame log cannot be written.
 pub fn run(
     app: App,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::Error>,
+    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
 ) -> Result<(), Error> {
     logged(app, None, startup)
 }
@@ -22,7 +22,7 @@ pub fn run(
 pub fn run_observed(
     app: App,
     observer: impl FnMut(FrameReport) + 'static,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::Error>,
+    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
 ) -> Result<(), Error> {
     logged(app, Some(Box::new(observer)), startup)
 }
@@ -30,7 +30,7 @@ pub fn run_observed(
 fn logged(
     app: App,
     mut observer: Option<Box<dyn FnMut(FrameReport)>>,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::Error>,
+    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
 ) -> Result<(), Error> {
     let path = std::env::var_os("LAVASHELL_FRAME_LOG");
     let reports = Rc::new(RefCell::new(Vec::new()));

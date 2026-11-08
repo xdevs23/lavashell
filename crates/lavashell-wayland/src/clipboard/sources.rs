@@ -2,7 +2,7 @@
 use super::drag::{drag_device, native_actions, portable_action};
 use super::pipes::{PipeIdentity, nonblocking};
 use super::state::SourceDrag;
-use crate::app::Platform;
+use crate::translator::Translator;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{Cancellation, DragActions, TransferId};
 use lavashell_platform::{
@@ -18,8 +18,9 @@ use smithay_client_toolkit as sctk;
 use std::io;
 use std::os::fd::AsFd;
 
-impl Platform {
-    pub(super) fn execute_source_request(&mut self, request: DragSourceRequest) {
+impl Translator {
+    /// Executes `request` of the runtime about a drag started by the app.
+    pub(crate) fn execute_drag_source(&mut self, request: DragSourceRequest) {
         match request {
             DragSourceRequest::Start {
                 drag,
@@ -29,7 +30,7 @@ impl Platform {
                 actions,
             } => {
                 let started = self.start_drag(drag, pointer, surface, formats, actions);
-                self.drag_source_event(DragSourceEvent::Started(drag, started));
+                self.links.report(DragSourceEvent::Started(drag, started));
             }
             DragSourceRequest::Cancel(drag) => {
                 let _cancelled = self.clipboard.drags.remove(&drag);
@@ -79,7 +80,7 @@ impl Platform {
             .collect();
         for id in cancelled {
             let gone = Cancellation::InputDeviceGone;
-            self.drag_source_event(DragSourceEvent::Cancelled(id, gone));
+            self.links.report(DragSourceEvent::Cancelled(id, gone));
         }
     }
 
@@ -108,7 +109,7 @@ impl Platform {
         let pipe = nonblocking(&pipe)
             .map(|()| pipe.into())
             .map_err(io::Error::from);
-        self.drag_source_event(DragSourceEvent::Send {
+        self.links.report(DragSourceEvent::Send {
             drag,
             format: FormatId(format),
             pipe,
@@ -117,7 +118,7 @@ impl Platform {
     }
 }
 
-impl DataSourceHandler for Platform {
+impl DataSourceHandler for Translator {
     fn accept_mime(
         &mut self,
         _: &Connection,
@@ -148,7 +149,7 @@ impl DataSourceHandler for Platform {
         } else if let Some(drag) = self.source_drag(source) {
             let _cancelled = self.clipboard.drags.remove(&drag);
             let reason = Cancellation::SourceCancelled;
-            self.drag_source_event(DragSourceEvent::Cancelled(drag, reason));
+            self.links.report(DragSourceEvent::Cancelled(drag, reason));
         }
     }
 
@@ -157,7 +158,7 @@ impl DataSourceHandler for Platform {
     fn dnd_finished(&mut self, _: &Connection, _: &QueueHandle<Self>, source: &WlDataSource) {
         if let Some(drag) = self.source_drag(source) {
             let _finished = self.clipboard.drags.remove(&drag);
-            self.drag_source_event(DragSourceEvent::Finished(drag));
+            self.links.report(DragSourceEvent::Finished(drag));
         }
     }
 
@@ -170,7 +171,8 @@ impl DataSourceHandler for Platform {
     ) {
         if let Some(drag) = self.source_drag(source) {
             let action = portable_action(action);
-            self.drag_source_event(DragSourceEvent::ActionSelected(drag, action));
+            self.links
+                .report(DragSourceEvent::ActionSelected(drag, action));
         }
     }
 }

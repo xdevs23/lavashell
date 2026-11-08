@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
 use crate::Error;
+use crate::translator::{Translator, ViewLink};
 use icu_locale_core::LanguageIdentifier;
 use lavashell_platform::SettingsEvent;
 use sctk::reexports::calloop::channel::{self, Event};
@@ -9,7 +9,7 @@ use smithay_client_toolkit as sctk;
 
 /// The languages the user prefers, read from the locale variables of the environment, most
 /// preferred first.
-pub(super) fn user_languages() -> Vec<LanguageIdentifier> {
+fn user_languages() -> Vec<LanguageIdentifier> {
     languages(sys_locale::get_locales())
 }
 
@@ -19,18 +19,21 @@ fn languages(tags: impl Iterator<Item = String>) -> Vec<LanguageIdentifier> {
     tags.filter_map(|tag| tag.parse().ok()).collect()
 }
 
-/// Watches the appearance preferences of the desktop on the event loop of `handle`. Removing the
-/// `sources` that it adds ends the watch.
-pub(super) fn install(
-    handle: &LoopHandle<'static, Platform>,
+/// Reports the languages the user prefers to `view`, and watches the appearance preferences of
+/// the desktop on the event loop of `handle`. Removing the `sources` that it adds ends the watch.
+pub(crate) fn install(
+    handle: &LoopHandle<'static, Translator>,
     sources: &mut Vec<RegistrationToken>,
+    view: &ViewLink,
 ) -> Result<(), Error> {
+    view.report(SettingsEvent::Locales(user_languages()));
     let (sender, channel) = channel::channel();
     let updates = handle
-        .insert_source(channel, |event, (), platform| {
+        .insert_source(channel, |event, (), translator| {
             if let Event::Msg(appearance) = event {
-                let changed = SettingsEvent::Appearance(appearance);
-                platform.surface_records.change_settings(changed);
+                translator
+                    .links
+                    .report(SettingsEvent::Appearance(appearance));
             }
         })
         .map_err(|failure| Error::WatchPreferences(failure.error))?;

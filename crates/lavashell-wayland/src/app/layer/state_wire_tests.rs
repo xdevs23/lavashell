@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
-use focus_wire::Wire;
+use focus_wire::{Wire, top_bar};
 use lavashell_core::prelude::{Density, DpExt, FrameTime, Rect, Size, Viewport};
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 
@@ -19,7 +19,7 @@ fn present(wire: &mut Wire, frame: &PresentFrame) -> Result<Messages, TestError>
 fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_only_once()
 -> Result<(), TestError> {
     let mut wire = Wire::new(4)?;
-    let layer = wire.layer(&LayerSurface::new("state"))?;
+    let layer = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
     assert!(!wire.flush()?.is_empty());
     let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
     let token = ConfigureToken::default();
@@ -50,5 +50,33 @@ fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_
     let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
     control.commit_state(&state)?;
     assert_eq!(wire.flush()?, vec![(surface, 6, vec![])]);
+    Ok(())
+}
+
+#[test]
+fn private_wire_acknowledges_a_layer_configure_with_the_frame_that_contains_its_token()
+-> Result<(), TestError> {
+    let mut wire = Wire::new(4)?;
+    let layer = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
+    assert!(!wire.flush()?.is_empty());
+    let (message, event) = translate_configure(9, 0, 30);
+    let configured = SurfaceEvent::Configured {
+        width: None,
+        height: Some(30.dp()),
+        token: Some(message.token),
+    };
+    assert_eq!(event, configured);
+    let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
+    control.receive(message);
+    let mut state = SurfaceState::default();
+    state.apply(SurfaceChange::Configure(message.token));
+    let frame = PresentFrame {
+        time: FrameTime::default(),
+        viewport: Viewport::new(Size::new(4.dp(), 30.dp()), Density::ONE),
+        present_at: None,
+        state: &state,
+    };
+    let role = layer.proxy.id().protocol_id();
+    assert!(present(&mut wire, &frame)?.contains(&(role, 6, vec![9])));
     Ok(())
 }

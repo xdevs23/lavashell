@@ -2,7 +2,7 @@
 use super::*;
 use crate::app::wire_messages::{messages, requests};
 use crate::test_error::TestError;
-use focus_wire::Wire;
+use focus_wire::{Wire, top_bar};
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
@@ -116,15 +116,13 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
 fn private_wire_resizes_and_reserves_a_layer_again_for_a_new_content_height()
 -> Result<(), TestError> {
     let mut wire = Wire::new(4)?;
-    let options = LayerSurface::new("content");
-    let layer = wire.layer(&options)?;
+    let layer = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
     assert!(!wire.flush()?.is_empty());
-    assert!(wire.commit(&layer)?.is_empty());
-    let content = ContentSize::try_from(Size::new(500.dp(), 40.dp()))?;
-    let geometry = PanelGeometry::of(options.panel.current_layout(), content);
+    let mut state = SurfaceState::default();
+    state.apply(SurfaceChange::Panel(top_bar(Size::new(500.dp(), 40.dp()))?));
     let role = layer.proxy.id().protocol_id();
     for sent in [vec![(0, vec![0, 40]), (2, vec![40])], Vec::new()] {
-        wire.send_geometry(geometry)?;
+        wire.send_state(&state)?;
         wire.connection.flush().map_err(Error::Flush)?;
         assert_eq!(requests(&mut wire.peer, role)?, sent);
     }
