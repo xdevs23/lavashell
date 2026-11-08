@@ -98,6 +98,10 @@ pub enum Error {
     SurfaceNotOpen(SurfaceId),
     #[error("the runtime made panel requests for the surface {0:?}, which has no layer role")]
     PanelWithoutLayer(SurfaceId),
+    #[error(
+        "the runtime made a focus grab request for the surface {0:?}, which has no native surface"
+    )]
+    FocusGrabWithoutSurface(SurfaceId),
     #[error("the serial of an input event does not fit a Wayland serial")]
     ProtocolSerial(#[source] TryFromIntError),
     #[error("the dragged data could not be received")]

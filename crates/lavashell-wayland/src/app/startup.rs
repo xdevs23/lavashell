@@ -101,7 +101,7 @@ impl Platform {
         };
         let text = TextClipboard::new(clipboard.clipboard(), config.action_queue.view_actions());
         let mut platform = Self {
-            focus_grabs: focus_grab::Capability::bind(globals, &qh),
+            focus_grabs: focus_grab::Grabs::bind(globals, &qh),
             accessibility_events,
             output_layers,
             session_lock: None,

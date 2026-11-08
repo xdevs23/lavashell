@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::app::focus_grab::readiness;
+use crate::app::focus_grab::Grabs;
 use crate::app::wire_messages::messages;
 use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1;
+use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
+use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::units::Density;
 use lavashell_renderer::FrameOutcome;
-use lavashell_runtime::{PanelContent, PanelRecords};
+use lavashell_runtime::{PanelContent, PanelRecords, SurfaceRecords};
 use lavashell_test_fixtures::NoText;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
@@ -21,7 +24,7 @@ pub(super) fn empty_view() -> View {
 }
 
 /// A layer and a focus grab manager whose requests a test reads back from the other end of
-/// a socket, with the panel of the layer in the runtime.
+/// a socket, with the surface, the panel and the focus grab of the layer in the runtime.
 pub(super) struct Wire {
     pub(super) connection: Connection,
     pub(super) peer: UnixStream,
@@ -31,9 +34,11 @@ pub(super) struct Wire {
     pub(super) manager: HyprlandFocusGrabManagerV1,
     compositor: wl_compositor::WlCompositor,
     client_qh: QueueHandle<wire_tests::Client>,
-    pub(super) size: Size,
+    size: Size,
     pub(super) input: bool,
     panels: PanelRecords,
+    surfaces: SurfaceRecords,
+    grabs: Grabs,
 }
 
 impl Wire {
@@ -51,19 +56,44 @@ impl Wire {
         let shell = registry.bind::<ZwlrLayerShellV1, _, _>(2, version, &qh, ());
         let manager = registry.bind::<HyprlandFocusGrabManagerV1, _, _>(3, 1, &qh, ());
         let surface = compositor.create_surface(&client_qh, ());
-        Ok(Self {
+        let size = crate::logical::size((1, 1));
+        let mut surfaces = SurfaceRecords::new(PreferenceOverrides::default());
+        let opened = surfaces
+            .open(empty_view(), size, Density::ONE, None, String::new())
+            .map_err(Error::from)?;
+        assert_eq!(opened, LAYER);
+        let mut wire = Self {
             connection,
             peer,
             qh,
             surface,
             shell,
+            grabs: Grabs::new(manager.clone()),
             manager,
             compositor,
             client_qh,
-            size: crate::logical::size((1, 1)),
+            size,
             input: true,
             panels: PanelRecords::default(),
-        })
+            surfaces,
+        };
+        wire.configure();
+        Ok(wire)
+    }
+
+    /// Reports the configure event of the compositor with the size of the layer.
+    fn configure(&mut self) {
+        let event = SurfaceEvent::Configured {
+            width: Some(self.size.width),
+            height: Some(self.size.height),
+        };
+        assert_eq!(self.surfaces.handle(LAYER, event), None);
+    }
+
+    /// Gives the layer the size `size`, in logical pixels, as the compositor does with a configure event.
+    pub(super) fn resize(&mut self, size: (u32, u32)) {
+        self.size = crate::logical::size(size);
+        self.configure();
     }
 
     /// Creates the layer of `options` with empty content, and opens its panel in the runtime in place of an
@@ -75,7 +105,20 @@ impl Wire {
         let proxy = create(&self.shell, &self.surface, None, options, &self.qh, LAYER);
         let layer = Runtime::new(proxy, options, layout, panel.keyboard_mode());
         self.panels.open(LAYER, panel);
+        if let Some(grab) = &options.focus_grab {
+            self.grabs.open(LAYER, grab.clone());
+        }
         Ok(layer)
+    }
+
+    /// Retires `layer` as the app does when the surface closes. The runtime removes the panel and the focus grab.
+    /// The layer role is destroyed.
+    pub(super) fn retire(&mut self, layer: &Runtime) -> Result<(), TestError> {
+        layer.proxy.destroy();
+        self.panels.forget(LAYER);
+        let surface = &self.surface;
+        self.grabs.forget(LAYER, &self.qh, |_| Some(surface))?;
+        Ok(())
     }
 
     /// Sends the requests made by the runtime for the layout and the keyboard mode of the panel, as the frame of
@@ -144,20 +187,24 @@ impl Wire {
             .collect())
     }
 
-    pub(super) fn focus(
-        &mut self,
-        layer: &mut Runtime,
-    ) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
-        let panel = self.panels.get(LAYER).ok_or(TestError::NoPanel)?;
-        let readiness = readiness(panel, true, self.size);
-        layer.update_focus_grab(
-            Some(&self.manager),
-            &self.surface,
-            &self.qh,
-            LAYER,
-            readiness,
-        );
+    /// Updates the focus grab of the layer, as the loop does after a render, and returns the requests sent.
+    pub(super) fn focus(&mut self) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
+        let surface = &self.surface;
+        self.grabs
+            .update(&self.panels, &self.surfaces, &self.qh, |_| Some(surface))?;
         self.flush()
+    }
+
+    /// Reports that the compositor cleared the focus grab of the layer.
+    pub(super) fn clear_focus(&mut self) {
+        self.grabs.cleared(LAYER);
+    }
+
+    /// Reports that the compositor cleared a grab other than the one that the layer holds, and returns that grab.
+    pub(super) fn clear_focus_from_other_grab(&mut self) -> HyprlandFocusGrabV1 {
+        let other = self.manager.create_grab(&self.qh, LAYER);
+        self.grabs.cleared_by(LAYER, &other);
+        other
     }
 
     pub(super) fn present(

@@ -333,7 +333,7 @@ impl App {
             platform.update_layers()?;
             platform.update_lock()?;
             platform.render()?;
-            platform.update_focus_grabs();
+            platform.update_focus_grabs()?;
             if platform.finished() {
                 break;
             }
