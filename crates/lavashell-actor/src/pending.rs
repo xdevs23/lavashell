@@ -35,19 +35,14 @@ impl<T: Merge> Pending<T> {
 
     pub(crate) fn push(&mut self, item: T) {
         match item.effect() {
-            Effect::Overwrites(key) => match self.index.entry(key) {
-                Entry::Occupied(place) => {
-                    self.items[*place.get()].absorb(item);
-                    return;
-                }
-                Entry::Vacant(place) => {
-                    let _place = place.insert(self.items.len());
-                }
-            },
-            Effect::BuildsOn => self.fence_earlier_writes(None),
-            Effect::Fences(key) => self.fence_earlier_writes(Some(key)),
+            Effect::Overwrites(key) => self.overwrite(key, item),
+            Effect::OverwritesAndFences { key, fenced } => {
+                let _fenced = self.index.remove(&fenced);
+                self.overwrite(key, item);
+            }
+            Effect::BuildsOn => self.append_fence(None, item),
+            Effect::Fences(key) => self.append_fence(Some(key), item),
         }
-        self.items.push(item);
     }
 
     /// Removes and returns every item, in order.
@@ -66,9 +61,20 @@ impl<T: Merge> Pending<T> {
         self.builds_on
     }
 
-    /// Counts an item that does not overwrite, and fences the earlier writes that the fence rule names. `key` is the
+    /// Folds `item` into the earlier write of `key`, or appends it as the write of `key` that later overwrites replace.
+    fn overwrite(&mut self, key: T::Key, item: T) {
+        match self.index.entry(key) {
+            Entry::Occupied(place) => self.items[*place.get()].absorb(item),
+            Entry::Vacant(place) => {
+                let _place = place.insert(self.items.len());
+                self.items.push(item);
+            }
+        }
+    }
+
+    /// Appends an item that does not overwrite, and fences the earlier writes that the fence rule names. `key` is the
     /// key that the item fences.
-    fn fence_earlier_writes(&mut self, key: Option<T::Key>) {
+    fn append_fence(&mut self, key: Option<T::Key>, item: T) {
         self.builds_on += 1;
         match (self.fence, key) {
             (Fence::EveryKey, _) => self.clear_index(),
@@ -77,6 +83,7 @@ impl<T: Merge> Pending<T> {
             }
             (Fence::NamedKey, None) => {}
         }
+        self.items.push(item);
     }
 
     /// Skips an empty index, because clearing a map costs time in proportion to its capacity.

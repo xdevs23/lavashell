@@ -33,6 +33,26 @@ pub enum PressState {
     Released,
 }
 
+/// What a key did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyAction {
+    Pressed,
+    /// The host repeated the press while the key is held.
+    Repeated,
+    Released,
+}
+
+impl KeyAction {
+    /// Whether the key is down after the action.
+    #[must_use]
+    pub fn press_state(self) -> PressState {
+        match self {
+            Self::Pressed | Self::Repeated => PressState::Pressed,
+            Self::Released => PressState::Released,
+        }
+    }
+}
+
 /// What a pointer, keyboard or touch screen connected to the host did. A position is in dp, relative to the surface
 /// under the pointer or to the surface on which the touch point went down.
 #[derive(Debug, PartialEq)]
@@ -63,10 +83,13 @@ pub enum DeviceEvent {
         at: Point,
         delta: Point,
     },
+    /// A key went down, repeated or went up. `code` is the Linux evdev code of the physical key, independent of the
+    /// keyboard layout.
     Key {
         keyboard: KeyboardDevice,
+        code: u32,
         stroke: KeyStroke,
-        state: PressState,
+        action: KeyAction,
     },
     Modifiers {
         keyboard: KeyboardDevice,

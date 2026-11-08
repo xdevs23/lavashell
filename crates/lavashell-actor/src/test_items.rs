@@ -4,6 +4,7 @@ use crate::{Effect, Merge};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Item {
     Set { key: u8, value: f64 },
+    SetFencing { key: u8, fenced: u8, value: f64 },
     Step(f64),
     Fence(u8),
 }
@@ -14,6 +15,7 @@ impl Merge for Item {
     fn effect(&self) -> Effect<u8> {
         match *self {
             Self::Set { key, .. } => Effect::Overwrites(key),
+            Self::SetFencing { key, fenced, .. } => Effect::OverwritesAndFences { key, fenced },
             Self::Step(_) => Effect::BuildsOn,
             Self::Fence(key) => Effect::Fences(key),
         }

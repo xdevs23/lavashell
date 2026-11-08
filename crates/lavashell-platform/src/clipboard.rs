@@ -56,8 +56,9 @@ pub enum ClipboardEvent {
     /// The nonblocking read end of a pipe whose write end went to the client that set the selection, or the reason
     /// why the read did not start.
     ReceiveStarted(ReceiveId, Result<OwnedFd, ReceiveRefusal>),
-    /// A client pastes the selection in the format and reads it from the nonblocking descriptor.
-    SourceSend(SelectionId, FormatId, OwnedFd),
+    /// A client pastes the selection in the format and reads it from the nonblocking descriptor, or the platform could
+    /// not prepare the descriptor.
+    SourceSend(SelectionId, FormatId, io::Result<OwnedFd>),
     /// Another selection replaced the selection.
     SourceCancelled(SelectionId),
 }
