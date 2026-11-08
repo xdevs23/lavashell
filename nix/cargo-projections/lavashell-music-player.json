@@ -2239,6 +2239,7 @@
       },
       {
         "dependencies": [
+          "accesskit",
           "icu_locale_core",
           "lavashell-core",
           "thiserror 2.0.21"
@@ -2266,6 +2267,8 @@
       },
       {
         "dependencies": [
+          "accesskit",
+          "accesskit_consumer",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
@@ -2273,7 +2276,9 @@
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "log",
-          "thiserror 2.0.21"
+          "num-traits",
+          "thiserror 2.0.21",
+          "unicode-segmentation"
         ],
         "name": "lavashell-runtime",
         "version": "0.1.0"
@@ -2300,7 +2305,6 @@
       {
         "dependencies": [
           "accesskit",
-          "accesskit_consumer",
           "accesskit_unix",
           "ash",
           "calloop",
@@ -2323,7 +2327,6 @@
           "smithay-client-toolkit",
           "sys-locale",
           "thiserror 2.0.21",
-          "unicode-segmentation",
           "wayland-backend",
           "wayland-scanner",
           "zbus"

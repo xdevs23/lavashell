@@ -3,6 +3,7 @@
 //! requests that follow.
 #![forbid(unsafe_code)]
 
+mod accessibility;
 mod choreographers;
 mod clipboard;
 mod error;
@@ -18,6 +19,7 @@ mod scheduler;
 mod session_lock;
 mod settings;
 mod shape;
+mod single_precision;
 mod surface_records;
 #[cfg(test)]
 mod test_error;
@@ -29,7 +31,7 @@ mod window_move;
 
 pub use choreographers::{Choreographers, SceneSink};
 pub use clipboard::{Clipboard, ClipboardTransfers, TextClipboard};
-pub use error::Error;
+pub use error::{AccessibilityFailure, Error};
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
 pub use panels::{
@@ -42,7 +44,7 @@ pub use scheduler::{
 };
 pub use session_lock::{ActiveLock, LockConfiguration, LockStep, SessionLock};
 pub use shape::WindowShape;
-pub use surface_records::{SurfaceRecords, measure_content};
+pub use surface_records::{AccessibilityOutcome, SurfaceRecords, measure_content};
 pub use transfer_pipe::{Progress, ReadBuffer, write_available};
 pub use view_actions::{ActionBatch, ActionQueue, ViewActions};
 pub use watches::Watches;

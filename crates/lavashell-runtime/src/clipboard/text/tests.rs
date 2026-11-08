@@ -73,7 +73,7 @@ impl Editor {
             assert_eq!(outcome, Ok(ActionOutcome::Performed));
         }
         let mut records = SurfaceRecords::new(PreferenceOverrides::default());
-        let surface = records.open(view, WINDOW.size, WINDOW.density, None)?;
+        let surface = records.open(view, WINDOW.size, WINDOW.density, None, String::new())?;
         let watches = Watches::default();
         let actions = ActionQueue::new(&watches);
         let transfers = ClipboardTransfers::new(&watches);

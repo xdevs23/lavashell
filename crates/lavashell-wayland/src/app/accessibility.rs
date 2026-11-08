@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, open_surface};
+use super::Platform;
 use crate::Error;
-use crate::accessibility::Event;
-use lavashell_core::accessibility::ActionOutcome;
-use lavashell_core::view::{InputEvent, View};
-use lavashell_runtime::SceneSink;
+use crate::accessibility::Bridge;
+use lavashell_core::geometry::Viewport;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::View;
+use lavashell_platform::{AccessibilityEvent, AccessibilityRequest};
 use sctk::reexports::calloop::channel::{self, Event as ChannelEvent, Sender};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
@@ -12,7 +13,7 @@ use smithay_client_toolkit as sctk;
 pub(super) fn install(
     handle: &LoopHandle<'static, Platform>,
     sources: &mut Vec<RegistrationToken>,
-) -> Result<Sender<Event>, Error> {
+) -> Result<Sender<AccessibilityEvent>, Error> {
     let (sender, channel) = channel::channel();
     let source = handle
         .insert_source(channel, |event, (), platform| {
@@ -26,94 +27,72 @@ pub(super) fn install(
 }
 
 impl Platform {
-    fn accessibility_event(&mut self, event: Event) {
-        let id = match &event {
-            Event::Activate(id) | Event::Action(id, _) | Event::Deactivate(id) => *id,
-        };
-        let configured = self.surface_records.is_configured(id);
-        // A surface that is not open ignores accessibility requests.
-        let Ok((surface, view, viewport)) =
-            open_surface(&mut self.surfaces, &mut self.surface_records, id)
-        else {
-            return;
-        };
-        let Some(bridge) = surface.accessibility.as_mut() else {
-            return;
-        };
-        if matches!(event, Event::Deactivate(_)) {
-            bridge.deactivate();
-            view.set_accessibility_text_geometry(false);
-            return;
-        }
-        if matches!(event, Event::Activate(_)) {
-            bridge.activate();
-            view.set_accessibility_text_geometry(true);
-        }
-        if !configured {
-            // The first frame after the compositor configures the surface publishes the complete initial tree.
-            return;
-        }
-        let mut frame = |view: &mut View, sink: &mut SceneSink| {
-            view.frame_into(viewport, self.renderer.shaper(), sink)
-        };
-        let shown = view.needs_visual_frame() || view.accessibility().nodes.is_empty();
-        if shown {
-            if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame) {
-                log::error!("{error}");
-            }
-            view.invalidate();
-        }
-        if !shown && view.needs_accessibility_update() {
-            view.update_accessibility();
-        }
-        let tree = view.accessibility();
-        if let Event::Action(_, request) = event
-            && let Some(bridge) = surface.accessibility.as_mut()
-            && let Some(request) = bridge.action(request, tree)
+    /// Sends `event` to the runtime and executes the requests that the runtime returns. A deactivation first drops the
+    /// tree stored for the assistive technologies.
+    fn accessibility_event(&mut self, event: AccessibilityEvent) {
+        let id = event.surface();
+        if let AccessibilityEvent::Deactivate(_) = event
+            && let Some(bridge) = self.bridge_mut(id)
         {
-            match view.accessibility_action(request) {
-                Ok(ActionOutcome::Performed) => {
-                    // Show the frame now, even while a frame callback of the compositor is pending, so that the changed
-                    // semantics are published at once. Showing a frame updates only the scene tree. It acquires no
-                    // swapchain image and does not wait for the scene queue.
-                    if let Err(error) = surface.show(id, view, &mut self.choreographers, &mut frame)
-                    {
-                        log::error!("{error}");
-                    }
-                    view.invalidate();
-                }
-                Ok(ActionOutcome::Ignored) => {}
-                Err(error) => log::error!("{error}"),
-            }
+            bridge.deactivate();
         }
-        if let Some(bridge) = surface.accessibility.as_mut() {
-            bridge.publish(view.accessibility(), true);
+        let (surfaces, choreographers, renderer) = (
+            &mut self.surfaces,
+            &mut self.choreographers,
+            &mut self.renderer,
+        );
+        let show = |view: &mut View, viewport: Viewport| -> Result<(), Error> {
+            let surface = surfaces.get_mut(&id).ok_or(Error::SurfaceNotOpen(id))?;
+            surface.show(id, view, choreographers, |view, sink| {
+                view.frame_into(viewport, renderer.shaper(), sink)
+            })
+        };
+        let outcome = (self.surface_records).handle_accessibility(event, show);
+        for failure in outcome.failures {
+            log::error!("{failure}");
         }
+        self.execute_accessibility_requests(outcome.publish);
     }
 
-    pub(super) fn accessibility_focus(&mut self) {
-        for (&id, surface) in &mut self.surfaces {
-            let focused = (self.devices.iter()).any(|seat| seat.keyboard_focuses(&self.input, id));
-            if let Some(view) = self.surface_records.open_view_mut(id) {
-                view.input(InputEvent::WindowFocus(focused));
-            }
-            if let Some(bridge) = &mut surface.accessibility {
-                bridge.window_focus(focused);
-            }
-        }
+    /// Sets the window focus of every surface for the assistive technologies to whether a keyboard focuses it.
+    pub(super) fn update_window_focus(&mut self) {
+        let focused = |surface| self.input.is_keyboard_focused(surface);
+        let requests = self.surface_records.window_focus_requests(focused);
+        self.execute_accessibility_requests(requests);
     }
 
     pub(super) fn accessibility_updates(&mut self) {
-        for (&id, surface) in &mut self.surfaces {
-            if self.surface_records.is_configured(id)
-                && let Some(view) = self.surface_records.open_view_mut(id)
-                && view.needs_accessibility_update()
-            {
-                view.update_accessibility();
-                if let Some(bridge) = &mut surface.accessibility {
-                    bridge.publish(view.accessibility(), false);
+        let requests = self.surface_records.update_accessibility();
+        self.execute_accessibility_requests(requests);
+    }
+
+    /// Publishes the changes of the accessibility tree of `surface` after its view showed a frame.
+    pub(super) fn publish_accessibility(&mut self, surface: SurfaceId) {
+        let request = self.surface_records.publish_accessibility(surface);
+        self.execute_accessibility_requests(request);
+    }
+
+    fn execute_accessibility_requests(
+        &mut self,
+        requests: impl IntoIterator<Item = AccessibilityRequest>,
+    ) {
+        for request in requests {
+            match request {
+                AccessibilityRequest::Publish { surface, tree } => {
+                    if let Some(bridge) = self.bridge_mut(surface) {
+                        bridge.publish(*tree);
+                    }
+                }
+                AccessibilityRequest::SetWindowFocus { surface, focused } => {
+                    if let Some(bridge) = self.bridge_mut(surface) {
+                        bridge.window_focus(focused);
+                    }
                 }
             }
         }
+    }
+
+    fn bridge_mut(&mut self, surface: SurfaceId) -> Option<&mut Bridge> {
+        self.surfaces.get_mut(&surface)?.accessibility.as_mut()
     }
 }

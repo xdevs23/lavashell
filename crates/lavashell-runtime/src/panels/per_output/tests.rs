@@ -50,7 +50,15 @@ fn bar_and_dock() -> (PanelsPerOutput<&'static str>, Seen) {
 fn open_in(
     surfaces: &mut SurfaceRecords,
 ) -> impl FnMut(&'static str, View) -> Result<SurfaceId, TestError> {
-    |_, view| Ok(surfaces.open(view, Size::new(1920.dp(), 1.dp()), Density::ONE, None)?)
+    |_, view| {
+        Ok(surfaces.open(
+            view,
+            Size::new(1920.dp(), 1.dp()),
+            Density::ONE,
+            None,
+            String::new(),
+        )?)
+    }
 }
 
 #[test]

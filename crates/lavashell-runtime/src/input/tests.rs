@@ -17,6 +17,7 @@ use std::rc::Rc;
 const MOUSE: PointerDevice = PointerDevice(1);
 const TABLET: PointerDevice = PointerDevice(2);
 const KEYBOARD: KeyboardDevice = KeyboardDevice(3);
+const SECOND_KEYBOARD: KeyboardDevice = KeyboardDevice(4);
 const WINDOW: SurfaceId = SurfaceId(0);
 const PANEL: SurfaceId = SurfaceId(1);
 const SERIAL: InputSerial = InputSerial(7);
@@ -249,9 +250,11 @@ fn keys_reach_the_focused_surface_with_the_modifiers_held_on_their_keyboard() {
     );
     let shortcut = Shortcut::control(Key::Character('a'));
     let expected = [
+        input_without_pointer(WINDOW, InputEvent::WindowFocus(true)),
         input_without_pointer(WINDOW, InputEvent::Modifiers(control)),
         input_without_pointer(WINDOW, InputEvent::Shortcut(shortcut)),
         input_without_pointer(WINDOW, InputEvent::KeyRelease(Key::Enter)),
+        input_without_pointer(WINDOW, InputEvent::WindowFocus(false)),
     ];
     assert_eq!(received, expected);
     assert_eq!(router.keyboard_focus(KEYBOARD), None);
@@ -260,6 +263,32 @@ fn keys_reach_the_focused_surface_with_the_modifiers_held_on_their_keyboard() {
             .route(DeviceEvent::KeyboardRemoved(KEYBOARD))
             .is_empty()
     );
+}
+
+#[test]
+fn a_surface_has_window_focus_while_any_keyboard_focuses_it() {
+    let mut router = InputRouter::new(None);
+    let window_focus =
+        |surface, focused| input_without_pointer(surface, InputEvent::WindowFocus(focused));
+    assert_eq!(
+        router.route(focus(Some(WINDOW))),
+        [window_focus(WINDOW, true)]
+    );
+    let second_on_window = DeviceEvent::KeyboardFocus {
+        keyboard: SECOND_KEYBOARD,
+        surface: Some(WINDOW),
+    };
+    assert!(router.route(second_on_window).is_empty());
+    assert_eq!(
+        router.route(focus(Some(PANEL))),
+        [window_focus(PANEL, true)]
+    );
+    assert!(router.is_keyboard_focused(WINDOW));
+    assert_eq!(
+        router.route(DeviceEvent::KeyboardRemoved(SECOND_KEYBOARD)),
+        [window_focus(WINDOW, false)]
+    );
+    assert!(!router.is_keyboard_focused(WINDOW));
 }
 
 #[test]
@@ -290,6 +319,7 @@ fn the_filter_receives_each_pressed_key_and_passes_on_what_it_returns() {
         shift: false,
     };
     let expected = [
+        input_without_pointer(WINDOW, InputEvent::WindowFocus(true)),
         input_without_pointer(WINDOW, tab),
         input_without_pointer(WINDOW, InputEvent::KeyRelease(Key::Space)),
     ];
@@ -302,7 +332,13 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
 -> Result<(), crate::Error> {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let view = View::new(lavashell_test_fixtures::facts(), |_| {});
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
+    let surface = records.open(
+        view,
+        Size::new(10.dp(), 10.dp()),
+        Density::ONE,
+        None,
+        String::new(),
+    )?;
     let moved = by(MOUSE, surface, InputEvent::Move(at(1, 1)));
     let cursor = Some(PlatformRequest::Input(InputRequest::SetCursor(
         MOUSE,
@@ -341,7 +377,7 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
     };
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let upper_half: DragRegion = Rc::new(|at: Point, size: Size| at.y < size.height * 0.5);
-    let surface = records.open(view, size, Density::ONE, Some(upper_half))?;
+    let surface = records.open(view, size, Density::ONE, Some(upper_half), String::new())?;
     let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
     let view = records.open_view_mut(surface).ok_or(TestError::NotOpen)?;
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;

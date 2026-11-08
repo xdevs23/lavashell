@@ -42,7 +42,13 @@ impl Run {
         let transfers = ClipboardTransfers::new(&watches);
         let mut records = SurfaceRecords::new(PreferenceOverrides::default());
         let view = View::new(lavashell_test_fixtures::facts(), |_| {});
-        let surface = records.open(view, Size::new(100.dp(), 50.dp()), Density::ONE, None)?;
+        let surface = records.open(
+            view,
+            Size::new(100.dp(), 50.dp()),
+            Density::ONE,
+            None,
+            String::new(),
+        )?;
         Ok(Self {
             watches,
             transfers,

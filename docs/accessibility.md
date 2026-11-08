@@ -57,5 +57,6 @@ from the app.
 ## Tests
 
 ```sh
-nix develop .#native --command cargo test -p lavashell-wayland --lib -- --nocapture --test-threads=1
+nix develop .#native --command cargo test -p lavashell-runtime --lib accessibility
+nix develop .#native --command cargo test -p lavashell-wayland --lib accessibility -- --nocapture --test-threads=1
 ```

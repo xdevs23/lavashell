@@ -8,7 +8,7 @@ use lavashell_core::platform::PlatformFacts;
 use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::{Failures, FrameError, View};
-use lavashell_platform::{SurfaceEvent, SurfaceRequest, WatchId};
+use lavashell_platform::{AccessibilityEvent, SurfaceEvent, SurfaceRequest, WatchId};
 use lavashell_renderer::{Fonts, PainterSetup, RendererState};
 use lavashell_runtime::{
     ActionQueue, Choreographers, ClipboardTransfers, FrameKind, FrameScheduler, InputFilter,
@@ -251,7 +251,7 @@ struct SurfaceProtocols {
 pub(super) struct Platform {
     focus_grabs: focus_grab::Capability,
     output_layers: Option<output_layers::Runtime>,
-    accessibility_events: sctk::reexports::calloop::channel::Sender<crate::accessibility::Event>,
+    accessibility_events: sctk::reexports::calloop::channel::Sender<AccessibilityEvent>,
     session_lock: Option<session_lock::Runtime>,
     sources: Vec<RegistrationToken>,
     /// The event loop source of each watched file descriptor.

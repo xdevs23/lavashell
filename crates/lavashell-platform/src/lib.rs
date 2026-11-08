@@ -3,6 +3,7 @@
 //! requests made by the runtime.
 #![forbid(unsafe_code)]
 
+mod accessibility;
 mod clipboard;
 mod input;
 mod lock;
@@ -15,6 +16,7 @@ mod timing;
 mod watch;
 mod window_control;
 
+pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_difference};
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,

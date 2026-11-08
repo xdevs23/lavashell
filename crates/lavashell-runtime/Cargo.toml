@@ -10,13 +10,17 @@ publish = false
 workspace = true
 
 [dependencies]
+accesskit.workspace = true
 icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 log.workspace = true
+num-traits.workspace = true
 thiserror.workspace = true
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
+accesskit_consumer.workspace = true
 lavashell-test-fixtures.workspace = true
