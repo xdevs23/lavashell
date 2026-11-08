@@ -44,6 +44,7 @@ impl Host {
         let configure = SurfaceEvent::Configured {
             width: None,
             height: None,
+            token: None,
         };
         assert_eq!(surfaces.handle(surface, configure), None);
         let mut panels = PanelRecords::default();

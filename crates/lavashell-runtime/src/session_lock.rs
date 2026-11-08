@@ -109,7 +109,7 @@ enum LockPhase {
 
 /// What the platform does after the lock step of a turn.
 #[derive(Debug, PartialEq, Eq)]
-pub enum LockStep {
+pub(crate) enum LockStep {
     Running,
     /// The platform unlocks the session and closes every surface.
     Unlock,
@@ -118,7 +118,7 @@ pub enum LockStep {
 }
 
 /// The session lock from its start until the host unlocks it, with one lock surface per output.
-pub struct ActiveLock {
+pub(crate) struct ActiveLock {
     session_lock: SessionLock,
     phase: LockPhase,
     views: LockViews,

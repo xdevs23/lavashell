@@ -33,12 +33,8 @@ fn a_shaped_window_is_transparent_and_draws_its_decorations() -> Result<(), Erro
     let shaped = window
         .shape(WindowShape::new(|_| Vec::new()))
         .spec(&mut view, &mut NoText)?;
-    let draws_decorations = |spec: &SurfaceSpec| {
-        let Role::Window {
-            draws_decorations, ..
-        } = spec.role;
-        draws_decorations
-    };
+    let draws_decorations =
+        |spec: &SurfaceSpec| matches!(&spec.role, Role::Window(window) if window.draws_decorations);
     assert!(!plain.appearance.transparent && !draws_decorations(&plain));
     assert!(shaped.appearance.transparent && draws_decorations(&shaped));
     Ok(())
@@ -70,13 +66,13 @@ fn the_spec_carries_every_setting_of_the_window() -> Result<(), Error> {
             hdr_metadata: Some(metadata),
             background_blur: true,
         },
-        role: Role::Window {
+        role: Role::Window(WindowRole {
             title: "Title".into(),
             app_id: "org.example.Title".into(),
             min_size: Some(Size::new(200.dp(), 100.dp())),
             fullscreen: true,
             draws_decorations: false,
-        },
+        }),
     };
     assert_eq!(window.spec(&mut spacer_view(), &mut NoText)?, expected);
     Ok(())

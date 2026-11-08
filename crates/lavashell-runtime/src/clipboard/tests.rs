@@ -76,6 +76,7 @@ pub(crate) fn move_bytes(watches: &Watches) {
         for request in watches.take_requests() {
             let _changed = match request {
                 WatchRequest::Watch(id, ..) => open.insert(id),
+                WatchRequest::Resume(_) => false,
                 WatchRequest::Unwatch(id) => open.remove(&id),
             };
         }
@@ -140,11 +141,35 @@ fn a_set_selection_is_written_to_each_client_that_pastes_it() -> TestResult {
     let (mut reader, writer) = std::io::pipe()?;
     let format = FormatId("application/x-custom".into());
     run.transfers
-        .handle(ClipboardEvent::SourceSend(id, format, writer.into()));
+        .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     move_bytes(&run.watches);
     let mut bytes = Vec::new();
     let _count = reader.read_to_end(&mut bytes)?;
     assert_eq!(bytes, [0, 255, 1]);
+    Ok(())
+}
+
+#[test]
+fn a_paste_whose_pipe_failed_leaves_the_selection_for_the_next_paste() -> TestResult {
+    let run = Run::new()?;
+    let set = set_selection(&run.transfers, TransferData::text("copied"));
+    run.transfers.submit(&run.records);
+    let (id, _) = set_request(run.transfers.take_requests())?;
+    run.transfers
+        .handle(ClipboardEvent::SelectionSet(id, Ok(())));
+    assert!(matches!(*set.borrow(), Some(Ok(()))));
+    let format = FormatId("text/plain".into());
+    let failed = std::io::Error::from(std::io::ErrorKind::InvalidInput);
+    run.transfers
+        .handle(ClipboardEvent::SourceSend(id, format.clone(), Err(failed)));
+    assert!(run.watches.take_requests().is_empty());
+    let (mut reader, writer) = std::io::pipe()?;
+    run.transfers
+        .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
+    move_bytes(&run.watches);
+    let mut bytes = Vec::new();
+    let _count = reader.read_to_end(&mut bytes)?;
+    assert_eq!(bytes, b"copied");
     Ok(())
 }
 
@@ -161,7 +186,7 @@ fn a_refused_selection_reports_the_refusal_and_sends_nothing() -> TestResult {
     let (mut reader, writer) = std::io::pipe()?;
     let format = FormatId("text/plain".into());
     run.transfers
-        .handle(ClipboardEvent::SourceSend(id, format, writer.into()));
+        .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
     let _count = reader.read_to_end(&mut bytes)?;
@@ -182,7 +207,7 @@ fn a_send_after_the_selection_was_cancelled_writes_nothing() -> TestResult {
     let (mut reader, writer) = std::io::pipe()?;
     let format = FormatId("text/plain".into());
     run.transfers
-        .handle(ClipboardEvent::SourceSend(id, format, writer.into()));
+        .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
     let _count = reader.read_to_end(&mut bytes)?;

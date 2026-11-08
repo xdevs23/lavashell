@@ -11,10 +11,11 @@ use lavashell_platform::{
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
+use std::io;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
-pub use text::TextClipboard;
+pub(crate) use text::TextClipboard;
 
 type SetCompletion = Box<dyn FnOnce(Result<(), Error>)>;
 
@@ -317,7 +318,18 @@ impl ClipboardTransfers {
     }
 
     /// Writes the selection `id` in `format` to `pipe`. When the selection has no such format, `pipe` closes at once.
-    fn send(&self, id: SelectionId, format: &FormatId, pipe: OwnedFd) {
+    /// A pipe that the platform could not prepare fails only this send.
+    fn send(&self, id: SelectionId, format: &FormatId, pipe: io::Result<OwnedFd>) {
+        let pipe = match pipe {
+            Ok(pipe) => pipe,
+            Err(source) => {
+                log_failure(
+                    "the clipboard selection was not sent",
+                    &Error::CreatePipe(source),
+                );
+                return;
+            }
+        };
         let bytes = (self.0.borrow().selections.get(&id))
             .and_then(|selection| selection.data.get(&format.0))
             .cloned();

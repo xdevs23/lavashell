@@ -107,7 +107,7 @@ impl SurfaceRecords {
     pub fn handle(&mut self, surface: SurfaceId, event: SurfaceEvent) -> Option<SurfaceRequest> {
         let record = self.open_record_mut(surface)?;
         match event {
-            SurfaceEvent::Configured { width, height } => record.configure(width, height),
+            SurfaceEvent::Configured { width, height, .. } => record.configure(width, height),
             SurfaceEvent::Closed => {
                 record.lifecycle = Lifecycle::Closing;
                 return Some(SurfaceRequest::Destroy(surface));

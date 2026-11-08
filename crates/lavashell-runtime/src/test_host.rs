@@ -1,0 +1,351 @@
+// SPDX-License-Identifier: GPL-3.0-only
+//! A scripted platform and an offscreen presentation for the tests that run the actors of the runtime.
+
+use crate::test_error::TestError;
+use crate::{
+    ActionQueue, ClipboardTransfers, Drags, Observers, RunEnd, RunError, RuntimeSetup,
+    SurfaceSetup, Watches, Window, drive,
+};
+use ash::vk;
+use lavashell_actor::Closed;
+use lavashell_core::frame::{FrameReport, FrameTime};
+use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
+use lavashell_core::units::DpExt;
+use lavashell_core::view::View;
+use lavashell_platform::{
+    Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks, PlatformRequest,
+    SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
+};
+use lavashell_renderer::vulkan::PresentationBackend;
+use lavashell_renderer::{
+    Fonts, FrameOutcome, PainterSetup, PresentFrame, RendererSetup, SurfaceControl,
+};
+use lavashell_vulkan::{Features, PhysicalDevice, Presentation};
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
+use std::convert::Infallible;
+use std::ffi::CStr;
+use std::rc::Rc;
+use std::sync::mpsc;
+use std::time::Instant;
+
+/// A backend whose renderer draws offscreen only.
+pub(crate) struct Offscreen;
+
+impl PresentationBackend for Offscreen {
+    fn surface_extension(&self) -> Option<&'static CStr> {
+        None
+    }
+
+    fn features(&self) -> Features {
+        Features::default()
+    }
+
+    fn supports(
+        &self,
+        _: &PhysicalDevice<'_>,
+        _: u32,
+    ) -> Result<Presentation, lavashell_vulkan::Error> {
+        Ok(Presentation::Supported)
+    }
+
+    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
+        None
+    }
+}
+
+/// A control for a surface that is never attached.
+pub(crate) struct NoControl;
+
+impl SurfaceControl for NoControl {
+    type Error = Infallible;
+    type Message = ();
+
+    fn receive(&mut self, (): ()) {}
+
+    fn prepare(&mut self, _: &PresentFrame) -> Result<(), Infallible> {
+        Ok(())
+    }
+
+    fn before_present(&mut self, _: &PresentFrame) {}
+
+    fn after_present(&mut self, _: FrameOutcome) {}
+
+    fn commit_state(&mut self, _: &SurfaceState) -> Result<(), Infallible> {
+        Ok(())
+    }
+}
+
+pub(crate) fn renderer_setup(painter: Option<PainterSetup>) -> RendererSetup {
+    RendererSetup {
+        fonts: Fonts::new(),
+        painter,
+        scene: None,
+        gpu_timing: false,
+        full_redraw: false,
+    }
+}
+
+/// A setup that opens `surfaces` and has no panels per output, session lock, observers or end condition.
+pub(crate) fn runtime_setup(surfaces: Vec<SurfaceSetup>) -> RuntimeSetup {
+    let watches = Watches::default();
+    RuntimeSetup {
+        surfaces,
+        panels_per_output: None,
+        session_lock: None,
+        renderer: renderer_setup(None),
+        start: Instant::now(),
+        ui_budget: None,
+        run_end: RunEnd::default(),
+        preference_overrides: PreferenceOverrides::default(),
+        input_filter: None,
+        observers: Observers::default(),
+        clipboard: ClipboardTransfers::new(&watches),
+        action_queue: ActionQueue::new(&watches),
+        drags: Drags::new(&watches),
+        watches,
+    }
+}
+
+/// Ends the run once the frame observer of `setup` receives a report, which the platform triggers with
+/// `Wire::end_marker`.
+pub(crate) fn end_on_marker(setup: &mut RuntimeSetup) {
+    let marked = Rc::new(Cell::new(false));
+    let observed = Rc::clone(&marked);
+    setup.observers.frame_report = Some(Box::new(move |_: FrameReport| observed.set(true)));
+    setup.run_end.exit_when(move || marked.get());
+}
+
+/// A host with `outputs` that reports when it presents frames.
+pub(crate) fn host(outputs: impl IntoIterator<Item = OutputId>) -> HostFacts {
+    HostFacts {
+        outputs: outputs.into_iter().collect(),
+        reports_presentation: true,
+    }
+}
+
+/// The surface requests among `requests`, in order.
+pub(crate) fn surface_requests(requests: &[PlatformRequest]) -> Vec<SurfaceRequest> {
+    (requests.iter())
+        .filter_map(|request| match request {
+            PlatformRequest::Surface(request) => Some(request.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The surface and the spec of each surface that `requests` ask for, in order.
+pub(crate) fn created(requests: &[PlatformRequest]) -> Vec<(SurfaceId, SurfaceSpec)> {
+    (surface_requests(requests).into_iter())
+        .filter_map(|request| match request {
+            SurfaceRequest::Create { surface, spec, .. } => Some((surface, *spec)),
+            SurfaceRequest::Destroy(_) | SurfaceRequest::Release(_) => None,
+        })
+        .collect()
+}
+
+/// A view that shows nothing.
+pub(crate) fn empty_view() -> View {
+    View::new(lavashell_test_fixtures::facts(), |_| {})
+}
+
+/// A window of 100 by 100 dp that shows an empty view.
+pub(crate) fn window(title: &str) -> SurfaceSetup {
+    let window = Window::new(title, "test.app").size(100.dp(), 100.dp());
+    SurfaceSetup::Window(window, empty_view())
+}
+
+/// The event of a host that closed `surface`.
+pub(crate) fn closed(surface: SurfaceId) -> PlatformEvent {
+    PlatformEvent::Surface(surface, SurfaceEvent::Closed)
+}
+
+/// Why a scripted platform failed.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum StandInError {
+    #[error("the host cannot be reached")]
+    Unreachable,
+    #[error("the platform failed while it served")]
+    Failed,
+    #[error("the runtime ended its requests before the request that the script awaited")]
+    RequestsEnded,
+    #[error("the runtime does not receive from the platform anymore")]
+    LinkClosed(#[from] Closed),
+    #[error("the test does not receive the requests of the platform anymore")]
+    LogClosed(#[from] mpsc::SendError<Vec<PlatformRequest>>),
+    #[error("the test scripted no platform")]
+    Unscripted,
+}
+
+type Script = Box<dyn FnOnce(Wire) -> Result<(), StandInError> + Send>;
+
+type RequestLog = mpsc::Sender<Vec<PlatformRequest>>;
+
+enum Scenario {
+    Unreachable,
+    Scripted {
+        host: HostFacts,
+        script: Script,
+        log: RequestLog,
+    },
+}
+
+thread_local! {
+    static SCENARIO: RefCell<Option<Scenario>> = const { RefCell::new(None) };
+}
+
+/// A platform that runs the script of a test on the platform thread instead of connecting to a host. The test sets
+/// the script with [`run_scripted`] on the thread that calls `drive`.
+pub(crate) struct StandIn {
+    script: Script,
+    log: RequestLog,
+}
+
+impl Platform for StandIn {
+    type Error = StandInError;
+    type Presentation = Offscreen;
+    type Control = NoControl;
+
+    fn connect() -> Result<Connection<Self>, StandInError> {
+        match SCENARIO.with_borrow_mut(Option::take) {
+            Some(Scenario::Scripted { host, script, log }) => Ok(Connection {
+                platform: Self { script, log },
+                presentation: Offscreen,
+                host,
+            }),
+            Some(Scenario::Unreachable) => Err(StandInError::Unreachable),
+            None => Err(StandInError::Unscripted),
+        }
+    }
+
+    fn serve(self, links: PlatformLinks<NoControl>) -> Result<(), StandInError> {
+        (self.script)(Wire::new(links, self.log))
+    }
+}
+
+/// The links of a scripted platform to the runtime, and the requests that the script took from the runtime.
+pub(crate) struct Wire {
+    links: PlatformLinks<NoControl>,
+    waiting: VecDeque<PlatformRequest>,
+    taken: Vec<PlatformRequest>,
+    log: RequestLog,
+}
+
+impl Wire {
+    fn new(links: PlatformLinks<NoControl>, log: RequestLog) -> Self {
+        Self {
+            links,
+            waiting: VecDeque::new(),
+            taken: Vec::new(),
+            log,
+        }
+    }
+
+    pub(crate) fn event(&self, event: PlatformEvent) -> Result<(), StandInError> {
+        self.links
+            .reports
+            .view
+            .push(event)
+            .map_err(StandInError::from)
+    }
+
+    pub(crate) fn timing(&self, event: TimingEvent) -> Result<(), StandInError> {
+        self.links
+            .reports
+            .scheduler
+            .push(event)
+            .map_err(StandInError::from)
+    }
+
+    /// Detaches `surface` from the renderer, which then reports that it retired the surface.
+    pub(crate) fn detach(&self, surface: SurfaceId) -> Result<(), StandInError> {
+        let detach = SurfaceAttachment::Detach(surface);
+        self.links
+            .reports
+            .renderer
+            .push(detach)
+            .map_err(StandInError::from)
+    }
+
+    /// Reports a discarded frame to the frame scheduler. The scheduler passes the report to the frame observer of the
+    /// app after the events that the platform sent before.
+    pub(crate) fn end_marker(&self) -> Result<(), StandInError> {
+        self.timing(TimingEvent::Discarded {
+            surface: SurfaceId(0),
+            frame: FrameTime::default(),
+        })
+    }
+
+    /// Takes requests of the runtime until the surface request `wanted` arrives.
+    pub(crate) fn await_surface_request(
+        &mut self,
+        wanted: &SurfaceRequest,
+    ) -> Result<(), StandInError> {
+        loop {
+            let request = self.next_request().ok_or(StandInError::RequestsEnded)?;
+            if matches!(request, PlatformRequest::Surface(surface) if surface == wanted) {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Takes the requests of the runtime until the runtime ends them, and hands every request that the script took to
+    /// the test.
+    pub(crate) fn finish(mut self) -> Result<(), StandInError> {
+        while self.next_request().is_some() {}
+        self.log.send(self.taken)?;
+        Ok(())
+    }
+
+    /// The next request of the runtime, or `None` once the runtime ended its requests.
+    fn next_request(&mut self) -> Option<&PlatformRequest> {
+        if self.waiting.is_empty() {
+            self.waiting.extend(self.links.requests.take().ok()?);
+        }
+        let request = self.waiting.pop_front()?;
+        self.taken.push(request);
+        self.taken.last()
+    }
+}
+
+pub(crate) type Outcome = Result<(), RunError<StandInError, Infallible>>;
+
+/// The outcome of a run on a scripted platform.
+pub(crate) struct Run {
+    pub(crate) outcome: Outcome,
+    requests: mpsc::Receiver<Vec<PlatformRequest>>,
+}
+
+impl Run {
+    /// The requests that the script took from the runtime. Fails with the failure of the run, or when the script
+    /// ended without finishing.
+    pub(crate) fn requests(self) -> Result<Vec<PlatformRequest>, TestError> {
+        self.outcome?;
+        Ok(self.requests.recv()?)
+    }
+}
+
+/// Runs `setup` on a platform that connects to `host` and runs `script` on the platform thread.
+pub(crate) fn run_scripted(
+    host: HostFacts,
+    setup: RuntimeSetup,
+    script: impl FnOnce(Wire) -> Result<(), StandInError> + Send + 'static,
+) -> Run {
+    let (log, requests) = mpsc::channel();
+    SCENARIO.set(Some(Scenario::Scripted {
+        host,
+        script: Box::new(script),
+        log,
+    }));
+    Run {
+        outcome: drive::<StandIn>(setup),
+        requests,
+    }
+}
+
+/// Runs `setup` on a platform whose host cannot be reached.
+pub(crate) fn run_unreachable(setup: RuntimeSetup) -> Outcome {
+    SCENARIO.set(Some(Scenario::Unreachable));
+    drive::<StandIn>(setup)
+}

@@ -171,12 +171,15 @@ fn setup() -> RendererSetup {
         scene: None,
         gpu_timing: false,
         full_redraw: false,
-        start: Instant::now(),
     }
 }
 
 fn state() -> Result<RendererState<RecordingControl>, TestError> {
-    Ok(RendererState::new(&HeadlessBackend, setup())?)
+    Ok(RendererState::new(
+        &HeadlessBackend,
+        setup(),
+        Instant::now(),
+    )?)
 }
 
 fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl> {
@@ -280,7 +283,8 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
     let streams = FailingStreams {
         events: Rc::clone(&events),
     };
-    let mut state = RendererState::with_streams(&HeadlessBackend, setup(), |_| Ok(streams))?;
+    let mut state =
+        RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| Ok(streams))?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let frame = frame(1, &surface_state);
@@ -336,9 +340,10 @@ fn painted_pixel<S>(
 #[test]
 fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), TestError> {
     let events = Rc::default();
-    let mut state =
-        RendererState::with_streams(&HeadlessBackend, setup(), |_| Ok(BoundFrames::default()))
-            .map_err(StartError::into_state)?;
+    let mut state = RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| {
+        Ok(BoundFrames::default())
+    })
+    .map_err(StartError::into_state)?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let stream = StreamId::next();

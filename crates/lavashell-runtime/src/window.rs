@@ -4,7 +4,7 @@ use lavashell_core::geometry::{Point, Size};
 use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::units::Dp;
 use lavashell_core::view::{Proposal, TextMeasurer, View};
-use lavashell_platform::{Appearance, Role, SurfaceSpec};
+use lavashell_platform::{Appearance, Role, SurfaceSpec, WindowRole};
 use std::rc::Rc;
 
 /// Whether a point in dp belongs to the drag region of a window with the given size.
@@ -133,13 +133,13 @@ impl Window {
                 hdr_metadata: self.hdr_metadata,
                 background_blur: self.background_blur,
             },
-            role: Role::Window {
+            role: Role::Window(WindowRole {
                 title: self.title.clone(),
                 app_id: self.app_id.clone(),
                 min_size: self.min_size,
                 fullscreen: self.fullscreen,
                 draws_decorations: self.shape.is_some(),
-            },
+            }),
         })
     }
 }

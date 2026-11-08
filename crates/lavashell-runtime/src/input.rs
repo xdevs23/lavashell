@@ -21,7 +21,7 @@ pub type InputFilter = Box<dyn FnMut(SurfaceId, InputEvent) -> Option<InputEvent
 
 /// What the router passes on to the view of a surface.
 #[derive(Debug, PartialEq)]
-pub enum RoutedInput {
+pub(crate) enum RoutedInput {
     Input {
         surface: SurfaceId,
         input: InputEvent,
@@ -112,7 +112,7 @@ struct KeyboardState {
 
 /// Routes the input of each pointer to the view under it, the input of each keyboard to the view focused by it, and the
 /// input of each touch point to the view on which it went down.
-pub struct InputRouter {
+pub(crate) struct InputRouter {
     /// The surface under each pointer.
     pointers: BTreeMap<PointerDevice, SurfaceId>,
     /// The pointer that interacts with each surface: the last pointer whose input the surface received.
@@ -177,9 +177,10 @@ impl InputRouter {
             DeviceEvent::Key {
                 keyboard,
                 stroke,
-                state,
+                action,
+                ..
             } => self
-                .route_key(keyboard, stroke, state)
+                .route_key(keyboard, stroke, action.press_state())
                 .into_iter()
                 .collect(),
             DeviceEvent::Modifiers {
@@ -220,6 +221,12 @@ impl InputRouter {
     #[must_use]
     pub fn is_keyboard_focused(&self, surface: SurfaceId) -> bool {
         (self.keyboards.values()).any(|keyboard| keyboard.focus == Some(surface))
+    }
+
+    /// The surface under `pointer`.
+    #[must_use]
+    pub fn pointer_surface(&self, pointer: PointerDevice) -> Option<SurfaceId> {
+        self.pointers.get(&pointer).copied()
     }
 
     /// The pointer that interacts with `surface`.

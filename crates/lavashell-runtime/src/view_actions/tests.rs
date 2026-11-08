@@ -26,7 +26,7 @@ fn watched(requests: &[WatchRequest]) -> Vec<WatchId> {
     (requests.iter())
         .filter_map(|request| match request {
             WatchRequest::Watch(id, ..) => Some(*id),
-            WatchRequest::Unwatch(_) => None,
+            WatchRequest::Resume(_) | WatchRequest::Unwatch(_) => None,
         })
         .collect()
 }
@@ -35,7 +35,7 @@ fn unwatched(requests: &[WatchRequest]) -> Vec<WatchId> {
     (requests.iter())
         .filter_map(|request| match request {
             WatchRequest::Unwatch(id) => Some(*id),
-            WatchRequest::Watch(..) => None,
+            WatchRequest::Watch(..) | WatchRequest::Resume(_) => None,
         })
         .collect()
 }

@@ -9,7 +9,7 @@ use lavashell_core::prelude::Modifier;
 use lavashell_core::ui::PointerPhase;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::{Cursor, View};
-use lavashell_platform::{SurfaceEvent, WindowControlRequest};
+use lavashell_platform::{KeyAction, SurfaceEvent, WindowControlRequest};
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -70,15 +70,16 @@ fn primary_press(pointer: PointerDevice, surface: SurfaceId, at: Point) -> Route
     }
 }
 
-fn key(key: Key, state: PressState) -> DeviceEvent {
+fn key(key: Key, action: KeyAction) -> DeviceEvent {
     let stroke = KeyStroke {
         key: Some(key),
         text: None,
     };
     DeviceEvent::Key {
         keyboard: KEYBOARD,
+        code: 0,
         stroke,
-        state,
+        action,
     }
 }
 
@@ -236,16 +237,16 @@ fn keys_reach_the_focused_surface_with_the_modifiers_held_on_their_keyboard() {
     let received = route_all(
         &mut router,
         [
-            key(Key::Tab, PressState::Pressed),
+            key(Key::Tab, KeyAction::Pressed),
             focus(Some(WINDOW)),
             DeviceEvent::Modifiers {
                 keyboard: KEYBOARD,
                 modifiers: control,
             },
-            key(Key::Character('a'), PressState::Pressed),
-            key(Key::Enter, PressState::Released),
+            key(Key::Character('a'), KeyAction::Pressed),
+            key(Key::Enter, KeyAction::Released),
             focus(None),
-            key(Key::Enter, PressState::Released),
+            key(Key::Enter, KeyAction::Released),
         ],
     );
     let shortcut = Shortcut::control(Key::Character('a'));
@@ -309,9 +310,9 @@ fn the_filter_receives_each_pressed_key_and_passes_on_what_it_returns() {
         &mut router,
         [
             focus(Some(WINDOW)),
-            key(Key::Escape, PressState::Pressed),
-            key(Key::Tab, PressState::Pressed),
-            key(Key::Space, PressState::Released),
+            key(Key::Escape, KeyAction::Pressed),
+            key(Key::Tab, KeyAction::Pressed),
+            key(Key::Space, KeyAction::Released),
         ],
     );
     let tab = InputEvent::Key {
@@ -340,21 +341,26 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
         String::new(),
     )?;
     let moved = by(MOUSE, surface, InputEvent::Move(at(1, 1)));
-    let cursor = Some(PlatformRequest::Input(InputRequest::SetCursor(
-        MOUSE,
-        Cursor::Default,
-    )));
-    assert_eq!(moved.deliver(&mut records), cursor);
+    let sets_default_cursor = |request: Option<PlatformRequest>| {
+        matches!(
+            request,
+            Some(PlatformRequest::Input(InputRequest::SetCursor(
+                MOUSE,
+                Cursor::Default
+            )))
+        )
+    };
+    assert!(sets_default_cursor(moved.deliver(&mut records)));
     let pressed = primary_press(MOUSE, surface, at(1, 1));
-    assert_eq!(pressed.deliver(&mut records), cursor);
+    assert!(sets_default_cursor(pressed.deliver(&mut records)));
     let cancel = RoutedInput::Cancel {
         surface,
         pointer: TABLET,
     };
-    assert_eq!(cancel.deliver(&mut records), None);
+    assert!(cancel.deliver(&mut records).is_none());
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     let left = by(MOUSE, surface, InputEvent::Leave);
-    assert_eq!(left.deliver(&mut records), None);
+    assert!(left.deliver(&mut records).is_none());
     Ok(())
 }
 
@@ -387,14 +393,19 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
         serial: SERIAL,
     };
     let in_region = primary_press(MOUSE, surface, at(5, 2));
-    assert_eq!(
+    assert!(matches!(
         in_region.deliver(&mut records),
-        Some(PlatformRequest::WindowControl(begin_move))
-    );
+        Some(PlatformRequest::WindowControl(request)) if request == begin_move
+    ));
     assert_eq!(presses(), 0);
     let outside = primary_press(MOUSE, surface, at(5, 8));
-    let cursor = PlatformRequest::Input(InputRequest::SetCursor(MOUSE, Cursor::Pointer));
-    assert_eq!(outside.deliver(&mut records), Some(cursor));
+    assert!(matches!(
+        outside.deliver(&mut records),
+        Some(PlatformRequest::Input(InputRequest::SetCursor(
+            MOUSE,
+            Cursor::Pointer
+        )))
+    ));
     assert_eq!(presses(), 1);
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     records.retire(surface);
