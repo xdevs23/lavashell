@@ -8,18 +8,16 @@ of the build profile is the control case and must change every layer. Nothing is
 import argparse
 import importlib.util
 import json
-import os
-import resource
 import shutil
 import subprocess
 import sys
 import tempfile
 import tomllib
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+from concurrent_checks import run_concurrently
 from flake_evaluation import locked_nixpkgs
 
 
@@ -189,14 +187,6 @@ def check_implicit_build(baseline):
         "engine plan dropped the original build script"
 
 
-def concurrent_checks(count):
-    """How many checks run at once: one per processor, as many as the free memory holds at the peak resident size
-    of the largest refresh or evaluation that has finished so far."""
-    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024
-    free = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
-    return max(1, min(count, os.process_cpu_count() or 1, free // peak))
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--nixpkgs", help="the nixpkgs source (default: the one the flake locks)")
@@ -218,9 +208,7 @@ def main():
                                                     ("inactive_native_closure", inactive_native_local, True),
                                                     ("selected_profile", profile_change, False))]
         checks += [partial(check_links_rejected, baseline), partial(check_implicit_build, baseline)]
-        with ThreadPoolExecutor(max_workers=concurrent_checks(len(checks))) as pool:
-            for running in [pool.submit(check) for check in checks]:
-                running.result()
+        run_concurrently(checks)
     print("Passed 5 regenerated dependency-layer boundaries, 1 original-engine links rejection and 1 build script")
 
 
