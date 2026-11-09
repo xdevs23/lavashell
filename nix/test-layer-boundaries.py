@@ -27,7 +27,7 @@ def scope(module, root, nixpkgs, gui_tools=False):
         }};
         tree = import (builtins.toPath {json.dumps(str(module))}) {{
           inherit pkgs;
-          root = builtins.toPath {json.dumps(str(root))};
+          root = /. + {json.dumps(str(root))};
         }};
         reference = import (builtins.toPath {json.dumps(str(module.with_name("reference-package.nix")))}) {{
           inherit (original) lib;
@@ -100,7 +100,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="boundaries-") as temporary:
         fixture = Path(temporary) / "repository"
         fixture.mkdir()
-        for name in ("Cargo.toml", "Cargo.lock", "COPYING"):
+        for name in ("Cargo.toml", "Cargo.lock", "COPYING", "about.toml"):
             shutil.copy2(root / name, fixture / name)
         (fixture / "nix").mkdir()
         shutil.copytree(root / "nix/cargo-projections", fixture / "nix/cargo-projections")
