@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, WindowShape, measure_content};
+use crate::shape::WindowShape;
+use crate::surface_records::{self, measure_content};
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::units::Dp;
@@ -116,7 +117,7 @@ impl Window {
         &self,
         view: &mut View,
         text: &mut impl TextMeasurer,
-    ) -> Result<SurfaceSpec, Error> {
+    ) -> Result<SurfaceSpec, surface_records::Error> {
         let unbounded = Proposal {
             width: None,
             height: None,

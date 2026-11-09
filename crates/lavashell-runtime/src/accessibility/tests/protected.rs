@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::test_error::TestResult;
 use accesskit_consumer::Tree;
 use lavashell_core::prelude::{
     Density, Dp, DpExt, InputEvent, Key, Modifier, ProtectedText, Size, TextFieldOptions,
@@ -17,8 +18,7 @@ impl TextMeasurer for Metrics {
 }
 
 #[test]
-fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> Result<(), TestError>
-{
+fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> TestResult {
     let secret = ProtectedText::new();
     let private = secret.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
@@ -66,7 +66,7 @@ fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> R
         let consumer = Tree::new(native, true);
         let field = (consumer.state())
             .node_by_tree_local_id(id, TreeId::ROOT)
-            .ok_or(TestError::MissingNativeNode(id))?;
+            .ok_or(AccessibilityTestError::MissingNativeNode(id))?;
         assert_eq!(field.role(), NativeRole::PasswordInput);
         assert_eq!(field.value().as_deref(), Some(""));
         assert!(!field.supports_text_ranges());

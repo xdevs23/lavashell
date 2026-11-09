@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::request::{DragCompletion, DragReceipt, DragStarted};
-use super::{DragGesture, DragRequest, DragSourceObserver, Shared};
-use crate::{Error, SurfaceRecords};
+use super::{DragGesture, DragRequest, DragSourceObserver, Error, Shared};
+use crate::surface_records::SurfaceRecords;
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{Cancellation, DragAction, TransferData, TransferId};
@@ -73,7 +73,7 @@ impl DragProgress {
         Some(match (self.failure.take(), self.action, self.sent) {
             (Some(error), _, _) => Err(error),
             (None, Some(action), sent) if sent > 0 => Ok(action),
-            _ => Err(Error::DragWithoutTransfer),
+            _ => Err(Error::WithoutTransfer),
         })
     }
 }
@@ -302,7 +302,7 @@ impl DragSources {
             sends: Vec::new(),
         };
         if actions.is_empty() {
-            source.complete(Err(Error::DragWithoutAction), records);
+            source.complete(Err(Error::WithoutAction), records);
             return;
         }
         let id = match self.new_source_id() {
@@ -387,6 +387,7 @@ impl DragSources {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipe_transfers;
 
     fn progress() -> DragProgress {
         DragProgress {
@@ -408,7 +409,7 @@ mod tests {
         progress.pending = 0;
         assert!(matches!(
             progress.take_result(),
-            Some(Err(Error::DragWithoutTransfer))
+            Some(Err(Error::WithoutTransfer))
         ));
         progress.sent = 1;
         assert!(matches!(progress.take_result(), Some(Ok(DragAction::Move))));
@@ -421,15 +422,16 @@ mod tests {
         progress.sent = 1;
         assert!(progress.take_result().is_none());
         progress.finished = true;
-        progress.failure = Some(Error::WritePipe(std::io::ErrorKind::BrokenPipe.into()));
+        let broken = std::io::ErrorKind::BrokenPipe.into();
+        progress.failure = Some(Error::Transfer(pipe_transfers::Error::WritePipe(broken)));
         assert!(matches!(
             progress.take_result(),
-            Some(Err(Error::WritePipe(_)))
+            Some(Err(Error::Transfer(pipe_transfers::Error::WritePipe(_))))
         ));
         progress.action = None;
         assert!(matches!(
             progress.take_result(),
-            Some(Err(Error::DragWithoutTransfer))
+            Some(Err(Error::WithoutTransfer))
         ));
     }
 }

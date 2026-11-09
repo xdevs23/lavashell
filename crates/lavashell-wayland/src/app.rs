@@ -5,10 +5,17 @@ use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::ConfigureToken;
 use lavashell_platform::SurfaceEvent;
 use lavashell_renderer::{Fonts, PainterSetup, SceneSetup};
-use lavashell_runtime::{
-    ActionQueue, ClipboardTransfers, Drags, InputFilter, LayerSurface, LockConfiguration,
-    Observers, PanelsPerOutput, RunEnd, SurfaceSetup, Watches,
-};
+use lavashell_runtime::clipboard::ClipboardTransfers;
+use lavashell_runtime::drag::Drags;
+use lavashell_runtime::input::InputFilter;
+use lavashell_runtime::layer_surface::LayerSurface;
+use lavashell_runtime::observers::Observers;
+use lavashell_runtime::panels::PanelsPerOutput;
+use lavashell_runtime::run::SurfaceSetup;
+use lavashell_runtime::run_end::RunEnd;
+use lavashell_runtime::session_lock::LockConfiguration;
+use lavashell_runtime::view_actions::ActionQueue;
+use lavashell_runtime::watches::Watches;
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_seat, wl_surface, wl_touch};
 use sctk::reexports::protocols::ext::background_effect::v1::client::{

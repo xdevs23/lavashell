@@ -1,9 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_error::{TestError, TestResult};
 use lavashell_core::geometry::{Size, Viewport};
 use lavashell_core::units::{Density, DpExt};
-use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
+use lavashell_test_fixtures::{FrameFailure, NoText, RecordedScene, WithoutFailures};
+
+#[derive(Debug, thiserror::Error)]
+enum SessionLockTestError {
+    #[error(transparent)]
+    SessionLock(#[from] Error),
+    #[error("the session lock did not create a view for the output")]
+    NoLockView,
+    #[error("a frame of a view failed")]
+    FrameFailure(#[from] FrameFailure),
+}
+
+type SessionLockTestResult<T = ()> = Result<T, SessionLockTestError>;
 
 const FIRST: OutputId = OutputId(1);
 const SECOND: OutputId = OutputId(2);
@@ -13,14 +24,14 @@ fn configuration(handle: &SessionLock) -> LockConfiguration {
 }
 
 /// Opens `surface` on `output` with the view offered by `lock`.
-fn open(lock: &mut ActiveLock, output: OutputId, surface: SurfaceId) -> TestResult {
-    let _view = lock.view_for(output).ok_or(TestError::NoLockView)?;
+fn open(lock: &mut ActiveLock, output: OutputId, surface: SurfaceId) -> SessionLockTestResult {
+    let _view = (lock.view_for(output)).ok_or(SessionLockTestError::NoLockView)?;
     lock.opened(output, surface);
     Ok(())
 }
 
 /// A lock started on both outputs, with surface 1 on the first output and surface 2 on the second.
-fn locked_on_both(handle: &SessionLock) -> Result<ActiveLock, TestError> {
+fn locked_on_both(handle: &SessionLock) -> SessionLockTestResult<ActiveLock> {
     let mut lock = ActiveLock::start(configuration(handle), &[FIRST, SECOND])?;
     open(&mut lock, FIRST, SurfaceId(1))?;
     open(&mut lock, SECOND, SurfaceId(2))?;
@@ -28,7 +39,7 @@ fn locked_on_both(handle: &SessionLock) -> Result<ActiveLock, TestError> {
 }
 
 #[test]
-fn release_is_scoped_to_one_attached_lifecycle() -> TestResult {
+fn release_is_scoped_to_one_attached_lifecycle() -> SessionLockTestResult {
     let handle = SessionLock::new();
     handle.unlock();
     assert!(!handle.release_requested());
@@ -49,17 +60,14 @@ fn release_is_scoped_to_one_attached_lifecycle() -> TestResult {
 fn a_lock_needs_an_output_and_a_fresh_handle() {
     let handle = SessionLock::new();
     let without_output = ActiveLock::start(configuration(&handle), &[]);
-    assert!(matches!(
-        without_output,
-        Err(Error::SessionLockWithoutOutput)
-    ));
+    assert!(matches!(without_output, Err(Error::WithoutOutput)));
     assert!(ActiveLock::start(configuration(&handle), &[FIRST]).is_ok());
     let reused = ActiveLock::start(configuration(&handle), &[FIRST]);
-    assert!(matches!(reused, Err(Error::SessionLockReused)));
+    assert!(matches!(reused, Err(Error::Reused)));
 }
 
 #[test]
-fn each_output_gets_one_lock_surface_until_it_is_removed() -> TestResult {
+fn each_output_gets_one_lock_surface_until_it_is_removed() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = locked_on_both(&handle)?;
     assert!(lock.view_for(FIRST).is_none());
@@ -71,7 +79,7 @@ fn each_output_gets_one_lock_surface_until_it_is_removed() -> TestResult {
 }
 
 #[test]
-fn an_output_is_offered_a_view_until_its_lock_surface_opened() -> TestResult {
+fn an_output_is_offered_a_view_until_its_lock_surface_opened() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = ActiveLock::start(configuration(&handle), &[FIRST])?;
     assert!(lock.view_for(FIRST).is_some());
@@ -83,7 +91,7 @@ fn an_output_is_offered_a_view_until_its_lock_surface_opened() -> TestResult {
 }
 
 #[test]
-fn an_unlock_waits_for_the_lock_and_closes_every_lock_surface() -> TestResult {
+fn an_unlock_waits_for_the_lock_and_closes_every_lock_surface() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = locked_on_both(&handle)?;
     handle.unlock();
@@ -97,7 +105,7 @@ fn an_unlock_waits_for_the_lock_and_closes_every_lock_surface() -> TestResult {
 }
 
 #[test]
-fn outputs_that_appear_during_the_unlock_get_no_lock_surface() -> TestResult {
+fn outputs_that_appear_during_the_unlock_get_no_lock_surface() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = locked_on_both(&handle)?;
     lock.handle(LockEvent::Locked);
@@ -110,7 +118,7 @@ fn outputs_that_appear_during_the_unlock_get_no_lock_surface() -> TestResult {
 }
 
 #[test]
-fn the_confirmed_unlock_releases_the_handle() -> TestResult {
+fn the_confirmed_unlock_releases_the_handle() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = locked_on_both(&handle)?;
     lock.handle(LockEvent::UnlockConfirmed);
@@ -126,19 +134,19 @@ fn the_confirmed_unlock_releases_the_handle() -> TestResult {
 }
 
 #[test]
-fn a_lock_ended_by_the_host_opens_no_surface_and_fails_the_next_step() -> TestResult {
+fn a_lock_ended_by_the_host_opens_no_surface_and_fails_the_next_step() -> SessionLockTestResult {
     let handle = SessionLock::new();
     let mut lock = locked_on_both(&handle)?;
     lock.handle(LockEvent::Locked);
     lock.handle(LockEvent::Finished);
     lock.handle(LockEvent::Locked);
     assert!(lock.view_for(OutputId(3)).is_none());
-    assert!(matches!(lock.step(), Err(Error::SessionLockEnded)));
+    assert!(matches!(lock.step(), Err(Error::Ended)));
     Ok(())
 }
 
 #[test]
-fn every_lock_surface_shows_a_view_of_the_same_compose_function() -> TestResult {
+fn every_lock_surface_shows_a_view_of_the_same_compose_function() -> SessionLockTestResult {
     let composed = Rc::new(Cell::new(0));
     let counted = composed.clone();
     let configuration = LockConfiguration::new(
@@ -149,7 +157,8 @@ fn every_lock_surface_shows_a_view_of_the_same_compose_function() -> TestResult 
     let mut lock = ActiveLock::start(configuration, &[FIRST, SECOND])?;
     let mut views = Vec::new();
     for (output, id) in [(FIRST, 1), (SECOND, 2)] {
-        views.push(lock.view_for(output).ok_or(TestError::NoLockView)?);
+        let view = (lock.view_for(output)).ok_or(SessionLockTestError::NoLockView)?;
+        views.push(view);
         lock.opened(output, SurfaceId(id));
     }
     let viewport = Viewport::new(Size::new(100.dp(), 50.dp()), Density::ONE);

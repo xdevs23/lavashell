@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{StartError, Stopped, ViewError, ViewInput, observer};
-use crate::{
-    Error, Redraw, Renderer, RendererError, RendererStopped, ScenePipeline, SchedulerThread,
-};
+use crate::renderer_actor::{Renderer, RendererError, RendererStopped};
+use crate::scene_pipeline::{self, ScenePipeline};
+use crate::scheduler::Redraw;
+use crate::scheduler_actor::{self, SchedulerThread};
 use lavashell_actor::{JoinError, Outlet, Sender};
 use lavashell_platform::{SurfaceAttachment, TimingEvent};
 use lavashell_renderer::{PresentationBackend, RendererSetup, SurfaceControl};
@@ -19,8 +20,8 @@ pub(super) struct Actors<C: SurfaceControl + Send + 'static> {
 /// What each actor returned when it stopped. `E` is the error of the controls of the native surfaces.
 pub(crate) struct ActorStops<E> {
     pub(crate) renderer: Result<(), JoinError<RendererError<E>>>,
-    pub(crate) scheduler: Result<(), Error>,
-    pub(crate) scene: Result<(), Arc<Error>>,
+    pub(crate) scheduler: Result<(), scheduler_actor::Error>,
+    pub(crate) scene: Result<(), Arc<scene_pipeline::Error>>,
 }
 
 impl<C: SurfaceControl + Send + 'static> Actors<C> {
@@ -40,10 +41,10 @@ impl<C: SurfaceControl + Send + 'static> Actors<C> {
         inbox: &Sender<ViewInput>,
     ) -> Result<Self, StartError<C::Error>> {
         let builder = observer(inbox, ViewInput::Builder, Stopped::Scene);
-        let scene = ScenePipeline::start(builder).map_err(ViewError::Runtime)?;
+        let scene = ScenePipeline::start(builder).map_err(ViewError::from)?;
         let scheduler_outputs = observer(inbox, ViewInput::Scheduler, Stopped::Scheduler);
         let scheduler =
-            SchedulerThread::start(redraw, start, scheduler_outputs).map_err(ViewError::Runtime)?;
+            SchedulerThread::start(redraw, start, scheduler_outputs).map_err(ViewError::from)?;
         let outputs = observer(inbox, ViewInput::Renderer, Stopped::Renderer);
         let renderer = Renderer::start(presentation, setup, start, cpu_timing, outputs)
             .map_err(StartError::StartRenderer)?;

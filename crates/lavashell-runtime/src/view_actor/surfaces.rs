@@ -2,8 +2,13 @@
 use super::ViewActor;
 use super::frames::ViewSurface;
 use super::panels::{OPENING_LENGTH, opening_size};
-use crate::ViewError;
-use crate::{DragRegion, LayerSurface, LockStep, Panel, SchedulerInput, Window, WindowShape};
+use crate::layer_surface::LayerSurface;
+use crate::panels::Panel;
+use crate::scheduler::SchedulerInput;
+use crate::session_lock::LockStep;
+use crate::shape::WindowShape;
+use crate::view_actor::ViewError;
+use crate::window::{DragRegion, Window};
 use lavashell_core::geometry::Size;
 use lavashell_core::output::OutputRequest;
 use lavashell_core::surface::SurfaceId;

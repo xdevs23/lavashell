@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! A scripted platform and an offscreen presentation for the tests that run the actors of the runtime.
 
+use crate::clipboard::ClipboardTransfers;
+use crate::drag::Drags;
+use crate::observers::Observers;
+use crate::run::{RunError, RuntimeSetup, SurfaceSetup, drive};
+use crate::run_end::RunEnd;
 use crate::test_error::TestError;
-use crate::{
-    ActionQueue, ClipboardTransfers, Drags, Observers, RunEnd, RunError, RuntimeSetup,
-    SurfaceSetup, Watches, Window, drive,
-};
+use crate::view_actions::ActionQueue;
+use crate::watches::Watches;
+use crate::window::Window;
 use ash::vk;
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameTime};

@@ -13,8 +13,10 @@ use std::io::{Read, Write};
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum TestError {
-    #[error("the runtime failed")]
-    Runtime(#[from] Error),
+    #[error("the clipboard failed")]
+    Clipboard(#[from] Error),
+    #[error("the surface records failed")]
+    Records(#[from] crate::surface_records::Error),
     #[error("the transfer data is not valid")]
     Transfer(#[from] TransferError),
     #[error("a frame failed")]
@@ -242,7 +244,7 @@ fn a_read_receives_every_byte_in_the_first_offered_format() -> TestResult {
 fn a_read_fails_without_a_matching_offer_or_an_open_surface() -> TestResult {
     let mut run = Run::new()?;
     let empty = run.read(&["text/plain"]);
-    assert!(matches!(*empty.borrow(), Some(Err(Error::ClipboardEmpty))));
+    assert!(matches!(*empty.borrow(), Some(Err(Error::Empty))));
     run.transfers.handle(offer(&["image/png"]));
     let other = run.read(&["text/plain"]);
     assert!(matches!(
@@ -254,10 +256,7 @@ fn a_read_fails_without_a_matching_offer_or_an_open_surface() -> TestResult {
     let refusal = Err(ReceiveRefusal::Empty);
     run.transfers
         .handle(ClipboardEvent::ReceiveStarted(id, refusal));
-    assert!(matches!(
-        *refused.borrow(),
-        Some(Err(Error::ClipboardEmpty))
-    ));
+    assert!(matches!(*refused.borrow(), Some(Err(Error::Empty))));
     let _destroy_request = run.records.handle(run.surface, SurfaceEvent::Closed);
     let closed = run.read(&["image/png"]);
     assert!(matches!(

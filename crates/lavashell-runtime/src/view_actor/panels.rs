@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::frames::send_surface_state;
 use super::{ViewActor, send_request};
-use crate::ViewError;
-use crate::{ContentState, SchedulerInput, Transaction};
+use crate::panels::{ContentState, Transaction};
+use crate::scheduler::SchedulerInput;
+use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{AxisPlacement, PanelGeometry};
 use lavashell_core::units::{Dp, NonNegativeDp};

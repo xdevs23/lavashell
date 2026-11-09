@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{DragObserver, DropEvent, DropObserver, Shared};
-use crate::{Error, SurfaceRecords};
+use super::{DragObserver, DropEvent, DropObserver, Error, Shared};
+use crate::surface_records::SurfaceRecords;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{
     Cancellation, DragEvent, DragOfferInfo, DropAcceptance, ReceivedData, TransferId,

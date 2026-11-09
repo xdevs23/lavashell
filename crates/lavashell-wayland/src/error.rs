@@ -97,7 +97,7 @@ pub enum RunError {
     #[error("the app is not set up to run")]
     Setup(#[source] SetupError),
     #[error("the run of the app failed")]
-    Run(#[source] lavashell_runtime::RunError<Error, ControlError>),
+    Run(#[source] lavashell_runtime::run::RunError<Error, ControlError>),
 }
 
 /// A failure of a request for the size or the state of a native surface, sent with a frame or with a commit without a

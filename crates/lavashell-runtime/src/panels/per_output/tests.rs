@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::{Error, OutputRecords};
+use crate::output_records::OutputRecords;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::units::{Density, DpExt};
@@ -12,8 +12,8 @@ const MONITOR: OutputId = OutputId(3);
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("the runtime failed")]
-    Runtime(#[from] Error),
+    #[error("the surface records failed")]
+    Records(#[from] crate::surface_records::Error),
     #[error("the surface of the dock did not open")]
     DockRefused,
 }

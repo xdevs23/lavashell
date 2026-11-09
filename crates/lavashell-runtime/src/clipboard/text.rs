@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Clipboard, log_failure};
-use crate::{Error, ViewActions};
+use super::{Clipboard, Error, log_failure};
+use crate::view_actions::ViewActions;
 use lavashell_core::keyboard::{Key, Shortcut};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{TEXT_FORMATS, TransferData};

@@ -13,7 +13,7 @@ pub(crate) enum TestError {
     #[error("the scene export failed")]
     Scene(#[from] Error),
     #[error("the scene pipeline of the overlay failed")]
-    Pipeline(#[from] Arc<lavashell_runtime::Error>),
+    Pipeline(#[from] Arc<lavashell_runtime::scene_pipeline::Error>),
     #[error("the overlay could not show a frame")]
     ShowFrame(#[from] ShowFrameError),
     #[error("the choreographer of the overlay is gone")]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::FrameSequence;
+use crate::scheduler::FrameSequence;
 use lavashell_actor::{Latest, lock_ignoring_poison};
 use lavashell_core::scene::tree::{SceneSnapshot, SceneTree};
 use lavashell_core::surface::{SurfaceId, SurfaceState};

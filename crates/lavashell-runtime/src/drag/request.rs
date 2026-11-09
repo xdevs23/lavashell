@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
+use super::Error;
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragAction, DragActions, ReceivedData, TransferData, TransferId};

@@ -5,8 +5,8 @@ use std::os::unix::net::UnixStream;
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("the runtime failed")]
-    Runtime(#[from] Error),
+    #[error("the transfer failed")]
+    Transfer(#[from] Error),
     #[error("a socket failed")]
     Socket(#[from] io::Error),
 }

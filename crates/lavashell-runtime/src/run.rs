@@ -2,12 +2,21 @@
 //! Runs an app on a platform: the views on the calling thread, the platform on a thread of its own, and the actors
 //! between them on theirs.
 
+use crate::clipboard::ClipboardTransfers;
 use crate::deadline_receiver::DeadlineReceiver;
-use crate::view_actor::{StopNotice, ViewActor, ViewInput};
-use crate::{
-    ActionQueue, ClipboardTransfers, Drags, Error, InputFilter, LayerSurface, LockConfiguration,
-    Observers, PanelsPerOutput, RendererError, RunEnd, Stopped, ViewError, Watches, Window,
-};
+use crate::drag::Drags;
+use crate::input::InputFilter;
+use crate::layer_surface::LayerSurface;
+use crate::observers::Observers;
+use crate::panels::PanelsPerOutput;
+use crate::renderer_actor::RendererError;
+use crate::run_end::RunEnd;
+use crate::scene_pipeline;
+use crate::session_lock::LockConfiguration;
+use crate::view_actions::ActionQueue;
+use crate::view_actor::{StopNotice, Stopped, ViewActor, ViewError, ViewInput};
+use crate::watches::Watches;
+use crate::window::Window;
 use lavashell_actor::{JoinError, SpawnError, mailbox};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
@@ -61,7 +70,7 @@ pub enum RunError<E, C> {
     #[error("the shaper that measures text for the views could not be created")]
     CreateShaper(#[source] lavashell_renderer::Error),
     #[error("the choreographer or the scene builder failed")]
-    SceneFailed(#[source] Arc<Error>),
+    SceneFailed(#[source] Arc<scene_pipeline::Error>),
     #[error(transparent)]
     View(#[from] ViewError),
 }
@@ -80,7 +89,7 @@ pub fn drive<P: Platform>(
     let start = setup.start;
     let connection = P::connect().map_err(RunError::Platform)?;
     let (inbox, inputs) = mailbox();
-    let inputs = DeadlineReceiver::new(inputs).map_err(ViewError::Runtime)?;
+    let inputs = DeadlineReceiver::new(inputs).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
     let mut view = ViewActor::<P::Control>::start(
         setup,
@@ -114,7 +123,7 @@ pub fn drive<P: Platform>(
     let renderer = stops.renderer.map_err(RunError::RunRenderer);
     let scheduler = stops
         .scheduler
-        .map_err(|error| RunError::View(ViewError::Runtime(error)));
+        .map_err(|error| RunError::View(ViewError::SchedulerActor(error)));
     let scene = stops.scene.map_err(RunError::SceneFailed);
     let platform = match served.join() {
         Ok(served) => served.map_err(RunError::Platform),

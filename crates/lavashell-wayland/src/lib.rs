@@ -22,5 +22,7 @@ pub use lavashell_core::output::MonitorInfo;
 pub use lavashell_core::panel::{
     AxisPlacement, ExclusiveZone, Extent, LayerLayout, LayerLevel, LayerMargins,
 };
-pub use lavashell_runtime::{HostKey, KeyboardFocus, LayerSurface, SessionLock};
+pub use lavashell_runtime::layer_surface::LayerSurface;
+pub use lavashell_runtime::observers::{HostKey, KeyboardFocus};
+pub use lavashell_runtime::session_lock::SessionLock;
 pub use translator::Wayland;

@@ -4,10 +4,12 @@ use super::*;
 const SURFACE: SurfaceId = SurfaceId(1);
 
 /// The tree that `request` publishes.
-fn published_tree(request: Option<AccessibilityRequest>) -> Result<Box<TreeUpdate>, TestError> {
+fn published_tree(
+    request: Option<AccessibilityRequest>,
+) -> Result<Box<TreeUpdate>, AccessibilityTestError> {
     match request {
         Some(AccessibilityRequest::Publish { tree, .. }) => Ok(tree),
-        _ => Err(TestError::NotPublished),
+        _ => Err(AccessibilityTestError::NotPublished),
     }
 }
 
@@ -26,7 +28,8 @@ fn a_surface_publishes_only_while_an_assistive_technology_reads_a_tree_with_node
 }
 
 #[test]
-fn a_surface_publishes_each_revision_once_and_again_when_asked() -> Result<(), TestError> {
+fn a_surface_publishes_each_revision_once_and_again_when_asked()
+-> Result<(), AccessibilityTestError> {
     let mut state = SurfaceAccessibility::new("Window".into());
     state.activate();
     let mut tree = tree();
@@ -42,7 +45,7 @@ fn a_surface_publishes_each_revision_once_and_again_when_asked() -> Result<(), T
 }
 
 #[test]
-fn a_root_without_a_name_has_the_name_of_the_surface() -> Result<(), TestError> {
+fn a_root_without_a_name_has_the_name_of_the_surface() -> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     root_mut(&mut tree)?.name = None;
     let mut state = SurfaceAccessibility::new("Window".into());

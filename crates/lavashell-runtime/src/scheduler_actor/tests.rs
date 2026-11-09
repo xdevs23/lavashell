@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::{FrameKind, ViewState};
+use crate::scheduler::{FrameKind, ViewState};
 use lavashell_core::frame::FrameTime;
 use lavashell_platform::TimingEvent;
 use std::sync::mpsc;

@@ -13,7 +13,8 @@ fn spacer_view() -> View {
 }
 
 #[test]
-fn a_window_opens_at_its_requested_size_or_else_at_the_size_its_view_fits() -> Result<(), Error> {
+fn a_window_opens_at_its_requested_size_or_else_at_the_size_its_view_fits()
+-> Result<(), surface_records::Error> {
     let mut view = spacer_view();
     let window = Window::new("Title", "org.example.Title");
     let measured = window.spec(&mut view, &mut NoText)?;
@@ -26,7 +27,8 @@ fn a_window_opens_at_its_requested_size_or_else_at_the_size_its_view_fits() -> R
 }
 
 #[test]
-fn a_shaped_window_is_transparent_and_draws_its_decorations() -> Result<(), Error> {
+fn a_shaped_window_is_transparent_and_draws_its_decorations() -> Result<(), surface_records::Error>
+{
     let mut view = spacer_view();
     let window = Window::new("Title", "org.example.Title");
     let plain = window.clone().spec(&mut view, &mut NoText)?;
@@ -41,7 +43,7 @@ fn a_shaped_window_is_transparent_and_draws_its_decorations() -> Result<(), Erro
 }
 
 #[test]
-fn the_spec_carries_every_setting_of_the_window() -> Result<(), Error> {
+fn the_spec_carries_every_setting_of_the_window() -> Result<(), surface_records::Error> {
     let output = OutputRequest::new(OutputProfile::Hdr10, Precision::Ten);
     let metadata = HdrMetadata {
         mastering_gamut: Gamut::Rec2020,

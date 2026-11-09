@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::Ui;
@@ -8,6 +7,10 @@ use lavashell_platform::{LockEvent, OutputId};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
+
+mod error;
+
+pub use error::Error;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Lifetime {
@@ -38,7 +41,7 @@ impl SessionLock {
 
     fn attach(&self) -> Result<(), Error> {
         if self.0.get() != Lifetime::Fresh {
-            return Err(Error::SessionLockReused);
+            return Err(Error::Reused);
         }
         self.0.set(Lifetime::Attached);
         Ok(())
@@ -135,7 +138,7 @@ impl ActiveLock {
     /// content, and when the handle of `configuration` was attached before.
     pub fn start(configuration: LockConfiguration, outputs: &[OutputId]) -> Result<Self, Error> {
         if outputs.is_empty() {
-            return Err(Error::SessionLockWithoutOutput);
+            return Err(Error::WithoutOutput);
         }
         configuration.handle.attach()?;
         Ok(Self {
@@ -184,7 +187,7 @@ impl ActiveLock {
     /// Fails when the host ended the lock or did not lock the session.
     pub fn step(&mut self) -> Result<LockStep, Error> {
         match self.phase {
-            LockPhase::Finished => Err(Error::SessionLockEnded),
+            LockPhase::Finished => Err(Error::Ended),
             LockPhase::Unlocked => {
                 self.session_lock.release();
                 Ok(LockStep::Released)

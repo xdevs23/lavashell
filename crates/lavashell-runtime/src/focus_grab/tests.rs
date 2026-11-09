@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_error::{TestError, TestResult};
-use crate::{KeyboardPolicy, PanelContent, PanelOptions};
+use crate::panels::test_error::PanelsTestError;
+use crate::panels::{KeyboardPolicy, PanelContent, PanelOptions};
+use crate::test_error::TestResult;
+use crate::view_actor::ViewError;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::reactive::State;
@@ -30,7 +32,7 @@ struct Host {
 }
 
 impl Host {
-    fn new(grab: FocusGrab) -> Result<Self, TestError> {
+    fn new(grab: FocusGrab) -> TestResult<Self> {
         let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
             ui.spacer(500.dp(), 40.dp(), Modifier::new());
         });
@@ -40,7 +42,9 @@ impl Host {
         };
         let panel = Panel::new(options, &mut view, &mut NoText)?;
         let mut surfaces = SurfaceRecords::new(PreferenceOverrides::default());
-        let surface = surfaces.open(view, surface_size(), Density::ONE, None, String::new())?;
+        let surface = surfaces
+            .open(view, surface_size(), Density::ONE, None, String::new())
+            .map_err(ViewError::from)?;
         let configure = SurfaceEvent::Configured {
             width: None,
             height: None,
@@ -66,7 +70,8 @@ impl Host {
         if let Some(change) = self.panels.geometry_change(self.surface) {
             state.apply(change);
         }
-        let requests = (self.panels.requests(self.surface, &state)).ok_or(TestError::NoPanel)?;
+        let requests =
+            (self.panels.requests(self.surface, &state)).ok_or(PanelsTestError::NoPanel)?;
         self.panels
             .shown(self.surface, PanelContent { size, input }, requests);
         Ok(())

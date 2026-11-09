@@ -5,8 +5,8 @@ use std::cell::Cell;
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
-    #[error("the runtime failed")]
-    Runtime(#[from] Error),
+    #[error("the watches failed")]
+    Watches(#[from] watches::Error),
     #[error("a pipe could not be created")]
     CreatePipe(#[from] std::io::Error),
 }

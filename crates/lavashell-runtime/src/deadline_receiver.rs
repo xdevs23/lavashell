@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use lavashell_actor::{Closed, Merge, Receiver};
 use rustix::event::{EventfdFlags, PollFd, PollFlags, eventfd, poll};
 use rustix::io::{Errno, read, write};
@@ -10,6 +9,10 @@ use rustix::time::{
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
+
+mod error;
+
+pub use error::Error;
 
 /// What ended the wait of a [`DeadlineReceiver`].
 #[derive(Debug, PartialEq, Eq)]

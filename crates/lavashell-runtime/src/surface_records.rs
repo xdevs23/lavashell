@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod accessibility;
+mod error;
 
-pub use accessibility::AccessibilityOutcome;
+pub use accessibility::{AccessibilityFailure, AccessibilityOutcome};
+pub use error::Error;
 
 use crate::accessibility::SurfaceAccessibility;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
-use crate::{DragRegion, Error};
+use crate::window::DragRegion;
 use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
@@ -218,5 +220,7 @@ pub fn measure_content(
     (view.size_that_fits(proposal, text)).map_err(Error::MeasureView)
 }
 
+#[cfg(test)]
+pub(crate) mod test_error;
 #[cfg(test)]
 mod tests;

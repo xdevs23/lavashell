@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, RendererError, RendererStopped, RunError, ShapeGeometryError};
+use crate::renderer_actor::{RendererError, RendererStopped};
+use crate::run::RunError;
+use crate::shape_geometry::ShapeGeometryError;
 use lavashell_actor::{Closed, SpawnError};
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
@@ -22,7 +24,17 @@ pub enum Stopped {
 #[derive(Debug, thiserror::Error)]
 pub enum ViewError {
     #[error(transparent)]
-    Runtime(#[from] Error),
+    DeadlineReceiver(#[from] crate::deadline_receiver::Error),
+    #[error(transparent)]
+    Panels(#[from] crate::panels::Error),
+    #[error(transparent)]
+    ScenePipeline(#[from] crate::scene_pipeline::Error),
+    #[error(transparent)]
+    SchedulerActor(#[from] crate::scheduler_actor::Error),
+    #[error(transparent)]
+    SessionLock(#[from] crate::session_lock::Error),
+    #[error(transparent)]
+    SurfaceRecords(#[from] crate::surface_records::Error),
     #[error("a surface could not show a frame of its view")]
     ShowScene(#[source] FrameError<Closed>),
     #[error(transparent)]

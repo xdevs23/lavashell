@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::Window;
 use crate::test_error::{TestError, TestResult};
 use crate::test_host::{
     NoControl, Offscreen, closed, created, empty_view, host, runtime_setup, surface_requests,
     window,
 };
 use crate::watches::AfterReady;
+use crate::window::Window;
 use lavashell_actor::{Receiver, mailbox};
 use lavashell_core::geometry::Size;
 use lavashell_core::output::OutputRequest;
@@ -31,7 +31,7 @@ struct Views {
 impl Views {
     fn start(setup: RuntimeSetup, host: HostFacts) -> Result<Self, TestError> {
         let (inbox, items) = mailbox();
-        let inputs = DeadlineReceiver::new(items)?;
+        let inputs = DeadlineReceiver::new(items).map_err(ViewError::from)?;
         let (sender, requests) = mailbox();
         let actor = ViewActor::<NoControl>::start(setup, Offscreen, host, sender, &inbox)?;
         Ok(Self {

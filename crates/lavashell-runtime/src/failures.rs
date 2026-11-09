@@ -10,4 +10,6 @@ pub(crate) fn log_failures(failures: Failures) {
 }
 
 #[cfg(test)]
+pub(crate) mod test_error;
+#[cfg(test)]
 mod tests;

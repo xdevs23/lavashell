@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::FrameSequence;
 use crate::builder_actor::BuilderInput;
 use crate::scene_item::{SceneFrame, SceneItem, SceneKey};
+use crate::scheduler::FrameSequence;
 use lavashell_actor::{Actor, Choreographer, Closed, Effect, Flow, Intake, Merge, Sender};
 use lavashell_core::surface::SurfaceId;
 use std::collections::BTreeMap;

@@ -23,10 +23,19 @@ pub mod prelude {
     pub use lavashell_core::prelude::*;
     pub use lavashell_renderer::{Fonts, Painter, VulkanRenderer};
     #[cfg(target_os = "linux")]
-    pub use lavashell_runtime::{
-        Clipboard, DragGesture, DragRequest, DropEvent, Error as RuntimeError, ViewActions,
-    };
-    pub use lavashell_runtime::{Window, WindowShape};
+    pub use lavashell_runtime::clipboard::{Clipboard, Error as ClipboardError};
+    #[cfg(target_os = "linux")]
+    pub use lavashell_runtime::drag::Error as DragError;
+    #[cfg(target_os = "linux")]
+    pub use lavashell_runtime::drag::{DragGesture, DragRequest, DropEvent};
+    #[cfg(target_os = "linux")]
+    pub use lavashell_runtime::pipe_transfers::Error as PipeTransferError;
+    pub use lavashell_runtime::shape::WindowShape;
+    #[cfg(target_os = "linux")]
+    pub use lavashell_runtime::view_actions::ViewActions;
+    #[cfg(target_os = "linux")]
+    pub use lavashell_runtime::watches::Error as WatchError;
+    pub use lavashell_runtime::window::Window;
     #[cfg(target_os = "linux")]
     pub use lavashell_wayland::{App, LayerLevel, LayerSurface};
 }

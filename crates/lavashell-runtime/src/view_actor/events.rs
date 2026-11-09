@@ -2,7 +2,10 @@
 use super::ViewActor;
 use super::frames::send_frame;
 use super::panels::configured_length;
-use crate::{AccessibilityFailure, Panel, SchedulerInput, Stopped, ViewError};
+use crate::panels::Panel;
+use crate::scheduler::SchedulerInput;
+use crate::surface_records::AccessibilityFailure;
+use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::error::message_chain;
 use lavashell_core::geometry::Viewport;

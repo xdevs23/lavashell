@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod accessibility;
 
+use super::test_error::SurfaceRecordsTestError;
 use super::*;
-use crate::test_error::{TestError, TestResult};
+use crate::test_error::TestResult;
+use crate::view_actor::ViewError;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::DpExt;
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
@@ -13,15 +15,15 @@ fn empty_view() -> View {
     View::new(lavashell_test_fixtures::facts(), |_| {})
 }
 
-fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, TestError> {
+fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, ViewError> {
     let size = Size::new(100.dp(), 50.dp());
     Ok(records.open(empty_view(), size, Density::ONE, None, String::new())?)
 }
 
 /// Frames the view of `surface`, so that it needs no frame until something invalidates it.
 fn frame(records: &mut SurfaceRecords, surface: SurfaceId) -> TestResult {
-    let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
-    let view = records.open_view_mut(surface).ok_or(TestError::NotOpen)?;
+    let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
+    let view = (records.open_view_mut(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
     assert!(!view.needs_visual_frame());
     Ok(())
@@ -90,7 +92,7 @@ fn a_density_change_sets_the_density_and_invalidates_the_view() -> TestResult {
     let density = Density::from_ratio(2.0, 1.0)?;
     let changed = SurfaceEvent::DensityChanged(density);
     assert_eq!(records.handle(surface, changed), None);
-    let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
+    let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     assert_eq!(viewport.density, density);
     assert!(needs_frame(&records, surface));
     Ok(())
@@ -114,7 +116,7 @@ fn a_close_asks_once_for_the_destruction_and_later_events_change_nothing() -> Te
 }
 
 #[test]
-fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> TestResult {
+fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> Result<(), Error> {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let held = Rc::new(10.dp());
     let captured = held.clone();

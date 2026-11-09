@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
+use crate::pipe_transfers::Error;
 use std::io::{self, Read, Write};
 
 /// Whether a transfer through a pipe moved every byte.

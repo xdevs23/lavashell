@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_error::TestResult;
 use lavashell_actor::{Effect, mailbox};
 use std::thread;
+
+#[derive(Debug, thiserror::Error)]
+enum DeadlineReceiverTestError {
+    #[error(transparent)]
+    DeadlineReceiver(#[from] Error),
+    #[error("a mailbox of the test closed")]
+    Closed(#[from] Closed),
+}
+
+type DeadlineReceiverTestResult = Result<(), DeadlineReceiverTestError>;
 
 /// A number in a mailbox, where each number builds on the numbers before it.
 #[derive(Debug, PartialEq)]
@@ -17,7 +26,7 @@ impl Merge for Number {
 }
 
 #[test]
-fn items_that_waited_before_the_receiver_existed_are_returned() -> TestResult {
+fn items_that_waited_before_the_receiver_existed_are_returned() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
     sender.push(Number(1))?;
     sender.push(Number(2))?;
@@ -32,7 +41,7 @@ fn items_that_waited_before_the_receiver_existed_are_returned() -> TestResult {
 }
 
 #[test]
-fn an_item_that_arrives_during_the_wait_ends_it() -> TestResult {
+fn an_item_that_arrives_during_the_wait_ends_it() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
     let receiver = DeadlineReceiver::new(items)?;
     let pusher = thread::spawn(move || sender.push(Number(1)));
@@ -42,7 +51,7 @@ fn an_item_that_arrives_during_the_wait_ends_it() -> TestResult {
 }
 
 #[test]
-fn dropping_the_last_sender_ends_the_wait() -> TestResult {
+fn dropping_the_last_sender_ends_the_wait() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
     let receiver = DeadlineReceiver::new(items)?;
     let dropper = thread::spawn(move || drop(sender));
@@ -52,7 +61,7 @@ fn dropping_the_last_sender_ends_the_wait() -> TestResult {
 }
 
 #[test]
-fn a_deadline_that_passed_ends_the_wait_without_an_item() -> TestResult {
+fn a_deadline_that_passed_ends_the_wait_without_an_item() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
     let receiver = DeadlineReceiver::new(items)?;
     assert_eq!(
@@ -64,7 +73,7 @@ fn a_deadline_that_passed_ends_the_wait_without_an_item() -> TestResult {
 }
 
 #[test]
-fn an_item_that_waits_is_returned_although_the_deadline_passed() -> TestResult {
+fn an_item_that_waits_is_returned_although_the_deadline_passed() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
     let receiver = DeadlineReceiver::new(items)?;
     sender.push(Number(1))?;
@@ -76,7 +85,7 @@ fn an_item_that_waits_is_returned_although_the_deadline_passed() -> TestResult {
 }
 
 #[test]
-fn a_wait_after_a_taken_item_ends_at_its_deadline() -> TestResult {
+fn a_wait_after_a_taken_item_ends_at_its_deadline() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
     let receiver = DeadlineReceiver::new(items)?;
     sender.push(Number(1))?;
@@ -89,7 +98,7 @@ fn a_wait_after_a_taken_item_ends_at_its_deadline() -> TestResult {
 }
 
 #[test]
-fn a_deadline_ahead_ends_the_wait_once_it_passed() -> TestResult {
+fn a_deadline_ahead_ends_the_wait_once_it_passed() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
     let receiver = DeadlineReceiver::new(items)?;
     let deadline = Instant::now() + Duration::from_millis(1);
@@ -103,7 +112,7 @@ fn a_deadline_ahead_ends_the_wait_once_it_passed() -> TestResult {
 }
 
 #[test]
-fn an_item_that_arrives_before_a_deadline_ahead_ends_the_wait() -> TestResult {
+fn an_item_that_arrives_before_a_deadline_ahead_ends_the_wait() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
     let receiver = DeadlineReceiver::new(items)?;
     let pusher = thread::spawn(move || sender.push(Number(1)));
