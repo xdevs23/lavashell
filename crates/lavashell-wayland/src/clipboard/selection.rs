@@ -14,7 +14,7 @@ use smithay_client_toolkit as sctk;
 use std::os::fd::OwnedFd;
 
 impl Platform {
-    /// Executes the clipboard requests made by the runtime.
+    /// Executes the clipboard requests and the drag and drop requests made by the runtime.
     pub(crate) fn submit_transfers(&mut self) {
         for request in self.clipboard.transfers.take_requests() {
             match request {
@@ -28,6 +28,7 @@ impl Platform {
                 }
             }
         }
+        self.execute_drag_requests();
     }
 
     /// Notes the serial of an input event of `seat`. When the input comes from another seat than the last input, the

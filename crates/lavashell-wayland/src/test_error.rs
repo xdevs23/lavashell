@@ -79,18 +79,6 @@ pub(crate) enum TestError {
     Failed(#[from] FrameFailure),
     #[error("the scene could not be built")]
     Scene(#[from] ApplyError),
-    #[error("the view has no field")]
-    MissingField,
-    #[error("the drop has no selected action")]
-    NoSelectedAction,
-    #[error("no field accepts the drag")]
-    DragNotAccepted,
-    #[error("the selected text starts no drag")]
-    NoDragSource,
-    #[error("the drag has no start callback")]
-    NoStartCallback,
-    #[error("the drag has no receipt callback")]
-    NoReceiptCallback,
     #[error("the test process has a logger that is not the recorder of the test")]
     Logger(#[source] &'static SetLoggerError),
 }

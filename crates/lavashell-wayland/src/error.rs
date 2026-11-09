@@ -3,7 +3,6 @@ use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
 use lavashell_renderer::{DrawError, InputSizeError, OutlineError, StateError};
@@ -14,7 +13,6 @@ use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
 use std::convert::Infallible;
-use std::io;
 use std::num::TryFromIntError;
 
 /// A failure of the Wayland host, named after the operation that failed.
@@ -50,8 +48,6 @@ pub enum Error {
     SchedulePreferenceWatch(#[source] ExecutorDestroyed),
     #[error("a file descriptor could not join the event loop")]
     WatchFd(#[source] calloop::Error),
-    #[error("a transfer pipe could not join the event loop")]
-    WatchPipe(#[source] calloop::Error),
     #[error("the event loop failed to dispatch")]
     DispatchEvents(#[source] calloop::Error),
     #[error("the requests could not be sent to the compositor")]
@@ -104,22 +100,10 @@ pub enum Error {
     FocusGrabWithoutSurface(SurfaceId),
     #[error("the serial of an input event does not fit a Wayland serial")]
     ProtocolSerial(#[source] TryFromIntError),
-    #[error("the dragged data could not be received")]
-    ReceiveDrag(#[source] io::Error),
     #[error("the transfer pipe could not be made non-blocking")]
     ConfigurePipe(#[source] rustix::io::Errno),
-    #[error("the compositor offers no drag and drop")]
-    DragUnavailable,
-    #[error("the compositor cannot report the end of a drag")]
-    DragCompletionUnavailable,
-    #[error("a drag needs a supported action")]
-    DragWithoutAction,
-    #[error("the destination asked for a format that the drag did not offer")]
-    UnadvertisedFormat,
-    #[error("the drag finished without a transfer and a supported action")]
-    DragWithoutTransfer,
-    #[error("the transfer was cancelled")]
-    Cancelled(#[from] Cancellation),
+    #[error("a new drag offer has a number too large for a transfer id")]
+    NumberDragOffer,
 }
 
 /// A failure of a request that the present of a frame applies to a native surface.

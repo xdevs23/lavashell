@@ -5,6 +5,7 @@
 
 mod accessibility;
 mod clipboard;
+mod drag;
 mod focus_grab;
 mod input;
 mod lock;
@@ -21,6 +22,10 @@ pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_differenc
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,
+};
+pub use drag::{
+    DragDevice, DragReceiveRefusal, DragRefusal, DragSourceEvent, DragSourceId, DragSourceRequest,
+    DragTargetEvent, DragTargetRequest,
 };
 pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{

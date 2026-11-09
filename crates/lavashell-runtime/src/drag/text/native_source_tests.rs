@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::DragRequest;
 use lavashell_core::transfer::Cancellation;
 use std::{cell::Cell, rc::Rc};
 
@@ -23,14 +22,14 @@ fn native_source(adapter: &TextTransfers, view: &mut View) -> Result<DragRequest
         position: Point::new(150.dp(), 5.dp()),
     };
     adapter
-        .source(&gesture, 1, view)
-        .ok_or(TestError::NoDragSource)
+        .source(&gesture, view)
+        .ok_or(TestError::Missing("a drag source"))
 }
 
 /// Runs the start callback of `request` with `view`, as the host does after the drag started.
 fn start_drag(request: &mut DragRequest, view: &mut View) -> Result<(), TestError> {
-    let started = request.started.take().ok_or(TestError::NoStartCallback)?;
-    started(view);
+    let started = (request.started.take()).ok_or(TestError::Missing("the start callback"))?;
+    started(DEVICE, view);
     Ok(())
 }
 
@@ -40,7 +39,7 @@ fn link_receipt(request: &mut DragRequest, id: TransferId) -> Result<(), TestErr
     let receipt = request
         .received
         .as_mut()
-        .ok_or(TestError::NoReceiptCallback)?;
+        .ok_or(TestError::Missing("the receipt callback"))?;
     receipt(id);
     Ok(())
 }
@@ -76,12 +75,12 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
     let info = offer(3, Point::new(111.dp(), 5.dp()), DragAction::Move);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     link_receipt(&mut request, info.id)?;
@@ -99,7 +98,7 @@ fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delet
 #[test]
 fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
 -> Result<(), TestError> {
-    for device in [1, 2] {
+    for device in [DEVICE, DragDevice(2)] {
         let Editor {
             mut view,
             mut scene,
@@ -125,11 +124,11 @@ fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
         );
         assert_eq!(
             adapter.receive(received(&info, b"abc")?, &mut view),
-            device != 1
+            device != DEVICE
         );
         assert_eq!(
             text.get(),
-            if device == 1 {
+            if device == DEVICE {
                 "abc abc xyz"
             } else {
                 "abc abc xyzabc"
@@ -138,7 +137,7 @@ fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
         (request.done)(Err(Cancellation::SourceCancelled.into()), &mut view);
         assert_eq!(
             text.get(),
-            if device == 1 {
+            if device == DEVICE {
                 "abc abc xyz"
             } else {
                 "abc abc xyzabc"
@@ -166,12 +165,12 @@ fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
     let info = offer(3, Point::new(111.dp(), 5.dp()), DragAction::Move);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     link_receipt(&mut request, info.id)?;
@@ -199,12 +198,12 @@ fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> R
     let info = offer(3, Point::new(61.dp(), 5.dp()), DragAction::Move);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &view)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &view)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
             .is_none()
     );
     link_receipt(&mut request, info.id)?;
@@ -237,12 +236,12 @@ fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Resul
     info.surface = SurfaceId(1);
     assert!(
         adapter
-            .drag(&DragEvent::Enter(info.clone()), 1, &destination)
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &destination)
             .is_some()
     );
     assert!(
         adapter
-            .drag(&DragEvent::Drop(info.clone()), 1, &destination)
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &destination)
             .is_none()
     );
     link_receipt(&mut request, info.id)?;

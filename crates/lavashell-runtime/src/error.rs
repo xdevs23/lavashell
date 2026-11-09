@@ -2,7 +2,7 @@
 use lavashell_core::accessibility::ActionError;
 use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::NumberError;
-use lavashell_platform::SelectionRefusal;
+use lavashell_platform::{DragReceiveRefusal, DragRefusal, SelectionRefusal};
 use std::collections::TryReserveError;
 use std::io;
 use std::string::FromUtf8Error;
@@ -18,6 +18,8 @@ pub enum Error {
     NumberSelection,
     #[error("a new read of the clipboard has a number too large for a receive id")]
     NumberReceive,
+    #[error("a new drag has a number too large for a drag id")]
+    NumberDragSource,
     #[error("the content of a surface could not be measured")]
     MeasureView(#[source] NumberError),
     #[error("the session-lock handle belongs to another lock")]
@@ -46,6 +48,18 @@ pub enum Error {
     ReserveTransfer(#[source] TryReserveError),
     #[error("the transferred text is not UTF-8")]
     DecodeText(#[source] FromUtf8Error),
+    #[error("the platform did not start the drag")]
+    StartDrag(#[source] DragRefusal),
+    #[error("a drag needs a supported action")]
+    DragWithoutAction,
+    #[error("the destination asked for a format that the drag did not offer")]
+    UnadvertisedFormat,
+    #[error("the drag finished without a transfer and a supported action")]
+    DragWithoutTransfer,
+    #[error("the dragged data could not be sent")]
+    SendDrag(#[source] io::Error),
+    #[error("the dragged data could not be received")]
+    ReceiveDrag(#[source] DragReceiveRefusal),
     #[error("the transfer was cancelled")]
     Cancelled(#[from] Cancellation),
 }
