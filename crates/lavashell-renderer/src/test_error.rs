@@ -23,6 +23,8 @@ pub(crate) enum TestError {
     #[error(transparent)]
     StartWithStreams(#[from] crate::StartError<Error>),
     #[error(transparent)]
+    StateCommit(#[from] crate::CommitError<std::convert::Infallible>),
+    #[error(transparent)]
     Draw(#[from] FailedDraw),
     #[error(transparent)]
     DrawFailure(#[from] DrawFailure),

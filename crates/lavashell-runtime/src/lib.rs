@@ -40,15 +40,15 @@ pub use focus_grab::FocusGrabs;
 pub use input::{InputFilter, InputRouter, RoutedInput};
 pub use output_records::OutputRecords;
 pub use panels::{
-    ContentState, KeyboardPolicy, Panel, PanelContent, PanelOptions, PanelRecords, PanelsPerOutput,
-    Transaction,
+    ContentState, KeyboardPolicy, Panel, PanelContent, PanelOptions, PanelRecords, PanelUpdate,
+    PanelsPerOutput, Transaction,
 };
 pub use run_end::RunEnd;
 pub use scheduler::{
     FrameKind, FrameScheduler, Redraw, SchedulerInput, SchedulerOutput, ViewState,
 };
 pub use session_lock::{ActiveLock, LockConfiguration, LockStep, SessionLock};
-pub use shape::WindowShape;
+pub use shape::{SurfaceShape, WindowShape};
 pub use surface_records::{AccessibilityOutcome, SurfaceRecords, measure_content};
 pub use view_actions::{ActionBatch, ActionQueue, ViewActions};
 pub use watches::Watches;

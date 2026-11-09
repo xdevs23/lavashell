@@ -5,7 +5,7 @@ use crate::native_window::NativeWindow;
 use crate::platform::{AospPresentation, RendererState, attach_window};
 use crate::surface_stream::SurfaceStream;
 use lavashell_core::prelude::{FrameTime, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_renderer::text::Shaper;
 use lavashell_renderer::{
     Fonts, FrameOutcome, Latch, LatchedFrames, PresentFrame, RendererSetup, StateError, Stream,
@@ -193,10 +193,12 @@ impl AndroidRenderer {
                 window,
             });
         }
+        let state = SurfaceState::default();
         let frame = PresentFrame {
             time,
             viewport,
             present_at,
+            state: &state,
         };
         let drawn = self.state.draw(SURFACE, frame, snapshot)?;
         Ok(drawn.outcome)
