@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
@@ -9,6 +8,10 @@ use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_pointer};
 use sctk::seat::pointer::{BTN_LEFT, BTN_RIGHT, PointerEventKind};
 use smithay_client_toolkit as sctk;
+
+mod error;
+
+pub use error::DeviceError;
 
 /// The protocol id of `proxy`, which is unique among the live objects on the connection.
 fn protocol_id(proxy: &impl Proxy) -> u64 {
@@ -27,8 +30,8 @@ fn input_serial(serial: u32) -> InputSerial {
     InputSerial(u64::from(serial))
 }
 
-pub(super) fn protocol_serial(serial: InputSerial) -> Result<u32, Error> {
-    u32::try_from(serial.0).map_err(Error::ProtocolSerial)
+pub(super) fn protocol_serial(serial: InputSerial) -> Result<u32, DeviceError> {
+    u32::try_from(serial.0).map_err(DeviceError::ProtocolSerial)
 }
 
 /// The event reported by `kind` for `pointer` at `at` on `surface`.

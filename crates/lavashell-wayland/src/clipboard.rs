@@ -4,7 +4,7 @@
 //! executes the requests made by it.
 
 mod drag;
-mod pipes;
+pub(crate) mod pipes;
 mod selection;
 mod sources;
 mod state;

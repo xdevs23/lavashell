@@ -45,29 +45,29 @@ pub(crate) use presentation::Presentation;
 pub(crate) use watch::WatchSources;
 
 mod accessibility;
-mod control;
+pub(crate) mod control;
 mod creation;
-mod device;
-mod focus_grab;
+pub(crate) mod device;
+pub(crate) mod focus_grab;
 mod input;
 mod key;
-mod layer;
+pub(crate) mod layer;
 mod output_layers;
 mod outputs;
 mod owned_wl_surface;
-mod preferences;
+pub(crate) mod preferences;
 mod presentation;
 mod protocols;
-mod public;
-mod session_lock;
+pub(crate) mod public;
+pub(crate) mod session_lock;
 mod standard_error;
-mod startup;
+pub(crate) mod startup;
 mod touch;
 mod transfer;
-mod watch;
+pub(crate) mod watch;
 mod window_input;
 #[cfg(test)]
-mod wire_messages;
+pub(crate) mod wire_messages;
 
 pub struct App {
     surfaces: Vec<SurfaceSetup>,

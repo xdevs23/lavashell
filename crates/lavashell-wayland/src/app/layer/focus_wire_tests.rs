@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::ConnectionError;
+use crate::Error;
 use crate::app::wire_messages::requests;
 use crate::test_error::TestError;
 use focus_wire::{LAYER, Wire, top_bar};
@@ -73,7 +75,10 @@ fn private_wire_keyboard_modes_follow_the_protocol_version_and_replay_for_a_new_
         let mut wire = Wire::new(version)?;
         let layer = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
         let role = layer.proxy.id().protocol_id();
-        wire.connection.flush().map_err(Error::Flush)?;
+        wire.connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         assert!(requests(&mut wire.peer, role)?.contains(&(4, vec![0])));
         layer.send_keyboard(KeyboardMode::OnDemand);
         assert_eq!(wire.flush()?, vec![(role, 4, vec![on_demand])]);
@@ -84,7 +89,10 @@ fn private_wire_keyboard_modes_follow_the_protocol_version_and_replay_for_a_new_
         assert!(!wire.flush()?.is_empty());
         let replacement = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::OnDemand)?;
         let role = replacement.proxy.id().protocol_id();
-        wire.connection.flush().map_err(Error::Flush)?;
+        wire.connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         assert!(requests(&mut wire.peer, role)?.contains(&(4, vec![on_demand])));
     }
     Ok(())

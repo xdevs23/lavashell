@@ -22,17 +22,18 @@ impl PipeIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::clipboard::pipes::test_error::PipesTestError;
     use crate::test_error::TestError;
 
     #[test]
     fn real_pipe_ends_match_and_unrelated_pipes_do_not() -> Result<(), TestError> {
         let (reader, writer) = rustix::pipe::pipe().map_err(TestError::CreatePipe)?;
         let (other, _) = rustix::pipe::pipe().map_err(TestError::CreatePipe)?;
-        let identity = PipeIdentity::read(&reader).ok_or(TestError::NotPipe)?;
+        let identity = PipeIdentity::read(&reader).ok_or(PipesTestError::NotPipe)?;
         assert!(PipeIdentity::read(&writer) == Some(identity));
         assert!(PipeIdentity::read(&other) != Some(identity));
         let executable = std::env::current_exe().map_err(TestError::CurrentExecutable)?;
-        let executable = std::fs::File::open(executable).map_err(TestError::OpenExecutable)?;
+        let executable = std::fs::File::open(executable).map_err(PipesTestError::OpenExecutable)?;
         assert!(PipeIdentity::read(&executable).is_none());
         Ok(())
     }

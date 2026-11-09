@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::RoleControl;
 use super::{NativeRole, SurfaceProtocols};
-use crate::Error;
 use crate::logical::whole_size;
 use crate::translator::Translator;
 use lavashell_platform::WindowRole;
@@ -11,6 +10,10 @@ use sctk::reexports::client::protocol::wl_surface;
 use sctk::shell::WaylandSurface;
 use sctk::shell::xdg::{XdgShell, window::WindowDecorations};
 use smithay_client_toolkit as sctk;
+
+mod error;
+
+pub use error::WindowError;
 
 impl SurfaceProtocols {
     pub(crate) fn bind(globals: &GlobalList, qh: &QueueHandle<Translator>) -> Self {
@@ -30,8 +33,8 @@ impl Translator {
         &self,
         wl: &wl_surface::WlSurface,
         window: &WindowRole,
-    ) -> Result<(NativeRole, RoleControl), Error> {
-        let xdg = self.protocols.xdg.as_ref().ok_or(Error::NoXdgShell)?;
+    ) -> Result<(NativeRole, RoleControl), WindowError> {
+        let xdg = self.protocols.xdg.as_ref().ok_or(WindowError::NoXdgShell)?;
         let decorations = if window.draws_decorations {
             WindowDecorations::ClientOnly
         } else {
@@ -41,7 +44,7 @@ impl Translator {
         native.set_title(&window.title);
         native.set_app_id(&window.app_id);
         let min_size = (window.min_size)
-            .map(|minimum| whole_size(minimum).ok_or(Error::MinimumWindowSize(minimum)))
+            .map(|minimum| whole_size(minimum).ok_or(WindowError::MinimumWindowSize(minimum)))
             .transpose()?;
         native.set_min_size(min_size);
         if window.fullscreen {

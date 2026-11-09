@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::test_error::LayerTestError;
 use super::*;
+use crate::ConnectionError;
+use crate::Error;
 use crate::app::control::{Control, RoleControl, SurfaceObjects};
 use crate::app::focus_grab::Grabs;
 use crate::app::wire_messages::messages;
+use crate::app::wire_messages::test_error::WireTestError;
 use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1;
 use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
 use crate::test_error::TestError;
@@ -53,8 +57,10 @@ impl Wire {
     pub(super) fn new(version: u32) -> Result<Self, TestError> {
         let (socket, peer) = UnixStream::pair().map_err(TestError::CreateSocketPair)?;
         peer.set_nonblocking(true)
-            .map_err(TestError::ConfigureSocket)?;
-        let connection = Connection::from_socket(socket).map_err(Error::Connect)?;
+            .map_err(WireTestError::ConfigureSocket)?;
+        let connection = Connection::from_socket(socket)
+            .map_err(ConnectionError::Connect)
+            .map_err(Error::from)?;
         let qh = connection.new_event_queue::<Translator>().handle();
         let client_qh = connection.new_event_queue::<wire_tests::Client>().handle();
         let registry = connection.display().get_registry(&client_qh, ());
@@ -109,20 +115,25 @@ impl Wire {
 
     /// Sends the requests for the parts of `state` that differ from the state applied last.
     pub(super) fn send_state(&mut self, state: &SurfaceState) -> Result<(), TestError> {
-        let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
+        let control = self.control.as_mut().ok_or(LayerTestError::NoLayer)?;
         control.send_state(state)?;
         Ok(())
     }
 
     pub(super) fn flush(&mut self) -> Result<Messages, TestError> {
-        self.connection.flush().map_err(Error::Flush)?;
+        self.connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         messages(&mut self.peer)
     }
 
     /// Executes `request` of the runtime on the grabs of the layer, and returns the requests sent.
     pub(super) fn execute(&mut self, request: FocusGrabRequest) -> Result<Messages, TestError> {
         let surface = &self.surface;
-        self.grabs.execute(request, &self.qh, |_| Some(surface))?;
+        self.grabs
+            .execute(request, &self.qh, |_| Some(surface))
+            .map_err(Error::from)?;
         self.flush()
     }
 

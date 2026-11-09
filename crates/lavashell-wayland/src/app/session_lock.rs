@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::RoleControl;
 use super::{NativeRole, configure_event};
-use crate::Error;
 use crate::translator::Translator;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{LockEvent, LockRequest};
@@ -14,6 +13,10 @@ use sctk::reexports::protocols::ext::session_lock::v1::client::{
 };
 use smithay_client_toolkit as sctk;
 use std::num::NonZeroU32;
+
+mod error;
+
+pub use error::SessionLockError;
 
 pub(super) type LockSurface = ExtSessionLockSurfaceV1;
 
@@ -42,22 +45,23 @@ impl Translator {
         wl: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
         surface: SurfaceId,
-    ) -> Result<(NativeRole, RoleControl), Error> {
-        let lock = (self.session_lock.as_ref()).ok_or(Error::LockSurfaceWithoutLock(surface))?;
+    ) -> Result<(NativeRole, RoleControl), SessionLockError> {
+        let lock = (self.session_lock.as_ref())
+            .ok_or(SessionLockError::LockSurfaceWithoutLock(surface))?;
         let lock_surface = lock.get_lock_surface(wl, output, &self.qh, surface);
         Ok((NativeRole::Lock(lock_surface), RoleControl::Stateless))
     }
 
     /// Executes `request` of the runtime on the session lock. The compositor reports what it did as lock events.
-    pub(crate) fn execute_lock(&mut self, request: LockRequest) -> Result<(), Error> {
+    pub(crate) fn execute_lock(&mut self, request: LockRequest) -> Result<(), SessionLockError> {
         match request {
             LockRequest::Lock => {
                 let manager = (self.registry.bind_one(&self.qh, 1..=1, ()))
-                    .map_err(Error::BindSessionLock)?;
+                    .map_err(SessionLockError::BindSessionLock)?;
                 self.session_lock = Some(request_lock(&manager, &self.qh));
             }
             LockRequest::Unlock => {
-                let lock = self.session_lock.take().ok_or(Error::UnlockWithoutLock)?;
+                let lock = (self.session_lock.take()).ok_or(SessionLockError::UnlockWithoutLock)?;
                 send_unlock(&lock, &self.connection, &self.qh);
             }
         }

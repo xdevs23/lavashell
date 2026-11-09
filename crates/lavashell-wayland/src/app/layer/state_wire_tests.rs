@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::test_error::LayerTestError;
 use super::*;
 use crate::test_error::TestError;
 use focus_wire::{Wire, top_bar};
@@ -8,7 +9,7 @@ use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 type Messages = Vec<(u32, u16, Vec<u32>)>;
 
 fn present(wire: &mut Wire, frame: &PresentFrame) -> Result<Messages, TestError> {
-    let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
+    let control = wire.control.as_mut().ok_or(LayerTestError::NoLayer)?;
     control.prepare(frame)?;
     control.before_present(frame);
     control.after_present(FrameOutcome::Shown);
@@ -21,7 +22,7 @@ fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_
     let mut wire = Wire::new(4)?;
     let layer = wire.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
     assert!(!wire.flush()?.is_empty());
-    let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
+    let control = wire.control.as_mut().ok_or(LayerTestError::NoLayer)?;
     let token = ConfigureToken::default();
     control.receive(LayerConfigure { token, serial: 7 });
     let mut state = SurfaceState::default();
@@ -47,7 +48,7 @@ fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_
         .map(|(id, opcode, _)| (id, opcode))
         .collect();
     assert_eq!(again, vec![(surface, 8), (surface, 3)]);
-    let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
+    let control = wire.control.as_mut().ok_or(LayerTestError::NoLayer)?;
     control.commit_state(&state)?;
     assert_eq!(wire.flush()?, vec![(surface, 6, vec![])]);
     Ok(())
@@ -66,7 +67,7 @@ fn private_wire_acknowledges_a_layer_configure_with_the_frame_that_contains_its_
         token: Some(message.token),
     };
     assert_eq!(event, configured);
-    let control = wire.control.as_mut().ok_or(TestError::NoLayer)?;
+    let control = wire.control.as_mut().ok_or(LayerTestError::NoLayer)?;
     control.receive(message);
     let mut state = SurfaceState::default();
     state.apply(SurfaceChange::Configure(message.token));

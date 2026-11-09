@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::layer::{LayerConfigure, LayerControl, LayerRequest};
 use super::presentation::Feedback;
-use crate::ControlError;
 use crate::logical::whole;
 use crate::translator::Translator;
 use lavashell_core::geometry::Rect;
@@ -14,6 +13,10 @@ use sctk::reexports::protocols::ext::background_effect::v1::client::ext_backgrou
 use sctk::reexports::protocols::wp::presentation_time::client::wp_presentation::WpPresentation;
 use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit as sctk;
+
+mod error;
+
+pub use error::ControlError;
 
 /// The protocol objects of a native surface, used by the requests for its frames, and the connection that sends the
 /// requests.

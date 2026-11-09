@@ -4,6 +4,9 @@
 use crate::test_error::TestError;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
+use test_error::TestBusError;
+
+pub(crate) mod test_error;
 
 struct BusProcess(Child);
 
@@ -32,15 +35,15 @@ pub(crate) fn run(
             .args(["--session", "--nofork", "--nopidfile", "--print-address=1"])
             .stdout(Stdio::piped())
             .spawn()
-            .map_err(TestError::StartBusDaemon)?,
+            .map_err(TestBusError::StartBusDaemon)?,
     );
-    let output = daemon.0.stdout.take().ok_or(TestError::NoBusAddress)?;
+    let output = daemon.0.stdout.take().ok_or(TestBusError::NoBusAddress)?;
     let mut address = String::new();
     let read = BufReader::new(output)
         .read_line(&mut address)
-        .map_err(TestError::ReadBusAddress)?;
+        .map_err(TestBusError::ReadBusAddress)?;
     if read == 0 {
-        return Err(TestError::NoBusAddress);
+        return Err(TestBusError::NoBusAddress.into());
     }
     let executable = std::env::current_exe().map_err(TestError::CurrentExecutable)?;
     let result = Command::new(executable)
@@ -49,10 +52,10 @@ pub(crate) fn run(
         .env("DBUS_SESSION_BUS_ADDRESS", address.trim())
         .env("AT_SPI_BUS_ADDRESS", address.trim())
         .status()
-        .map_err(TestError::RunChildTest)?;
+        .map_err(TestBusError::RunChildTest)?;
     if result.success() {
         Ok(())
     } else {
-        Err(TestError::ChildTestFailed(result))
+        Err(TestBusError::ChildTestFailed(result).into())
     }
 }

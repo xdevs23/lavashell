@@ -3,6 +3,7 @@
 //! the bus of the desktop session.
 
 use super::*;
+use crate::accessibility::test_error::AccessibilityTestError;
 use accesskit::{ActionData, ActionRequest, TextPosition, TextSelection};
 use lavashell_actor::{Closed, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -99,7 +100,7 @@ fn wait_event(
         let arrived = reported
             .view
             .take()
-            .map_err(|Closed| TestError::EventsClosed)?;
+            .map_err(|Closed| AccessibilityTestError::EventsClosed)?;
         reported.events.extend(accessibility_events(arrived));
     }
 }
@@ -125,7 +126,7 @@ fn wait_for<T>(
         if holds(&value) {
             return Ok(value);
         }
-        let signal = signals.next().ok_or(TestError::BusClosed)?;
+        let signal = signals.next().ok_or(AccessibilityTestError::BusClosed)?;
         assert_eq!(signal?.message_type(), zbus::message::Type::Signal);
     }
 }
@@ -149,7 +150,7 @@ fn serve_fixture(
         .build()?;
     let name = registry
         .unique_name()
-        .ok_or(TestError::NoUniqueName)?
+        .ok_or(AccessibilityTestError::NoUniqueName)?
         .to_string();
     let served = registry.object_server().at(
         ROOT,
@@ -208,7 +209,7 @@ fn child() -> Result<(), TestError> {
         matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
-        return Err(TestError::UnexpectedEvent);
+        return Err(AccessibilityTestError::UnexpectedEvent.into());
     };
     let run = |character_index| TextPosition {
         node: NodeId(FIRST_RUN),
@@ -266,7 +267,7 @@ fn check_button(
         matches!(event, AccessibilityEvent::Action(SurfaceId(0), _))
     })?
     else {
-        return Err(TestError::UnexpectedEvent);
+        return Err(AccessibilityTestError::UnexpectedEvent.into());
     };
     // The bridge queues the click action before it replies to `DoAction`. An action caused by the earlier focus
     // changes would have been queued before the click, so the queue would contain it now.

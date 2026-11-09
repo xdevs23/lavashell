@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::App;
+use crate::Wayland;
 use crate::logical::{whole_size, window_size};
-use crate::{RunError, SetupError, Wayland};
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
@@ -24,6 +24,10 @@ use lavashell_runtime::view_actions::{ActionQueue, ViewActions};
 use lavashell_runtime::watches::Watches;
 use lavashell_runtime::window::Window;
 use std::time::{Duration, Instant};
+
+mod error;
+
+pub use error::{RunError, SetupError};
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before

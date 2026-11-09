@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use crate::translator::{Translator, ViewLink};
 use icu_locale_core::LanguageIdentifier;
 use lavashell_platform::SettingsEvent;
 use sctk::reexports::calloop::channel::{self, Event};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
+
+mod error;
+
+pub use error::PreferencesError;
 
 /// The languages the user prefers, read from the locale variables of the environment, most
 /// preferred first.
@@ -25,7 +28,7 @@ pub(crate) fn install(
     handle: &LoopHandle<'static, Translator>,
     sources: &mut Vec<RegistrationToken>,
     view: &ViewLink,
-) -> Result<(), Error> {
+) -> Result<(), PreferencesError> {
     view.report(SettingsEvent::Locales(user_languages()));
     let (sender, channel) = channel::channel();
     let updates = handle
@@ -36,21 +39,21 @@ pub(crate) fn install(
                     .report(SettingsEvent::Appearance(appearance));
             }
         })
-        .map_err(|failure| Error::WatchPreferences(failure.error))?;
+        .map_err(|failure| PreferencesError::WatchPreferences(failure.error))?;
     sources.push(updates);
-    let (executor, scheduler) =
-        calloop::futures::executor::<zbus::Result<()>>().map_err(Error::CreatePreferenceWatch)?;
+    let (executor, scheduler) = calloop::futures::executor::<zbus::Result<()>>()
+        .map_err(PreferencesError::CreatePreferenceWatch)?;
     let watch = handle
         .insert_source(executor, |watched, (), _| {
             if let Err(error) = watched {
                 log::info!("the appearance preferences of the desktop are unavailable: {error}");
             }
         })
-        .map_err(|failure| Error::WatchPreferences(failure.error))?;
+        .map_err(|failure| PreferencesError::WatchPreferences(failure.error))?;
     sources.push(watch);
     scheduler
         .schedule(crate::preferences::watch(sender))
-        .map_err(Error::SchedulePreferenceWatch)
+        .map_err(PreferencesError::SchedulePreferenceWatch)
 }
 
 #[cfg(test)]

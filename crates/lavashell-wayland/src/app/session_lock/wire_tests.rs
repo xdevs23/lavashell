@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::ConnectionError;
+use crate::Error;
 use crate::app::wire_messages::messages;
+use crate::app::wire_messages::test_error::WireTestError;
 use crate::test_error::TestError;
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::wl_registry;
@@ -22,13 +25,18 @@ impl Wire {
     fn new() -> Result<Self, TestError> {
         let (socket, mut peer) = UnixStream::pair().map_err(TestError::CreateSocketPair)?;
         peer.set_nonblocking(true)
-            .map_err(TestError::ConfigureSocket)?;
-        let connection = Connection::from_socket(socket).map_err(Error::Connect)?;
+            .map_err(WireTestError::ConfigureSocket)?;
+        let connection = Connection::from_socket(socket)
+            .map_err(ConnectionError::Connect)
+            .map_err(Error::from)?;
         let qh = connection.new_event_queue::<Translator>().handle();
         let registry_qh = connection.new_event_queue::<Registry>().handle();
         let registry = connection.display().get_registry(&registry_qh, ());
         let manager = registry.bind::<ExtSessionLockManagerV1, _, _>(1, 1, &qh, ());
-        connection.flush().map_err(Error::Flush)?;
+        connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         assert!(!messages(&mut peer)?.is_empty());
         Ok(Self {
             connection,
@@ -39,7 +47,10 @@ impl Wire {
     }
 
     fn flush(&mut self) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
-        self.connection.flush().map_err(Error::Flush)?;
+        self.connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         messages(&mut self.peer)
     }
 }

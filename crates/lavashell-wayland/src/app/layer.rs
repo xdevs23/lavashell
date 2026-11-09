@@ -2,7 +2,6 @@
 use super::control::RoleControl;
 use super::{NativeRole, Surface, configure_event};
 use crate::translator::Translator;
-use crate::{Error, LayerLayoutError};
 use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_platform::{KeyboardMode, PanelRequest, PanelRole, SurfaceEvent};
@@ -17,6 +16,7 @@ use smithay_client_toolkit as sctk;
 use std::collections::VecDeque;
 use std::num::NonZero;
 
+pub use error::{LayerError, LayerLayoutError};
 pub(super) use protocol_layout::ProtocolLayout;
 
 /// The layer-shell role of a surface.
@@ -120,9 +120,9 @@ impl LayerControl {
 
 impl Surface {
     /// Sends `keyboard`, the keyboard mode set by the runtime for the panel on this surface, `id`.
-    fn send_keyboard(&self, id: SurfaceId, keyboard: KeyboardMode) -> Result<(), Error> {
+    fn send_keyboard(&self, id: SurfaceId, keyboard: KeyboardMode) -> Result<(), LayerError> {
         let NativeRole::Layer(layer) = &self.role else {
-            return Err(Error::PanelWithoutLayer(id));
+            return Err(LayerError::PanelWithoutLayer(id));
         };
         layer.send_keyboard(keyboard);
         Ok(())
@@ -162,8 +162,8 @@ impl Translator {
         surface: SurfaceId,
         output: Option<&wl_output::WlOutput>,
         panel: &PanelRole,
-    ) -> Result<ZwlrLayerSurfaceV1, Error> {
-        let shell = self.protocols.layers.as_ref().ok_or(Error::NoLayerShell)?;
+    ) -> Result<ZwlrLayerSurfaceV1, LayerError> {
+        let shell = (self.protocols.layers.as_ref()).ok_or(LayerError::NoLayerShell)?;
         let (level, namespace) = (panel.level, &panel.namespace);
         Ok(create(
             shell, wl, output, level, namespace, &self.qh, surface,
@@ -172,7 +172,7 @@ impl Translator {
 
     /// Executes a request of the runtime for a panel. A request for a panel whose native surface is gone changes
     /// nothing.
-    pub(crate) fn execute_panel(&self, request: PanelRequest) -> Result<(), Error> {
+    pub(crate) fn execute_panel(&self, request: PanelRequest) -> Result<(), LayerError> {
         match request {
             PanelRequest::SetKeyboard(surface, keyboard) => (self.surfaces.live(surface))
                 .map_or(Ok(()), |native| native.send_keyboard(surface, keyboard)),
@@ -222,6 +222,7 @@ fn apply_keyboard(proxy: &ZwlrLayerSurfaceV1, keyboard: KeyboardMode) {
     });
 }
 
+mod error;
 mod protocol_layout;
 
 #[cfg(test)]
@@ -230,6 +231,8 @@ mod focus_wire;
 mod focus_wire_tests;
 #[cfg(test)]
 mod state_wire_tests;
+#[cfg(test)]
+pub(crate) mod test_error;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

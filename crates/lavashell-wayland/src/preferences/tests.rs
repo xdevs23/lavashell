@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::test_error::PreferencesTestError;
 use super::*;
 use crate::Error;
+use crate::PreferencesError;
 use crate::test_error::TestError;
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::{Appearance, ContrastPreference};
@@ -110,7 +112,7 @@ fn private_bus_portal_roundtrip() -> Result<(), TestError> {
 #[derive(Default)]
 struct Updates {
     appearances: Vec<Appearance>,
-    ended: Option<TestError>,
+    ended: Option<PreferencesTestError>,
 }
 
 /// Dispatches the event loop until `count` updates arrived. Fails when the watch ended before that.
@@ -121,7 +123,7 @@ fn dispatch_until(
 ) -> Result<(), TestError> {
     while updates.appearances.len() < count {
         if let Some(ended) = updates.ended.take() {
-            return Err(ended);
+            return Err(ended.into());
         }
         loop_.dispatch(None, updates)?;
     }
@@ -167,7 +169,7 @@ fn child() -> Result<(), TestError> {
                 // A failed watch also closes the channel. The error already stored for that failure by the
                 // executor callback is not replaced.
                 if updates.ended.is_none() {
-                    updates.ended = Some(TestError::UpdatesClosed);
+                    updates.ended = Some(PreferencesTestError::UpdatesClosed);
                 }
                 return;
             };
@@ -177,12 +179,15 @@ fn child() -> Result<(), TestError> {
     let watch = loop_
         .handle()
         .insert_source(executor, |watched, (), updates| {
-            let ended = watched.map_or_else(TestError::WatchFailed, |()| TestError::WatchEnded);
+            let ended = watched.map_or_else(PreferencesTestError::WatchFailed, |()| {
+                PreferencesTestError::WatchEnded
+            });
             updates.ended = Some(ended);
         })?;
     scheduler
         .schedule(watch_bus(address, sender))
-        .map_err(Error::SchedulePreferenceWatch)?;
+        .map_err(PreferencesError::SchedulePreferenceWatch)
+        .map_err(Error::from)?;
     let mut updates = Updates::default();
     dispatch_until(&mut loop_, &mut updates, 1)?;
     assert_eq!(updates.appearances[0].contrast, ContrastPreference::More);

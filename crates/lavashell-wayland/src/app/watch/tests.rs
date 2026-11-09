@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::Error;
 use crate::test_error::TestError;
 use lavashell_actor::{Receiver, mailbox};
 use lavashell_platform::PlatformEvent;
@@ -33,10 +34,14 @@ fn a_ready_watch_is_reported_once_until_the_runtime_resumes_it() -> Result<(), T
     let (_reader, writer) = rustix::pipe::pipe().map_err(TestError::CreatePipe)?;
     let mut watches = WatchSources::default();
     let watch = WatchRequest::Watch(WATCH, writer, Readiness::Writable);
-    watches.execute(&handle, watch, &view)?;
+    watches
+        .execute(&handle, watch, &view)
+        .map_err(Error::from)?;
     assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, [WATCH]);
     assert!(reported_after_turn(&mut event_loop, &receiver)?.is_empty());
-    watches.execute(&handle, WatchRequest::Resume(WATCH), &view)?;
+    watches
+        .execute(&handle, WatchRequest::Resume(WATCH), &view)
+        .map_err(Error::from)?;
     assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, [WATCH]);
     Ok(())
 }
@@ -50,10 +55,16 @@ fn an_ended_watch_is_not_reported_after_a_resume() -> Result<(), TestError> {
     let (_reader, writer) = rustix::pipe::pipe().map_err(TestError::CreatePipe)?;
     let mut watches = WatchSources::default();
     let watch = WatchRequest::Watch(WATCH, writer, Readiness::Writable);
-    watches.execute(&handle, watch, &view)?;
+    watches
+        .execute(&handle, watch, &view)
+        .map_err(Error::from)?;
     assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, [WATCH]);
-    watches.execute(&handle, WatchRequest::Unwatch(WATCH), &view)?;
-    watches.execute(&handle, WatchRequest::Resume(WATCH), &view)?;
+    watches
+        .execute(&handle, WatchRequest::Unwatch(WATCH), &view)
+        .map_err(Error::from)?;
+    watches
+        .execute(&handle, WatchRequest::Resume(WATCH), &view)
+        .map_err(Error::from)?;
     assert!(reported_after_turn(&mut event_loop, &receiver)?.is_empty());
     Ok(())
 }
