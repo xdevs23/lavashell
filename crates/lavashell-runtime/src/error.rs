@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_actor::{JoinError, SpawnError};
 use lavashell_core::accessibility::ActionError;
+use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::NumberError;
 use lavashell_platform::{DragReceiveRefusal, DragRefusal, SelectionRefusal};
 use std::collections::TryReserveError;
+use std::convert::Infallible;
 use std::io;
 use std::string::FromUtf8Error;
 
@@ -62,6 +65,14 @@ pub enum Error {
     ReceiveDrag(#[source] DragReceiveRefusal),
     #[error("the transfer was cancelled")]
     Cancelled(#[from] Cancellation),
+    #[error("the choreographer could not start")]
+    StartChoreographer(#[source] SpawnError<Infallible>),
+    #[error("the scene builder could not start")]
+    StartBuilder(#[source] SpawnError<ApplyError>),
+    #[error("the choreographer failed")]
+    RunChoreographer(#[source] JoinError<Infallible>),
+    #[error("the scene builder failed")]
+    RunBuilder(#[source] JoinError<ApplyError>),
 }
 
 /// A failure while the runtime handles an event of an assistive technology. `E` is the failure of the platform to

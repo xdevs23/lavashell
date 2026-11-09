@@ -4,12 +4,15 @@ use crate::app::wire_messages::{messages, requests};
 use crate::test_error::TestError;
 use focus_wire::Wire;
 use lavashell_core::geometry::Size;
-use lavashell_core::panel::{ContentSize, Extent, LayerLayout, LayerMargins};
-use lavashell_core::units::DpExt;
+use lavashell_core::panel::{
+    AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
+};
+use lavashell_core::units::{DpExt, FiniteDp};
 use sctk::reexports::client::protocol::{wl_compositor, wl_registry};
 use sctk::reexports::client::{Connection, delegate_noop};
 use smithay_client_toolkit as sctk;
 use std::os::unix::net::UnixStream;
+use zwlr_layer_surface_v1::Anchor;
 
 pub(super) struct Client;
 

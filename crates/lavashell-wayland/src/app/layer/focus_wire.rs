@@ -8,10 +8,9 @@ use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceOverrides;
-use lavashell_core::scene::SceneBuilder;
 use lavashell_core::units::Density;
 use lavashell_renderer::{FrameOutcome, SurfaceControl};
-use lavashell_runtime::{Choreographers, PanelContent, PanelRecords, PanelUpdate, SurfaceRecords};
+use lavashell_runtime::{PanelContent, PanelRecords, PanelUpdate, SurfaceRecords};
 use lavashell_test_fixtures::NoText;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
@@ -41,8 +40,6 @@ pub(super) struct Wire {
     panels: PanelRecords,
     surfaces: SurfaceRecords,
     grabs: Grabs,
-    choreographers: Choreographers,
-    builder: SceneBuilder,
     state: SurfaceState,
     /// The control of the layer created last by `layer`.
     pub(super) control: Option<Control>,
@@ -83,8 +80,6 @@ impl Wire {
             input: true,
             panels: PanelRecords::default(),
             surfaces,
-            choreographers: Choreographers::default(),
-            builder: SceneBuilder::default(),
             state: SurfaceState::default(),
             control: None,
         };
@@ -125,8 +120,6 @@ impl Wire {
         };
         let control = Control::new(LAYER, objects, role_state(geometry), self.qh.clone());
         self.control = Some(control);
-        self.choreographers = Choreographers::default();
-        self.builder = SceneBuilder::default();
         self.state = SurfaceState::default();
         let layer = Runtime::new(proxy, options, layout, panel.keyboard_mode());
         self.panels.open(LAYER, panel);
@@ -150,17 +143,16 @@ impl Wire {
     /// as the frame of a layer does before its present.
     pub(super) fn update(&mut self, layer: &Runtime) -> Result<(), TestError> {
         send_keyboard(layer, self.panels.update(LAYER));
-        self.build_state()?;
+        self.build_state();
         self.send_state()
     }
 
-    /// Sends the geometry of the panel to the sink of the layer and builds the surface state from the sink, as the
-    /// app does before a frame or a commit without a frame.
-    fn build_state(&mut self) -> Result<(), TestError> {
-        send_surface_state(self.choreographers.sink(LAYER), &self.panels, LAYER, []);
-        self.choreographers
-            .build(LAYER, &mut self.builder, &mut self.state)?;
-        Ok(())
+    /// Applies the geometry of the panel to the surface state, as the scene builder does with the state that the app
+    /// sends before a frame or a commit without a frame.
+    fn build_state(&mut self) {
+        if let Some(geometry) = self.panels.geometry_change(LAYER) {
+            self.state.apply(geometry);
+        }
     }
 
     /// Sends the requests for the parts of `geometry` that differ from the geometry applied last.
@@ -192,7 +184,7 @@ impl Wire {
             Transaction::Settled => {}
             Transaction::NeedsFrame => view.invalidate(),
             Transaction::Committed => {
-                self.build_state()?;
+                self.build_state();
                 let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
                 control.commit_state(&self.state)?;
             }

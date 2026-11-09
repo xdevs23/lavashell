@@ -65,6 +65,14 @@ impl Script {
         self.frame_at(millis, input, FrameKind::Render)
     }
 
+    /// Composes the frame started by `input` at `millis`, and renders it once its scene is built at the same time.
+    fn drawn_at(&mut self, millis: u64, input: SchedulerInput) -> Result<FrameTime, MissingOutput> {
+        let composed = self.compose_at(millis, input)?;
+        let drawn = self.render_at(millis, built(composed.sequence))?;
+        assert_eq!(drawn.sequence, composed.sequence);
+        Ok(drawn)
+    }
+
     fn report_at(
         &mut self,
         millis: u64,
@@ -93,6 +101,13 @@ fn published(next_change: Option<Duration>) -> SchedulerInput {
     SchedulerInput::Published {
         surface: WINDOW,
         next_change,
+    }
+}
+
+fn built(sequence: u64) -> SchedulerInput {
+    SchedulerInput::Built {
+        surface: WINDOW,
+        sequence: Some(FrameSequence(sequence)),
     }
 }
 
@@ -137,7 +152,7 @@ fn output_refresh(refresh: Option<Duration>) -> SchedulerInput {
 /// A script whose window showed one frame 16 ms after it started, on a display without a fixed refresh.
 fn presented_after_16_ms() -> Result<Script, MissingOutput> {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, shown(first, ms(1))).is_empty());
     let _presented_report = script.report_at(16, presented(first, Some(ms(16)), None))?;
     Ok(script)
@@ -148,6 +163,8 @@ fn a_view_composes_again_only_once_the_display_is_ready() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
     let first = script.compose_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, wants(ViewState::Changed, None)).is_empty());
+    let _drawn = script.render_at(2, built(first.sequence))?;
+    assert!(script.at(3, wants(ViewState::Changed, None)).is_empty());
     assert!(script.at(4, shown(first, ms(4))).is_empty());
     assert!(script.at(5, wants(ViewState::Changed, None)).is_empty());
     assert!(script.at(16, display_ready()).is_empty());
@@ -159,7 +176,7 @@ fn a_view_composes_again_only_once_the_display_is_ready() -> TestResult {
 #[test]
 fn a_view_that_needs_nothing_composes_nothing_when_the_display_is_ready() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(4, shown(first, ms(4))).is_empty());
     assert!(script.at(16, display_ready()).is_empty());
     assert!(script.at(16, wants(ViewState::Unchanged, None)).is_empty());
@@ -187,7 +204,7 @@ fn an_unconfigured_surface_starts_no_frame() {
 #[test]
 fn with_a_refresh_a_frame_targets_the_first_refresh_after_its_render_cost() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(100, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(100, wants(ViewState::Changed, None))?;
     assert!(script.at(104, shown(first, ms(4))).is_empty());
     let report = script.report_at(111, presented(first, Some(ms(110)), Some(ms(10))))?;
     assert_eq!(report.stage, FrameStage::Presented);
@@ -202,7 +219,7 @@ fn with_a_refresh_a_frame_targets_the_first_refresh_after_its_render_cost() -> T
 #[test]
 fn the_render_cost_is_the_reported_cost() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(100, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(100, wants(ViewState::Changed, None))?;
     assert!(script.at(150, shown(first, ms(4))).is_empty());
     let _presented_report = script.report_at(160, presented(first, Some(ms(160)), Some(ms(10))))?;
     assert!(script.at(165, display_ready()).is_empty());
@@ -224,7 +241,7 @@ fn without_a_refresh_a_frame_targets_the_measured_presentation_delay() -> TestRe
 #[test]
 fn a_presentation_without_a_time_is_reported_on_arrival_and_sets_the_refresh() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(2, shown(first, ms(2))).is_empty());
     let report = script.report_at(30, presented(first, None, Some(ms(8))))?;
     assert_eq!(report.observed, ms(30));
@@ -239,7 +256,7 @@ fn a_presentation_without_a_time_is_reported_on_arrival_and_sets_the_refresh() -
 fn a_discarded_frame_is_reported_and_leaves_the_prediction_unchanged() -> TestResult {
     let mut script = presented_after_16_ms()?;
     assert!(script.at(20, display_ready()).is_empty());
-    let second = script.compose_at(20, wants(ViewState::Changed, None))?;
+    let second = script.drawn_at(20, wants(ViewState::Changed, None))?;
     assert!(script.at(22, shown(second, ms(2))).is_empty());
     let discarded = TimingEvent::Discarded {
         surface: WINDOW,
@@ -258,7 +275,7 @@ fn a_discarded_frame_is_reported_and_leaves_the_prediction_unchanged() -> TestRe
 #[test]
 fn a_stale_frame_draws_again_at_once() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     let again = script.compose_at(1, rendered(first, FrameOutcome::Stale, ms(1)))?;
     assert_eq!(again.sequence, first.sequence + 1);
     Ok(())
@@ -278,7 +295,7 @@ fn a_stale_frame_of_the_scene_composes_again() -> TestResult {
 #[test]
 fn a_pending_frame_draws_again_with_the_next_report() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(
         script
             .at(1, rendered(first, FrameOutcome::Pending, ms(1)))
@@ -291,7 +308,7 @@ fn a_pending_frame_draws_again_with_the_next_report() -> TestResult {
 #[test]
 fn a_report_about_another_frame_changes_nothing() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     let other = FrameTime {
         sequence: first.sequence + 1,
         ..first
@@ -302,6 +319,37 @@ fn a_report_about_another_frame_changes_nothing() -> TestResult {
             .is_empty()
     );
     assert!(script.at(2, wants(ViewState::Changed, None)).is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_composed_frame_renders_once_its_scene_is_built() -> TestResult {
+    let mut script = Script::opened(Redraw::OnChange);
+    let first = script.compose_at(0, wants(ViewState::Changed, None))?;
+    assert!(script.at(1, shown(first, ms(1))).is_empty());
+    assert!(script.at(1, built(first.sequence - 1)).is_empty());
+    let outside_compose = SchedulerInput::Built {
+        surface: WINDOW,
+        sequence: None,
+    };
+    assert!(script.at(1, outside_compose).is_empty());
+    let drawn = script.render_at(2, built(first.sequence))?;
+    assert_eq!(drawn.sequence, first.sequence);
+    assert!(script.at(3, built(first.sequence)).is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_scene_built_after_its_frame_rendered_renders_with_the_next_frame() -> TestResult {
+    let mut script = Script::opened(Redraw::OnChange);
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
+    assert!(script.at(1, built(first.sequence)).is_empty());
+    assert!(script.at(2, shown(first, ms(2))).is_empty());
+    assert!(script.at(16, display_ready()).is_empty());
+    let again = script.render_at(16, wants(ViewState::Unchanged, None))?;
+    assert!(script.at(17, shown(again, ms(1))).is_empty());
+    assert!(script.at(32, display_ready()).is_empty());
+    assert!(script.at(32, wants(ViewState::Unchanged, None)).is_empty());
     Ok(())
 }
 

@@ -3,7 +3,7 @@ use super::*;
 use crate::app::wire_messages::requests;
 use crate::test_error::TestError;
 use focus_wire::{Wire, empty_view};
-use lavashell_core::panel::{Extent, LayerMargins};
+use lavashell_core::panel::{AxisPlacement, ExclusiveZone, Extent, LayerMargins};
 use lavashell_core::prelude::{Density, DpExt, Modifier, NonNegativeDp, Size, State, Viewport};
 use lavashell_renderer::FrameOutcome;
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};

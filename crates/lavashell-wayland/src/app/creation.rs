@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::{Control, RoleControl, SurfaceObjects};
 use super::owned_wl_surface::OwnedWlSurface;
+use super::render::NextDraw;
 use super::{Platform, Role, Surface, destroy_objects};
 use crate::Error;
-use lavashell_core::scene::SceneBuilder;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
@@ -114,8 +114,8 @@ impl Platform {
             crate::accessibility::Bridge::new(id, self.accessibility_events.clone());
         let surface = Surface {
             accessibility: Some(accessibility),
-            builder: SceneBuilder::default(),
-            state: SurfaceState::default(),
+            next_draw: NextDraw::SceneOnly,
+            uncommitted_state: false,
             role,
             wl,
             _window: window,

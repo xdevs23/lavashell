@@ -86,6 +86,17 @@
             },
             {
               "manifest": {
+                "dependencies": {
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
+                  }
+                },
                 "features": {},
                 "lib": {
                   "path": "src/lib.rs"
@@ -2476,6 +2487,9 @@
                 "version": "0.0.0"
               },
               {
+                "dependencies": [
+                  "thiserror"
+                ],
                 "name": "lavashell-actor",
                 "version": "0.0.0"
               },
@@ -3905,7 +3919,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "06dfda8168c88bd44884ec0d62c4087ceeeed5781589c64fe88ba35c4ae0a884"
+        "seedHash": "4f01d600e5164516c64c40803b6753af3bf11d3282157b6c6e8350da4680c42a"
       }
     }
   },
@@ -4937,6 +4951,9 @@
         "version": "0.1.0"
       },
       {
+        "dependencies": [
+          "thiserror 2.0.21"
+        ],
         "name": "lavashell-actor",
         "version": "0.1.0"
       },

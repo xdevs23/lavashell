@@ -2,16 +2,16 @@
 use super::control::{Control, RoleControl};
 use super::creation::NativeSpec;
 use super::{Platform, Role, Surface, configure_event, send_surface_state};
-use crate::logical::{extent, whole};
 use crate::surface::LayerSurface;
 use crate::{Error, LayerLayoutError};
-use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLevel, PanelGeometry};
+use lavashell_actor::Closed;
+use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId, SurfaceState};
-use lavashell_core::units::{FiniteDp, NonNegativeDp};
 use lavashell_core::view::View;
 use lavashell_platform::{Appearance, KeyboardMode, SurfaceEvent};
 use lavashell_renderer::SurfaceContents;
 use lavashell_runtime::{ContentState, Panel, Transaction};
+use protocol_layout::{ProtocolLayout, apply, initial_size};
 use sctk::reexports::client::protocol::{wl_output, wl_surface};
 use sctk::reexports::client::{Proxy, QueueHandle};
 use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
@@ -20,7 +20,6 @@ use sctk::reexports::protocols_wlr::layer_shell::v1::client::{
 };
 use smithay_client_toolkit as sctk;
 use std::collections::VecDeque;
-use zwlr_layer_surface_v1::Anchor;
 
 /// The layer-shell role of a surface.
 pub(super) struct Runtime {
@@ -253,9 +252,16 @@ impl Platform {
                 Transaction::Settled => {}
                 Transaction::NeedsFrame => view.invalidate(),
                 Transaction::Committed => {
-                    send_surface_state(self.choreographers.sink(id), &self.panels, id, []);
-                    surface.build(id, view, &mut self.choreographers)?;
-                    (self.renderer.commit_state(id, &surface.state)).map_err(Error::CommitState)?;
+                    let sink = self.scene.sink(id, None);
+                    match send_surface_state(sink, &self.panels, id, []) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            let built = self.scene.built(id);
+                            (self.renderer.commit_state(id, &built.state))
+                                .map_err(Error::CommitState)?;
+                        }
+                        Err(Closed) => self.scene_stopped = true,
+                    }
                 }
             }
         }
@@ -280,10 +286,10 @@ impl Platform {
         if let Some(layer) = layer
             && self.surface_records.is_open(id)
         {
-            let token = layer.receive_configure(serial);
-            self.choreographers
-                .sink(id)
-                .set_state(SurfaceChange::Configure(token));
+            let configure = SurfaceChange::Configure(layer.receive_configure(serial));
+            if self.scene.sink(id, None).set_state(configure).is_err() {
+                self.scene_stopped = true;
+            }
         }
         configure_event(
             configured_length(width, requested_width),
@@ -318,24 +324,6 @@ fn create(
     shell.get_layer_surface(wl, output, layer, options.namespace.clone(), qh, id)
 }
 
-/// The edges of the output to which a layer is anchored along one axis, where `start` and `end` are the two edges of
-/// that axis.
-fn protocol_anchor(span: AxisPlacement<NonNegativeDp>, start: Anchor, end: Anchor) -> Anchor {
-    match span {
-        AxisPlacement::Start(_) => start,
-        AxisPlacement::End(_) => end,
-        AxisPlacement::Center(_) => Anchor::empty(),
-        AxisPlacement::Fill => start | end,
-    }
-}
-
-fn anchored_to_one_edge(span: AxisPlacement<NonNegativeDp>) -> bool {
-    match span {
-        AxisPlacement::Start(_) | AxisPlacement::End(_) => true,
-        AxisPlacement::Center(_) | AxisPlacement::Fill => false,
-    }
-}
-
 /// Sends `keyboard`. Version 4 of layer-shell adds on-demand keyboard interactivity. An older compositor gives an
 /// interactive layer the keyboard exclusively.
 fn apply_keyboard(proxy: &ZwlrLayerSurfaceV1, keyboard: KeyboardMode) {
@@ -347,138 +335,7 @@ fn apply_keyboard(proxy: &ZwlrLayerSurfaceV1, keyboard: KeyboardMode) {
     });
 }
 
-/// The size of a layer before the first configure event arrives, computed from the layout sent with its role. An
-/// axis that fills starts at one logical pixel.
-fn initial_size(layout: ProtocolLayout) -> (u32, u32) {
-    (layout.width.max(1), layout.height.max(1))
-}
-
-/// The length that the layer-shell protocol expects along one axis. The protocol expects zero for an
-/// axis that fills the space between its anchors.
-fn protocol_extent(span: AxisPlacement<NonNegativeDp>) -> Result<u32, LayerLayoutError> {
-    match span.extent() {
-        None => Ok(0),
-        Some(length) => extent(length.get(), 0).ok_or(LayerLayoutError::Length(length)),
-    }
-}
-
-/// The exclusive zone that the layer-shell protocol expects. The protocol expects -1 for a layer that
-/// extends under the zones reserved by other layers. `across` is the protocol length of the layer
-/// across its anchored edge, or `None` when the layer is not anchored to a single edge.
-fn protocol_zone(zone: ExclusiveZone, across: Option<u32>) -> Result<i32, LayerLayoutError> {
-    match zone {
-        ExclusiveZone::Reserve(length) => {
-            whole(length.get()).ok_or(LayerLayoutError::ExclusiveZone(length))
-        }
-        ExclusiveZone::LayerExtent => {
-            i32::try_from(across.unwrap_or(0)).map_err(LayerLayoutError::ReserveExtent)
-        }
-        ExclusiveZone::IgnoreOthers => Ok(-1),
-    }
-}
-
-/// The whole numbers sent to the compositor for a layout.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct ProtocolLayout {
-    anchor: Anchor,
-    width: u32,
-    height: u32,
-    zone: i32,
-    margins: ProtocolMargins,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct ProtocolMargins {
-    top: i32,
-    right: i32,
-    bottom: i32,
-    left: i32,
-}
-
-impl ProtocolLayout {
-    pub fn new(geometry: PanelGeometry) -> Result<Self, LayerLayoutError> {
-        let margin = |length: FiniteDp| whole(length.get()).ok_or(LayerLayoutError::Margin(length));
-        let margins = geometry.margins();
-        let (horizontal, vertical) = (geometry.horizontal(), geometry.vertical());
-        let width = protocol_extent(horizontal)?;
-        let height = protocol_extent(vertical)?;
-        // The compositor ignores the exclusive zone of a layer that is not anchored to a single edge.
-        let across = match (
-            anchored_to_one_edge(horizontal),
-            anchored_to_one_edge(vertical),
-        ) {
-            (false, true) => Some(height),
-            (true, false) => Some(width),
-            _ => None,
-        };
-        Ok(Self {
-            anchor: protocol_anchor(horizontal, Anchor::Left, Anchor::Right)
-                | protocol_anchor(vertical, Anchor::Top, Anchor::Bottom),
-            width,
-            height,
-            zone: protocol_zone(geometry.exclusive_zone(), across)?,
-            margins: ProtocolMargins {
-                top: margin(margins.top)?,
-                right: margin(margins.right)?,
-                bottom: margin(margins.bottom)?,
-                left: margin(margins.left)?,
-            },
-        })
-    }
-}
-
-fn apply(proxy: &ZwlrLayerSurfaceV1, previous: Option<ProtocolLayout>, next: ProtocolLayout) {
-    for request in GeometryRequest::needed(previous, next) {
-        request.send(proxy, next);
-    }
-}
-
-/// A request of the layer surface protocol that sets one part of the geometry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GeometryRequest {
-    Size,
-    Anchor,
-    ExclusiveZone,
-    Margin,
-}
-
-impl GeometryRequest {
-    /// Every geometry request, in the order the layer-shell protocol declares them.
-    const ALL: [Self; 4] = [Self::Size, Self::Anchor, Self::ExclusiveZone, Self::Margin];
-
-    /// The requests whose values differ between the layouts, or every request for a new protocol object.
-    fn needed(previous: Option<ProtocolLayout>, next: ProtocolLayout) -> Vec<Self> {
-        (Self::ALL.into_iter())
-            .filter(|request| previous.is_none_or(|previous| request.differs(previous, next)))
-            .collect()
-    }
-
-    fn differs(self, previous: ProtocolLayout, next: ProtocolLayout) -> bool {
-        match self {
-            Self::Size => (previous.width, previous.height) != (next.width, next.height),
-            Self::Anchor => previous.anchor != next.anchor,
-            Self::ExclusiveZone => previous.zone != next.zone,
-            Self::Margin => previous.margins != next.margins,
-        }
-    }
-
-    fn send(self, proxy: &ZwlrLayerSurfaceV1, layout: ProtocolLayout) {
-        match self {
-            Self::Size => proxy.set_size(layout.width, layout.height),
-            Self::Anchor => proxy.set_anchor(layout.anchor),
-            Self::ExclusiveZone => proxy.set_exclusive_zone(layout.zone),
-            Self::Margin => {
-                let ProtocolMargins {
-                    top,
-                    right,
-                    bottom,
-                    left,
-                } = layout.margins;
-                proxy.set_margin(top, right, bottom, left);
-            }
-        }
-    }
-}
+mod protocol_layout;
 
 #[cfg(test)]
 mod focus_wire;
