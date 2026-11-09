@@ -8,11 +8,16 @@ of the build profile is the control case and must change every layer. Nothing is
 import argparse
 import importlib.util
 import json
+import os
+import resource
 import shutil
 import subprocess
 import sys
 import tempfile
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 from flake_evaluation import locked_nixpkgs
@@ -137,6 +142,61 @@ def engine_build_script(root, reference):
     return next(crate for crate in crates if crate["member"] == reference.as_posix())["manifest"]["package"]["build"]
 
 
+@dataclass(frozen=True)
+class Baseline:
+    args: argparse.Namespace
+    root: Path
+    reference: Path
+    keys: dict
+    units: dict
+
+    def fixture(self, label, mutate):
+        fixture = self.root.parent / label
+        copy_fixture(self.root, fixture)
+        mutate(fixture, self.reference)
+        return fixture
+
+
+def check_layers(baseline, label, mutate, equivalent):
+    fixture = baseline.fixture(label, mutate)
+    if label != "application_source":
+        refresh(baseline.args, fixture, baseline.reference)
+    keys, units = identity(baseline.args, fixture, baseline.reference)
+    if equivalent:
+        assert units == baseline.units, f"{label}: selected external contexts changed"
+        assert keys == baseline.keys, f"{label}: equivalent contexts changed dependency drv/output paths"
+    else:
+        assert all(units[layer] != baseline.units[layer] for layer in units), "profile control changed no contexts"
+        assert all(keys[key] != baseline.keys[key] for key in keys), "profile control failed to invalidate a layer"
+
+
+def check_links_rejected(baseline):
+    fixture = baseline.fixture("original_engine_links", original_engine_links)
+    try:
+        refresh(baseline.args, fixture, baseline.reference)
+    except RuntimeError as error:
+        if "unsupported original links contract" not in str(error):
+            raise
+    else:
+        raise AssertionError("original_engine_links: normalized engine seed erased an unsupported links contract")
+
+
+def check_implicit_build(baseline):
+    fixture = baseline.fixture("original_engine_implicit_build",
+                               lambda root, reference: (root / reference / "build.rs").write_text("fn main() {}\n"))
+    refresh(baseline.args, fixture, baseline.reference)
+    assert engine_build_script(fixture, baseline.reference) == "build.rs", \
+        "engine plan dropped the original build script"
+
+
+def concurrent_checks(count):
+    """How many checks run at once: one per processor, as many as the free memory holds at the peak resident size
+    of the largest refresh or evaluation that has finished so far."""
+    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss * 1024
+    free = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+    return max(1, min(count, os.process_cpu_count() or 1, free // peak))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--nixpkgs", help="the nixpkgs source (default: the one the flake locks)")
@@ -150,39 +210,17 @@ def main():
         copy_fixture(root, base)
         reference = boundaries.reference_package(base / "nix/examples.nix", base, args.nixpkgs)
         refresh(args, base, reference)
-        base_keys, base_units = identity(args, base, reference)
-        for label, mutate, equivalent in (("application_source", source_change, True),
-                                           ("common_to_active_target", move_feature, True),
-                                           ("inactive_local_closure", inactive_local, True),
-                                           ("inactive_native_closure", inactive_native_local, True),
-                                           ("selected_profile", profile_change, False)):
-            fixture = Path(temporary) / label
-            copy_fixture(base, fixture)
-            mutate(fixture, reference)
-            if label != "application_source":
-                refresh(args, fixture, reference)
-            keys, units = identity(args, fixture, reference)
-            if equivalent:
-                assert units == base_units, f"{label}: selected external contexts changed"
-                assert keys == base_keys, f"{label}: equivalent contexts changed dependency drv/output paths"
-            else:
-                assert all(units[layer] != base_units[layer] for layer in units), "profile control changed no contexts"
-                assert all(keys[key] != base_keys[key] for key in keys), "profile control failed to invalidate a layer"
-        fixture = Path(temporary) / "original_engine_links"
-        copy_fixture(base, fixture)
-        original_engine_links(fixture, reference)
-        try:
-            refresh(args, fixture, reference)
-        except RuntimeError as error:
-            if "unsupported original links contract" not in str(error):
-                raise
-        else:
-            raise AssertionError("original_engine_links: normalized engine seed erased an unsupported links contract")
-        fixture = Path(temporary) / "original_engine_implicit_build"
-        copy_fixture(base, fixture)
-        (fixture / reference / "build.rs").write_text("fn main() {}\n")
-        refresh(args, fixture, reference)
-        assert engine_build_script(fixture, reference) == "build.rs", "engine plan dropped the original build script"
+        baseline = Baseline(args, base, reference, *identity(args, base, reference))
+        checks = [partial(check_layers, baseline, label, mutate, equivalent)
+                  for label, mutate, equivalent in (("application_source", source_change, True),
+                                                    ("common_to_active_target", move_feature, True),
+                                                    ("inactive_local_closure", inactive_local, True),
+                                                    ("inactive_native_closure", inactive_native_local, True),
+                                                    ("selected_profile", profile_change, False))]
+        checks += [partial(check_links_rejected, baseline), partial(check_implicit_build, baseline)]
+        with ThreadPoolExecutor(max_workers=concurrent_checks(len(checks))) as pool:
+            for running in [pool.submit(check) for check in checks]:
+                running.result()
     print("Passed 5 regenerated dependency-layer boundaries, 1 original-engine links rejection and 1 build script")
 
 
