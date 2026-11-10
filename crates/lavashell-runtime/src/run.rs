@@ -2,6 +2,7 @@
 //! Runs an app on a platform: the views on the calling thread, the platform on a thread of its own, and the actors
 //! between them on theirs.
 
+use crate::app::App;
 use crate::clipboard::ClipboardTransfers;
 use crate::deadline_receiver::DeadlineReceiver;
 use crate::drag::Drags;
@@ -11,35 +12,36 @@ use crate::observers::Observers;
 use crate::panels::PanelsPerOutput;
 use crate::renderer_actor::RendererError;
 use crate::run_end::RunEnd;
-use crate::scene_pipeline;
 use crate::session_lock::LockConfiguration;
 use crate::view_actions::ActionQueue;
 use crate::view_actor::{StopNotice, Stopped, ViewActor, ViewError, ViewInput};
 use crate::watches::Watches;
 use crate::window::Window;
+use crate::{registry, scene_pipeline, standard_error};
 use lavashell_actor::{JoinError, SpawnError, mailbox};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
-use lavashell_platform::{Platform, PlatformLinks, Reports};
+use lavashell_platform::{Capability, Platform, PlatformLinks, Reports};
 use lavashell_renderer::{RendererSetup, SurfaceControl};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{io, thread};
 
 /// A surface that the app opens when it starts.
-pub enum SurfaceSetup {
+pub(crate) enum SurfaceSetup {
     Window(Window, View),
     Panel(LayerSurface, View),
 }
 
 /// The configuration of a run: the surfaces to open, the renderer setup, and the callbacks and queues through which
 /// the app follows the run.
-pub struct RuntimeSetup {
+pub(crate) struct RuntimeSetup {
     pub surfaces: Vec<SurfaceSetup>,
     pub panels_per_output: Option<PanelsPerOutput<LayerSurface>>,
     pub session_lock: Option<LockConfiguration>,
     pub renderer: RendererSetup,
-    /// The start of the run, from which every time of the run is measured.
+    /// The start of the run, from which every time of the run is measured. `drive` sets it when the run starts.
     pub start: Instant,
     /// The GPU time per frame available to the effects of each surface, or `None` for no limit.
     pub ui_budget: Option<Duration>,
@@ -53,10 +55,41 @@ pub struct RuntimeSetup {
     pub drags: Drags,
 }
 
+impl RuntimeSetup {
+    /// The windows that the app opens when it starts.
+    pub fn windows(&self) -> impl Iterator<Item = &Window> {
+        self.surfaces.iter().filter_map(|surface| match surface {
+            SurfaceSetup::Window(window, _) => Some(window),
+            SurfaceSetup::Panel(..) => None,
+        })
+    }
+
+    /// The panels that the app opens when it starts, without the panels per output.
+    pub fn panels(&self) -> impl Iterator<Item = &LayerSurface> {
+        self.surfaces.iter().filter_map(|surface| match surface {
+            SurfaceSetup::Panel(layer, _) => Some(layer),
+            SurfaceSetup::Window(..) => None,
+        })
+    }
+
+    /// Whether the run opens a surface: a window or a panel at the start, a panel per output, or a lock surface.
+    pub fn has_surfaces(&self) -> bool {
+        !self.surfaces.is_empty() || self.panels_per_output.is_some() || self.session_lock.is_some()
+    }
+}
+
 /// A failure of a run, named after the part that failed. `E` is the error of the platform, and `C` the error of the
 /// controls of the native surfaces.
 #[derive(Debug, thiserror::Error)]
 pub enum RunError<E, C> {
+    #[error("the app has not added a window, a layer or a session lock")]
+    NoSurfaces,
+    #[error(
+        "the platform does not support what the app uses: {}. Run the app on a platform that \
+         supports it, or remove the parts of the app that use it.",
+        registry::Listed(.0)
+    )]
+    Unsupported(BTreeSet<Capability>),
     #[error(transparent)]
     Platform(E),
     #[error("the thread of the platform could not be started")]
@@ -75,24 +108,44 @@ pub enum RunError<E, C> {
     View(#[from] ViewError),
 }
 
-/// Connects to the host of `P` and runs the app of `setup` until it ends. The views run on the calling thread and
-/// the platform on a thread of its own.
+/// The failure of a run on the platform `P`.
+pub type PlatformRunError<P> =
+    RunError<<P as Platform>::Error, <<P as Platform>::Control as SurfaceControl>::Error>;
+
+/// Runs `app` on the platform `P` until it ends. The views run on the calling thread and the platform on a thread of
+/// its own.
 ///
 /// # Errors
 ///
-/// Fails when the platform, a view or an actor fails. When a part of the run stopped and the views end because of
-/// it, the failure of that part replaces the stop. Otherwise the run fails with the first failure among the renderer,
-/// the frame scheduler, the scene pipeline and the platform, in that order.
-pub fn drive<P: Platform>(
-    setup: RuntimeSetup,
-) -> Result<(), RunError<P::Error, <P::Control as SurfaceControl>::Error>> {
-    let start = setup.start;
+/// Fails when the app has not added a surface, when it uses a subsystem not offered by `P`, and when the platform, a
+/// view or an actor fails. When a part of the run stopped and the views end because of it, the failure of that part
+/// replaces the stop. Otherwise the run fails with the first failure among the renderer, the frame scheduler, the
+/// scene pipeline and the platform, in that order.
+pub fn run<P: Platform>(app: App) -> Result<(), PlatformRunError<P>> {
+    standard_error::install();
+    let setup = app.into_setup();
+    if !setup.has_surfaces() {
+        return Err(RunError::NoSurfaces);
+    }
+    drive::<P>(setup)
+}
+
+/// Connects to the host of `P` and runs the app described by `setup` until it ends.
+pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), PlatformRunError<P>> {
+    let start = Instant::now();
+    setup.start = start;
     let connection = P::connect().map_err(RunError::Platform)?;
+    let offered = connection.platform.capabilities();
+    let missing = registry::missing(&setup, &offered);
+    if !missing.is_empty() {
+        return Err(RunError::Unsupported(missing));
+    }
     let (inbox, inputs) = mailbox();
     let inputs = DeadlineReceiver::new(inputs).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
     let mut view = ViewActor::<P::Control>::start(
         setup,
+        &offered,
         connection.presentation,
         connection.host,
         requests,

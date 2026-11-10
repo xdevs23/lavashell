@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::registry::Subsystem;
+use crate::run::RuntimeSetup;
 use crate::surface_records::measure_content;
 use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
@@ -8,7 +10,7 @@ use lavashell_core::panel::{
 use lavashell_core::reactive::State;
 use lavashell_core::surface::{SurfaceChange, SurfaceField, SurfaceId, SurfaceState};
 use lavashell_core::view::{TextMeasurer, View};
-use lavashell_platform::KeyboardMode;
+use lavashell_platform::{Capability, KeyboardMode};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -17,6 +19,12 @@ mod per_output;
 
 pub use error::Error;
 pub use per_output::PanelsPerOutput;
+
+inventory::submit! { Subsystem { capability: Capability::Panels, used: shows_panels } }
+
+fn shows_panels(setup: &RuntimeSetup) -> bool {
+    setup.panels_per_output.is_some() || setup.panels().next().is_some()
+}
 
 /// When a panel receives the keyboard focus.
 #[derive(Clone)]

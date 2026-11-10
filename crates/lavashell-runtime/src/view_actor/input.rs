@@ -106,12 +106,15 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     }
 
     /// Copies, cuts or pastes text for a clipboard shortcut, and returns whether it did. The view receives the shortcut
-    /// when there is nothing to copy, cut or paste, and when the routed surface is not open.
+    /// when there is nothing to copy, cut or paste, when the routed surface is not open, and on a platform without a
+    /// clipboard.
     fn run_clipboard_shortcut(&mut self, routed: &RoutedInput) -> bool {
         let RoutedInput::Input { surface, input, .. } = routed else {
             return false;
         };
-        let text = &self.transfers.text;
+        let Some(text) = &self.transfers.text else {
+            return false;
+        };
         (self.records.open_view_mut(*surface))
             .is_some_and(|view| text.apply_shortcut(*surface, input, view))
     }

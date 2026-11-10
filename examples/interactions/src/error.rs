@@ -7,6 +7,8 @@ use std::{io, path::PathBuf};
 pub enum Error {
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Setup(#[from] lavashell::SetupError),
     #[error("no home directory to keep the sample files in")]
     NoHome,
     #[error("cannot create the cache directory {path}")]

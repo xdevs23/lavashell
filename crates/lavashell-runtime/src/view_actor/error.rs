@@ -26,6 +26,8 @@ pub enum ViewError {
     #[error(transparent)]
     DeadlineReceiver(#[from] crate::deadline_receiver::Error),
     #[error(transparent)]
+    FocusGrab(#[from] crate::focus_grab::Error),
+    #[error(transparent)]
     Panels(#[from] crate::panels::Error),
     #[error(transparent)]
     ScenePipeline(#[from] crate::scene_pipeline::Error),

@@ -24,10 +24,11 @@ pub(crate) fn whole(length: Dp) -> Option<i32> {
     length.round().get().to_i32()
 }
 
-/// The nearest whole logical pixels of the width and the height of `size`, for protocol requests
-/// that take integers, or `None` when a length is not finite or does not fit an `i32`.
-pub(crate) fn protocol_size(size: Size) -> Option<(i32, i32)> {
-    Some((whole(size.width)?, whole(size.height)?))
+/// The whole logical pixels of a surface of `size`, each length rounded and at least one pixel, or `None` when a
+/// length is negative, not finite or does not fit an `i32`.
+pub(crate) fn surface_size(size: Size) -> Option<(i32, i32)> {
+    let length = |length: Dp| i32::try_from(extent(length, 1)?).ok();
+    Some((length(size.width)?, length(size.height)?))
 }
 
 /// The nearest whole logical pixel of a size, at least `minimum`, or `None` when the length is
@@ -43,7 +44,5 @@ pub(crate) fn whole_size(size: Size) -> Option<(u32, u32)> {
     extent(size.width, 0).zip(extent(size.height, 0))
 }
 
-/// The nearest whole logical pixels of a window size, or `None` when [`whole_size`] fails or a length rounds to zero.
-pub(crate) fn window_size(size: Size) -> Option<(u32, u32)> {
-    whole_size(size).filter(|&(width, height)| width > 0 && height > 0)
-}
+#[cfg(test)]
+mod tests;

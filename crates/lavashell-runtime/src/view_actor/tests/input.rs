@@ -78,7 +78,7 @@ fn sets_window_focus(requests: &[PlatformRequest], focused: bool) -> bool {
 
 #[test]
 fn a_pointer_that_enters_a_surface_gets_the_cursor_of_its_view() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     let requests = views.step([pointer_enters(WINDOW)])?;
     assert!(requests.iter().any(sets_cursor));
     Ok(())
@@ -86,7 +86,7 @@ fn a_pointer_that_enters_a_surface_gets_the_cursor_of_its_view() -> TestResult {
 
 #[test]
 fn a_pointer_over_a_surface_that_is_not_open_gets_no_cursor() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     let requests = views.step([pointer_enters(SurfaceId(5))])?;
     assert!(!requests.iter().any(sets_cursor));
     Ok(())
@@ -99,7 +99,7 @@ fn the_focus_observer_sees_each_surface_that_gains_or_loses_the_keyboard_focus()
     let mut setup = runtime_setup(vec![window("window")]);
     let observer = move |change: KeyboardFocus| recorded.borrow_mut().push(change);
     setup.observers.keyboard_focus = Some(Box::new(observer));
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let gained = views.step([focus(Some(WINDOW))])?;
     let lost = views.step([focus(None)])?;
     let expected = [window_focus_change(true), window_focus_change(false)];
@@ -127,7 +127,7 @@ fn a_consumed_key_reaches_the_key_observer_but_not_the_view() -> TestResult {
     };
     setup.observers.key = Some(Box::new(observer));
     setup.input_filter = Some(Box::new(filter));
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     views.play([
         focus(Some(WINDOW)),
         key(TYPED, "a", KeyAction::Pressed),
@@ -156,7 +156,7 @@ fn a_key_without_keyboard_focus_is_not_shown_to_the_key_observer() -> TestResult
         false
     };
     setup.observers.key = Some(Box::new(observer));
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     views.play([key(TYPED, "a", KeyAction::Pressed)])?;
     assert!(keys.borrow().is_empty());
     Ok(())

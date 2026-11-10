@@ -5,28 +5,31 @@ use crate::surface_records::SurfaceRecords;
 use crate::view_actions::ActionQueue;
 use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::PlatformRequest;
+use lavashell_platform::{Capability, PlatformRequest};
+use std::collections::BTreeSet;
 
 /// The data that the app exchanges with the host: the clipboard, the text clipboard shortcuts of the views, the drags
 /// and the watched file descriptors.
 pub(super) struct Transfers {
     pub(super) clipboard: ClipboardTransfers,
-    pub(super) text: TextClipboard,
+    pub(super) text: Option<TextClipboard>,
     pub(super) drags: Drags,
     pub(super) watches: Watches,
 }
 
 impl Transfers {
-    /// The transfers of `clipboard`, `drags` and `watches`. The text clipboard shortcuts queue their actions in
-    /// `action_queue`.
+    /// The transfers of `clipboard`, `drags` and `watches` on a platform that offers `offered`. The text clipboard
+    /// shortcuts queue their actions in `action_queue`.
     pub(super) fn new(
         clipboard: ClipboardTransfers,
-        drags: Drags,
+        mut drags: Drags,
         watches: Watches,
         action_queue: &ActionQueue,
+        offered: &BTreeSet<Capability>,
     ) -> Self {
+        drags.restrict_to(offered);
         Self {
-            text: TextClipboard::new(clipboard.clipboard(), action_queue.view_actions()),
+            text: clipboard.text_clipboard(action_queue.view_actions(), offered),
             clipboard,
             drags,
             watches,

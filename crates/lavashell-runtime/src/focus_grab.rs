@@ -1,11 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::panels::{Panel, PanelRecords};
+use crate::registry::Subsystem;
+use crate::run::{RuntimeSetup, SurfaceSetup};
 use crate::surface_records::SurfaceRecords;
 use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::geometry::Size;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{FocusGrabEvent, FocusGrabRequest};
-use std::collections::BTreeMap;
+use lavashell_platform::{Capability, FocusGrabEvent, FocusGrabRequest};
+use std::collections::{BTreeMap, BTreeSet};
+
+mod error;
+
+pub use error::Error;
+
+inventory::submit! { Subsystem { capability: Capability::FocusGrab, used: grabs_focus } }
+
+fn grabs_focus(setup: &RuntimeSetup) -> bool {
+    (setup.surfaces.iter()).any(
+        |surface| matches!(surface, SurfaceSetup::Panel(layer, _) if layer.focus_grab.is_some()),
+    )
+}
 
 /// Whether the host has the focus grab of a panel.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -82,16 +96,34 @@ impl Record {
 }
 
 /// The focus grab of every panel that has one, by the id of its surface.
-#[derive(Default)]
 pub struct FocusGrabs {
     records: BTreeMap<SurfaceId, Record>,
+    offered: bool,
 }
 
 impl FocusGrabs {
+    /// The focus grabs on a platform that offers `offered`.
+    #[must_use]
+    pub fn new(offered: &BTreeSet<Capability>) -> Self {
+        Self {
+            records: BTreeMap::new(),
+            offered: offered.contains(&Capability::FocusGrab),
+        }
+    }
+
     /// An update acquires the grab for the panel once the panel is ready.
-    pub fn open(&mut self, surface: SurfaceId, grab: FocusGrab) {
+    ///
+    /// # Errors
+    ///
+    /// Fails when the platform does not offer focus grabs, which the setup check cannot see for a panel made per
+    /// output.
+    pub fn open(&mut self, surface: SurfaceId, grab: FocusGrab) -> Result<(), Error> {
+        if !self.offered {
+            return Err(Error::Unsupported(surface));
+        }
         let state = GrabState::Released;
         let _replaced_grab = self.records.insert(surface, Record { grab, state });
+        Ok(())
     }
 
     /// Removes the focus grab of `surface` after the surface has retired.

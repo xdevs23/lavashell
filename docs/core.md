@@ -22,14 +22,17 @@ fn counter(ui: &mut Ui, plus: &'static Icon) {
 enum Error {
     #[error("cannot decode an icon")]
     Icon(#[from] lavashell_lucide::Error),
+    #[error("the app is not set up to run")]
+    Setup(#[from] lavashell::SetupError),
     #[error("the app failed")]
-    App(#[from] lavashell::wayland::RunError),
+    App(#[from] lavashell::RunError),
 }
 
 fn main() -> Result<(), Error> {
     let plus = lavashell_lucide::PLUS.icon()?;
-    let window = Window::new("Counter", "org.example.Counter");
-    Ok(App::new(platform()).run(|app| app.window(window, move |ui| counter(ui, plus)))?)
+    let mut app = App::new(platform());
+    app.window(Window::new("Counter", "org.example.Counter"), move |ui| counter(ui, plus))?;
+    Ok(lavashell::run::<Platform>(app)?)
 }
 ```
 

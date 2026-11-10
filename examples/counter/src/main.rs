@@ -45,7 +45,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Error> {
     let plus = icon(&lavashell_lucide::PLUS)?;
     let window = Window::new("Lavashell / Counter", "lavashell.counter");
-    App::new(platform())
-        .run(|app| app.window(window, move |ui| counter(ui, plus)))
-        .map_err(Error::App)
+    let mut app = App::new(platform());
+    app.window(window, move |ui| counter(ui, plus))?;
+    lavashell::run::<Platform>(app).map_err(Error::App)
 }

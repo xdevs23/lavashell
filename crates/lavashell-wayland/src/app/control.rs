@@ -188,7 +188,7 @@ impl SurfaceControl for Control {
         match &self.objects.viewport {
             Some(viewport) => {
                 let (width, height) =
-                    crate::logical::protocol_size(size).ok_or(ControlError::Destination(size))?;
+                    crate::logical::surface_size(size).ok_or(ControlError::Destination(size))?;
                 viewport.set_destination(width, height);
             }
             None => self.objects.wl.set_buffer_scale(buffer_scale(density)?),

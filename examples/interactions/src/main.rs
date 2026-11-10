@@ -50,25 +50,24 @@ fn run() -> Result<(), Error> {
     let actions = app.view_actions();
     let observer = demo.clone();
     let quit = demo.quit.clone();
-    let app = transfers::install(app, &demo)
+    let mut app = transfers::install(app, &demo)
         .view_observer(move |surface, _, view| observer.observe(surface, view))
         .exit_when(move || quit.get());
 
-    Ok(lavashell_example_support::run(app, move |app| {
-        let window = if shaped {
-            shape::window(hole)
+    let window = if shaped {
+        shape::window(hole)
+    } else {
+        (arguments.size).window(
+            Window::new(copy(CopyKey::Title), "lavashell.interactions")
+                .fullscreen(arguments.fullscreen),
+        )
+    };
+    app.window(window, move |ui| {
+        if shaped {
+            shape::child_compose(ui, &demo, &clipboard, &actions);
         } else {
-            (arguments.size).window(
-                Window::new(copy(CopyKey::Title), "lavashell.interactions")
-                    .fullscreen(arguments.fullscreen),
-            )
-        };
-        app.window(window, move |ui| {
-            if shaped {
-                shape::child_compose(ui, &demo, &clipboard, &actions);
-            } else {
-                ui::compose(ui, &demo, &clipboard, &actions);
-            }
-        })
-    })?)
+            ui::compose(ui, &demo, &clipboard, &actions);
+        }
+    })?;
+    Ok(lavashell_example_support::run(app)?)
 }

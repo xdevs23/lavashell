@@ -200,6 +200,9 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         &self,
         requests: impl IntoIterator<Item = AccessibilityRequest>,
     ) -> Result<(), ViewError> {
+        if !self.accessibility {
+            return Ok(());
+        }
         for request in requests {
             self.request(PlatformRequest::Accessibility(request))?;
         }

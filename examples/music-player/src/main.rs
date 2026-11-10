@@ -42,28 +42,26 @@ fn run() -> Result<(), Error> {
     }
 
     let tick = model.clone();
-    let app = arguments.example.app()?.on_tick(move |elapsed| {
+    let mut app = arguments.example.app()?.on_tick(move |elapsed| {
         if tick.with(|m| m.playing) {
             tick.update(|m| m.advance(elapsed));
         }
     });
-    Ok(lavashell_example_support::run(app, move |app| {
-        if !arguments.layer || arguments.both {
-            let state = model.clone();
-            app.window(
-                (arguments.size).window(Window::new(
-                    music::copy(music::CopyKey::Title),
-                    "lavashell.music",
-                )),
-                move |ui| music::music(ui, &state, icons),
-            )?;
-        }
-        if arguments.layer || arguments.both {
-            let state = model.clone();
-            app.layer(LayerSurface::new("lavashell-music"), move |ui| {
-                music::panel(ui, &state, icons);
-            });
-        }
-        Ok(())
-    })?)
+    if !arguments.layer || arguments.both {
+        let state = model.clone();
+        app.window(
+            (arguments.size).window(Window::new(
+                music::copy(music::CopyKey::Title),
+                "lavashell.music",
+            )),
+            move |ui| music::music(ui, &state, icons),
+        )?;
+    }
+    if arguments.layer || arguments.both {
+        let state = model.clone();
+        app.layer(LayerSurface::new("lavashell-music"), move |ui| {
+            music::panel(ui, &state, icons);
+        });
+    }
+    Ok(lavashell_example_support::run(app)?)
 }

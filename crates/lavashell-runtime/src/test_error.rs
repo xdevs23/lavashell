@@ -24,6 +24,8 @@ pub(crate) enum TestError {
     Closed(#[from] Closed),
     #[error("the run failed")]
     Run(#[from] RunError<StandInError, Infallible>),
+    #[error("the app is not set up to run")]
+    Setup(#[from] crate::app::SetupError),
     #[error("a view failed")]
     View(#[from] ViewError),
     #[error("the views could not start")]

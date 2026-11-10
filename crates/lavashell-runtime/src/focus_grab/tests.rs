@@ -53,8 +53,8 @@ impl Host {
         assert_eq!(surfaces.handle(surface, configure), None);
         let mut panels = PanelRecords::default();
         panels.open(surface, panel);
-        let mut grabs = FocusGrabs::default();
-        grabs.open(surface, grab);
+        let mut grabs = FocusGrabs::new(&BTreeSet::from(Capability::ALL));
+        grabs.open(surface, grab).map_err(ViewError::from)?;
         Ok(Self {
             panels,
             surfaces,
@@ -201,7 +201,9 @@ fn a_forgotten_grab_requests_its_release_only_when_it_was_started() -> TestResul
     let grab = FocusGrab::new(|| true, move || counted.set(counted.get() + 1));
     let mut host = Host::new(grab.clone())?;
     assert_eq!(host.grabs.forget(host.surface), None);
-    host.grabs.open(host.surface, grab);
+    host.grabs
+        .open(host.surface, grab)
+        .map_err(ViewError::from)?;
     host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     assert_eq!(host.grabs.forget(host.surface), Some(host.release()));
@@ -210,4 +212,11 @@ fn a_forgotten_grab_requests_its_release_only_when_it_was_started() -> TestResul
     host.show(false, surface_size())?;
     assert!(host.update().is_empty());
     Ok(())
+}
+
+#[test]
+fn a_grab_does_not_open_on_a_platform_without_focus_grabs() {
+    let mut grabs = FocusGrabs::new(&BTreeSet::new());
+    let opened = grabs.open(SurfaceId(0), FocusGrab::new(|| true, || {}));
+    assert!(matches!(opened, Err(Error::Unsupported(SurfaceId(0)))));
 }

@@ -6,17 +6,19 @@ mod target;
 mod text;
 
 use crate::pipe_transfers::{PipeTransfers, Transfer};
+use crate::registry::Subsystem;
 use crate::surface_records::SurfaceRecords;
 use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance, ReceivedData, TransferId};
 use lavashell_core::view::View;
 use lavashell_platform::{
-    DeviceEvent, DragSourceEvent, DragSourceId, DragSourceRequest, DragTargetEvent,
+    Capability, DeviceEvent, DragSourceEvent, DragSourceId, DragSourceRequest, DragTargetEvent,
     DragTargetRequest, FormatId, PointerDevice, WatchId,
 };
 use source::DragSources;
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -25,6 +27,11 @@ use text::TextTransfers;
 
 pub use error::Error;
 pub use request::{DragGesture, DragRequest, DropEvent};
+
+inventory::submit! { Subsystem {
+    capability: Capability::DragAndDrop,
+    used: |setup| setup.drags.observed(),
+} }
 
 type DragObserver = Box<dyn FnMut(DragEvent, &mut View) -> Option<DropAcceptance>>;
 type DropObserver = Box<dyn FnMut(DropEvent, &mut View) -> bool>;
@@ -115,11 +122,26 @@ impl Drags {
         self.sources.observer = Some(Box::new(observer));
     }
 
+    /// Whether the app set a drag observer. The built-in drag and drop of text does not count: on a platform without
+    /// drags, it stays off instead of failing the run.
+    fn observed(&self) -> bool {
+        self.targets.drag_observer.is_some()
+            || self.targets.drop_observer.is_some()
+            || self.sources.observer.is_some()
+    }
+
     /// Enables the built-in drag and drop of text, which handles the drags that the observers registered by the app
     /// did not accept.
     pub fn enable_text_transfers(&mut self) {
         if self.shared.text.is_none() {
             self.shared.text = Some(TextTransfers::default());
+        }
+    }
+
+    /// Switches the built-in drag and drop of text off when `offered` lacks drag and drop, so no text drag starts.
+    pub(crate) fn restrict_to(&mut self, offered: &BTreeSet<Capability>) {
+        if !offered.contains(&Capability::DragAndDrop) {
+            self.shared.text = None;
         }
     }
 

@@ -1,33 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::App;
-use crate::Wayland;
-use crate::logical::{whole_size, window_size};
+use crate::clipboard::{Clipboard, ClipboardTransfers};
+use crate::drag::{DragGesture, DragRequest, Drags, DropEvent};
+use crate::layer_surface::LayerSurface;
+use crate::observers::{HostKey, KeyboardFocus, Observers};
+use crate::panels::PanelsPerOutput;
+use crate::run::{RuntimeSetup, SurfaceSetup};
+use crate::run_end::RunEnd;
+use crate::session_lock::{LockConfiguration, SessionLock};
+use crate::view_actions::{ActionQueue, ViewActions};
+use crate::watches::Watches;
+use crate::window::Window;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
-use lavashell_core::output::OutputInfo;
+use lavashell_core::output::{MonitorInfo, OutputInfo};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::reactive::State;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{Fonts, Painter, RendererSetup};
-use lavashell_runtime::clipboard::{Clipboard, ClipboardTransfers};
-use lavashell_runtime::drag::{DragGesture, DragRequest, Drags, DropEvent};
-use lavashell_runtime::layer_surface::LayerSurface;
-use lavashell_runtime::observers::{HostKey, KeyboardFocus, Observers};
-use lavashell_runtime::run::{RuntimeSetup, SurfaceSetup, drive};
-use lavashell_runtime::run_end::RunEnd;
-use lavashell_runtime::session_lock::{LockConfiguration, SessionLock};
-use lavashell_runtime::view_actions::{ActionQueue, ViewActions};
-use lavashell_runtime::watches::Watches;
-use lavashell_runtime::window::Window;
 use std::time::{Duration, Instant};
 
 mod error;
 
-pub use error::{RunError, SetupError};
+pub use error::SetupError;
+
+/// The surfaces, the observer callbacks and the renderer setup of an app. [`run`](crate::run) runs it on a platform.
+pub struct App {
+    setup: RuntimeSetup,
+    platform: PlatformFacts,
+}
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before
@@ -39,12 +44,12 @@ impl App {
         mut self,
         filter: impl FnMut(SurfaceId, InputEvent) -> Option<InputEvent> + 'static,
     ) -> Self {
-        self.input_filter = Some(Box::new(filter));
+        self.setup.input_filter = Some(Box::new(filter));
         self
     }
 
-    /// Locks the session through ext-session-lock-v1 and shows a lock surface composed by `compose` on every output
-    /// that the compositor advertises. Only an unlock through `handle` ends the lock.
+    /// Locks the session and shows a lock surface composed by `compose` on every output of the host. Only an unlock
+    /// through `handle` ends the lock.
     ///
     /// # Errors
     ///
@@ -54,10 +59,10 @@ impl App {
         handle: SessionLock,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), SetupError> {
-        if self.session_lock.is_some() {
+        if self.setup.session_lock.is_some() {
             return Err(SetupError::SessionLockConfigured);
         }
-        self.session_lock = Some(LockConfiguration::new(
+        self.setup.session_lock = Some(LockConfiguration::new(
             handle,
             self.platform.clone(),
             compose,
@@ -69,7 +74,7 @@ impl App {
     /// id assigned when the surface was created, which no other surface gets.
     #[must_use]
     pub fn view_actions(&self) -> ViewActions {
-        self.action_queue.view_actions()
+        self.setup.action_queue.view_actions()
     }
 
     /// Sets `callback`, which runs for each event of a drag offered by another client and returns whether the drag
@@ -80,15 +85,15 @@ impl App {
         mut self,
         callback: impl FnMut(DragEvent, &mut View) -> Option<DropAcceptance> + 'static,
     ) -> Self {
-        self.drags.on_drag(callback);
+        self.setup.drags.on_drag(callback);
         self
     }
 
     /// Sets `callback`, which runs when the receipt of the data of a drop ends, with the data or the error in the
-    /// event, and commits the drop. Returning true finishes the Wayland transfer, but only when the data was received.
+    /// event, and commits the drop. Returning true finishes the transfer, but only when the data was received.
     #[must_use]
     pub fn on_drop(mut self, callback: impl FnMut(DropEvent, &mut View) -> bool + 'static) -> Self {
-        self.drags.on_drop(callback);
+        self.setup.drags.on_drop(callback);
         self
     }
 
@@ -100,7 +105,7 @@ impl App {
         mut self,
         callback: impl FnMut(DragGesture, &mut View) -> Option<DragRequest> + 'static,
     ) -> Self {
-        self.drags.on_drag_source(callback);
+        self.setup.drags.on_drag_source(callback);
         self
     }
 
@@ -109,7 +114,7 @@ impl App {
     /// the drags that the app did not accept.
     #[must_use]
     pub fn text_transfers(mut self) -> Self {
-        self.drags.enable_text_transfers();
+        self.setup.drags.enable_text_transfers();
         self
     }
 
@@ -117,7 +122,7 @@ impl App {
     /// change.
     #[must_use]
     pub fn preference_overrides(mut self, overrides: PreferenceOverrides) -> Self {
-        self.preference_overrides = overrides;
+        self.setup.preference_overrides = overrides;
         self
     }
 
@@ -125,14 +130,14 @@ impl App {
     /// the key, so the view does not see it.
     #[must_use]
     pub fn on_keyboard(mut self, callback: impl FnMut(HostKey) -> bool + 'static) -> Self {
-        self.observers.key = Some(Box::new(callback));
+        self.setup.observers.key = Some(Box::new(callback));
         self
     }
 
     /// Sets `callback`, which runs each time a surface gains or loses the keyboard focus.
     #[must_use]
     pub fn on_keyboard_focus(mut self, callback: impl FnMut(KeyboardFocus) + 'static) -> Self {
-        self.observers.keyboard_focus = Some(Box::new(callback));
+        self.setup.observers.keyboard_focus = Some(Box::new(callback));
         self
     }
 
@@ -144,13 +149,13 @@ impl App {
         mut self,
         callback: impl FnMut(SurfaceId, Viewport, &View) + 'static,
     ) -> Self {
-        self.observers.view = Some(Box::new(callback));
+        self.setup.observers.view = Some(Box::new(callback));
         self
     }
 
     #[must_use]
     pub fn exit_when(mut self, predicate: impl FnMut() -> bool + 'static) -> Self {
-        self.run_end.exit_when(predicate);
+        self.setup.run_end.exit_when(predicate);
         self
     }
 
@@ -158,7 +163,7 @@ impl App {
     /// comparisons or for a host that changes content in ways that the damage tracking does not detect.
     #[must_use]
     pub fn incremental(mut self, enabled: bool) -> Self {
-        self.full_redraw = !enabled;
+        self.setup.renderer.full_redraw = !enabled;
         self
     }
 
@@ -170,7 +175,7 @@ impl App {
         mut self,
         make: impl FnOnce() -> S + Send + 'static,
     ) -> Self {
-        self.scene = Some(Box::new(move || -> Box<dyn SceneSource> {
+        self.setup.renderer.scene = Some(Box::new(move || -> Box<dyn SceneSource> {
             Box::new(make())
         }));
         self
@@ -181,8 +186,8 @@ impl App {
     /// it. The text rendering set by `setup` applies to measuring text for the views too.
     #[must_use]
     pub fn configure_painter(mut self, setup: impl FnOnce(&mut Painter) + Send + 'static) -> Self {
-        let previous = self.painter_setup.take();
-        self.painter_setup = Some(Box::new(move |painter| {
+        let previous = self.setup.renderer.painter.take();
+        self.setup.renderer.painter = Some(Box::new(move |painter| {
             if let Some(previous) = previous {
                 previous(painter);
             }
@@ -194,7 +199,7 @@ impl App {
     /// Sets `budget`, the time per frame available to the UI. The chooser of the effect quality cannot raise it.
     #[must_use]
     pub fn ui_budget(mut self, budget: Duration) -> Self {
-        self.ui_budget = Some(budget);
+        self.setup.ui_budget = Some(budget);
         self
     }
 
@@ -203,17 +208,21 @@ impl App {
     #[must_use]
     pub fn new(platform: PlatformFacts) -> Self {
         let watches = Watches::default();
-        Self {
-            surfaces: Vec::new(),
-            output_layers: None,
+        let renderer = RendererSetup {
             fonts: Fonts::default(),
-            session_lock: None,
-            run_end: RunEnd::default(),
-            painter_setup: None,
+            painter: None,
             scene: None,
             gpu_timing: false,
             full_redraw: false,
+        };
+        let setup = RuntimeSetup {
+            surfaces: Vec::new(),
+            panels_per_output: None,
+            session_lock: None,
+            renderer,
+            start: Instant::now(),
             ui_budget: None,
+            run_end: RunEnd::default(),
             preference_overrides: PreferenceOverrides::default(),
             input_filter: None,
             observers: Observers::default(),
@@ -221,38 +230,38 @@ impl App {
             action_queue: ActionQueue::new(&watches),
             drags: Drags::new(&watches),
             watches,
-            platform,
-        }
+        };
+        Self { setup, platform }
     }
 
     #[must_use]
     pub fn fonts(mut self, fonts: Fonts) -> Self {
-        self.fonts = fonts;
+        self.setup.renderer.fonts = fonts;
         self
     }
 
     #[must_use]
     pub fn clipboard(&self) -> Clipboard {
-        self.clipboard.clipboard()
+        self.setup.clipboard.clipboard()
     }
 
     #[must_use]
     pub fn exit_after(mut self, duration: Duration) -> Self {
-        self.run_end.exit_after(duration);
+        self.setup.run_end.exit_after(duration);
         self
     }
 
     #[must_use]
     pub fn on_tick(mut self, tick: impl FnMut(Duration) + 'static) -> Self {
-        self.observers.tick = Some(Box::new(tick));
+        self.setup.observers.tick = Some(Box::new(tick));
         self
     }
 
-    /// Sets `callback`, which runs once for each render opportunity given by the compositor, with the timing of the
+    /// Sets `callback`, which runs once for each render opportunity given by the platform, with the timing of the
     /// frame based on its presentation time.
     #[must_use]
     pub fn on_frame(mut self, callback: impl FnMut(FrameTime) + 'static) -> Self {
-        self.observers.frame = Some(Box::new(callback));
+        self.setup.observers.frame = Some(Box::new(callback));
         self
     }
 
@@ -260,7 +269,7 @@ impl App {
     /// frame reports.
     #[must_use]
     pub fn gpu_timing(mut self, enabled: bool) -> Self {
-        self.gpu_timing = enabled;
+        self.setup.renderer.gpu_timing = enabled;
         self
     }
 
@@ -268,7 +277,7 @@ impl App {
     /// callback runs on the thread of the views, so it must return quickly and buffer writes to disk.
     #[must_use]
     pub fn frame_observer(mut self, callback: impl FnMut(FrameReport) + 'static) -> Self {
-        self.observers.frame_report = Some(Box::new(callback));
+        self.setup.observers.frame_report = Some(Box::new(callback));
         self
     }
 
@@ -277,7 +286,7 @@ impl App {
         mut self,
         observer: impl FnMut(SurfaceId, OutputInfo) + 'static,
     ) -> Self {
-        self.observers.output = Some(Box::new(observer));
+        self.setup.observers.output = Some(Box::new(observer));
         self
     }
 
@@ -285,22 +294,24 @@ impl App {
     ///
     /// # Errors
     ///
-    /// Fails when the size or the minimum size of `window` does not fit the protocol.
+    /// Fails when the size of `window` is not finite or not above zero, or when its minimum size is not finite or
+    /// below zero.
     pub fn window(
         &mut self,
         window: Window,
         compose: impl FnMut(&mut Ui) + 'static,
     ) -> Result<(), SetupError> {
-        if let Some(size) = window.size.filter(|&size| window_size(size).is_none()) {
-            return Err(SetupError::WindowSize(size));
-        }
-        if let Some(minimum) = window
-            .min_size
-            .filter(|&minimum| whole_size(minimum).is_none())
+        if let Some(size) = window.size
+            && let Err(source) = size.to_positive()
         {
-            return Err(SetupError::MinimumWindowSize(minimum));
+            return Err(SetupError::WindowSize { size, source });
         }
-        self.surfaces.push(SurfaceSetup::Window(
+        if let Some(size) = window.min_size
+            && let Err(source) = size.to_non_negative()
+        {
+            return Err(SetupError::MinimumWindowSize { size, source });
+        }
+        self.setup.surfaces.push(SurfaceSetup::Window(
             window,
             View::new(self.platform.clone(), compose),
         ));
@@ -308,53 +319,35 @@ impl App {
     }
 
     pub fn layer(&mut self, layer: LayerSurface, compose: impl FnMut(&mut Ui) + 'static) {
-        self.surfaces.push(SurfaceSetup::Panel(
+        self.setup.surfaces.push(SurfaceSetup::Panel(
             layer,
             View::new(self.platform.clone(), compose),
         ));
     }
 
-    /// Calls `startup` to add the surfaces, connects to the compositor and runs until the last
-    /// surface closes.
+    /// Registers `factory`, which runs once for each output that appears and returns the layer surfaces to create on
+    /// that output. The `State<MonitorInfo>` passed to the factory updates when the geometry of the output changes.
+    /// The surfaces close when the output is removed.
     ///
     /// # Errors
     ///
-    /// Fails with the error of `startup`, when no surface was added, and when the connection, a
-    /// protocol the surfaces need, the renderer, a frame or a window move fails.
-    pub fn run(
-        mut self,
-        startup: impl FnOnce(&mut Self) -> Result<(), SetupError>,
-    ) -> Result<(), RunError> {
-        super::standard_error::install();
-        startup(&mut self).map_err(RunError::Setup)?;
-        if self.surfaces.is_empty() && self.session_lock.is_none() && self.output_layers.is_none() {
-            return Err(RunError::Setup(SetupError::NoSurfaces));
+    /// Fails when the app has a per-output layer factory already.
+    pub fn layers_per_output(
+        &mut self,
+        factory: impl FnMut(State<MonitorInfo>) -> Vec<(LayerSurface, View)> + 'static,
+    ) -> Result<(), SetupError> {
+        if self.setup.panels_per_output.is_some() {
+            return Err(SetupError::OutputLayersConfigured);
         }
-        drive::<Wayland>(self.into_setup(Instant::now())).map_err(RunError::Run)
+        self.setup.panels_per_output = Some(PanelsPerOutput::new(factory));
+        Ok(())
     }
 
-    fn into_setup(self, start: Instant) -> RuntimeSetup {
-        RuntimeSetup {
-            surfaces: self.surfaces,
-            panels_per_output: self.output_layers,
-            session_lock: self.session_lock,
-            renderer: RendererSetup {
-                fonts: self.fonts,
-                painter: self.painter_setup,
-                scene: self.scene,
-                gpu_timing: self.gpu_timing,
-                full_redraw: self.full_redraw,
-            },
-            start,
-            ui_budget: self.ui_budget,
-            run_end: self.run_end,
-            preference_overrides: self.preference_overrides,
-            input_filter: self.input_filter,
-            observers: self.observers,
-            watches: self.watches,
-            clipboard: self.clipboard,
-            action_queue: self.action_queue,
-            drags: self.drags,
-        }
+    /// Converts the app into the setup for a run.
+    pub(crate) fn into_setup(self) -> RuntimeSetup {
+        self.setup
     }
 }
+
+#[cfg(test)]
+mod tests;

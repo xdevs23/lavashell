@@ -134,6 +134,19 @@ impl LayerSurface {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lavashell_core::panel::{Extent, LayerMargins};
+
+    #[test]
+    fn a_new_layer_is_a_bar_across_the_top_that_reserves_its_content_height() {
+        let layout = LayerSurface::new("bar").panel.current_layout();
+        let bar = LayerLayout {
+            margins: LayerMargins::default(),
+            horizontal: AxisPlacement::Fill,
+            vertical: AxisPlacement::Start(Extent::Content),
+            exclusive_zone: ExclusiveZone::LayerExtent,
+        };
+        assert_eq!(layout, bar);
+    }
 
     #[test]
     fn enabling_the_keyboard_keeps_a_condition_set_before_it() {

@@ -6,7 +6,7 @@ use lavashell_platform::{ClipboardEvent, DragSourceId, DragTargetEvent, Selectio
 use sctk::data_device_manager::data_offer::DragOffer;
 use sctk::data_device_manager::data_source::{CopyPasteSource, DragSource};
 use sctk::data_device_manager::{DataDeviceManagerState, data_device::DataDevice};
-use sctk::reexports::client::{QueueHandle, globals::GlobalList, protocol::wl_seat::WlSeat};
+use sctk::reexports::client::{QueueHandle, protocol::wl_seat::WlSeat};
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 
@@ -53,12 +53,12 @@ pub(crate) struct ClipboardState {
 
 impl ClipboardState {
     pub fn new(
-        globals: &GlobalList,
+        manager: Option<DataDeviceManagerState>,
         qh: &QueueHandle<Translator>,
         seats: impl Iterator<Item = WlSeat>,
     ) -> Self {
         let mut state = Self {
-            manager: DataDeviceManagerState::bind(globals, qh).ok(),
+            manager,
             devices: Vec::new(),
             serial: None,
             selections: Vec::new(),

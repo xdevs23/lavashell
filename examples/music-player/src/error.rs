@@ -4,4 +4,6 @@
 pub enum Error {
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Setup(#[from] lavashell::SetupError),
 }

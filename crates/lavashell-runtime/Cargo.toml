@@ -11,7 +11,9 @@ workspace = true
 
 [dependencies]
 accesskit.workspace = true
+env_logger.workspace = true
 icu_locale_core.workspace = true
+inventory.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-platform.workspace = true

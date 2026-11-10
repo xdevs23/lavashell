@@ -8695,6 +8695,26 @@
         "version": "0.11.2"
       },
       {
+        "checksum": "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217",
+        "dependencies": [
+          "log",
+          "regex"
+        ],
+        "name": "env_filter",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "2.0.0"
+      },
+      {
+        "checksum": "de671bd27a75a797dc9ae289ba1e77276e75e2026408aab65185384e2d5cd3f6",
+        "dependencies": [
+          "env_filter",
+          "log"
+        ],
+        "name": "env_logger",
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "version": "0.11.11"
+      },
+      {
         "checksum": "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f",
         "name": "equivalent",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
@@ -9315,7 +9335,9 @@
           "accesskit 0.25.1",
           "accesskit_consumer",
           "ash",
+          "env_logger",
           "icu_locale_core",
+          "inventory",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",

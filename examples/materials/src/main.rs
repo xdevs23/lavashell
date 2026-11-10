@@ -44,16 +44,15 @@ fn run() -> Result<(), Error> {
     }
 
     let state = demo.clone();
-    let app = arguments
+    let mut app = arguments
         .example
         .app()?
         .output_observer(move |_, info| state.output.set(Some(info)));
-    Ok(lavashell_example_support::run(app, move |app| {
-        app.window(
-            Window::new(copy(CopyKey::Title), "lavashell.materials")
-                .fullscreen(arguments.fullscreen)
-                .output(request),
-            move |u| ui::compose(u, &demo),
-        )
-    })?)
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.materials")
+            .fullscreen(arguments.fullscreen)
+            .output(request),
+        move |u| ui::compose(u, &demo),
+    )?;
+    Ok(lavashell_example_support::run(app)?)
 }
