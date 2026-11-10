@@ -13,6 +13,7 @@ use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
 use smithay_client_toolkit as sctk;
 use std::num::TryFromIntError;
+use std::sync::Arc;
 
 /// A failure of the Wayland host, named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
@@ -85,6 +86,8 @@ pub enum Error {
     ShowScene(#[source] FrameError<Closed>),
     #[error("the scene builder stopped")]
     SceneStopped,
+    #[error("the choreographer or the scene builder failed")]
+    SceneFailed(#[source] Arc<lavashell_runtime::Error>),
     #[error("the frame scheduler stopped")]
     SchedulerStopped,
     #[error("surface {0:?} is not open")]

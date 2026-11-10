@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_core::scene::tree::ApplyError;
 use lavashell_renderer::Error as RendererError;
+use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -23,6 +25,8 @@ pub enum Error {
     OverlayTarget(#[source] RendererError),
     #[error("the overlay cannot draw")]
     OverlayDraw(#[source] RendererError),
+    #[error("the choreographer or the scene builder of the overlay cannot start")]
+    StartScene(#[source] lavashell_runtime::Error),
     #[error("cannot create an exportable scene image")]
     SceneImage(#[source] lavashell_vulkan::Error),
     #[error("cannot create the commands that hand a scene image over")]
@@ -51,4 +55,15 @@ pub enum Error {
     ExportsMissing,
     #[error("Bevy renders pipelined, so the overlay and the scene export cannot share its queue")]
     PipelinedRendering,
+}
+
+/// A failure of `OverlayFrame::show_frame_at`.
+#[derive(Debug, thiserror::Error)]
+pub enum ShowFrameError {
+    #[error("a change in the frame of the view does not fit the scene shown before")]
+    Mirror(#[source] ApplyError),
+    #[error("the choreographer or the scene builder of the overlay failed")]
+    Scene(#[source] Arc<lavashell_runtime::Error>),
+    #[error("the choreographer and the scene builder of the overlay stopped")]
+    SceneStopped,
 }

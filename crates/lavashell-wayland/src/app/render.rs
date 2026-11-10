@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::shape::ShapeGeometry;
-use super::{AppConfig, Platform, Role, actor_link, open_surface, send_frame, send_surface_state};
+use super::{AppConfig, Platform, Role, open_surface, send_frame, send_surface_state};
 use crate::Error;
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
@@ -71,7 +71,10 @@ impl Platform {
     /// Joins the threads of the stopped scene pipeline, and returns the failure of the actor that stopped it, or
     /// `SceneStopped` when neither actor failed.
     fn stopped_scene_error(&mut self) -> Error {
-        actor_link::stopped(self.scene.stop(), Error::SceneStopped)
+        match self.scene.stop() {
+            Ok(()) => Error::SceneStopped,
+            Err(error) => Error::SceneFailed(error),
+        }
     }
 
     /// Runs the frame started by the frame scheduler for each surface, in composition order. A compose frame sends the

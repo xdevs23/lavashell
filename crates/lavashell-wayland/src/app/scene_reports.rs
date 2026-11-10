@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, actor_link, warn_whole_scene_next};
+use super::{Platform, actor_link};
 use crate::Error;
 use lavashell_runtime::{BuilderObserver, BuilderReport, SchedulerInput};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
@@ -35,10 +35,8 @@ impl Platform {
                 }
             }
             BuilderReport::Restart { surface, error } => {
-                warn_whole_scene_next(error);
-                self.scene.restart(surface);
                 if let Some(view) = self.surface_records.open_view_mut(surface) {
-                    view.invalidate();
+                    self.scene.restart_view(surface, view, &error);
                 }
             }
         }
