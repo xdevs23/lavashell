@@ -561,6 +561,12 @@
                     "package": "icu_locale_core",
                     "version": "=2.3.0"
                   },
+                  "lavashell-actor": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-actor",
+                    "path": "../lavashell-actor"
+                  },
                   "lavashell-core": {
                     "default-features": false,
                     "features": [
@@ -2575,6 +2581,7 @@
                 "dependencies": [
                   "accesskit",
                   "icu_locale_core",
+                  "lavashell-actor",
                   "lavashell-core",
                   "thiserror"
                 ],
@@ -3919,7 +3926,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "4f01d600e5164516c64c40803b6753af3bf11d3282157b6c6e8350da4680c42a"
+        "seedHash": "06897f9a0a2c1872a911a1f336ad1e9b9c27bc751914bb26da78ba5f9beed0de"
       }
     }
   },
@@ -5057,6 +5064,7 @@
         "dependencies": [
           "accesskit",
           "icu_locale_core",
+          "lavashell-actor",
           "lavashell-core",
           "thiserror 2.0.21"
         ],

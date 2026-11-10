@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::control::RoleControl;
+use super::control::{Control, RoleControl};
 use super::creation::NativeSpec;
 use super::{
-    App, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility, focus_grab,
-    output_layers, preferences, presentation, scene_reports,
+    App, AppConfig, Platform, Request, Role, SeatDevices, SurfaceProtocols, accessibility,
+    focus_grab, output_layers, preferences, presentation, scene_reports, scheduler_outputs,
 };
 use crate::Error;
 use crate::clipboard::ClipboardState;
@@ -14,7 +14,7 @@ use lavashell_core::view::View;
 use lavashell_platform::{Role as SurfaceRole, SettingsEvent, SurfaceSpec};
 use lavashell_renderer::{RendererSetup, RendererState};
 use lavashell_runtime::{
-    FrameScheduler, InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline,
+    InputRouter, OutputRecords, PanelRecords, Redraw, ScenePipeline, SchedulerThread,
     SurfaceRecords, TextClipboard, Window,
 };
 use sctk::compositor::CompositorState;
@@ -42,6 +42,15 @@ impl SurfaceProtocols {
             fractional: globals.bind(qh, 1..=1, ()).ok(),
             background: globals.bind(qh, 1..=1, ()).ok(),
         }
+    }
+}
+
+/// Redraws every frame while the app ticks, observes each frame or shows a scene, and otherwise only after a change.
+fn redraw_for(config: &AppConfig, renderer: &RendererState<Control>) -> Redraw {
+    if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene() {
+        Redraw::Continuous
+    } else {
+        Redraw::OnChange
     }
 }
 
@@ -95,12 +104,8 @@ impl Platform {
         let accessibility_events = accessibility::install(&loop_handle, &mut sources)?;
         preferences::install(&loop_handle, &mut sources)?;
         let builder_reports = scene_reports::install(&loop_handle, &mut sources)?;
-        let redraw = if config.tick.is_some() || config.on_frame.is_some() || renderer.shows_scene()
-        {
-            Redraw::Continuous
-        } else {
-            Redraw::OnChange
-        };
+        let scheduler_outputs = scheduler_outputs::install(&loop_handle, &mut sources)?;
+        let redraw = redraw_for(&config, &renderer);
         let text = TextClipboard::new(clipboard.clipboard(), config.action_queue.view_actions());
         let mut platform = Self {
             focus_grabs: focus_grab::Grabs::bind(globals, &qh),
@@ -114,7 +119,9 @@ impl Platform {
             surface_requests: Vec::new(),
             scene: ScenePipeline::start(builder_reports)?,
             scene_stopped: false,
-            scheduler: FrameScheduler::new(redraw),
+            scheduler: SchedulerThread::start(redraw, start, scheduler_outputs)?,
+            scheduler_wake: None,
+            scheduler_stopped: false,
             started_frames: BTreeMap::new(),
             surfaces: BTreeMap::new(),
             renderer,

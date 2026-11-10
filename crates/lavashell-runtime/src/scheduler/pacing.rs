@@ -144,8 +144,7 @@ impl Pacing {
     /// The next time after `now` at which the surface needs a frame: at the deadline of the view, or early enough
     /// before the next change of the scene for a frame to show that change.
     pub fn wake(&self, now: Duration) -> Option<Duration> {
-        let lead = self.clock.predict(now).saturating_sub(now);
-        let change = self.next_change.map(|change| change.saturating_sub(lead));
+        let change = self.next_change.map(|change| self.clock.start_for(change));
         [self.deadline, change]
             .into_iter()
             .flatten()

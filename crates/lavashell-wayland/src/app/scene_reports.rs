@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, warn_whole_scene_next};
+use super::{Platform, actor_link, warn_whole_scene_next};
 use crate::Error;
-use lavashell_actor::Closed;
 use lavashell_runtime::{BuilderObserver, BuilderReport, SchedulerInput};
-use sctk::reexports::calloop::channel::{self, Event};
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
 use smithay_client_toolkit as sctk;
 
@@ -12,15 +10,13 @@ pub(super) fn install(
     handle: &LoopHandle<'static, Platform>,
     sources: &mut Vec<RegistrationToken>,
 ) -> Result<BuilderObserver, Error> {
-    let (sender, channel) = channel::channel();
-    let source = handle
-        .insert_source(channel, |event, (), platform| match event {
-            Event::Msg(report) => platform.scene_report(report),
-            Event::Closed => platform.scene_stopped = true,
-        })
-        .map_err(|failure| Error::WatchScene(failure.error))?;
-    sources.push(source);
-    let observer = move |report: BuilderReport| sender.send(report).map_err(|_unsent| Closed);
+    let observer = actor_link::watch(
+        handle,
+        sources,
+        Platform::scene_report,
+        |platform| platform.scene_stopped = true,
+        Error::WatchScene,
+    )?;
     Ok(Box::new(observer))
 }
 

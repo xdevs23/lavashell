@@ -2753,6 +2753,7 @@ version = "0.1.0"
 dependencies = [
  "accesskit 0.25.1",
  "icu_locale_core",
+ "lavashell-actor",
  "lavashell-core",
  "thiserror 2.0.21",
 ]

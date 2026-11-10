@@ -12,5 +12,6 @@ workspace = true
 [dependencies]
 accesskit.workspace = true
 icu_locale_core.workspace = true
+lavashell-actor.workspace = true
 lavashell-core.workspace = true
 thiserror.workspace = true

@@ -73,6 +73,10 @@ pub enum Error {
     RunChoreographer(#[source] JoinError<Infallible>),
     #[error("the scene builder failed")]
     RunBuilder(#[source] JoinError<ApplyError>),
+    #[error("the frame scheduler could not start")]
+    StartScheduler(#[source] SpawnError<Infallible>),
+    #[error("the frame scheduler failed")]
+    RunScheduler(#[source] JoinError<Infallible>),
 }
 
 /// A failure while the runtime handles an event of an assistive technology. `E` is the failure of the platform to

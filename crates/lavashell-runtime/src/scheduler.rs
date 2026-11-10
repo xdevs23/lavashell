@@ -5,6 +5,7 @@ use lavashell_platform::TimingEvent;
 use lavashell_renderer::FrameOutcome;
 use pacing::Pacing;
 use std::collections::BTreeMap;
+use std::mem;
 use std::time::Duration;
 
 mod pacing;
@@ -95,6 +96,9 @@ pub enum SchedulerOutput {
     },
     /// Pass the report to the frame observer of the app.
     Report(Box<FrameReport>),
+    /// Ask every view at this time what it needs. A surface can need a frame then without another input. `None`
+    /// cancels the earlier time. Each output replaces the previous one.
+    WakeAt(Option<Duration>),
 }
 
 /// Decides when each surface composes and renders. A surface starts a frame when the view of the surface needs one or
@@ -105,6 +109,8 @@ pub enum SchedulerOutput {
 pub struct FrameScheduler {
     redraw: Redraw,
     surfaces: BTreeMap<SurfaceId, Pacing>,
+    /// The wake time sent last.
+    announced_wake: Option<Duration>,
 }
 
 impl FrameScheduler {
@@ -113,11 +119,13 @@ impl FrameScheduler {
         Self {
             redraw,
             surfaces: BTreeMap::new(),
+            announced_wake: None,
         }
     }
 
-    /// Applies `input` at `now` and appends the outputs that follow from it to `out`. A report about a surface
-    /// unknown to the scheduler leaves the pacing state unchanged.
+    /// Applies `input` at `now` and appends the frames and reports that follow from it to `out`, followed by the wake
+    /// time when the input changed it. A report about a surface unknown to the scheduler leaves the pacing state
+    /// unchanged.
     pub fn handle(&mut self, now: Duration, input: SchedulerInput, out: &mut Vec<SchedulerOutput>) {
         let started = match input {
             SchedulerInput::Opened(surface) => {
@@ -176,11 +184,14 @@ impl FrameScheduler {
                 time,
             });
         }
+        let wake = self.next_wake(now);
+        if mem::replace(&mut self.announced_wake, wake) != wake {
+            out.push(SchedulerOutput::WakeAt(wake));
+        }
     }
 
     /// The earliest time after `now` at which a surface needs a frame without another input.
-    #[must_use]
-    pub fn next_wake(&self, now: Duration) -> Option<Duration> {
+    fn next_wake(&self, now: Duration) -> Option<Duration> {
         (self.surfaces.values())
             .filter_map(|pacing| pacing.wake(now))
             .min()
