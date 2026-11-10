@@ -3,15 +3,32 @@
 let
   original = builtins.fromTOML (builtins.readFile (root + "/Cargo.lock"));
   key = package: "${package.name} ${package.version} ${package.source or ""}";
+  isRegistry = package: package ? source;
+  groupByName = lib.groupBy (package: package.name);
+  groupByKey = lib.groupBy key;
+  lookup = groups: name: groups.${name} or [ ];
+  originalByKey = groupByKey original.package;
+  originalRegistryByName = groupByName (lib.filter isRegistry original.package);
+  findOriginal =
+    package:
+    let
+      matching = lookup originalByKey (key package);
+      named = lookup originalRegistryByName package.name;
+    in
+    if matching != [ ] then
+      builtins.head matching
+    else if builtins.length named == 1 then
+      builtins.head named
+    else
+      throw "Refresh the Cargo projection for ${key package}";
   matches =
-    packages: reference:
+    packagesByName: reference:
     let
       words = lib.splitString " " reference;
     in
     lib.filter (
       package:
-      package.name == builtins.head words
-      && (builtins.length words < 2 || package.version == builtins.elemAt words 1)
+      (builtins.length words < 2 || package.version == builtins.elemAt words 1)
       && (
         builtins.length words < 3
         || builtins.elem (lib.concatStringsSep " " (lib.drop 2 words)) [
@@ -19,14 +36,19 @@ let
           "(${package.source or ""})"
         ]
       )
-    ) packages;
+    ) (lookup packagesByName (builtins.head words));
   # A reference by name alone to a crate with several versions in the current lock file resolves to the version in
   # the baseline lock file. The baseline has only one version of that crate, so its references omit the version.
   resolver =
-    packages: seeded: reference:
+    packages: seeded:
     let
-      candidates = matches packages reference;
-      kept = matches seeded reference;
+      packagesByName = groupByName packages;
+      seededByName = groupByName seeded;
+    in
+    reference:
+    let
+      candidates = matches packagesByName reference;
+      kept = matches seededByName reference;
     in
     if builtins.length candidates == 1 then
       builtins.head candidates
@@ -37,74 +59,60 @@ let
   project =
     baseline: names: local:
     let
-      baselineRegistry = lib.filter (package: package ? source) baseline.package;
-      current =
-        package:
-        let
-          matching = lib.filter (entry: key entry == key package) original.package;
-          named = lib.filter (entry: entry.name == package.name && entry ? source) original.package;
-        in
-        if matching != [ ] then
-          builtins.head matching
-        else if builtins.length named == 1 then
-          builtins.head named
-        else
-          throw "Refresh the Cargo projection for ${key package}";
+      baselineRegistry = lib.filter isRegistry baseline.package;
+      resolveInBaseline = resolver baseline.package [ ];
       rebased = map (
         package:
-        (current package)
+        (findOriginal package)
         // {
-          dependencies = map (reference: key (current (resolver baseline.package [ ] reference))) (
+          dependencies = map (lockReference: key (findOriginal (resolveInBaseline lockReference))) (
             package.dependencies or [ ]
           );
         }
       ) baselineRegistry;
+      rebasedByKey = groupByKey rebased;
       packages =
         rebased
         ++ local
         ++ lib.filter (
-          package: package ? source && !(lib.any (entry: key entry == key package) rebased)
+          package: isRegistry package && lookup rebasedByKey (key package) == [ ]
         ) original.package;
       resolve = resolver packages rebased;
-      closure = lib.genericClosure {
-        startSet = map (name: {
-          key = key (resolve name);
-          package = resolve name;
-        }) names;
-        operator =
-          entry:
-          map (reference: {
-            key = key (resolve reference);
-            package = resolve reference;
-          }) (entry.package.dependencies or [ ]);
+      toClosureEntry = package: {
+        key = key package;
+        inherit package;
+        dependencies = map resolve (package.dependencies or [ ]);
       };
-      selected = map (entry: entry.package) closure;
+      closure = lib.genericClosure {
+        startSet = map (name: toClosureEntry (resolve name)) names;
+        operator = entry: map toClosureEntry entry.dependencies;
+      };
+      selectedByName = groupByName (map (entry: entry.package) closure);
       reference =
-        dependency:
-        let
-          package = resolve dependency;
-          duplicates = lib.filter (entry: entry.name == package.name) selected;
-        in
-        package.name + lib.optionalString (builtins.length duplicates > 1) " ${package.version}";
+        package:
+        package.name
+        +
+          lib.optionalString (builtins.length (lookup selectedByName package.name) > 1)
+            " ${package.version}";
     in
     {
       inherit (original) version;
       package = lib.sort (a: b: key a < key b) (
         map (
-          package:
-          package
-          // lib.optionalAttrs (package ? dependencies) {
-            dependencies = lib.sort builtins.lessThan (map reference package.dependencies);
+          entry:
+          entry.package
+          // lib.optionalAttrs (entry.package ? dependencies) {
+            dependencies = lib.sort builtins.lessThan (map reference entry.dependencies);
           }
-        ) selected
+        ) closure
       );
     };
 in
 {
   projected =
     baseline: names:
-    project baseline names (lib.filter (package: !(package ? source)) original.package);
+    project baseline names (lib.filter (package: !isRegistry package) original.package);
   engine =
     baseline: names:
-    project baseline names (lib.filter (package: !(package ? source)) baseline.package);
+    project baseline names (lib.filter (package: !isRegistry package) baseline.package);
 }
