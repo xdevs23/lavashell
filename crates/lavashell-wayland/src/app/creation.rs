@@ -5,9 +5,10 @@ use super::owned_wl_surface::OwnedWlSurface;
 use super::{NativeRole, Surface, destroy_objects};
 use crate::Error;
 use crate::LayerError;
-use crate::translator::Translator;
+use crate::translator::{Translator, ViewLink};
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
+use lavashell_renderer::{PresentationPolicy, SurfaceTiming};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -91,8 +92,10 @@ impl Translator {
             role_state(&spec.role),
             self.qh.clone(),
         );
-        let attach = spec.attach(surface, window.clone(), gpu_budget, control);
-        let accessibility = crate::accessibility::Bridge::new(surface, self.links.view());
+        let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
+        let attach = spec.attach(surface, window.clone(), timing, gpu_budget, control);
+        let accessibility =
+            crate::accessibility::Bridge::new(surface, ViewLink::new(self.links.view.clone()));
         let native = Surface {
             accessibility: Some(accessibility),
             role,

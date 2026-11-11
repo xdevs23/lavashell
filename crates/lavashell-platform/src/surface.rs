@@ -5,7 +5,7 @@ use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
 use lavashell_core::units::{Density, Dp};
-use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell_renderer::{Attach, SurfaceAlpha, SurfaceTiming};
 use lavashell_vulkan::Window;
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,25 +53,27 @@ pub struct SurfaceSpec {
 }
 
 impl SurfaceSpec {
-    /// What attaches `surface` to the renderer, presented on `window` as the spec describes, with `gpu_budget` and
-    /// `control`.
+    /// The attachment of `window` as `surface` to the renderer, shown as this spec describes, with `control` as the
+    /// control of the surface.
     #[must_use]
     pub fn attach<C>(
         &self,
         surface: SurfaceId,
         window: Arc<dyn Window>,
+        timing: SurfaceTiming,
         gpu_budget: Option<Duration>,
         control: C,
     ) -> Attach<C> {
+        let alpha = if self.appearance.transparent {
+            SurfaceAlpha::Transparent
+        } else {
+            SurfaceAlpha::Opaque
+        };
         Attach {
             surface,
             window,
-            alpha: if self.appearance.transparent {
-                SurfaceAlpha::Transparent
-            } else {
-                SurfaceAlpha::Opaque
-            },
-            timing: SurfaceTiming::new(PresentationPolicy::Automatic),
+            alpha,
+            timing,
             output: self.appearance.output,
             hdr_metadata: self.appearance.hdr_metadata,
             gpu_budget,

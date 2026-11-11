@@ -2,7 +2,7 @@
 use super::*;
 use crate::test_error::{TestError, TestResult};
 use crate::test_host::{
-    NoControl, closed, created, empty_view, host, runtime_setup, surface_requests, window,
+    StandIn, closed, created, empty_view, host, runtime_setup, surface_requests, window,
 };
 use crate::watches::AfterReady;
 use crate::window::Window;
@@ -12,6 +12,7 @@ use lavashell_core::output::OutputRequest;
 use lavashell_core::units::DpExt;
 use lavashell_platform::{
     Appearance, Readiness, Role, SurfaceSpec, WatchEvent, WatchId, WatchRequest, WindowRole,
+    no_streams,
 };
 use lavashell_renderer::HeadlessPresentation;
 use rustix::event::{EventfdFlags, eventfd};
@@ -22,7 +23,7 @@ const WINDOW: SurfaceId = SurfaceId(0);
 
 /// A view actor that a test hands one input at a time, with the requests that it sends to the platform.
 struct Views {
-    actor: ViewActor<NoControl>,
+    actor: ViewActor<StandIn>,
     inbox: Sender<ViewInput>,
     inputs: DeadlineReceiver<ViewInput>,
     requests: Receiver<PlatformRequest>,
@@ -40,16 +41,13 @@ impl Views {
         let inputs = DeadlineReceiver::new(items, clock.as_ref()).map_err(ViewError::from)?;
         let (sender, requests) = mailbox();
         let offered = offered.into_iter().collect();
-        let presentation = HeadlessPresentation::without_surfaces();
-        let actor = ViewActor::<NoControl>::start(
-            setup,
-            &offered,
-            presentation,
+        let connected = Connected {
+            presentation: HeadlessPresentation::without_surfaces(),
+            streams: no_streams(),
             host,
-            &clock,
-            sender,
-            &inbox,
-        )?;
+            clock: Arc::clone(&clock),
+        };
+        let actor = ViewActor::<StandIn>::start(setup, &offered, connected, sender, &inbox)?;
         Ok(Self {
             actor,
             inbox,

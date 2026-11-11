@@ -6,17 +6,19 @@ use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
+use lavashell_platform::no_streams;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{HeadlessPresentation, Painter, PainterSetup};
-use std::convert::Infallible;
+use lavashell_renderer::{HeadlessPresentation, NoStreams, Painter, PainterSetup};
 use std::sync::mpsc;
+
+type TestInput = RendererInput<NoControl, NoStreams>;
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
     #[error("the renderer could not start")]
-    Start(#[from] SpawnError<RendererError<Infallible>>),
+    Start(#[from] SpawnError<RendererError<NoControl, NoStreams>>),
     #[error("the renderer failed")]
-    Join(#[from] JoinError<RendererError<Infallible>>),
+    Join(#[from] JoinError<RendererError<NoControl, NoStreams>>),
     #[error("the renderer stopped")]
     Stopped(#[from] RendererStopped),
     #[error("the mailbox is gone")]
@@ -30,13 +32,20 @@ type TestResult = Result<(), TestError>;
 /// A started renderer with the setup of its painter, and the outputs of the renderer.
 fn start(
     painter: Option<PainterSetup>,
-) -> Result<(Renderer<NoControl>, mpsc::Receiver<RendererOutput>), TestError> {
+) -> Result<
+    (
+        Renderer<NoControl, NoStreams>,
+        mpsc::Receiver<RendererOutput>,
+    ),
+    TestError,
+> {
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
     let presentation = HeadlessPresentation::without_surfaces();
     let clock = Arc::new(SystemClock::start());
-    let renderer = Renderer::start(presentation, setup, clock, false, Box::new(observer))?;
+    let observer = Box::new(observer);
+    let renderer = Renderer::start(presentation, setup, no_streams(), clock, false, observer)?;
     Ok((renderer, received))
 }
 
@@ -48,7 +57,7 @@ fn empty_scene() -> Arc<BuiltSurface> {
     })
 }
 
-fn render(surface: u64, sequence: u64) -> RendererInput<NoControl> {
+fn render(surface: u64, sequence: u64) -> TestInput {
     RendererInput::Render {
         surface: SurfaceId(surface),
         time: FrameTime {
@@ -60,22 +69,26 @@ fn render(surface: u64, sequence: u64) -> RendererInput<NoControl> {
     }
 }
 
-fn outline(surface: u64) -> RendererInput<NoControl> {
+fn outline(surface: u64) -> TestInput {
     RendererInput::Outline {
         surface: SurfaceId(surface),
         outline: None,
     }
 }
 
-fn control(surface: u64) -> RendererInput<NoControl> {
+fn control(surface: u64) -> TestInput {
     RendererInput::Surface(SurfaceAttachment::Control {
         surface: SurfaceId(surface),
         message: (),
     })
 }
 
-fn detach(surface: u64) -> RendererInput<NoControl> {
+fn detach(surface: u64) -> TestInput {
     RendererInput::Surface(SurfaceAttachment::Detach(SurfaceId(surface)))
+}
+
+fn stream_task(task: impl FnOnce(&mut NoStreams, &Painter) + Send + 'static) -> TestInput {
+    RendererInput::Streams(Box::new(task))
 }
 
 /// What the renderer takes from its mailbox, without the values that the merge rule ignores.
@@ -88,11 +101,12 @@ enum Taken {
     AdvanceScene,
     Detach(u64),
     Attach,
+    Streams,
     Stop,
 }
 
 impl Taken {
-    fn of(input: &RendererInput<NoControl>) -> Self {
+    fn of(input: &TestInput) -> Self {
         match input {
             RendererInput::Render { surface, time, .. } => Self::Render(surface.0, time.sequence),
             RendererInput::Outline { surface, .. } => Self::Outline(surface.0),
@@ -103,13 +117,14 @@ impl Taken {
             RendererInput::AdvanceScene(_) => Self::AdvanceScene,
             RendererInput::Surface(SurfaceAttachment::Detach(surface)) => Self::Detach(surface.0),
             RendererInput::Surface(SurfaceAttachment::Attach(_)) => Self::Attach,
+            RendererInput::Streams(_) => Self::Streams,
             RendererInput::Stop => Self::Stop,
         }
     }
 }
 
 /// The inputs that the renderer takes at once after `inputs` were pushed while it was busy.
-fn taken(inputs: impl IntoIterator<Item = RendererInput<NoControl>>) -> Result<Vec<Taken>, Closed> {
+fn taken(inputs: impl IntoIterator<Item = TestInput>) -> Result<Vec<Taken>, Closed> {
     let (sender, receiver) = mailbox();
     for input in inputs {
         sender.push(input)?;
@@ -157,6 +172,14 @@ fn a_message_a_commit_or_a_detach_keeps_the_frames_on_either_side() -> TestResul
         Taken::Detach(1),
         Taken::Render(1, 4),
     ];
+    assert_eq!(taken(inputs)?, expected);
+    Ok(())
+}
+
+#[test]
+fn a_stream_task_keeps_the_frames_on_either_side() -> TestResult {
+    let inputs = [render(1, 1), stream_task(|_, _| {}), render(1, 2)];
+    let expected = [Taken::Render(1, 1), Taken::Streams, Taken::Render(1, 2)];
     assert_eq!(taken(inputs)?, expected);
     Ok(())
 }
@@ -213,6 +236,18 @@ fn a_detached_surface_is_reported_after_the_inputs_sent_before_it() -> TestResul
         outputs.recv()?,
         RendererOutput::Retired(SurfaceId(3))
     ));
+    renderer.stop()?;
+    Ok(())
+}
+
+#[test]
+fn a_stream_task_runs_on_the_renderer_with_its_streams() -> TestResult {
+    let (mut renderer, _outputs) = start(None)?;
+    let (ran, received) = mpsc::channel();
+    renderer.send(stream_task(move |_, _| {
+        let _test_waits_below = ran.send(());
+    }))?;
+    received.recv()?;
     renderer.stop()?;
     Ok(())
 }

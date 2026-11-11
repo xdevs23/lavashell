@@ -176,11 +176,13 @@ impl<T: Merge> Receiver<T> {
         take_waiting(self.shared.lock())
     }
 
-    /// Runs `wake` on the pushing thread each time an item arrives in the empty mailbox, and once every sender is
-    /// gone, so that a receiver that also waits for other sources learns that it can take items. Replaces the function
-    /// set before.
+    /// Runs `wake` right away, then on the pushing thread each time an item arrives in the empty mailbox, and once
+    /// every sender is gone. A receiver that also blocks on other sources takes the items after each run. The first
+    /// run is for the items that arrived before. Replaces the function set before.
     pub fn on_arrival(&self, wake: impl Fn() + Send + Sync + 'static) {
-        self.shared.lock().wake = Some(Arc::new(wake));
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
+        self.shared.lock().wake = Some(Arc::clone(&wake));
+        wake();
     }
 
     /// Marks the receiver as resting in its activity when no item is waiting for it, and returns whether no item is

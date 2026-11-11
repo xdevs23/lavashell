@@ -12,12 +12,10 @@ pub use control::{PresentFrame, SurfaceControl};
 pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
 pub use snapshot::Snapshot;
 
-use crate::stream::{FrameImporter, FrameSource, LatchedFrames, NoStreams, StreamBackend};
+use crate::stream::{NoStreams, StreamBackend};
 use crate::text::{Shaper, TextRendering};
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
-use crate::{
-    Fonts, FrameOutcome, Latch, Painter, Stream, SurfaceAlpha, SurfaceContents, SurfaceTiming,
-};
+use crate::{Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents, SurfaceTiming};
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
 use lavashell_core::surface::{SurfaceId, SurfaceState};
@@ -288,9 +286,11 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.painter.shaper()
     }
 
-    #[must_use]
-    pub fn streams(&self) -> &S {
-        &self.streams
+    /// Runs `task` with the streams and with the painter, which records each frame of a stream that is not drawn.
+    /// Compose the snapshot that draws a frame latched by `task` after the task, because a frame draws nothing for an
+    /// image older than the one latched last.
+    pub fn run_on_streams<T>(&mut self, task: impl FnOnce(&mut S, &Painter) -> T) -> T {
+        task(&mut self.streams, &self.painter)
     }
 
     /// The text rendering of the painter, which a shaper made by [`crate::text::Shaper::with_rendering`] follows to
@@ -408,23 +408,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         (self.surfaces.values())
             .filter_map(|attached| attached.target.frames_in_flight())
             .min()
-    }
-}
-
-impl<C: SurfaceControl, I: FrameImporter> RendererState<C, LatchedFrames<I>> {
-    /// Latches the newest frame of `stream` and releases the frame latched before, as [`LatchedFrames::latch`]
-    /// describes. Compose the snapshot that draws the returned image after the latch, because a frame draws nothing
-    /// for an image older than the one latched last.
-    ///
-    /// # Errors
-    ///
-    /// Fails as [`LatchedFrames::latch`] does.
-    pub fn latch<F>(&mut self, stream: &mut Stream<F>) -> Result<Latch, I::Error>
-    where
-        F: FrameSource<Frame = I::Frame>,
-        I::Error: From<F::Error>,
-    {
-        self.streams.latch(&self.painter, stream)
     }
 }
 

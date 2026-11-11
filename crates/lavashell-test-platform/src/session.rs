@@ -11,6 +11,7 @@ use lavashell_platform::{
     DeviceEvent, PlatformEvent, PlatformLinks, PlatformRequest, Role, SurfaceAttachment,
     SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
 };
+use lavashell_renderer::{NoStreams, PresentationPolicy, SurfaceTiming};
 use lavashell_vulkan::HeadlessWindow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
@@ -20,7 +21,7 @@ use std::time::Duration;
 /// The host of a test platform while it plays its script.
 pub(crate) struct Session {
     clock: VirtualClock,
-    links: PlatformLinks<FrameCapture>,
+    links: PlatformLinks<FrameCapture, NoStreams>,
     density: Density,
     /// The capture mode of the controls, also of each control created later.
     capture: CaptureMode,
@@ -46,7 +47,7 @@ enum Settled {
 impl Session {
     pub(crate) fn new(
         clock: VirtualClock,
-        links: PlatformLinks<FrameCapture>,
+        links: PlatformLinks<FrameCapture, NoStreams>,
         density: Density,
     ) -> Self {
         let (shown_by_controls, shown) = mailbox();
@@ -117,7 +118,7 @@ impl Session {
             return Ok(Settled::Ended);
         }
         let event = event(self)?;
-        self.report(event);
+        self.links.reports.report(event);
         self.settle()
     }
 
@@ -174,8 +175,8 @@ impl Session {
             return Ok(Settled::Ended);
         }
         for (surface, frame) in presented {
-            self.report_timing(TimingEvent::DisplayReady(surface));
-            self.report_timing(TimingEvent::Presented {
+            self.links.reports.time(TimingEvent::DisplayReady(surface));
+            self.links.reports.time(TimingEvent::Presented {
                 surface,
                 frame,
                 time: Some(frame.now),
@@ -226,7 +227,7 @@ impl Session {
     fn capture(&mut self, mode: CaptureMode) {
         self.capture = mode;
         for &(surface, _) in &self.windows {
-            self.report_attachment(SurfaceAttachment::Control {
+            self.links.reports.attach(SurfaceAttachment::Control {
                 surface,
                 message: mode,
             });
@@ -243,7 +244,7 @@ impl Session {
         loop {
             for &(surface, _) in &self.windows {
                 if closed.insert(surface) {
-                    self.report((surface, SurfaceEvent::Closed));
+                    self.links.reports.report((surface, SurfaceEvent::Closed));
                 }
             }
             let Ok(requests) = self.links.requests.take() else {
@@ -284,10 +285,21 @@ impl Session {
     /// at the size of `spec`.
     fn create(&mut self, surface: SurfaceId, spec: SurfaceSpec, gpu_budget: Option<Duration>) {
         let control = FrameCapture::new(surface, self.capture, self.shown_by_controls.clone());
-        let attach = spec.attach(surface, Arc::new(HeadlessWindow), gpu_budget, control);
-        self.report_attachment(SurfaceAttachment::Attach(Box::new(attach)));
-        self.report((surface, SurfaceEvent::DensityChanged(self.density)));
-        self.report((
+        let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
+        let attach = spec.attach(
+            surface,
+            Arc::new(HeadlessWindow),
+            timing,
+            gpu_budget,
+            control,
+        );
+        self.links
+            .reports
+            .attach(SurfaceAttachment::Attach(Box::new(attach)));
+        self.links
+            .reports
+            .report((surface, SurfaceEvent::DensityChanged(self.density)));
+        self.links.reports.report((
             surface,
             SurfaceEvent::Configured {
                 width: Some(spec.size.width),
@@ -302,18 +314,8 @@ impl Session {
         self.windows.retain(|&(window, _)| window != surface);
         let _last_frame = self.screen.remove(&surface);
         self.unpresented.retain(|&(shown, _)| shown != surface);
-        self.report_attachment(SurfaceAttachment::Detach(surface));
-    }
-
-    fn report(&self, event: impl Into<PlatformEvent>) {
-        let _gone_view_ends_the_run = self.links.reports.view.push(event.into());
-    }
-
-    fn report_timing(&self, event: TimingEvent) {
-        let _gone_scheduler_ends_the_run = self.links.reports.scheduler.push(event);
-    }
-
-    fn report_attachment(&self, attachment: SurfaceAttachment<FrameCapture>) {
-        let _gone_renderer_ends_the_run = self.links.reports.renderer.push(attachment);
+        self.links
+            .reports
+            .attach(SurfaceAttachment::Detach(surface));
     }
 }

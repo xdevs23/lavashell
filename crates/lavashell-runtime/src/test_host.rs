@@ -23,10 +23,11 @@ use lavashell_core::view::{InputEvent, TextMeasurer, View};
 use lavashell_platform::{
     Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
     PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
+    no_streams,
 };
 use lavashell_renderer::{
-    Fonts, FrameOutcome, HeadlessPresentation, PainterSetup, PresentFrame, RendererSetup,
-    SurfaceControl,
+    Fonts, FrameOutcome, HeadlessPresentation, NoStreams, PainterSetup, PresentFrame,
+    RendererSetup, SurfaceControl,
 };
 use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
 use std::cell::{Cell, RefCell};
@@ -227,6 +228,7 @@ impl Platform for StandIn {
     type Error = StandInError;
     type Presentation = HeadlessPresentation;
     type Control = NoControl;
+    type Streams = NoStreams;
 
     fn connect() -> Result<Connection<Self>, StandInError> {
         match SCENARIO.with_borrow_mut(Option::take) {
@@ -242,6 +244,7 @@ impl Platform for StandIn {
                     log,
                 },
                 presentation: HeadlessPresentation::without_surfaces(),
+                streams: no_streams(),
                 host,
                 clock: Arc::new(SystemClock::start()),
             }),
@@ -254,21 +257,21 @@ impl Platform for StandIn {
         self.offered.clone()
     }
 
-    fn serve(self, links: PlatformLinks<NoControl>) -> Result<(), StandInError> {
+    fn serve(self, links: PlatformLinks<NoControl, NoStreams>) -> Result<(), StandInError> {
         (self.script)(Wire::new(links, self.log))
     }
 }
 
 /// The links of a scripted platform to the runtime, and the requests that the script took from the runtime.
 pub(crate) struct Wire {
-    links: PlatformLinks<NoControl>,
+    links: PlatformLinks<NoControl, NoStreams>,
     waiting: VecDeque<PlatformRequest>,
     taken: Vec<PlatformRequest>,
     log: RequestLog,
 }
 
 impl Wire {
-    fn new(links: PlatformLinks<NoControl>, log: RequestLog) -> Self {
+    fn new(links: PlatformLinks<NoControl, NoStreams>, log: RequestLog) -> Self {
         Self {
             links,
             waiting: VecDeque::new(),
@@ -344,7 +347,7 @@ impl Wire {
     }
 }
 
-pub(crate) type Outcome = Result<(), RunError<StandInError, Infallible>>;
+pub(crate) type Outcome = Result<(), RunError<StandIn>>;
 
 /// The outcome of a run on a scripted platform.
 pub(crate) struct Run {

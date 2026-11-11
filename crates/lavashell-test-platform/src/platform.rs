@@ -2,8 +2,10 @@
 use crate::clock::VirtualClock;
 use crate::session::Session;
 use crate::{Error, FrameCapture, HostScript, RecordedFrames};
-use lavashell_platform::{Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks};
-use lavashell_renderer::HeadlessPresentation;
+use lavashell_platform::{
+    Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks, no_streams,
+};
+use lavashell_renderer::{HeadlessPresentation, NoStreams};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::sync::{Arc, mpsc};
@@ -52,12 +54,14 @@ impl Platform for TestPlatform {
     type Error = Error;
     type Presentation = HeadlessPresentation;
     type Control = FrameCapture;
+    type Streams = NoStreams;
 
     fn connect() -> Result<Connection<Self>, Error> {
         let host = HOST.with_borrow_mut(Option::take).ok_or(Error::NoScript)?;
         let clock = VirtualClock::default();
         Ok(Connection {
             presentation: HeadlessPresentation::with_surfaces(),
+            streams: no_streams(),
             host: HostFacts {
                 outputs: vec![OUTPUT],
                 reports_presentation: true,
@@ -71,7 +75,7 @@ impl Platform for TestPlatform {
         BTreeSet::new()
     }
 
-    fn serve(self, links: PlatformLinks<FrameCapture>) -> Result<(), Error> {
+    fn serve(self, links: PlatformLinks<FrameCapture, NoStreams>) -> Result<(), Error> {
         let Host { script, recorded } = self.host;
         let mut session = Session::new(self.clock, links, script.density);
         let served = session.play(script.steps);

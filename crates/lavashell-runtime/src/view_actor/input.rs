@@ -6,9 +6,9 @@ use crate::observers::{HostKey, KeyboardFocus};
 use crate::view_actor::ViewError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
-    DeviceEvent, KeyAction, KeyboardDevice, PlatformRequest, PressState, WindowControlRequest,
+    DeviceEvent, KeyAction, KeyboardDevice, Platform, PlatformRequest, PressState,
+    WindowControlRequest,
 };
-use lavashell_renderer::SurfaceControl;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum WindowMove {
@@ -16,7 +16,7 @@ enum WindowMove {
     NotBegun,
 }
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Routes `event` to the views. The key observer of the app sees each key before the views, and the focus
     /// observer of the app sees each surface that gains or loses the keyboard focus.
     pub(super) fn device_event(&mut self, event: DeviceEvent) -> Result<(), ViewError> {

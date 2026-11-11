@@ -17,8 +17,8 @@ use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
-use lavashell_platform::{PanelRequest, PlatformRequest};
-use lavashell_renderer::{Drawn, FrameOutcome, SurfaceContents, SurfaceControl};
+use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
+use lavashell_renderer::{Drawn, FrameOutcome, SurfaceContents};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
@@ -96,7 +96,7 @@ impl ViewSurface {
     }
 }
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Makes the renderer commit each surface state that waits for a commit without a frame, then runs the frame
     /// started by the frame scheduler for each surface, in composition order. A compose frame sends the frames of the
     /// view and the surface state to the scene pipeline, and a render frame makes the renderer draw the newest scene

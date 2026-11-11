@@ -37,11 +37,10 @@ use frames::ViewSurface;
 use lavashell_actor::{Clock, Closed, Effect, Merge, Outlet, Sender};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
-    Capability, HostFacts, LockRequest, PlatformEvent, PlatformRequest, SurfaceAttachment,
-    SurfaceRequest, TimingEvent,
+    Capability, HostFacts, LockRequest, Platform, PlatformEvent, PlatformRequest, Reports,
+    StreamSetup, SurfaceRequest,
 };
 use lavashell_renderer::text::Shaper;
-use lavashell_renderer::{PresentationBackend, SurfaceControl};
 use pacing::FramePacing;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -141,11 +140,11 @@ impl<T> ActorOutlet<T> {
 }
 
 /// The views of an app, the records of their surfaces and the actors between them and the host.
-pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
+pub(crate) struct ViewActor<P: Platform> {
     records: SurfaceRecords,
     panels: PanelRecords,
     surfaces: BTreeMap<SurfaceId, ViewSurface>,
-    actors: Actors<C>,
+    actors: Actors<P>,
     /// Measures text for the views as the painter of the renderer shapes it.
     shaper: Shaper,
     requests: Sender<PlatformRequest>,
@@ -168,10 +167,19 @@ pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
     clock: Arc<dyn Clock>,
 }
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
-    /// Starts the scene pipeline, the renderer for the surfaces of `presentation` and the frame scheduler, which
-    /// report to `inbox` and measure time on `clock`, and asks the platform through `requests` for the surfaces of
-    /// `setup`. The built-in parts that need a capability missing from `offered` are switched off.
+/// What the connection to the host of `P` supplies to the views: the presentation and the streams for the renderer,
+/// what the host reported when it connected, and the clock on which every actor measures time.
+pub(crate) struct Connected<P: Platform> {
+    pub(crate) presentation: P::Presentation,
+    pub(crate) streams: StreamSetup<P::Streams>,
+    pub(crate) host: HostFacts,
+    pub(crate) clock: Arc<dyn Clock>,
+}
+
+impl<P: Platform> ViewActor<P> {
+    /// Starts the scene pipeline, the renderer and the frame scheduler on what `connected` supplies. The scene
+    /// pipeline and the frame scheduler send their reports to `inbox`. Requests the surfaces listed in `setup` from the
+    /// platform through `requests`. Built-in parts whose capability is not in `offered` are not started.
     ///
     /// # Errors
     ///
@@ -179,12 +187,16 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     pub(crate) fn start(
         setup: RuntimeSetup,
         offered: &BTreeSet<Capability>,
-        presentation: impl PresentationBackend + Send + 'static,
-        host: HostFacts,
-        clock: &Arc<dyn Clock>,
+        connected: Connected<P>,
         requests: Sender<PlatformRequest>,
         inbox: &Sender<ViewInput>,
-    ) -> Result<Self, StartError<C::Error>> {
+    ) -> Result<Self, StartError<P>> {
+        let Connected {
+            presentation,
+            streams,
+            host,
+            clock,
+        } = connected;
         let RuntimeSetup {
             surfaces,
             panels_per_output,
@@ -213,8 +225,9 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let actors = Actors::start(
             presentation,
             renderer_setup,
+            streams,
             redraw,
-            clock,
+            &clock,
             cpu_timing,
             inbox,
         )?;
@@ -241,22 +254,22 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             ui_budget,
             surface_requests: Vec::new(),
             pacing: FramePacing::default(),
-            clock: Arc::clone(clock),
+            clock,
         };
         actor.open_setup_surfaces(surfaces, session_lock)?;
         Ok(actor)
     }
 
-    /// The outlets through which a platform reports the timing of the frames to the frame scheduler and attaches its
-    /// native surfaces to the renderer.
+    /// The links through which a platform reports to the actors, with `view` for the reports to the views.
     ///
     /// # Errors
     ///
     /// Fails when the renderer stopped.
-    pub(crate) fn links(
+    pub(crate) fn reports(
         &self,
-    ) -> Result<(Outlet<TimingEvent>, Outlet<SurfaceAttachment<C>>), RendererStopped> {
-        self.actors.links()
+        view: Outlet<PlatformEvent>,
+    ) -> Result<Reports<P::Control, P::Streams>, RendererStopped> {
+        self.actors.reports(view, Arc::clone(&self.clock))
     }
 
     /// Runs turns until the run ends. Each turn renders, and then waits for the inputs from the platform and the
@@ -297,7 +310,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         mut self,
         inputs: &DeadlineReceiver<ViewInput>,
         ran: Result<(), ViewError>,
-    ) -> (Result<(), ViewError>, ActorStops<C::Error>) {
+    ) -> (Result<(), ViewError>, ActorStops<P>) {
         let renderer = self.actors.renderer.stop();
         let ran = ran.and_then(|()| self.handle_until(inputs, Stopped::Renderer));
         let scheduler = self.actors.scheduler.stop();

@@ -2562,8 +2562,12 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "jni",
+ "lavashell-actor",
  "lavashell-core",
+ "lavashell-platform",
  "lavashell-renderer",
+ "lavashell-runtime",
+ "lavashell-test-fixtures",
  "lavashell-vulkan",
  "log",
  "ndk",

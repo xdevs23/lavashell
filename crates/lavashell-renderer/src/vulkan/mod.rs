@@ -24,7 +24,7 @@ pub use foreign::{
     FOREIGN_IMPORT_EXTENSIONS, ForeignAlpha, ForeignImport, ForeignImporter, ForeignMemory,
     SampledMemory, Sampling,
 };
-pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status};
+pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status, Window};
 pub use offscreen::OffscreenSurface;
 pub use presentation::{HeadlessPresentation, PresentationBackend};
 pub use scene::{PendingScene, SceneCompletion, SceneImage, SceneSource};
@@ -42,9 +42,7 @@ use crate::Error;
 use ash::vk;
 use completion::drop_completed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_vulkan::{
-    Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest, Window,
-};
+use lavashell_vulkan::{Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest};
 use skia_handoff::{Glyphs, SkiaContext};
 use skia_safe::gpu::{self, SurfaceOrigin, SyncCpu};
 use skia_safe::{Canvas, ColorType, Surface};

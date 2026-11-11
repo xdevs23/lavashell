@@ -8,14 +8,14 @@ use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{AxisPlacement, PanelGeometry};
 use lavashell_core::units::{Dp, NonNegativeDp};
-use lavashell_platform::{PanelRequest, PlatformRequest};
-use lavashell_renderer::{SurfaceContents, SurfaceControl};
+use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
+use lavashell_renderer::SurfaceContents;
 
 /// The length at which a surface opens along an axis whose length the host sets: one logical pixel, the smallest
 /// length that a host shows.
 pub(super) const OPENING_LENGTH: Dp = Dp::new(1.0);
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Sends the requests made by the runtime for each panel before a frame is rendered. While the host shows the
     /// current content of a panel, a changed geometry or keyboard mode is committed without a frame once the scene
     /// builder built it and no frame of the panel is composed or drawn.

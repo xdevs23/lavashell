@@ -48,7 +48,8 @@ pub use state::{
 };
 pub use stream::{
     BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,
-    LatchAccess, LatchedFrames, NoStreams, ProducedFrame, Stream, StreamBackend, Taken,
+    LatchAccess, LatchedFrames, NoStreams, ProducedFrame, RendererStreams, Stream, StreamBackend,
+    Taken,
 };
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,

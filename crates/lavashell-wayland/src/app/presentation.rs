@@ -88,7 +88,7 @@ impl Dispatch<WpPresentation, ()> for Translator {
                 && let Ok(absolute) = Duration::try_from(rustix::time::clock_gettime(clock))
                 && let Some(presentation) = &mut state.presentation
             {
-                presentation.epoch = absolute.checked_sub(state.links.clock().now());
+                presentation.epoch = absolute.checked_sub(state.links.clock.now());
                 presentation.clock = Some(clock);
             }
         }
@@ -122,7 +122,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Translator {
                     surface: data.surface,
                     frame: data.timing,
                     time: (state.presentation.as_ref()).and_then(|presentation| {
-                        presentation.observed(absolute, state.links.clock())
+                        presentation.observed(absolute, state.links.clock.as_ref())
                     }),
                     refresh: (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh))),
                     flags: presentation_flags(wp_presentation_feedback::Kind::from_bits_truncate(

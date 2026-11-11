@@ -9,7 +9,7 @@ use lavashell_renderer::skia::{
     self, AlphaType, ColorSpace, ColorType, Data, ISize, Image, ImageInfo,
 };
 use lavashell_runtime::window::Window;
-use lavashell_runtime::{App, PlatformRunError, RunError, SetupError, run, watches};
+use lavashell_runtime::{App, RunError, SetupError, run, watches};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::os::fd::OwnedFd;
@@ -26,7 +26,7 @@ enum TestError {
     #[error(transparent)]
     Setup(#[from] SetupError),
     #[error(transparent)]
-    Run(#[from] PlatformRunError<TestPlatform>),
+    Run(#[from] RunError<TestPlatform>),
     #[error(transparent)]
     Platform(#[from] Error),
     #[error("cannot create a pipe")]
