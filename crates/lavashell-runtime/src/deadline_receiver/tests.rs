@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_actor::{Effect, mailbox};
+use lavashell_actor::{Effect, SystemClock, mailbox};
 use std::thread;
 
 #[derive(Debug, thiserror::Error)]
@@ -31,7 +31,7 @@ fn items_that_waited_before_the_receiver_existed_are_returned() -> DeadlineRecei
     sender.push(Number(1))?;
     sender.push(Number(2))?;
     drop(sender);
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     assert_eq!(
         receiver.take_until(None)?,
         Arrival::Items(vec![Number(1), Number(2)])
@@ -43,7 +43,7 @@ fn items_that_waited_before_the_receiver_existed_are_returned() -> DeadlineRecei
 #[test]
 fn an_item_that_arrives_during_the_wait_ends_it() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     let pusher = thread::spawn(move || sender.push(Number(1)));
     assert_eq!(receiver.take_until(None)?, Arrival::Items(vec![Number(1)]));
     assert!(matches!(pusher.join(), Ok(Ok(()))));
@@ -53,7 +53,7 @@ fn an_item_that_arrives_during_the_wait_ends_it() -> DeadlineReceiverTestResult 
 #[test]
 fn dropping_the_last_sender_ends_the_wait() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     let dropper = thread::spawn(move || drop(sender));
     assert_eq!(receiver.take_until(None)?, Arrival::SendersGone);
     assert!(dropper.join().is_ok());
@@ -63,9 +63,9 @@ fn dropping_the_last_sender_ends_the_wait() -> DeadlineReceiverTestResult {
 #[test]
 fn a_deadline_that_passed_ends_the_wait_without_an_item() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     assert_eq!(
-        receiver.take_until(Some(Instant::now()))?,
+        receiver.take_until(Some(Duration::ZERO))?,
         Arrival::DeadlinePassed
     );
     drop(sender);
@@ -75,10 +75,10 @@ fn a_deadline_that_passed_ends_the_wait_without_an_item() -> DeadlineReceiverTes
 #[test]
 fn an_item_that_waits_is_returned_although_the_deadline_passed() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     sender.push(Number(1))?;
     assert_eq!(
-        receiver.take_until(Some(Instant::now()))?,
+        receiver.take_until(Some(Duration::ZERO))?,
         Arrival::Items(vec![Number(1)])
     );
     Ok(())
@@ -87,11 +87,11 @@ fn an_item_that_waits_is_returned_although_the_deadline_passed() -> DeadlineRece
 #[test]
 fn a_wait_after_a_taken_item_ends_at_its_deadline() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     sender.push(Number(1))?;
     assert_eq!(receiver.take_until(None)?, Arrival::Items(vec![Number(1)]));
     assert_eq!(
-        receiver.take_until(Some(Instant::now()))?,
+        receiver.take_until(Some(Duration::ZERO))?,
         Arrival::DeadlinePassed
     );
     Ok(())
@@ -100,13 +100,14 @@ fn a_wait_after_a_taken_item_ends_at_its_deadline() -> DeadlineReceiverTestResul
 #[test]
 fn a_deadline_ahead_ends_the_wait_once_it_passed() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox::<Number>();
-    let receiver = DeadlineReceiver::new(items)?;
-    let deadline = Instant::now() + Duration::from_millis(1);
+    let clock = SystemClock::start();
+    let receiver = DeadlineReceiver::new(items, &clock)?;
+    let deadline = clock.now() + Duration::from_millis(1);
     assert_eq!(
         receiver.take_until(Some(deadline))?,
         Arrival::DeadlinePassed
     );
-    assert!(Instant::now() >= deadline);
+    assert!(clock.now() >= deadline);
     drop(sender);
     Ok(())
 }
@@ -114,9 +115,9 @@ fn a_deadline_ahead_ends_the_wait_once_it_passed() -> DeadlineReceiverTestResult
 #[test]
 fn an_item_that_arrives_before_a_deadline_ahead_ends_the_wait() -> DeadlineReceiverTestResult {
     let (sender, items) = mailbox();
-    let receiver = DeadlineReceiver::new(items)?;
+    let receiver = DeadlineReceiver::new(items, &SystemClock::start())?;
     let pusher = thread::spawn(move || sender.push(Number(1)));
-    let deadline = Instant::now() + Duration::from_secs(3600);
+    let deadline = Duration::from_secs(3600);
     assert_eq!(
         receiver.take_until(Some(deadline))?,
         Arrival::Items(vec![Number(1)])

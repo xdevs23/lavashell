@@ -26,7 +26,7 @@ pub use foreign::{
 };
 pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status};
 pub use offscreen::OffscreenSurface;
-pub use presentation::PresentationBackend;
+pub use presentation::{HeadlessPresentation, PresentationBackend};
 pub use scene::{PendingScene, SceneCompletion, SceneImage, SceneSource};
 pub use scene_mailbox::{CompletedScene, SceneMailbox};
 pub(crate) use skia_handoff::SkiaFormat;
@@ -71,7 +71,7 @@ impl VulkanRenderer {
     /// Fails when no Vulkan device meets the requirements of the renderer, or when Vulkan or Skia cannot create the
     /// renderer.
     pub fn headless() -> Result<Self, Error> {
-        Self::new(&presentation::Headless)
+        Self::new(&HeadlessPresentation::without_surfaces())
     }
 
     /// A renderer whose device presents to surfaces created for `backend`.
@@ -178,14 +178,10 @@ impl VulkanRenderer {
     pub fn png(&mut self, surface: &mut Surface) -> Result<Vec<u8>, Error> {
         let context = &mut *self.context;
         context.flush_and_submit_surface(surface, Some(SyncCpu::Yes));
-        // The PNG export is SDR sRGB.
         let mut export = gpu::surfaces::render_target(
             context,
             gpu::Budgeted::Yes,
-            &skia_safe::ImageInfo::new_n32_premul(
-                surface.image_info().dimensions(),
-                skia_safe::ColorSpace::new_srgb(),
-            ),
+            &crate::image::png_export_info(surface.image_info().dimensions()),
             Some(0),
             Some(SurfaceOrigin::TopLeft),
             None,

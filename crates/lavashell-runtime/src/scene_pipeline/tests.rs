@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_actor::JoinError;
+use lavashell_actor::{JoinError, SystemClock};
 use lavashell_core::geometry::{Color, Size, Viewport};
 use lavashell_core::prelude::{Modifier, TextStyle};
 use lavashell_core::reactive::State;
@@ -43,7 +43,10 @@ impl TextMeasurer for NoText {
 fn start() -> Result<(ScenePipeline, mpsc::Receiver<BuilderReport>), Error> {
     let (reports, received) = mpsc::channel();
     let observer = move |report: BuilderReport| reports.send(report).map_err(|_unsent| Closed);
-    Ok((ScenePipeline::start(Box::new(observer))?, received))
+    Ok((
+        ScenePipeline::start(Box::new(observer), &SystemClock::start())?,
+        received,
+    ))
 }
 
 /// A view of one square filled with `color`.

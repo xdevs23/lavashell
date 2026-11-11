@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::app::Control;
-use lavashell_actor::Outlet;
+use lavashell_actor::{Clock, Outlet};
 use lavashell_platform::{PlatformEvent, Reports, SurfaceAttachment, TimingEvent};
-use std::time::Instant;
 
 /// The links through which the translator reports to the actors of the runtime. A report to an actor that is gone is
 /// dropped, because a gone actor ends the run, which ends the requests and then serving.
@@ -32,9 +31,9 @@ impl Links {
         ViewLink::new(self.0.view.clone())
     }
 
-    /// The start of the clock of the app.
-    pub(crate) fn start(&self) -> Instant {
-        self.0.start
+    /// The clock used by the app.
+    pub(crate) fn clock(&self) -> &dyn Clock {
+        self.0.clock.as_ref()
     }
 }
 

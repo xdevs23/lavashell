@@ -164,7 +164,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Makes the renderer advance the scene source in the viewport of the first configured surface while the source
     /// is due, so the scene work runs on the GPU while the views are composed.
     fn advance_scene(&self) -> Result<(), ViewError> {
-        if self.pacing.scene_due()
+        if self.pacing.scene_due(self.clock.now())
             && let Some(viewport) = (self.surfaces.keys())
                 .find(|&&id| self.records.is_configured(id))
                 .and_then(|&id| self.records.open_viewport(id))
@@ -179,7 +179,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Calls the tick callback of the app, and the frame callback of the app with `timing`, the timing of the first
     /// frame composed in a render.
     fn notify_frame(&mut self, timing: FrameTime) {
-        let since_last_tick = self.pacing.tick(self.start.elapsed());
+        let since_last_tick = self.pacing.tick(self.clock.now());
         if let Some(tick) = self.observers.tick.as_mut() {
             tick(since_last_tick);
         }
@@ -416,7 +416,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                 surface: id,
                 timing: start.timing,
                 stage: FrameStage::Submitted,
-                observed: self.start.elapsed(),
+                observed: self.clock.now(),
                 presentation_time: None,
                 metrics: None,
                 flags: None,

@@ -9,7 +9,7 @@ pub use lavashell_effect_quality as effect_quality;
 pub use lavashell_keyboard as keyboard;
 pub use lavashell_materials as materials;
 pub use lavashell_renderer as renderer;
-pub use lavashell_runtime::{Capability, SetupError, run};
+pub use lavashell_runtime::{Capability, PlatformRunError, SetupError, run};
 #[cfg(target_os = "linux")]
 pub use lavashell_wayland as wayland;
 

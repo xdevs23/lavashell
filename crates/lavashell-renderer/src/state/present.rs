@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::targets::AttachedSurface;
-use super::{Drawn, FrameError, PresentFrame, SurfaceControl};
+use super::{Drawn, FrameError, PresentFrame, Snapshot, SurfaceControl};
 use crate::stream::FrameDevice;
 use crate::vulkan::{CompletedScene, SceneImage, VulkanRenderer};
 use crate::{FrameOutcome, SurfaceFrame};
@@ -39,6 +39,7 @@ pub(super) fn present_frame<C: SurfaceControl>(
         scene,
     } = inputs;
     let mut painted = Ok(());
+    let mut control_result = Ok(());
     let paint_frame = |canvas: &skia_safe::Canvas| {
         attached.control.before_present(&frame);
         painted = painter.paint_surface(
@@ -53,6 +54,9 @@ pub(super) fn present_frame<C: SurfaceControl>(
                 streams,
             },
         );
+        if painted.is_ok() {
+            control_result = attached.control.painted(&frame, Snapshot::new(canvas));
+        }
     };
     let outcome = gpu
         .draw_timed_in(
@@ -65,6 +69,11 @@ pub(super) fn present_frame<C: SurfaceControl>(
         )
         .map_err(FrameError::Draw)
         .and_then(|outcome| painted.map(|()| outcome).map_err(FrameError::Paint))
+        .and_then(|outcome| {
+            control_result
+                .map(|()| outcome)
+                .map_err(FrameError::Control)
+        })
         .inspect_err(|_| attached.damage.invalidate())?;
     attached.control.after_present(outcome);
     attached.damage.forget_unless_shown(outcome);

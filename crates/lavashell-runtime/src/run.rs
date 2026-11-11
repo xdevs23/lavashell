@@ -18,14 +18,14 @@ use crate::view_actor::{StopNotice, Stopped, ViewActor, ViewError, ViewInput};
 use crate::watches::Watches;
 use crate::window::Window;
 use crate::{registry, scene_pipeline, standard_error};
-use lavashell_actor::{JoinError, SpawnError, mailbox};
+use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
 use lavashell_platform::{Capability, Platform, PlatformLinks, Reports};
 use lavashell_renderer::{RendererSetup, SurfaceControl};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{io, thread};
 
 /// A surface that the app opens when it starts.
@@ -41,8 +41,6 @@ pub(crate) struct RuntimeSetup {
     pub panels_per_output: Option<PanelsPerOutput<LayerSurface>>,
     pub session_lock: Option<LockConfiguration>,
     pub renderer: RendererSetup,
-    /// The start of the run, from which every time of the run is measured. `drive` sets it when the run starts.
-    pub start: Instant,
     /// The GPU time per frame available to the effects of each surface, or `None` for no limit.
     pub ui_budget: Option<Duration>,
     pub run_end: RunEnd,
@@ -131,23 +129,24 @@ pub fn run<P: Platform>(app: App) -> Result<(), PlatformRunError<P>> {
 }
 
 /// Connects to the host of `P` and runs the app described by `setup` until it ends.
-pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), PlatformRunError<P>> {
-    let start = Instant::now();
-    setup.start = start;
+pub(crate) fn drive<P: Platform>(setup: RuntimeSetup) -> Result<(), PlatformRunError<P>> {
     let connection = P::connect().map_err(RunError::Platform)?;
+    let clock = connection.clock;
     let offered = connection.platform.capabilities();
     let missing = registry::missing(&setup, &offered);
     if !missing.is_empty() {
         return Err(RunError::Unsupported(missing));
     }
-    let (inbox, inputs) = mailbox();
-    let inputs = DeadlineReceiver::new(inputs).map_err(ViewError::DeadlineReceiver)?;
+    let (inbox, inputs) = mailbox_on(clock.as_ref());
+    let inputs =
+        DeadlineReceiver::new(inputs, clock.as_ref()).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
     let mut view = ViewActor::<P::Control>::start(
         setup,
         &offered,
         connection.presentation,
         connection.host,
+        &clock,
         requests,
         &inbox,
     )?;
@@ -157,7 +156,7 @@ pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), Platform
             view: inbox.outlet(ViewInput::Platform),
             scheduler,
             renderer,
-            start,
+            clock,
         },
         requests: platform_requests,
     };
@@ -173,6 +172,7 @@ pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), Platform
     drop(inbox);
     let ran = view.run(&inputs);
     let (ran, stops) = view.stop(&inputs, ran);
+    drop(inputs);
     let renderer = stops.renderer.map_err(RunError::RunRenderer);
     let scheduler = stops
         .scheduler

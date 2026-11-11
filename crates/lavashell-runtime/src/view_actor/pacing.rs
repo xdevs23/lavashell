@@ -6,7 +6,7 @@ use lavashell_core::surface::SurfaceId;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// The frames that the next render runs, and the times at which the views take a turn without an input.
 #[derive(Default)]
@@ -16,9 +16,9 @@ pub(super) struct FramePacing {
     /// The built state that the next render commits without a frame for each surface. The state is read when the
     /// frame scheduler starts the commit, while no frame of the surface is composed or drawn.
     state_commits: BTreeMap<SurfaceId, Arc<BuiltSurface>>,
-    /// The instant at which the scene source on the renderer thread produces the next image, as the renderer
-    /// reported last.
-    scene_deadline: Option<Instant>,
+    /// The time on the clock at which the scene source on the renderer thread produces the next image, as the
+    /// renderer reported last.
+    scene_deadline: Option<Duration>,
     /// The time at which the scheduler asks the views to report again what they need.
     scheduler_wake: Option<Duration>,
     last_tick: Duration,
@@ -35,7 +35,7 @@ impl FramePacing {
         let _replaced = self.state_commits.insert(surface, built);
     }
 
-    pub(super) fn set_scene_deadline(&mut self, deadline: Option<Instant>) {
+    pub(super) fn set_scene_deadline(&mut self, deadline: Option<Duration>) {
         self.scene_deadline = deadline;
     }
 
@@ -53,9 +53,9 @@ impl FramePacing {
         mem::take(&mut self.state_commits)
     }
 
-    /// Whether the scene source is due to produce its next image.
-    pub(super) fn scene_due(&self) -> bool {
-        (self.scene_deadline).is_some_and(|deadline| deadline <= Instant::now())
+    /// Whether the scene source is due to produce its next image at `now`.
+    pub(super) fn scene_due(&self, now: Duration) -> bool {
+        (self.scene_deadline).is_some_and(|deadline| deadline <= now)
     }
 
     /// Returns the time since the tick before, and makes `now` the time of the last tick.
@@ -69,13 +69,13 @@ impl FramePacing {
         let _uncommitted_state = self.state_commits.remove(&surface);
     }
 
-    /// The earlier of the next scene image and the time at which the scheduler asks the views to report again,
-    /// measured from `start`, or `None` without either. A scene deadline that has passed is left out, because the
-    /// render before this wait asked the scene source to advance, and the renderer reports the next deadline once it
-    /// changes. A wake time that is due ends the wait at once and is used up by the next render.
-    pub(super) fn deadline(&mut self, start: Instant, now: Instant) -> Option<Instant> {
+    /// The earlier of the next scene image and the time at which the scheduler asks the views to report again, or
+    /// `None` without either. A scene deadline that has passed at `now` is left out, because the render before this
+    /// wait asked the scene source to advance, and the renderer reports the next deadline once it changes. A wake
+    /// time that is due ends the wait at once and is used up by the next render.
+    pub(super) fn deadline(&mut self, now: Duration) -> Option<Duration> {
         let scene = self.scene_deadline.filter(|&deadline| deadline > now);
-        let wake = (self.scheduler_wake).and_then(|wake| start.checked_add(wake));
+        let wake = self.scheduler_wake;
         if wake.is_some_and(|wake| wake <= now) {
             self.scheduler_wake = None;
         }

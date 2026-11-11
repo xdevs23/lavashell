@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::translator::Translator;
+use lavashell_actor::Clock;
 use lavashell_core::frame::{FrameTime, PresentationFlag, PresentationFlags};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::TimingEvent;
@@ -10,7 +11,7 @@ use sctk::reexports::protocols::wp::presentation_time::client::{
     wp_presentation_feedback::{self, WpPresentationFeedback},
 };
 use smithay_client_toolkit as sctk;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn presentation_flags(kind: wp_presentation_feedback::Kind) -> PresentationFlags {
     use wp_presentation_feedback::Kind;
@@ -41,16 +42,16 @@ impl Presentation {
         })
     }
 
-    fn observed(&self, absolute: Duration, start: Instant) -> Option<Duration> {
+    fn observed(&self, absolute: Duration, clock: &dyn Clock) -> Option<Duration> {
         if self.clock == Some(rustix::time::ClockId::Monotonic) {
             return absolute.checked_sub(self.epoch?);
         }
         // Other clocks can drift or be adjusted against the monotonic clock, or count time in suspend. The
         // timestamp is converted with the current value of its clock, because an offset measured at startup would
         // be out of date.
-        let before = start.elapsed();
+        let before = clock.now();
         let clock_now = Duration::try_from(rustix::time::clock_gettime(self.clock?)).ok()?;
-        let after = start.elapsed();
+        let after = clock.now();
         let age = clock_now.checked_sub(absolute)?;
         let read_at = midpoint(before, after);
         read_at.checked_sub(age)
@@ -87,7 +88,7 @@ impl Dispatch<WpPresentation, ()> for Translator {
                 && let Ok(absolute) = Duration::try_from(rustix::time::clock_gettime(clock))
                 && let Some(presentation) = &mut state.presentation
             {
-                presentation.epoch = absolute.checked_sub(state.links.start().elapsed());
+                presentation.epoch = absolute.checked_sub(state.links.clock().now());
                 presentation.clock = Some(clock);
             }
         }
@@ -121,7 +122,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Translator {
                     surface: data.surface,
                     frame: data.timing,
                     time: (state.presentation.as_ref()).and_then(|presentation| {
-                        presentation.observed(absolute, state.links.start())
+                        presentation.observed(absolute, state.links.clock())
                     }),
                     refresh: (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh))),
                     flags: presentation_flags(wp_presentation_feedback::Kind::from_bits_truncate(

@@ -2,18 +2,18 @@
 use super::*;
 use crate::test_error::{TestError, TestResult};
 use crate::test_host::{
-    NoControl, Offscreen, closed, created, empty_view, host, runtime_setup, surface_requests,
-    window,
+    NoControl, closed, created, empty_view, host, runtime_setup, surface_requests, window,
 };
 use crate::watches::AfterReady;
 use crate::window::Window;
-use lavashell_actor::{Receiver, mailbox};
+use lavashell_actor::{Receiver, SystemClock, mailbox};
 use lavashell_core::geometry::Size;
 use lavashell_core::output::OutputRequest;
 use lavashell_core::units::DpExt;
 use lavashell_platform::{
     Appearance, Readiness, Role, SurfaceSpec, WatchEvent, WatchId, WatchRequest, WindowRole,
 };
+use lavashell_renderer::HeadlessPresentation;
 use rustix::event::{EventfdFlags, eventfd};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -26,6 +26,7 @@ struct Views {
     inbox: Sender<ViewInput>,
     inputs: DeadlineReceiver<ViewInput>,
     requests: Receiver<PlatformRequest>,
+    clock: Arc<dyn Clock>,
 }
 
 impl Views {
@@ -34,17 +35,27 @@ impl Views {
         offered: impl IntoIterator<Item = Capability>,
         host: HostFacts,
     ) -> Result<Self, TestError> {
+        let clock: Arc<dyn Clock> = Arc::new(SystemClock::start());
         let (inbox, items) = mailbox();
-        let inputs = DeadlineReceiver::new(items).map_err(ViewError::from)?;
+        let inputs = DeadlineReceiver::new(items, clock.as_ref()).map_err(ViewError::from)?;
         let (sender, requests) = mailbox();
         let offered = offered.into_iter().collect();
-        let actor =
-            ViewActor::<NoControl>::start(setup, &offered, Offscreen, host, sender, &inbox)?;
+        let presentation = HeadlessPresentation::without_surfaces();
+        let actor = ViewActor::<NoControl>::start(
+            setup,
+            &offered,
+            presentation,
+            host,
+            &clock,
+            sender,
+            &inbox,
+        )?;
         Ok(Self {
             actor,
             inbox,
             inputs,
             requests,
+            clock,
         })
     }
 
@@ -90,7 +101,7 @@ fn wake_at(wake: Duration) -> ViewInput {
     ViewInput::Scheduler(SchedulerOutput::WakeAt(Some(wake)))
 }
 
-fn scene_wake_at(deadline: Instant) -> ViewInput {
+fn scene_wake_at(deadline: Duration) -> ViewInput {
     ViewInput::Renderer(RendererOutput::SceneWake(Some(deadline)))
 }
 
@@ -243,7 +254,7 @@ fn a_wake_time_that_is_due_ends_the_wait_only_once() -> TestResult {
     assert_eq!(views.actor.deadline(), None);
     views.actor.handle(wake_at(Duration::ZERO))?;
     let due = views.actor.deadline();
-    assert!(due.is_some_and(|at| at <= Instant::now()));
+    assert!(due.is_some_and(|at| at <= views.clock.now()));
     assert_eq!(views.actor.deadline(), None);
     Ok(())
 }
@@ -251,7 +262,7 @@ fn a_wake_time_that_is_due_ends_the_wait_only_once() -> TestResult {
 #[test]
 fn the_wait_ends_at_the_earliest_scene_deadline_or_wake_time_that_is_still_ahead() -> TestResult {
     let mut views = views_of(vec![window("window")], Capability::ALL)?;
-    let passed = Instant::now();
+    let passed = views.clock.now();
     let ahead = passed + Duration::from_secs(500);
     views.actor.handle(scene_wake_at(passed))?;
     assert_eq!(views.actor.deadline(), None);
@@ -267,11 +278,10 @@ fn the_exit_time_of_the_run_ends_the_wait_unless_a_wake_time_is_due_sooner() -> 
     setup.run_end.exit_after(Duration::from_secs(5000));
     let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let exit = views.actor.deadline();
-    assert!(exit.is_some_and(|at| at > Instant::now()));
+    assert!(exit.is_some_and(|at| at > views.clock.now()));
     let sooner = Duration::from_secs(10);
     views.actor.handle(wake_at(sooner))?;
-    let expected = views.actor.start.checked_add(sooner);
-    assert_eq!(views.actor.deadline(), expected);
+    assert_eq!(views.actor.deadline(), Some(sooner));
     Ok(())
 }
 

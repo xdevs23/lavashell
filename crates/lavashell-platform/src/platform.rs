@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Capability, OutputId, PlatformEvent, PlatformRequest, TimingEvent};
-use lavashell_actor::{Outlet, Receiver};
+use lavashell_actor::{Clock, Outlet, Receiver};
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{Attach, PresentationBackend, SurfaceControl};
 use std::collections::BTreeSet;
-use std::time::Instant;
+use std::sync::Arc;
 
 /// A host system on which the runtime shows its surfaces. The platform runs on its own thread, where it translates
 /// what the host does into events for the runtime and executes the requests of the runtime.
@@ -32,12 +32,14 @@ pub trait Platform: Sized + Send + 'static {
     fn serve(self, links: PlatformLinks<Self::Control>) -> Result<(), Self::Error>;
 }
 
-/// An open connection to the host: the platform that runs the connection, the presentation for the renderer, and what
-/// the host reported when the connection opened.
+/// An open connection to the host: the platform that runs the connection, the presentation for the renderer, what
+/// the host reported when the connection opened, and the clock used by the run.
 pub struct Connection<P: Platform> {
     pub platform: P,
     pub presentation: P::Presentation,
     pub host: HostFacts,
+    /// The clock on which the run measures every time and waits for each deadline.
+    pub clock: Arc<dyn Clock>,
 }
 
 /// What a platform learns about the host when it connects.
@@ -66,8 +68,8 @@ pub struct Reports<C: SurfaceControl> {
     pub view: Outlet<PlatformEvent>,
     pub scheduler: Outlet<TimingEvent>,
     pub renderer: Outlet<SurfaceAttachment<C>>,
-    /// The start of the clock of the app. The platform measures each time in a timing event from it.
-    pub start: Instant,
+    /// The clock used by the app, against which the platform measures each timing event.
+    pub clock: Arc<dyn Clock>,
 }
 
 /// What a platform sends to the renderer about a native surface.

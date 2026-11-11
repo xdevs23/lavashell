@@ -14,7 +14,6 @@ use lavashell_renderer::{
 };
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use std::time::Instant;
 
 struct AttachedSurface<C> {
     target: SurfaceTarget,
@@ -32,7 +31,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn with_streams(
         backend: &AospPresentation,
         setup: RendererSetup,
-        _start_without_scene_source: Instant,
         streams: impl FnOnce(&VulkanRenderer) -> Result<S, S::Error>,
     ) -> Result<Self, StartError<S::Error>> {
         let RendererSetup { fonts, .. } = setup;

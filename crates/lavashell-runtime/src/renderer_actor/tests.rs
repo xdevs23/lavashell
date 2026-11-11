@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_host::{NoControl, Offscreen, renderer_setup};
+use crate::test_host::{NoControl, renderer_setup};
+use lavashell_actor::{SystemClock, mailbox};
 use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{Painter, PainterSetup};
+use lavashell_renderer::{HeadlessPresentation, Painter, PainterSetup};
 use std::convert::Infallible;
 use std::sync::mpsc;
 
@@ -33,7 +34,9 @@ fn start(
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
-    let renderer = Renderer::start(Offscreen, setup, Instant::now(), false, Box::new(observer))?;
+    let presentation = HeadlessPresentation::without_surfaces();
+    let clock = Arc::new(SystemClock::start());
+    let renderer = Renderer::start(presentation, setup, clock, false, Box::new(observer))?;
     Ok((renderer, received))
 }
 
@@ -172,7 +175,7 @@ fn a_later_scene_advance_replaces_one_not_handled_yet() -> TestResult {
 
 #[test]
 fn the_scene_deadline_is_reported_only_when_an_input_changes_it() {
-    let passed = Instant::now();
+    let passed = Duration::from_secs(1);
     let later = passed + Duration::from_millis(16);
     assert!(scene_wake(Some(passed), Some(passed)).is_none());
     assert!(scene_wake(None, None).is_none());

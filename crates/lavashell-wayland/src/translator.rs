@@ -17,6 +17,7 @@ use crate::Error;
 use crate::RequestsError;
 use crate::app::{Control, Grabs, Presentation, SurfaceProtocols, advertised_outputs};
 use crate::wayland_presentation::WaylandPresentation;
+use lavashell_actor::SystemClock;
 use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks};
 use links::Links;
 use requests::{Requests, execute_arrived};
@@ -29,6 +30,7 @@ use sctk::reexports::client::{Connection, EventQueue};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// The connection to a Wayland compositor and the protocols bound on it, until the platform serves it.
 pub struct Wayland {
@@ -75,6 +77,7 @@ impl Platform for Wayland {
             platform: wayland,
             presentation: backend,
             host,
+            clock: Arc::new(SystemClock::start()),
         })
     }
 

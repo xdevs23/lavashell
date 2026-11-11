@@ -2,8 +2,8 @@
 use crate::cpu_time::CpuStamp;
 use crate::surface_slots::BuiltSurface;
 use lavashell_actor::{
-    Actor, Closed, Effect, Flow, Handle, JoinError, Merge, Outlet, Sender, SpawnError, mailbox,
-    spawn,
+    Actor, Clock, Closed, Effect, Flow, Handle, JoinError, Merge, Outlet, Sender, SpawnError,
+    mailbox_on, spawn,
 };
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::Viewport;
@@ -79,9 +79,9 @@ pub enum RendererOutput {
     Committed(SurfaceId),
     /// The renderer dropped the target and the control of the surface, so nothing presents to the surface anymore.
     Retired(SurfaceId),
-    /// The instant at which the scene source produces the next image, or `None` while the source cannot submit
-    /// another image. The renderer sends the instant each time it changes.
-    SceneWake(Option<Instant>),
+    /// The time on the run clock at which the scene source produces the next image, or `None` while the source cannot
+    /// submit another image. The renderer sends the time each time it changes.
+    SceneWake(Option<Duration>),
 }
 
 /// A frame drawn by the renderer.
@@ -144,7 +144,7 @@ struct Running<C: SurfaceControl + Send + 'static> {
 
 impl<C: SurfaceControl + Send + 'static> Renderer<C> {
     /// Starts the renderer on a thread that builds the GPU renderer and the painter for the surfaces of `backend` from
-    /// `setup`. The renderer measures the times passed to the scene source from `start`, measures the CPU time of each
+    /// `setup`. The renderer measures the times passed to the scene source on `clock`, measures the CPU time of each
     /// draw when `cpu_timing` is set, and passes each output to `observer`.
     ///
     /// # Errors
@@ -153,17 +153,18 @@ impl<C: SurfaceControl + Send + 'static> Renderer<C> {
     pub fn start<B: PresentationBackend + Send + 'static>(
         backend: B,
         setup: RendererSetup,
-        start: Instant,
+        clock: Arc<dyn Clock>,
         cpu_timing: bool,
         observer: RendererObserver,
     ) -> Result<Self, SpawnError<RendererError<C::Error>>> {
-        let (inbox, receiver) = mailbox();
+        let (inbox, receiver) = mailbox_on(clock.as_ref());
         let (rendering, started_rendering) = mpsc::sync_channel(1);
         let actor = spawn("renderer", receiver, move || {
-            let state = RendererState::new(&backend, setup, start).map_err(RendererError::Start)?;
+            let state = RendererState::new(&backend, setup).map_err(RendererError::Start)?;
             let _sent = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
+                clock,
                 cpu_timing,
                 observer,
             })
@@ -227,6 +228,8 @@ impl<C: SurfaceControl + Send + 'static> Drop for Renderer<C> {
 /// The GPU renderer, the painter and the attached surfaces, on the renderer thread.
 struct RendererActor<C: SurfaceControl> {
     state: RendererState<C>,
+    /// The clock on which the scene source measures the time of each image.
+    clock: Arc<dyn Clock>,
     cpu_timing: bool,
     observer: RendererObserver,
 }
@@ -255,7 +258,8 @@ impl<C: SurfaceControl + Send + 'static> Actor for RendererActor<C> {
                 Some(RendererOutput::Committed(surface))
             }
             RendererInput::AdvanceScene(viewport) => {
-                (self.state.advance_scene(viewport)).map_err(RendererError::AdvanceScene)?;
+                (self.state.advance_scene(viewport, self.clock.now()))
+                    .map_err(RendererError::AdvanceScene)?;
                 None
             }
             RendererInput::Stop => return Ok(Flow::Stop),
@@ -327,7 +331,7 @@ impl<C: SurfaceControl> RendererActor<C> {
 
 /// The report of the scene deadline `after` an input that found the deadline `before`, or `None` when the deadline did
 /// not change. A scene source that produced nothing keeps a deadline that has passed, which the platform knows already.
-fn scene_wake(before: Option<Instant>, after: Option<Instant>) -> Option<RendererOutput> {
+fn scene_wake(before: Option<Duration>, after: Option<Duration>) -> Option<RendererOutput> {
     (after != before).then_some(RendererOutput::SceneWake(after))
 }
 

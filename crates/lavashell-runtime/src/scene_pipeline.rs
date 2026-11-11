@@ -4,7 +4,7 @@ use crate::choreographer_actor::{ChoreographerActor, ChoreographerInput};
 use crate::scene_item::SceneItem;
 use crate::scheduler::FrameSequence;
 use crate::surface_slots::{BuiltSurface, SurfaceSlots};
-use lavashell_actor::{Closed, Handle, Sender, mailbox, spawn};
+use lavashell_actor::{Clock, Closed, Handle, Sender, mailbox_on, spawn};
 use lavashell_core::error::message_chain;
 use lavashell_core::scene::tree::{ApplyError, Change};
 use lavashell_core::scene::{ChangeSink, SinkId};
@@ -96,14 +96,15 @@ pub enum FrameStatus {
 }
 
 impl ScenePipeline {
-    /// Starts the choreographer and the scene builder. The builder passes each report to `observer`.
+    /// Starts the choreographer and the scene builder, whose mailboxes `clock` counts. The builder passes each report
+    /// to `observer`.
     ///
     /// # Errors
     ///
     /// Fails when the thread of either actor cannot start.
-    pub fn start(observer: BuilderObserver) -> Result<Self, Error> {
-        let (choreographer, choreographer_inbox) = mailbox();
-        let (builder, builder_inbox) = mailbox();
+    pub fn start(observer: BuilderObserver, clock: &dyn Clock) -> Result<Self, Error> {
+        let (choreographer, choreographer_inbox) = mailbox_on(clock);
+        let (builder, builder_inbox) = mailbox_on(clock);
         let intake = choreographer_inbox.intake();
         let choreographer_actor = spawn("choreographer", choreographer_inbox, move || {
             Ok(ChoreographerActor::new(builder, intake))

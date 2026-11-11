@@ -11,7 +11,7 @@ use lavashell_renderer::{
     Fonts, FrameOutcome, Latch, LatchedFrames, PresentFrame, RendererSetup, StateError, Stream,
     SurfaceAlpha,
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// The one surface of the renderer state, which the attached native window presents.
 const SURFACE: SurfaceId = SurfaceId::UNSPECIFIED;
@@ -34,7 +34,7 @@ impl AndroidRenderer {
             gpu_timing: false,
             full_redraw: false,
         };
-        let state = RendererState::with_streams(&AospPresentation, setup, Instant::now(), |gpu| {
+        let state = RendererState::with_streams(&AospPresentation, setup, |gpu| {
             HardwareBufferImporter::new(gpu).map(LatchedFrames::new)
         })?;
         Ok(Self { state })
