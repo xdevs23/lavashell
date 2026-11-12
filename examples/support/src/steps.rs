@@ -70,8 +70,9 @@ impl<L: Clone + 'static, E: From<Error> + 'static> Steps<L, E> {
         }));
         let actions = app.view_actions();
         let observed = Rc::clone(&playing);
-        let app =
-            app.view_observer(move |surface, _, view| observe(&observed, &actions, surface, view));
+        let app = app.view_observer(move |surface, _, _, view| {
+            observe(&observed, &actions, surface, view)
+        });
         let frames = record(app, script)?.into_frames();
         let mut played = playing.borrow_mut();
         let unplayed = match mem::replace(&mut played.phase, Phase::Ready) {

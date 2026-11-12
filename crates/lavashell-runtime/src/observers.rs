@@ -24,7 +24,7 @@ pub struct KeyboardFocus {
     pub focused: bool,
 }
 
-type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
+type ViewObserver = Box<dyn FnMut(SurfaceId, FrameTime, Viewport, &View)>;
 
 /// The callbacks through which an app follows its run. Each one runs on the thread of the views.
 #[derive(Default)]

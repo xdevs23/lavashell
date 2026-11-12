@@ -10,7 +10,7 @@ use std::time::Duration;
 /// `app` with a view observer that publishes to `pace` what `steps` returns for each frame.
 fn publishing(app: App, pace: &Pace, steps: impl Fn(&View) -> StepsPace + 'static) -> App {
     let pace = pace.clone();
-    app.view_observer(move |_, _, view| pace.publish(steps(view)))
+    app.view_observer(move |_, _, _, view| pace.publish(steps(view)))
 }
 
 fn paced(pace: Pace) -> HostScript {
@@ -54,7 +54,7 @@ fn paced_play_presents_at_an_unchanged_time_while_an_action_waits_for_its_frame(
     let actions = bar.view_actions();
     let published = pace.clone();
     let mut first = true;
-    let app = bar.view_observer(move |surface, _, _| {
+    let app = bar.view_observer(move |surface, _, _, _| {
         if mem::take(&mut first) {
             actions.dispatch(surface, View::invalidate);
             published.publish(StepsPace::Queued);

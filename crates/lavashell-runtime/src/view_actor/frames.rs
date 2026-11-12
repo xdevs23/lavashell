@@ -261,11 +261,21 @@ impl<P: Platform> ViewActor<P> {
         } else {
             ViewChange::Unchanged
         };
-        send_frame(view, self.actors.scene.sink(id, None), &mut failed, &mut frame)?;
+        send_frame(
+            view,
+            self.actors.scene.sink(id, None),
+            &mut failed,
+            &mut frame,
+        )?;
         actions.run(id, view);
         if view.needs_visual_frame() {
             change = ViewChange::Changed;
-            send_frame(view, self.actors.scene.sink(id, None), &mut failed, &mut frame)?;
+            send_frame(
+                view,
+                self.actors.scene.sink(id, None),
+                &mut failed,
+                &mut frame,
+            )?;
         }
         Ok(change)
     }
@@ -406,7 +416,7 @@ impl<P: Platform> ViewActor<P> {
             return;
         };
         if let Some(observer) = &mut self.observers.view {
-            observer(id, viewport, view);
+            observer(id, start.timing, viewport, view);
         }
         if let Some(info) = drawn.output
             && surface.output != Some(info)

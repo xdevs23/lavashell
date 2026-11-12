@@ -216,7 +216,7 @@ fn a_request_that_the_test_platform_cannot_carry_out_fails_the_run() -> TestResu
     let actions = app.view_actions();
     let watched = Rc::new(RefCell::new(Ok(())));
     let dispatched = Rc::clone(&watched);
-    let app = app.view_observer(move |surface, _, _| {
+    let app = app.view_observer(move |surface, _, _, _| {
         if let Some(source) = source.take() {
             *dispatched.borrow_mut() = actions.dispatch_when_readable(source, surface, |_| {});
         }

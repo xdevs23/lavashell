@@ -142,12 +142,12 @@ impl App {
     }
 
     /// Sets `callback`, which runs after a view is composed and can inspect the view without changing how the
-    /// platform handles input. The callback receives the ID of the surface, the same ID used by view actions, and the
-    /// viewport of the surface: its size in dp and its density.
+    /// platform handles input. The callback receives the ID of the surface, the same ID used by view actions, the
+    /// timing of the drawn frame and the viewport of the surface: its size in dp and its density.
     #[must_use]
     pub fn view_observer(
         mut self,
-        callback: impl FnMut(SurfaceId, Viewport, &View) + 'static,
+        callback: impl FnMut(SurfaceId, FrameTime, Viewport, &View) + 'static,
     ) -> Self {
         self.setup.observers.view = Some(Box::new(callback));
         self
