@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
+use crate::{Error, RecordedFrame};
 use lavashell_actor::{Effect, Merge, Sender};
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
@@ -36,6 +36,17 @@ impl FrameCapture {
             shown,
             painted: None,
         }
+    }
+}
+
+impl ShownFrame {
+    /// The frame as a recording contains it, when its pixels were captured.
+    pub(crate) fn recorded(&self) -> Option<RecordedFrame> {
+        Some(RecordedFrame {
+            surface: self.surface,
+            time: self.time,
+            png: self.png.clone()?,
+        })
     }
 }
 

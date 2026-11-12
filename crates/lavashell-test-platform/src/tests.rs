@@ -16,6 +16,8 @@ use std::os::fd::OwnedFd;
 use std::rc::Rc;
 use std::time::Duration;
 
+mod paced;
+
 const APP_ID: &str = "test.app";
 const KEYBOARD: KeyboardDevice = KeyboardDevice(1);
 const KEY_A: u32 = 30;
@@ -160,25 +162,35 @@ fn a_recording_contains_the_pixels_of_the_frame_shown_by_each_window() -> TestRe
     Ok(())
 }
 
-#[test]
-fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
+/// An app whose blue bar animates its width for 100 ms with a linear tween.
+fn growing_bar() -> Result<App, SetupError> {
     let tween = Tween::new(Duration::from_millis(100))
         .easing(Easing::Linear)
         .preserve_velocity(false);
-    let app = app(
+    app(
         move |ui| match ui.animate_presence("width", 100.dp(), 0.dp(), tween) {
             Ok(width) => ui.spacer(width.get(), 100.dp(), Modifier::new().background(BLUE)),
             Err(error) => ui.fail(error),
         },
-    )?;
-    let every = constant!(FrameInterval::per_second(40));
-    let script = HostScript::new(Density::ONE).record_until_rest(every);
+    )
+}
+
+fn presentation_times(script: HostScript, app: App) -> Result<Vec<Duration>, TestError> {
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
-    let times: Vec<_> = (frames?.frames().iter())
+    Ok((frames?.frames().iter())
         .map(|frame| frame.time.presentation)
-        .collect();
-    assert_eq!(times, [0, 25, 50, 75, 100].map(Duration::from_millis));
+        .collect())
+}
+
+#[test]
+fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
+    let every = constant!(FrameInterval::per_second(40));
+    let script = HostScript::new(Density::ONE).record_until_rest(every);
+    assert_eq!(
+        presentation_times(script, growing_bar()?)?,
+        [0, 25, 50, 75, 100].map(Duration::from_millis)
+    );
     Ok(())
 }
 

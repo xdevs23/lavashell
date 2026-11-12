@@ -18,6 +18,8 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod paced;
+
 /// The host of a test platform while it plays its script.
 pub(crate) struct Session {
     clock: VirtualClock,
@@ -106,6 +108,7 @@ impl Session {
             }),
             Step::PlayUntil(time) => self.play_until(time),
             Step::RecordUntilRest(every) => self.record_until_rest(every),
+            Step::RecordPaced(pace) => self.record_paced(&pace),
         }
     }
 
@@ -206,14 +209,7 @@ impl Session {
 
     /// Records the newest frame of each window, whose pixels the controls captured.
     fn record(&mut self) {
-        self.recorded
-            .extend(self.screen.values().filter_map(|frame| {
-                Some(RecordedFrame {
-                    surface: frame.surface,
-                    time: frame.time,
-                    png: frame.png.clone()?,
-                })
-            }));
+        (self.recorded).extend(self.screen.values().filter_map(ShownFrame::recorded));
     }
 
     /// The sequence of the newest frame of each window.

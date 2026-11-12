@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::platform::{Host, ScopedHost};
-use crate::{Error, FrameInterval, RecordedFrames};
+use crate::{Error, FrameInterval, Pace, RecordedFrames};
 use lavashell_core::units::Density;
 use lavashell_platform::{KeyboardDevice, PlatformEvent};
 use std::sync::mpsc;
@@ -22,6 +22,7 @@ pub(crate) enum Step {
     },
     PlayUntil(Duration),
     RecordUntilRest(FrameInterval),
+    RecordPaced(Pace),
 }
 
 impl HostScript {
@@ -66,6 +67,19 @@ impl HostScript {
         self
     }
 
+    /// Plays the run at the pace of the steps that publish to `pace`, and records the newest frame of each window
+    /// each time it is new. Once the actors have nothing left to do, the clock moves to the earliest of their next
+    /// deadline, the due time of the steps and, while the steps sample a motion, the next sample time. While an
+    /// action of the steps waits for its frame, the frames shown are presented without moving the clock. The step
+    /// ends once the steps end, or once the run is at rest as [`is_at_rest`](crate::is_at_rest) describes and the
+    /// steps do not wait for a later due time. When nothing publishes to `pace`, the step plays the deadlines of the
+    /// actors until the run is at rest.
+    #[must_use]
+    pub fn record_paced(mut self, pace: Pace) -> Self {
+        self.steps.push(Step::RecordPaced(pace));
+        self
+    }
+
     /// Runs `run` with this script as the host of a test platform that connects on the calling thread, and returns
     /// what `run` returned with the frames recorded by the script.
     ///
@@ -87,6 +101,6 @@ impl HostScript {
 
 impl Step {
     pub(crate) fn records(&self) -> bool {
-        matches!(self, Self::RecordUntilRest(_))
+        matches!(self, Self::RecordUntilRest(_) | Self::RecordPaced(_))
     }
 }
