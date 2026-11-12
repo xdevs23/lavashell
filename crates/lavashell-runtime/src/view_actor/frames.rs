@@ -252,6 +252,7 @@ impl<P: Platform> ViewActor<P> {
         actions: &mut ActionBatch,
     ) -> Result<ViewChange, ViewError> {
         let (_, view, viewport) = open_parts(&mut self.surfaces, &mut self.records, id)?;
+        let mut failed = |failures| self.observers.report_failures(id, failures);
         let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
             view.frame_into_at(viewport, &mut self.shaper, timing, sink)
         };
@@ -260,11 +261,11 @@ impl<P: Platform> ViewActor<P> {
         } else {
             ViewChange::Unchanged
         };
-        send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+        send_frame(view, self.actors.scene.sink(id, None), &mut failed, &mut frame)?;
         actions.run(id, view);
         if view.needs_visual_frame() {
             change = ViewChange::Changed;
-            send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+            send_frame(view, self.actors.scene.sink(id, None), &mut failed, &mut frame)?;
         }
         Ok(change)
     }

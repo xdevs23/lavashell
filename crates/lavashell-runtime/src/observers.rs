@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::failures::log_failures;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::View;
+use lavashell_core::view::{ComponentFailure, Failures, View};
 use std::time::Duration;
 
 /// A physical key of the focused surface, as a Linux evdev code independent of the keyboard layout and of text
@@ -41,4 +42,17 @@ pub struct Observers {
     pub view: Option<ViewObserver>,
     /// Receives the output that shows a surface each time it changes.
     pub output: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
+    /// Receives each component that failed in a frame of a surface.
+    pub failure: Option<Box<dyn FnMut(SurfaceId, ComponentFailure)>>,
+}
+
+impl Observers {
+    /// Passes each of `failures`, the components that failed in a frame of `surface`, to the failure observer, or logs
+    /// it as an error without one.
+    pub(crate) fn report_failures(&mut self, surface: SurfaceId, failures: Failures) {
+        match &mut self.failure {
+            Some(observer) => (failures.into_iter()).for_each(|failure| observer(surface, failure)),
+            None => log_failures(failures),
+        }
+    }
 }

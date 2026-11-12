@@ -162,8 +162,10 @@ impl<P: Platform> ViewActor<P> {
     fn accessibility_event(&mut self, event: AccessibilityEvent) -> Result<(), ViewError> {
         let id = event.surface();
         let (scene, shaper) = (&mut self.actors.scene, &mut self.shaper);
+        let observers = &mut self.observers;
         let show = |view: &mut View, viewport: Viewport| {
-            send_frame(view, scene.sink(id, None), |view, sink| {
+            let failed = |failures| observers.report_failures(id, failures);
+            send_frame(view, scene.sink(id, None), failed, |view, sink| {
                 view.frame_into(viewport, shaper, sink)
             })
         };

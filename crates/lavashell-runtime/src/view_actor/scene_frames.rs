@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::failures::log_failures;
 use crate::panels::PanelRecords;
 use crate::scene_pipeline::{FrameStatus, SceneSink};
 use crate::view_actor::{Stopped, ViewError};
@@ -7,18 +6,19 @@ use lavashell_actor::Closed;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
 
-/// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
-/// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
-/// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
+/// Runs `frame` to send the next frame of `view` into `sink`, and passes the components that failed in the frame to
+/// `failed`. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no
+/// scene to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
 pub(super) fn send_frame(
     view: &mut View,
     mut sink: SceneSink<'_>,
+    failed: impl FnOnce(Failures),
     frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
 ) -> Result<(), ViewError> {
     let shows_scene = sink.any_frame_ended();
     match frame(view, &mut sink) {
         Ok(failures) => {
-            log_failures(failures);
+            failed(failures);
             Ok(())
         }
         Err(FrameError::Sink(Closed)) => Err(ViewError::Stopped(Stopped::Scene)),
