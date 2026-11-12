@@ -62,6 +62,8 @@ pub enum NativeMethodError {
     InspectBuffer(#[source] jni::errors::Error),
     #[error("the android.hardware.HardwareBuffer to read is closed")]
     ClosedBuffer,
+    #[error("cannot read the android.view.MotionEvent to report")]
+    ReadMotionEvent(#[source] lavashell_android::Error),
     #[error("the handle of a new round trip exceeds the range of a JVM long")]
     TooManyRoundTrips(#[source] TryFromIntError),
     #[error("cannot create the JVM object or array returned to the activity")]

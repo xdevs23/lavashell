@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#[cfg(target_os = "android")]
+use crate::motion_jni::MalformedMotion;
 use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
@@ -66,9 +68,7 @@ pub enum Error {
     #[error("no stream with the id {0:?} is attached to the renderer")]
     FindStream(StreamId),
     #[cfg(target_os = "android")]
-    #[error(
-        "a Java exception is pending, so JNI cannot convert between a Surface and its native window"
-    )]
+    #[error("a Java exception is pending, so JNI cannot convert the Java object")]
     PendingException,
     #[cfg(target_os = "android")]
     #[error("the Surface to convert is null")]
@@ -85,6 +85,24 @@ pub enum Error {
     #[cfg(target_os = "android")]
     #[error("AOSP returned no Surface for the native window")]
     WindowSurface,
+    #[cfg(target_os = "android")]
+    #[error("the MotionEvent to convert is null")]
+    NullMotionEvent,
+    #[cfg(target_os = "android")]
+    #[error("cannot check whether the object to convert is an android.view.MotionEvent")]
+    MotionEventClass(#[source] jni::errors::Error),
+    #[cfg(target_os = "android")]
+    #[error("the object to convert is no android.view.MotionEvent")]
+    NotAMotionEvent,
+    #[cfg(target_os = "android")]
+    #[error("AOSP returned no native copy of the MotionEvent")]
+    MotionEventCopy,
+    #[cfg(target_os = "android")]
+    #[error("cannot read the action button of the MotionEvent")]
+    ActionButton(#[source] jni::errors::Error),
+    #[cfg(target_os = "android")]
+    #[error("the MotionEvent is malformed")]
+    MalformedMotion(#[from] MalformedMotion),
     /// Failures of one call, in the order in which they happened. After each failure, the call continued with the work
     /// that did not depend on the failed work.
     #[error("{}", in_order(.0))]

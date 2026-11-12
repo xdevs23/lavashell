@@ -8,7 +8,7 @@ use ::jni::objects::JLongArray;
 use ::jni::objects::{JClass, JIntArray, JObject};
 use ::jni::sys::{jboolean, jfloat, jint, jlong};
 use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
-use lavashell_android::{BufferSizes, StreamFormat, surface_of_window};
+use lavashell_android::{BufferSizes, StreamFormat, motion_event_of, surface_of_window};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::{ForeignFormat, skia};
@@ -119,6 +119,25 @@ pub fn count_wakes<'local>(env: EnvUnowned<'local>, _: JClass<'local>, handle: j
     export(env, |_| {
         with_round_trip(handle, |round_trip| Ok(round_trip.wakes().into()))
     })
+}
+
+#[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
+pub fn report_motion<'local>(
+    env: EnvUnowned<'local>,
+    _: JClass<'local>,
+    handle: jlong,
+    event: JObject<'local>,
+) {
+    export(env, |env| {
+        let read = motion_event_of(env, &event).map_err(NativeMethodError::ReadMotionEvent);
+        let Some(motion) = read? else {
+            return Ok(());
+        };
+        with_round_trip(handle, |round_trip| {
+            round_trip.report_motion(motion);
+            Ok(())
+        })
+    });
 }
 
 #[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]

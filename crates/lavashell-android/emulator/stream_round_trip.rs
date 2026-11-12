@@ -3,7 +3,7 @@ use crate::error::NativeMethodError;
 use crate::pane::{Pane, run_pane};
 use lavashell_actor::{Receiver, Sender, mailbox};
 use lavashell_android::{
-    AospHost, AospStreams, BufferSizes, NativeWindow, StreamFormat, SurfaceStream,
+    AospHost, AospStreams, BufferSizes, MotionEvent, NativeWindow, StreamFormat, SurfaceStream,
 };
 use lavashell_core::prelude::*;
 use lavashell_renderer::{
@@ -85,6 +85,10 @@ impl StreamRoundTrip {
 
     pub fn drawn_size(&self) -> Result<Option<PixelSize>, NativeMethodError> {
         self.on_stream(|stream| Ok(stream.drawn_size()))
+    }
+
+    pub fn report_motion(&self, event: MotionEvent) {
+        self.run.host.motion(event);
     }
 
     /// How often the round trip has received a notification of a frame from the stream.

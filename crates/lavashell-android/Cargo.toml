@@ -18,6 +18,7 @@ lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 lavashell-vulkan.workspace = true
 ndk.workspace = true
+ndk-sys.workspace = true
 rustix = { workspace = true, features = ["event"] }
 thiserror.workspace = true
 

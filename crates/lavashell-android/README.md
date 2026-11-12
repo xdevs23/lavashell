@@ -5,7 +5,7 @@ Requires AOSP 12 (API 31) or later.
 ## Run an app on a Surface
 
 ```rust,ignore
-use lavashell::android::{AospHost, NativeWindow, window_of_surface};
+use lavashell::android::{AospHost, NativeWindow, motion_event_of, window_of_surface};
 use lavashell::prelude::Platform;
 use lavashell::renderer::{PresentationPolicy, SurfaceTiming};
 
@@ -23,6 +23,12 @@ host.surface_changed();
 
 // In every frame callback of the Choreographer. The host app posts the callback again in each frame until the run ends.
 host.frame();
+
+// In onTouchEvent and onGenericMotionEvent of the view that shows the Surface. Both return true for each event passed
+// to the host.
+if let Some(event) = motion_event_of(env, &event)? {
+    host.motion(event);
+}
 
 // In surfaceDestroyed. The call returns after the renderer has retired the Surface. Retiring it closes the window and
 // ends the run.

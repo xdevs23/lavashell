@@ -1995,6 +1995,7 @@
           "lavashell-vulkan",
           "log",
           "ndk",
+          "ndk-sys",
           "rustix",
           "thiserror 2.0.21"
         ],

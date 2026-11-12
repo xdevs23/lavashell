@@ -4,6 +4,7 @@ pub(crate) mod surface;
 
 pub use error::AospError;
 
+use crate::input::{MotionEvent, MotionTranslator};
 use crate::native_window::NativeWindow;
 use crate::streams::AospStreams;
 use lavashell_actor::{Closed, lock_ignoring_poison};
@@ -20,6 +21,7 @@ enum HostMessage {
     /// The Surface is destroyed once `retired` is sent or dropped.
     SurfaceDestroyed(mpsc::SyncSender<()>),
     Frame,
+    Motion(MotionEvent),
     /// Requests of the runtime arrived, or every sender of the requests is gone.
     Requests,
     Streams(StreamTask<AospStreams>),
@@ -60,7 +62,14 @@ impl HostLink {
             let _ended_platform_reads_nothing = wake.send(HostMessage::Requests);
         });
         let mut surface = HostSurface::default();
-        let served = execute_messages(&messages, &requests, &reports, &mut surface);
+        let mut translator = MotionTranslator::default();
+        let served = execute_messages(
+            &messages,
+            &requests,
+            &reports,
+            &mut surface,
+            &mut translator,
+        );
         let left = Remains {
             _messages: messages,
             _destroying: surface.into_destroying(),
@@ -76,6 +85,7 @@ fn execute_messages(
     requests: &lavashell_actor::Receiver<PlatformRequest>,
     reports: &Reports<NativeWindow, AospStreams>,
     surface: &mut HostSurface,
+    translator: &mut MotionTranslator,
 ) -> Result<(), AospError> {
     for message in messages {
         match message {
@@ -95,6 +105,7 @@ fn execute_messages(
             HostMessage::SurfaceChanged => surface.changed(reports)?,
             HostMessage::SurfaceDestroyed(retired) => surface.destroyed(retired, reports),
             HostMessage::Frame => surface.frame(reports),
+            HostMessage::Motion(event) => translator.report(event, surface.shown(), reports),
             HostMessage::Streams(task) => reports.run_on_streams(task),
         }
     }
@@ -187,6 +198,12 @@ impl AospHost {
     /// Reports that the display is ready for the next frame. Call it in every frame callback of the Choreographer.
     pub fn frame(&self) {
         self.send(HostMessage::Frame);
+    }
+
+    /// Reports a motion event on the Surface. Call it in `onTouchEvent` and in `onGenericMotionEvent` of the view that
+    /// shows the Surface.
+    pub fn motion(&self, event: MotionEvent) {
+        self.send(HostMessage::Motion(event));
     }
 
     /// Runs `task` with the streams and the painter on the renderer thread, after the frames drawn before, and
