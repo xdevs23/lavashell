@@ -227,6 +227,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
             &mut painter,
             surface.canvas(),
             &tree,
+            PixelScale::SQUARE.dp_to_output(Density::ONE),
             Some(Rect::new(0.dp(), 0.dp(), size.width, size.height)),
             skia_safe::Color::TRANSPARENT,
         )?;
@@ -259,6 +260,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
             &mut painter,
             surface.canvas(),
             &tree,
+            PixelScale::SQUARE.dp_to_output(Density::ONE),
             None,
             skia_safe::Color::TRANSPARENT,
         )?;

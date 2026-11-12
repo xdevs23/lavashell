@@ -142,7 +142,7 @@ fn paint_damage(
 ) -> Result<(), TestError> {
     let frame = SurfaceFrame {
         tree: tree.at(Duration::ZERO),
-        density,
+        dp_to_output: PixelScale::SQUARE.dp_to_output(density),
         damage,
         clear: skia_safe::Color::BLACK,
         scene: None,

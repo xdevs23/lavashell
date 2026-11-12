@@ -56,7 +56,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
         }),
         renderer: sender.outlet(
             |attachment: SurfaceAttachment<NativeWindow>| match attachment {
-                SurfaceAttachment::Attach(attach) => Sent::Attach(attach.surface),
+                SurfaceAttachment::Attach { attach, .. } => Sent::Attach(attach.surface),
                 SurfaceAttachment::Control { message, .. } => match message {},
                 SurfaceAttachment::Detach(surface) => Sent::Detach(surface),
             },

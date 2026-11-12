@@ -114,9 +114,9 @@ impl Taken {
                 Self::Control(surface.0)
             }
             RendererInput::CommitState { surface, .. } => Self::CommitState(surface.0),
-            RendererInput::AdvanceScene(_) => Self::AdvanceScene,
+            RendererInput::AdvanceScene { .. } => Self::AdvanceScene,
             RendererInput::Surface(SurfaceAttachment::Detach(surface)) => Self::Detach(surface.0),
-            RendererInput::Surface(SurfaceAttachment::Attach(_)) => Self::Attach,
+            RendererInput::Surface(SurfaceAttachment::Attach { .. }) => Self::Attach,
             RendererInput::Streams(_) => Self::Streams,
             RendererInput::Stop => Self::Stop,
         }
@@ -187,11 +187,11 @@ fn a_stream_task_keeps_the_frames_on_either_side() -> TestResult {
 #[test]
 fn a_later_scene_advance_replaces_one_not_handled_yet() -> TestResult {
     let viewport = Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE);
-    let inputs = [
-        RendererInput::AdvanceScene(viewport),
-        render(1, 1),
-        RendererInput::AdvanceScene(viewport),
-    ];
+    let advance = || RendererInput::AdvanceScene {
+        surface: SurfaceId(1),
+        viewport,
+    };
+    let inputs = [advance(), render(1, 1), advance()];
     assert_eq!(taken(inputs)?, [Taken::AdvanceScene, Taken::Render(1, 1)]);
     Ok(())
 }

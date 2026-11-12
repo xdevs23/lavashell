@@ -3,6 +3,7 @@ use crate::{
     Capability, OutputId, PlatformEvent, PlatformRequest, StreamSetup, StreamTask, TimingEvent,
 };
 use lavashell_actor::{Clock, Outlet, Receiver};
+use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{Attach, PresentationBackend, RendererStreams, SurfaceControl};
 use std::collections::BTreeSet;
@@ -101,8 +102,12 @@ impl<C: SurfaceControl, S> Reports<C, S> {
 
 /// What a platform sends to the renderer about a native surface.
 pub enum SurfaceAttachment<C: SurfaceControl> {
-    /// Creates the target of a new native surface.
-    Attach(Box<Attach<C>>),
+    /// Creates the target of a new native surface, whose frames are drawn at `scale`: the number of output pixels
+    /// covered by one viewport pixel.
+    Attach {
+        attach: Box<Attach<C>>,
+        scale: PixelScale,
+    },
     /// Passes `message` to the control of `surface`, unless the surface was detached.
     Control {
         surface: SurfaceId,

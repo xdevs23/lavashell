@@ -4,7 +4,7 @@ use super::{Drawn, FrameError, PresentFrame, Snapshot, SurfaceControl};
 use crate::stream::FrameDevice;
 use crate::vulkan::{CompletedScene, SceneImage, VulkanRenderer};
 use crate::{FrameOutcome, SurfaceFrame};
-use lavashell_core::prelude::{Presented, Rect};
+use lavashell_core::prelude::{Affine, Presented, Rect};
 use lavashell_core::surface::SurfaceId;
 
 /// The surface that one frame is drawn into, with the values that the frame paints.
@@ -12,6 +12,7 @@ pub(super) struct FrameInputs<'a, C> {
     pub surface: SurfaceId,
     pub attached: &'a mut AttachedSurface<C>,
     pub frame: PresentFrame<'a>,
+    pub dp_to_output: Affine,
     pub shown: Presented<'a>,
     /// The size of the frame in physical pixels.
     pub physical: (u32, u32),
@@ -33,6 +34,7 @@ pub(super) fn present_frame<C: SurfaceControl>(
         surface,
         attached,
         frame,
+        dp_to_output,
         shown,
         physical,
         damage,
@@ -46,7 +48,7 @@ pub(super) fn present_frame<C: SurfaceControl>(
             canvas,
             SurfaceFrame {
                 tree: shown,
-                density: frame.viewport.density,
+                dp_to_output,
                 damage,
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: scene.map(|scene| &scene.content),

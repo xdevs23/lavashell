@@ -312,6 +312,8 @@ pub enum Error {
     OutputColorSpace(OutputProfile),
     #[error("the gain that maps the scene to scRGB lies beyond the range of a Skia scalar")]
     OutputColorFilter(#[source] DrawFailure),
+    #[error("the map from dp to output pixels lies beyond the range of Skia scalars")]
+    OutputTransform(#[source] DrawFailure),
     #[error("cannot allocate the floating-point working surface")]
     WorkingSurface,
     #[error("an offscreen surface of {0:?} is too large for Skia")]

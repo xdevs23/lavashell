@@ -4,7 +4,7 @@ use crate::input::ShownSurface;
 use crate::native_window::NativeWindow;
 use crate::platform::vulkan_window;
 use crate::streams::AospStreams;
-use lavashell_core::geometry::Size;
+use lavashell_core::geometry::{PixelScale, Size};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp, Px};
 use lavashell_platform::{
@@ -211,7 +211,10 @@ impl HostSurface {
             *gpu_budget,
             window.clone(),
         );
-        reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
+        reports.attach(SurfaceAttachment::Attach {
+            attach: Box::new(attach),
+            scale: PixelScale::SQUARE,
+        });
         configure(reports, surface, size);
         self.surface = RuntimeSurface::Shown { surface, size };
         Ok(())

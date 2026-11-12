@@ -167,6 +167,7 @@ fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
             ..FrameTime::default()
         },
         viewport: Viewport::new(Size::new(40.dp(), 30.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state,
     }
@@ -360,5 +361,50 @@ fn a_committed_state_goes_to_the_control_of_its_surface_without_a_draw() -> Resu
         unknown,
         Err(CommitError::State(StateError::UnknownSurface(SurfaceId(1))))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_frame_at_a_non_square_scale_fills_exactly_the_scaled_buffer() -> Result<(), TestError> {
+    let events = Rc::default();
+    let mut state = state()?;
+    attach_recording(&mut state, &events)?;
+    let surface_state = SurfaceState::default();
+    let square = frame(1, &surface_state);
+    let wide = PresentFrame {
+        scale: PixelScale::filling(square.viewport, PixelSize::new(64, 30))?,
+        ..square
+    };
+    let background = DrawCommand::Fill {
+        shape: Rect::from_size(wide.viewport.size).into(),
+        brush: Brush::Solid(Color::WHITE),
+    };
+    let snapshot = SceneTree::with_leaf([background])?.snapshot();
+    assert_eq!(
+        state.draw(SURFACE, wide, &snapshot)?.outcome,
+        FrameOutcome::Shown
+    );
+    let attached = (state.surfaces.get_mut(&SURFACE)).ok_or(TestError::Missing("surface"))?;
+    let pixels = (attached.target.painted_pixels()).ok_or(TestError::Missing("painted image"))?;
+    assert_eq!(pixels.len(), 64 * 30 * 4);
+    assert!(pixels.iter().all(|&channel| channel == 255));
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, wide.scale)?,
+        SurfaceContents::Current
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, PixelScale::SQUARE)?,
+        SurfaceContents::Outdated
+    );
+    let wider = Viewport::new(Size::new(Dp::new(40.1), 30.dp()), Density::ONE);
+    let same_buffer = PixelScale::filling(wider, PixelSize::new(64, 30))?;
+    assert_eq!(
+        same_buffer.buffer_size(wide.viewport)?,
+        PixelSize::new(64, 30)
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, same_buffer)?,
+        SurfaceContents::Outdated
+    );
     Ok(())
 }

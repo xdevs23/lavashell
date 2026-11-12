@@ -17,7 +17,9 @@ use crate::text::{Shaper, TextRendering};
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
 use crate::{Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents, SurfaceTiming};
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
-use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
+use lavashell_core::prelude::{
+    HdrMetadata, OutputInfo, OutputRequest, PixelScale, SceneSnapshot, Viewport,
+};
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_effect_quality::FrameBudget;
 use lavashell_vulkan::Window;
@@ -213,7 +215,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             .map(|attached| &attached.control)
     }
 
-    /// Sets `outline`, in physical pixels, to clip every frame of `surface`. The next frame paints the whole surface.
+    /// Sets `outline`, in dp, to clip every frame of `surface`. The next frame paints the whole surface.
     ///
     /// # Errors
     ///
@@ -253,7 +255,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         (self.surfaces.get(&surface)).and_then(|attached| attached.target.output())
     }
 
-    /// Whether the target of `surface` contains the last frame drawn at `viewport`.
+    /// Whether the target of `surface` contains the last frame drawn at `viewport` and `scale`.
     ///
     /// # Errors
     ///
@@ -262,12 +264,14 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         &self,
         surface: SurfaceId,
         viewport: Viewport,
+        scale: PixelScale,
     ) -> Result<SurfaceContents, StateError> {
-        let attached = self.surfaces.get(&surface);
-        let target = &attached.ok_or(StateError::UnknownSurface(surface))?.target;
-        target
-            .contents(physical_size(viewport)?)
-            .map_err(StateError::ReadContents)
+        let attached = (self.surfaces.get(&surface)).ok_or(StateError::UnknownSurface(surface))?;
+        if !attached.damage.drawn_at(scale) {
+            return Ok(SurfaceContents::Outdated);
+        }
+        let size = physical_size(viewport, scale)?;
+        (attached.target.contents(size)).map_err(StateError::ReadContents)
     }
 
     #[must_use]
@@ -307,17 +311,22 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.scene.as_ref().and_then(SceneImages::wake)
     }
 
-    /// Reads the completed scene images, and asks the scene source for the next one in `viewport` when it is due at
-    /// `now`, on the clock of the caller. A platform calls it before composing the views, so the scene work runs on
-    /// the GPU while the views are composed.
+    /// Reads the completed scene images, and asks the scene source for the next one in `viewport` at `scale` when it
+    /// is due at `now`, on the clock of the caller. A platform calls it before composing the views, so the scene work
+    /// runs on the GPU while the views are composed.
     ///
     /// # Errors
     ///
     /// Fails when the scene source or the scene mailbox fails.
-    pub fn advance_scene(&mut self, viewport: Viewport, now: Duration) -> Result<(), StateError> {
+    pub fn advance_scene(
+        &mut self,
+        viewport: Viewport,
+        scale: PixelScale,
+        now: Duration,
+    ) -> Result<(), StateError> {
         let frames_in_flight = self.scene_frames_in_flight();
         match &mut self.scene {
-            Some(scene) => scene.tick(&mut self.gpu, now, viewport, frames_in_flight),
+            Some(scene) => scene.tick(&mut self.gpu, now, viewport, scale, frames_in_flight),
             None => Ok(()),
         }
     }
@@ -339,9 +348,9 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
-        self.advance_scene(frame.viewport, frame.time.now)?;
+        self.advance_scene(frame.viewport, frame.scale, frame.time.now)?;
         let scene = self.scene.as_ref().and_then(SceneImages::latest);
-        let physical = physical_size(frame.viewport)?;
+        let physical = physical_size(frame.viewport, frame.scale)?;
         let shown = snapshot.at(frame.time.presentation);
         let scene_generation = scene.as_ref().map_or(0, |scene| scene.generation);
         let attached =
@@ -354,14 +363,19 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             surface,
             gpu_time: attached.gpu_budget,
         };
-        let density = frame.viewport.density;
         let sequence = frame.time.sequence;
-        let quality =
-            self.painter
-                .plan_scene_effects(shown, budget, sequence, scene_generation, density);
+        let dp_to_output = frame.scale.dp_to_output(frame.viewport.density);
+        let quality = self.painter.plan_scene_effects(
+            shown,
+            budget,
+            sequence,
+            scene_generation,
+            dp_to_output,
+        );
         let inputs = PixelInputs {
             lineage: snapshot.lineage(),
             scene_generation,
+            scale: frame.scale,
             quality,
         };
         let damage = attached.damage(shown, frame.viewport, physical, &inputs, self.full_redraw)?;
@@ -370,6 +384,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             surface,
             attached,
             frame,
+            dp_to_output,
             shown,
             physical,
             damage,
@@ -417,6 +432,7 @@ impl<C: SurfaceControl, S> Drop for RendererState<C, S> {
     }
 }
 
-fn physical_size(viewport: Viewport) -> Result<(u32, u32), StateError> {
-    (viewport.size.buffer_size(viewport.density)).map_err(StateError::BufferSize)
+fn physical_size(viewport: Viewport, scale: PixelScale) -> Result<(u32, u32), StateError> {
+    let size = (scale.buffer_size(viewport)).map_err(StateError::BufferSize)?;
+    Ok((size.width, size.height))
 }

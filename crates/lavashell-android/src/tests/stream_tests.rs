@@ -94,7 +94,7 @@ impl Display {
                 let outcome = gpu.present(|canvas| {
                     let whole = SurfaceFrame {
                         tree: shown,
-                        density: Density::ONE,
+                        dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
                         damage: Some(Rect::new(0.dp(), 0.dp(), SIDE.dp(), SIDE.dp())),
                         clear: skia::Color::TRANSPARENT,
                         scene: None,

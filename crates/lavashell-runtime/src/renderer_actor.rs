@@ -6,7 +6,7 @@ use lavashell_actor::{
     mailbox_on, spawn,
 };
 use lavashell_core::frame::FrameTime;
-use lavashell_core::geometry::Viewport;
+use lavashell_core::geometry::{PixelScale, Viewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{Platform, StreamSetup, StreamTask, SurfaceAttachment};
 use lavashell_renderer::skia::Path;
@@ -16,6 +16,7 @@ use lavashell_renderer::{
     CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, RendererStreams,
     StartError, StateError, StreamBackend, SurfaceContents, SurfaceControl,
 };
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
@@ -27,7 +28,7 @@ pub enum RendererInput<C: SurfaceControl, S> {
     Surface(SurfaceAttachment<C>),
     /// Runs the task with the streams, after processing all earlier inputs.
     Streams(StreamTask<S>),
-    /// Sets `outline`, in physical pixels, to clip every later frame of `surface`. A later outline of the surface
+    /// Sets `outline`, in dp, to clip every later frame of `surface`. A later outline of the surface
     /// replaces an outline that the renderer has not set yet.
     Outline {
         surface: SurfaceId,
@@ -47,8 +48,12 @@ pub enum RendererInput<C: SurfaceControl, S> {
         surface: SurfaceId,
         built: Arc<BuiltSurface>,
     },
-    /// Asks the scene source for the next image in `viewport` once the image is due.
-    AdvanceScene(Viewport),
+    /// Asks the scene source for the next image in `viewport` at the scale of `surface` once the image is due, while
+    /// `surface` is attached.
+    AdvanceScene {
+        surface: SurfaceId,
+        viewport: Viewport,
+    },
     /// Ends the renderer after the inputs sent before, also while other senders to the inbox exist.
     Stop,
 }
@@ -68,7 +73,7 @@ impl<C: SurfaceControl, S> Merge for RendererInput<C, S> {
         match self {
             Self::Outline { surface, .. } => Effect::Overwrites(RendererKey::Outline(*surface)),
             Self::Render { surface, .. } => Effect::Overwrites(RendererKey::Render(*surface)),
-            Self::AdvanceScene(_) => Effect::Overwrites(RendererKey::AdvanceScene),
+            Self::AdvanceScene { .. } => Effect::Overwrites(RendererKey::AdvanceScene),
             Self::Surface(_) | Self::Streams(_) | Self::CommitState { .. } | Self::Stop => {
                 Effect::BuildsOn
             }
@@ -94,6 +99,8 @@ pub struct Rendered {
     pub surface: SurfaceId,
     pub time: FrameTime,
     pub viewport: Viewport,
+    /// The number of output pixels covered by one viewport pixel of the frame.
+    pub scale: PixelScale,
     pub drawn: Drawn,
     /// Whether the target of the surface contains the drawn frame after the draw.
     pub contents: SurfaceContents,
@@ -204,6 +211,7 @@ where
             let _sent = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
+                scales: BTreeMap::new(),
                 clock,
                 cpu_timing,
                 observer,
@@ -284,6 +292,8 @@ where
 /// The GPU renderer, the painter, the attached surfaces and the streams, on the renderer thread.
 struct RendererActor<C: SurfaceControl, S> {
     state: RendererState<C, S>,
+    /// The scale at which the frames of each attached surface are drawn.
+    scales: BTreeMap<SurfaceId, PixelScale>,
     /// The clock on which the scene source measures the time of each image.
     clock: Arc<dyn Clock>,
     cpu_timing: bool,
@@ -321,9 +331,11 @@ where
                     .map_err(RendererError::CommitState)?;
                 Some(RendererOutput::Committed(surface))
             }
-            RendererInput::AdvanceScene(viewport) => {
-                (self.state.advance_scene(viewport, self.clock.now()))
-                    .map_err(RendererError::AdvanceScene)?;
+            RendererInput::AdvanceScene { surface, viewport } => {
+                if let Some(&scale) = self.scales.get(&surface) {
+                    (self.state.advance_scene(viewport, scale, self.clock.now()))
+                        .map_err(RendererError::AdvanceScene)?;
+                }
                 None
             }
             RendererInput::Stop => return Ok(Flow::Stop),
@@ -345,9 +357,11 @@ where
         attachment: SurfaceAttachment<C>,
     ) -> Result<Option<RendererOutput>, RendererError<C, S>> {
         match attachment {
-            SurfaceAttachment::Attach(attach) => {
+            SurfaceAttachment::Attach { attach, scale } => {
+                let surface = attach.surface;
                 (self.state.attach(*attach))
                     .map_err(|failed| RendererError::Attach(failed.error))?;
+                let _replaced_scale = self.scales.insert(surface, scale);
                 Ok(None)
             }
             SurfaceAttachment::Control { surface, message } => {
@@ -358,6 +372,7 @@ where
             }
             SurfaceAttachment::Detach(surface) => {
                 drop(self.state.retire(surface));
+                let _retired_scale = self.scales.remove(&surface);
                 Ok(Some(RendererOutput::Retired(surface)))
             }
         }
@@ -373,9 +388,12 @@ where
     ) -> Result<RendererOutput, RendererError<C, S>> {
         let started = Instant::now();
         let cpu_start = self.cpu_timing.then(CpuStamp::now).flatten();
+        let unknown = || RendererError::Draw(StateError::UnknownSurface(surface).into());
+        let scale = *self.scales.get(&surface).ok_or_else(unknown)?;
         let frame = PresentFrame {
             time,
             viewport,
+            scale,
             present_at: None,
             state: &built.state,
         };
@@ -383,11 +401,12 @@ where
         let cost = started.elapsed();
         let cpu_time = cpu_start.and_then(CpuStamp::elapsed);
         let contents =
-            (self.state.contents(surface, viewport)).map_err(RendererError::ReadContents)?;
+            (self.state.contents(surface, viewport, scale)).map_err(RendererError::ReadContents)?;
         Ok(RendererOutput::Rendered(Box::new(Rendered {
             surface,
             time,
             viewport,
+            scale,
             drawn,
             contents,
             next_change: built.scene.next_change(time.presentation),

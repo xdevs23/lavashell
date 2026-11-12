@@ -161,17 +161,16 @@ impl<P: Platform> ViewActor<P> {
         });
     }
 
-    /// Makes the renderer advance the scene source in the viewport of the first configured surface while the source
-    /// is due, so the scene work runs on the GPU while the views are composed.
+    /// Makes the renderer advance the scene source for the first configured surface while the source is due, so the
+    /// scene work runs on the GPU while the views are composed.
     fn advance_scene(&self) -> Result<(), ViewError> {
         if self.pacing.scene_due(self.clock.now())
-            && let Some(viewport) = (self.surfaces.keys())
-                .find(|&&id| self.records.is_configured(id))
-                .and_then(|&id| self.records.open_viewport(id))
+            && let Some(&surface) =
+                (self.surfaces.keys()).find(|&&id| self.records.is_configured(id))
+            && let Some(viewport) = self.records.open_viewport(surface)
         {
-            self.actors
-                .renderer
-                .send(RendererInput::AdvanceScene(viewport))?;
+            let advance = RendererInput::AdvanceScene { surface, viewport };
+            self.actors.renderer.send(advance)?;
         }
         Ok(())
     }
@@ -292,7 +291,7 @@ impl<P: Platform> ViewActor<P> {
         let Viewport { size, density } = viewport;
         let mut clip = None;
         let shape_changes = surface.shape.update(size, density, |outline| {
-            let geometry = ShapeGeometry::new(outline, size, density)?;
+            let geometry = ShapeGeometry::new(outline, size)?;
             clip = Some(geometry.clip);
             Ok::<_, ViewError>(geometry.input_cells)
         })?;
@@ -340,6 +339,7 @@ impl<P: Platform> ViewActor<P> {
             surface: id,
             time,
             viewport,
+            scale: _fixed_while_attached,
             drawn,
             contents,
             next_change,

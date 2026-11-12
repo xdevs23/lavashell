@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{FrameOutcome, Snapshot};
-use lavashell_core::prelude::{FrameTime, Viewport};
+use lavashell_core::prelude::{FrameTime, PixelScale, Viewport};
 use lavashell_core::surface::SurfaceState;
 use std::time::Duration;
 
@@ -10,6 +10,8 @@ use std::time::Duration;
 pub struct PresentFrame<'a> {
     pub time: FrameTime,
     pub viewport: Viewport,
+    /// The number of output pixels covered by one viewport pixel. The whole scene is drawn at this scale.
+    pub scale: PixelScale,
     /// The presentation time set on the buffer of the frame, on the clock of `VK_GOOGLE_display_timing`, from 1 to
     /// `i64::MAX` nanoseconds. `None` lets the presentation engine choose. After one frame with a time, every later
     /// frame of the surface needs one, as `SurfaceTiming` describes.

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{PixelSize, Point, Viewport};
-use crate::units::{Dp, NonNegative, NumberError, Positive, Px};
+use crate::scene::Affine;
+use crate::units::{Density, Dp, NonNegative, NumberError, Positive, Px};
 use num_traits::ToPrimitive;
 
-/// How many output pixels one viewport pixel covers, across and down.
+/// The number of output pixels covered by one viewport pixel, across and down. Two scales are equal
+/// when their ratios have the same bits.
 #[derive(Clone, Copy, Debug)]
 pub struct PixelScale {
     x: AxisScale,
@@ -29,6 +31,10 @@ impl AxisScale {
             output_length: Positive::try_new(f64::from(output_length))?,
             viewport_length: Positive::try_new(viewport_length.get())?,
         })
+    }
+
+    fn ratio(self) -> f64 {
+        self.output_length.get() / self.viewport_length.get()
     }
 
     fn to_output(self, length: Px) -> Px {
@@ -59,6 +65,15 @@ impl PixelScale {
         })
     }
 
+    /// Maps dp at `density` to output pixels.
+    #[must_use]
+    pub fn dp_to_output(self, density: Density) -> Affine {
+        Affine::scale(
+            density.get() * self.x.ratio(),
+            density.get() * self.y.ratio(),
+        )
+    }
+
     /// The size in whole output pixels, rounded up, of a buffer that covers `viewport` at this scale. For the
     /// viewport passed to [`PixelScale::filling`], it is exactly the output. Another viewport can come out one pixel
     /// larger where its exact size is a whole number of pixels.
@@ -86,6 +101,15 @@ impl PixelScale {
         )
     }
 }
+
+impl PartialEq for PixelScale {
+    fn eq(&self, other: &Self) -> bool {
+        let bits = |scale: &Self| [scale.x.ratio(), scale.y.ratio()].map(f64::to_bits);
+        bits(self) == bits(other)
+    }
+}
+
+impl Eq for PixelScale {}
 
 /// The whole number of pixels, rounded up, that a buffer needs for `length`.
 ///
