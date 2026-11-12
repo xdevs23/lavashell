@@ -169,7 +169,7 @@ in
           }
           ''
             cd ${root}
-            for test in test-cargo-reuse test-dependency-workspace test-layered-progress; do
+            for test in test-cargo-reuse test-concurrent-checks test-dependency-workspace test-layered-progress; do
               python3 "nix/$test.py"
             done
             python3 -m unittest discover -s tools -p 'test_*.py'

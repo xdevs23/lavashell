@@ -13,6 +13,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import concurrent_checks
+
 
 def module(name, filename):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
@@ -109,8 +111,9 @@ class DependencyWorkspace(unittest.TestCase):
             root = Path(temporary)
             native = root / "nix/cargo-projections/native.json"
 
-            def read_native_lock(*_):
-                classified_with.append(json.loads(native.read_text())["lock"])
+            def read_native_lock(_root, _nixpkgs, expression):
+                if "needsEngine" in expression:
+                    classified_with.append(json.loads(native.read_text())["lock"])
                 return {}
 
             run_refresh(root, graph=Mock(return_value=({}, refreshed_lock)), evaluate=read_native_lock)
@@ -130,6 +133,31 @@ class DependencyWorkspace(unittest.TestCase):
         self.assertIn("dmeo", stderr.getvalue())
         graph.assert_not_called()
         evaluate.assert_not_called()
+
+    def test_a_failed_package_is_named_and_the_packages_queued_behind_it_do_not_start(self):
+        refreshed = []
+
+        def graph(_args, _directory, package_, _renderer, frozen=False):
+            if package_ != "lavashell-example-support":
+                refreshed.append(package_)
+                raise SystemExit("cargo failed")
+            return {}, {"version": 4, "package": []}
+
+        def evaluate(_root, _nixpkgs, expression):
+            return {"examples/first": False, "examples/second": False} if "needsEngine" in expression else []
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("first", "second"):
+                example = root / "examples" / name
+                (example / "src").mkdir(parents=True)
+                (example / "src/main.rs").write_text("fn main() {}\n")
+                (example / "Cargo.toml").write_text(projection.manifest_text({"package": {"name": name}}))
+            with patch.object(concurrent_checks, "concurrent_count", return_value=1), \
+                    self.assertRaises(SystemExit) as failure:
+                run_refresh(root, graph=graph, evaluate=evaluate)
+        self.assertEqual(refreshed, ["first"])
+        self.assertEqual(failure.exception.__notes__, ["while refreshing the projection of first"])
 
     def test_native_closure_fixture_changes_lavashell_manifest_and_lock_edge_only(self):
         with tempfile.TemporaryDirectory() as temporary:

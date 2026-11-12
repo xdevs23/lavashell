@@ -34,9 +34,7 @@ def main():
             package = manifest["package"]["name"]
             destination = Path(temporary) / entry
             data = projections.workspace(root, args.nixpkgs, f"examples/{entry}", False, destination)
-            renderer = any(tomllib.loads(crate["manifest"])["package"]["name"] == "lavashell-renderer"
-                           for crate in data["crates"])
-            graph, _ = projections.graph(args, destination, package, renderer, frozen=True)
+            graph, _ = projections.graph(args, destination, package, projections.uses_renderer(data), frozen=True)
             metadata_file = root / f"nix/cargo-projections/{package}.json"
             dependency_file = root / "nix/cargo-projections/native.json" if entry == "support" else metadata_file
             if not dependency_file.exists():
@@ -53,14 +51,14 @@ def main():
                 projections.projected_workspace(root, args.nixpkgs, f"examples/{entry}", layer, projected)
                 selected = record["plan"]["selection"]
                 canonical, _ = projections.graph(
-                    args, projected, package, "lavashell-renderer" in selected["packages"], frozen=True,
+                    args, projected, package, projections.RENDERER in selected["packages"], frozen=True,
                 )
                 if projections.plan.external_units(canonical) != record["plan"]["externalUnits"]:
                     raise AssertionError(f"canonical {layer} unit records differ for {package}")
                 seed_directory = destination / f"seed-{layer}"
                 projections.workspace(root, args.nixpkgs, f"examples/{entry}", layer == "engine", seed_directory)
                 seed_graph, _ = projections.graph(
-                    args, seed_directory, package, "lavashell-renderer" in selected["packages"], frozen=True,
+                    args, seed_directory, package, projections.RENDERER in selected["packages"], frozen=True,
                 )
                 projections.dependency.verify_units(seed_graph, canonical, projections.plan.external_units)
             if metadata_file.exists():
