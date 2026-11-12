@@ -71,6 +71,8 @@ pub(crate) enum TestError {
     CreateSocketPair(#[source] io::Error),
     #[error("the socket could not be made non-blocking")]
     ConfigureSocket(#[source] io::Error),
+    #[error("the layer has no panel in the runtime")]
+    NoPanel,
     #[error("the wire has no layer")]
     NoLayer,
     #[error("a request for a native surface does not fit the protocol")]

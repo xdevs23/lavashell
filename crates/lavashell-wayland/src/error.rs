@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_actor::Closed;
+use lavashell_actor::{Closed, JoinError, SpawnError};
 use lavashell_core::geometry::{Rect, Size};
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{FiniteDp, NonNegativeDp, NumberError};
 use lavashell_core::view::FrameError;
-use lavashell_renderer::{CommitError, DrawError, InputSizeError, OutlineError, StateError};
+use lavashell_renderer::{InputSizeError, OutlineError};
+use lavashell_runtime::{RendererError, RendererStopped};
 use sctk::reexports::calloop;
 use sctk::reexports::calloop::futures::ExecutorDestroyed;
 use sctk::reexports::client::ConnectError;
@@ -44,6 +45,8 @@ pub enum Error {
     WatchScene(#[source] calloop::Error),
     #[error("the outputs of the frame scheduler could not join the event loop")]
     WatchScheduler(#[source] calloop::Error),
+    #[error("the reports of the renderer could not join the event loop")]
+    WatchRenderer(#[source] calloop::Error),
     #[error("the system preferences could not join the event loop")]
     WatchPreferences(#[source] calloop::Error),
     #[error("the watch of the system preferences could not be created")]
@@ -68,12 +71,14 @@ pub enum Error {
     NoXdgShell,
     #[error("the compositor offers no layer-shell")]
     NoLayerShell,
+    #[error("the renderer could not start")]
+    StartRenderer(#[source] SpawnError<RendererError<ControlError>>),
     #[error("the renderer failed")]
-    Render(#[source] StateError),
-    #[error("a frame could not be drawn")]
-    Draw(#[source] DrawError<ControlError>),
-    #[error("the state of a panel could not be committed without a frame")]
-    CommitState(#[source] CommitError<ControlError>),
+    RunRenderer(#[source] JoinError<RendererError<ControlError>>),
+    #[error("the renderer stopped")]
+    RendererStopped(#[from] RendererStopped),
+    #[error("the shaper that measures text for the views could not be created")]
+    CreateShaper(#[source] lavashell_renderer::Error),
     #[error("the layout of a new layer does not fit the protocol")]
     LayerLayout(#[source] LayerLayoutError),
     #[error("a contour of a window shape is not a valid polygon")]
@@ -120,6 +125,8 @@ pub enum ControlError {
     Region(Rect),
     #[error("the layout of a layer does not fit the protocol")]
     Layout(#[from] LayerLayoutError),
+    #[error("the requests of a surface could not be sent to the compositor")]
+    Flush(#[source] WaylandError),
 }
 
 /// A layout of a layer whose lengths do not fit the layer-shell protocol.

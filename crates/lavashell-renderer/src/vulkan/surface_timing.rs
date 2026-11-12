@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::{cell::Cell, rc::Rc};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentationPolicy {
@@ -11,17 +12,23 @@ pub enum PresentationPolicy {
 /// same policy. After one frame with an explicit time, every later frame of the surface needs one too.
 /// `Automatic` is valid only while the surface has never presented with an explicit time.
 #[derive(Clone)]
-pub struct SurfaceTiming(Rc<Cell<PresentationPolicy>>);
+pub struct SurfaceTiming(Arc<AtomicBool>);
 
 impl SurfaceTiming {
     #[must_use]
     pub fn new(policy: PresentationPolicy) -> Self {
-        Self(Rc::new(Cell::new(policy)))
+        Self(Arc::new(AtomicBool::new(
+            policy == PresentationPolicy::Explicit,
+        )))
     }
 
     #[must_use]
     pub fn policy(&self) -> PresentationPolicy {
-        self.0.get()
+        if self.0.load(Ordering::Relaxed) {
+            PresentationPolicy::Explicit
+        } else {
+            PresentationPolicy::Automatic
+        }
     }
 
     pub(super) fn check(&self, explicit: bool) -> Result<(), crate::Error> {
@@ -33,7 +40,7 @@ impl SurfaceTiming {
 
     pub(super) fn submitting(&self, explicit: bool) {
         if explicit {
-            self.0.set(PresentationPolicy::Explicit);
+            self.0.store(true, Ordering::Relaxed);
         }
     }
 }

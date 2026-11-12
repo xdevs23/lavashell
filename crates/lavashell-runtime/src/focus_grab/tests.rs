@@ -5,6 +5,7 @@ use crate::{KeyboardPolicy, PanelContent, PanelOptions};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::reactive::State;
+use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::View;
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
@@ -57,10 +58,17 @@ impl Host {
         })
     }
 
-    /// Reports that the host shows a frame with `size`, which accepts input or not.
-    fn show(&mut self, input: bool, size: Size) {
-        let content = PanelContent { size, input };
-        self.panels.shown(self.surface, content);
+    /// Reports that the host shows a frame with `size`, which accepts input or not, and which applied the geometry and
+    /// the keyboard mode sent before it.
+    fn show(&mut self, input: bool, size: Size) -> TestResult {
+        let mut state = SurfaceState::default();
+        if let Some(change) = self.panels.geometry_change(self.surface) {
+            state.apply(change);
+        }
+        let requests = (self.panels.requests(self.surface, &state)).ok_or(TestError::NoPanel)?;
+        self.panels
+            .shown(self.surface, PanelContent { size, input }, requests);
+        Ok(())
     }
 
     fn update(&mut self) -> Vec<FocusGrabRequest> {
@@ -90,11 +98,11 @@ fn grab(active: &State<bool>) -> FocusGrab {
 fn a_grab_starts_once_the_shown_content_accepts_input_and_fits_the_surface() -> TestResult {
     let mut host = Host::new(grab(&State::new(true)))?;
     assert!(host.update().is_empty());
-    host.show(false, surface_size());
+    host.show(false, surface_size())?;
     assert!(host.update().is_empty());
-    host.show(true, other_size());
+    host.show(true, other_size())?;
     assert!(host.update().is_empty());
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     assert!(host.update().is_empty());
     Ok(())
@@ -104,14 +112,14 @@ fn a_grab_starts_once_the_shown_content_accepts_input_and_fits_the_surface() -> 
 fn a_started_grab_ends_with_the_input_of_the_content_or_the_activity_of_the_panel() -> TestResult {
     let active = State::new(true);
     let mut host = Host::new(grab(&active))?;
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
-    host.show(true, other_size());
+    host.show(true, other_size())?;
     assert!(host.update().is_empty());
-    host.show(false, surface_size());
+    host.show(false, surface_size())?;
     assert_eq!(host.update(), [host.release()]);
     assert!(host.update().is_empty());
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     active.set(false);
     assert_eq!(host.update(), [host.release()]);
@@ -123,11 +131,11 @@ fn a_started_grab_ends_with_the_input_of_the_content_or_the_activity_of_the_pane
 fn a_cleared_grab_of_an_active_panel_waits_for_the_panel_to_become_inactive() -> TestResult {
     let active = State::new(true);
     let mut host = Host::new(grab(&active))?;
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     host.clear();
     assert!(host.update().is_empty());
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert!(host.update().is_empty());
     active.set(false);
     assert!(host.update().is_empty());
@@ -143,7 +151,7 @@ fn the_cleared_callback_can_make_the_panel_inactive_before_the_state_is_read() -
     let observed = active.clone();
     let grab = FocusGrab::new(move || observed.get(), move || closed.set(false));
     let mut host = Host::new(grab)?;
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     host.clear();
     assert!(!active.get());
@@ -160,7 +168,7 @@ fn a_clear_without_a_started_grab_does_not_run_the_cleared_callback() -> TestRes
     let mut host = Host::new(grab)?;
     host.clear();
     assert_eq!(cleared.get(), 0);
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     host.clear();
     host.clear();
@@ -171,11 +179,11 @@ fn a_clear_without_a_started_grab_does_not_run_the_cleared_callback() -> TestRes
 #[test]
 fn a_grab_makes_no_request_once_its_surface_closed() -> TestResult {
     let mut host = Host::new(grab(&State::new(true)))?;
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     let closed = host.surfaces.handle(host.surface, SurfaceEvent::Closed);
     assert_eq!(closed, Some(SurfaceRequest::Destroy(host.surface)));
-    host.show(false, surface_size());
+    host.show(false, surface_size())?;
     assert!(host.update().is_empty());
     Ok(())
 }
@@ -188,12 +196,12 @@ fn a_forgotten_grab_requests_its_release_only_when_it_was_started() -> TestResul
     let mut host = Host::new(grab.clone())?;
     assert_eq!(host.grabs.forget(host.surface), None);
     host.grabs.open(host.surface, grab);
-    host.show(true, surface_size());
+    host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     assert_eq!(host.grabs.forget(host.surface), Some(host.release()));
     host.clear();
     assert_eq!(cleared.get(), 0);
-    host.show(false, surface_size());
+    host.show(false, surface_size())?;
     assert!(host.update().is_empty());
     Ok(())
 }

@@ -10,7 +10,7 @@ use lavashell_core::geometry::Size;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::units::Density;
 use lavashell_renderer::{FrameOutcome, SurfaceControl};
-use lavashell_runtime::{PanelContent, PanelRecords, PanelUpdate, SurfaceRecords};
+use lavashell_runtime::{PanelContent, PanelRecords, PanelRequests, PanelUpdate, SurfaceRecords};
 use lavashell_test_fixtures::NoText;
 use sctk::reexports::client::Connection;
 use sctk::reexports::client::protocol::wl_compositor;
@@ -111,6 +111,7 @@ impl Wire {
         let layout = ProtocolLayout::new(geometry)?;
         let proxy = create(&self.shell, &self.surface, None, options, &self.qh, LAYER);
         let objects = SurfaceObjects {
+            connection: self.connection.clone(),
             wl: self.surface.clone(),
             viewport: None,
             presentation: None,
@@ -181,15 +182,22 @@ impl Wire {
         } = self.panels.update_transaction(LAYER, content);
         send_keyboard(layer, keyboard);
         match transaction {
-            Transaction::Settled => {}
+            Transaction::Settled | Transaction::Committing => {}
             Transaction::NeedsFrame => view.invalidate(),
             Transaction::Committed => {
                 self.build_state();
                 let control = self.control.as_mut().ok_or(TestError::NoLayer)?;
                 control.commit_state(&self.state)?;
+                let requests = self.requests()?;
+                self.panels.committed(LAYER, requests);
             }
         }
         Ok(transaction)
+    }
+
+    /// The panel requests that a commit of the built surface state applies.
+    fn requests(&self) -> Result<PanelRequests, TestError> {
+        (self.panels.requests(LAYER, &self.state)).ok_or(TestError::NoPanel)
     }
 
     pub(super) fn keyboard_granted(&self) -> bool {
@@ -245,15 +253,18 @@ impl Wire {
         &mut self,
         frame: FrameOutcome,
     ) -> Result<Vec<(u32, u16, Vec<u32>)>, TestError> {
-        // This fixture has no renderer. The test commits the surface where the renderer commits a shown
-        // frame, then reports the frame to the runtime, as the app does after the renderer presents.
+        // This fixture has no renderer. The test builds the surface state of the frame and commits the surface where
+        // the renderer commits a shown frame, then reports the frame to the runtime, as the app does after the
+        // renderer presents.
+        self.build_state();
         if frame == FrameOutcome::Shown {
             self.surface.commit();
             let content = PanelContent {
                 size: self.size,
                 input: self.input,
             };
-            self.panels.shown(LAYER, content);
+            let requests = self.requests()?;
+            self.panels.shown(LAYER, content, requests);
         }
         self.flush()
     }

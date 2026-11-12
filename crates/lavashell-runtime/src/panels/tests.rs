@@ -33,6 +33,22 @@ fn panel(records: &PanelRecords) -> Result<&Panel, TestError> {
     records.get(PANEL).ok_or(TestError::NoPanel)
 }
 
+/// The requests that a commit sent now applies, with the geometry of the panel in the surface state.
+fn requests(records: &PanelRecords) -> Result<PanelRequests, TestError> {
+    let mut state = SurfaceState::default();
+    if let Some(change) = records.geometry_change(PANEL) {
+        state.apply(change);
+    }
+    records.requests(PANEL, &state).ok_or(TestError::NoPanel)
+}
+
+/// Records a shown frame with content of `size` that accepts input, and applies the requests sent before it.
+fn show(records: &mut PanelRecords, size: Size) -> TestResult {
+    let applied = requests(records)?;
+    records.shown(PANEL, PanelContent { size, input: true }, applied);
+    Ok(())
+}
+
 #[test]
 fn the_keyboard_policy_asks_for_on_demand_focus_only_while_its_condition_holds() {
     assert_eq!(KeyboardPolicy::Off.mode(), KeyboardMode::Off);
@@ -84,7 +100,7 @@ fn a_new_panel_lays_out_its_content_and_receives_the_keyboard_after_a_shown_fram
     assert!(!panel(&records)?.keyboard_granted());
     assert!(!panel(&records)?.input_enabled());
     let size = Size::new(500.dp(), 40.dp());
-    records.shown(PANEL, PanelContent { size, input: true });
+    show(&mut records, size)?;
     let shown = panel(&records)?;
     assert!(shown.keyboard_granted() && shown.input_enabled());
     assert!(shown.content_current(size));
@@ -121,8 +137,7 @@ fn a_change_commits_at_once_only_while_the_host_shows_the_current_content() -> T
     };
     let mut records = PanelRecords::default();
     open(&mut records, options, &mut view)?;
-    let size = Size::new(500.dp(), 40.dp());
-    records.shown(PANEL, PanelContent { size, input: true });
+    show(&mut records, Size::new(500.dp(), 40.dp()))?;
     active.set(true);
     let waiting = records.update_transaction(PANEL, ContentState::Stale);
     let enable = PanelUpdate {
@@ -134,6 +149,10 @@ fn a_change_commits_at_once_only_while_the_host_shows_the_current_content() -> T
     let committed = records.update_transaction(PANEL, ContentState::Current);
     assert_eq!(committed.transaction, Transaction::Committed);
     assert_eq!(committed.keyboard, None);
+    assert!(!panel(&records)?.keyboard_granted());
+    let running = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(running.transaction, Transaction::Committing);
+    records.committed(PANEL, requests(&records)?);
     assert!(panel(&records)?.keyboard_granted());
     let settled = records.update_transaction(PANEL, ContentState::Current);
     assert_eq!(settled.transaction, Transaction::Settled);
@@ -169,13 +188,89 @@ fn a_layout_change_below_half_a_dp_reaches_the_host_as_no_change() -> TestResult
     };
     let mut records = PanelRecords::default();
     open(&mut records, options, &mut view)?;
-    let size = Size::new(500.dp(), 40.dp());
-    records.shown(PANEL, PanelContent { size, input: true });
+    show(&mut records, Size::new(500.dp(), 40.dp()))?;
     let nudged = FiniteDp::try_new(0.2.dp())?;
     layout.update(|layout| layout.margins.top = nudged);
     let settled = records.update_transaction(PANEL, ContentState::Stale);
     assert_eq!(settled.transaction, Transaction::Settled);
     assert_eq!(settled.keyboard, None);
     assert!(panel(&records)?.keyboard_granted());
+    Ok(())
+}
+
+#[test]
+fn a_commit_that_applies_an_older_geometry_leaves_the_panel_waiting() -> TestResult {
+    let mut view = view(&State::new(40.dp()));
+    let layout = State::new(PanelOptions::default().layout);
+    let options = PanelOptions {
+        layout_state: Some(layout.clone()),
+        keyboard: KeyboardPolicy::OnDemand,
+        ..PanelOptions::default()
+    };
+    let mut records = PanelRecords::default();
+    open(&mut records, options, &mut view)?;
+    show(&mut records, Size::new(500.dp(), 40.dp()))?;
+    let before_move = requests(&records)?;
+    let top = FiniteDp::try_new(3.dp())?;
+    layout.update(|layout| layout.margins.top = top);
+    let moved = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(moved.transaction, Transaction::Committed);
+    records.committed(PANEL, before_move);
+    assert!(!panel(&records)?.keyboard_granted());
+    let again = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(again.transaction, Transaction::Committing);
+    records.committed(PANEL, requests(&records)?);
+    assert!(panel(&records)?.keyboard_granted());
+    Ok(())
+}
+
+#[test]
+fn a_frame_does_not_apply_a_keyboard_mode_sent_after_its_requests() -> TestResult {
+    let mut view = view(&State::new(40.dp()));
+    let active = State::new(false);
+    let condition = active.clone();
+    let options = PanelOptions {
+        keyboard: KeyboardPolicy::OnDemandWhen(Rc::new(move || condition.get())),
+        ..PanelOptions::default()
+    };
+    let mut records = PanelRecords::default();
+    open(&mut records, options, &mut view)?;
+    let before_enable = requests(&records)?;
+    active.set(true);
+    let enable = records.update_transaction(PANEL, ContentState::Stale);
+    assert_eq!(enable.keyboard, Some(KeyboardMode::OnDemand));
+    let size = Size::new(500.dp(), 40.dp());
+    records.shown(PANEL, PanelContent { size, input: true }, before_enable);
+    assert!(!panel(&records)?.keyboard_granted());
+    show(&mut records, size)?;
+    assert!(panel(&records)?.keyboard_granted());
+    Ok(())
+}
+
+#[test]
+fn a_geometry_commits_again_after_a_frame_applied_another_one_in_between() -> TestResult {
+    let mut view = view(&State::new(40.dp()));
+    let layout = State::new(PanelOptions::default().layout);
+    let options = PanelOptions {
+        layout_state: Some(layout.clone()),
+        ..PanelOptions::default()
+    };
+    let mut records = PanelRecords::default();
+    open(&mut records, options, &mut view)?;
+    let size = Size::new(500.dp(), 40.dp());
+    show(&mut records, size)?;
+    let committed_top = FiniteDp::try_new(3.dp())?;
+    layout.update(|layout| layout.margins.top = committed_top);
+    let moved = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(moved.transaction, Transaction::Committed);
+    records.committed(PANEL, requests(&records)?);
+    let drawn_top = FiniteDp::try_new(6.dp())?;
+    layout.update(|layout| layout.margins.top = drawn_top);
+    let drawn = records.update_transaction(PANEL, ContentState::Stale);
+    assert_eq!(drawn.transaction, Transaction::NeedsFrame);
+    show(&mut records, size)?;
+    layout.update(|layout| layout.margins.top = committed_top);
+    let back = records.update_transaction(PANEL, ContentState::Current);
+    assert_eq!(back.transaction, Transaction::Committed);
     Ok(())
 }

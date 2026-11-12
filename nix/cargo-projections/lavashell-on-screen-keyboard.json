@@ -2134,14 +2134,17 @@
         "dependencies": [
           "accesskit",
           "accesskit_consumer",
+          "ash",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
           "log",
           "num-traits",
+          "rustix",
           "thiserror 2.0.21",
           "unicode-segmentation"
         ],

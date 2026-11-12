@@ -19,7 +19,12 @@ pub struct PresentFrame<'a> {
 
 /// The requests of a platform that belong to the draw of each frame of one surface.
 pub trait SurfaceControl {
-    type Error: std::error::Error + 'static;
+    type Error: std::error::Error + Send + 'static;
+    /// What the platform sends to the control between frames, for example a report from the host that a later frame
+    /// applies.
+    type Message: Send;
+
+    fn receive(&mut self, message: Self::Message);
 
     /// Runs before every draw of `frame`, whether or not the frame reaches present.
     ///

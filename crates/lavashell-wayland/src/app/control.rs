@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Platform;
-use super::layer::{LayerControl, LayerRequest};
+use super::layer::{LayerConfigure, LayerControl, LayerRequest};
 use super::presentation::Feedback;
 use crate::ControlError;
 use crate::logical::whole;
@@ -8,15 +8,17 @@ use lavashell_core::geometry::Rect;
 use lavashell_core::prelude::{Density, Viewport};
 use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
-use sctk::reexports::client::QueueHandle;
 use sctk::reexports::client::protocol::{wl_compositor, wl_region, wl_surface};
+use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;
 use sctk::reexports::protocols::wp::presentation_time::client::wp_presentation::WpPresentation;
 use sctk::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit as sctk;
 
-/// The protocol objects of a native surface, used by the requests for its frames.
+/// The protocol objects of a native surface, used by the requests for its frames, and the connection that sends the
+/// requests.
 pub(super) struct SurfaceObjects {
+    pub connection: Connection,
     pub wl: wl_surface::WlSurface,
     pub viewport: Option<WpViewport>,
     pub presentation: Option<WpPresentation>,
@@ -78,14 +80,8 @@ impl Control {
         }
     }
 
-    pub fn destroy(self) {
-        if let Some(viewport) = self.objects.viewport {
-            viewport.destroy();
-        }
-    }
-
     /// The control of the layer role, or `None` when the surface has no layer role.
-    pub fn layer_mut(&mut self) -> Option<&mut LayerControl> {
+    fn layer_mut(&mut self) -> Option<&mut LayerControl> {
         match &mut self.objects.role_control {
             RoleControl::Layer(layer) => Some(layer),
             RoleControl::Stateless => None,
@@ -173,6 +169,14 @@ impl Control {
 
 impl SurfaceControl for Control {
     type Error = ControlError;
+    type Message = LayerConfigure;
+
+    /// Records a configure event of the layer role until the frame that applies it.
+    fn receive(&mut self, configure: LayerConfigure) {
+        if let Some(layer) = self.layer_mut() {
+            layer.receive_configure(configure);
+        }
+    }
 
     /// Sets the size of the surface in logical pixels, and makes the requests for the state of `frame`, sent by
     /// `before_present`.
@@ -215,11 +219,12 @@ impl SurfaceControl for Control {
         }
     }
 
-    /// Sends the requests for `state` and commits the surface with the buffer it shows.
+    /// Sends the requests for `state` and the commit of the surface with the buffer shown by the surface to the
+    /// compositor.
     fn commit_state(&mut self, state: &SurfaceState) -> Result<(), ControlError> {
         self.send_state(state)?;
         self.objects.wl.commit();
-        Ok(())
+        self.objects.connection.flush().map_err(ControlError::Flush)
     }
 }
 

@@ -14,25 +14,23 @@ pub(super) fn install(
         handle,
         sources,
         Platform::scene_report,
-        |platform| platform.scene_stopped = true,
+        |platform| platform.stops.scene = true,
         Error::WatchScene,
     )?;
     Ok(Box::new(observer))
 }
 
 impl Platform {
-    /// Renders a composed frame of the surface once its scene is built, and commits a surface state built without a
-    /// frame with the next render. After a frame that did not fit the scene, the view of the surface sends the whole
-    /// scene to a restarted sink.
+    /// Renders a composed frame of the surface once its scene is built. A surface state built without a frame waits
+    /// for a commit without a frame, which the frame scheduler starts. After a frame that did not fit the scene, the
+    /// view of the surface sends the whole scene to a restarted sink.
     fn scene_report(&mut self, report: BuilderReport) {
         match report {
             BuilderReport::Built { surface, sequence } => {
                 self.schedule(SchedulerInput::Built { surface, sequence });
             }
             BuilderReport::StateChanged { surface } => {
-                if let Some(surface) = self.surfaces.get_mut(&surface) {
-                    surface.uncommitted_state = true;
-                }
+                self.schedule(SchedulerInput::StateChanged(surface));
             }
             BuilderReport::Restart { surface, error } => {
                 if let Some(view) = self.surface_records.open_view_mut(surface) {

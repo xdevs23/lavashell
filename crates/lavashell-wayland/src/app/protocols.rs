@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::layer::LayerConfigure;
 use super::{Platform, configure_event};
-use lavashell_core::surface::SurfaceId;
+use crate::Error;
+use lavashell_actor::Closed;
+use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId};
 use lavashell_core::units::Density;
 use lavashell_platform::{SurfaceEvent, TimingEvent};
-use lavashell_runtime::SchedulerInput;
+use lavashell_runtime::{RendererInput, SchedulerInput};
 use sctk::compositor::CompositorHandler;
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::client::protocol::wl_callback::{self, WlCallback};
@@ -145,6 +148,8 @@ impl WindowHandler for Platform {
 }
 
 impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
+    /// The control of the layer records the serial of a configure event. The first commit whose surface state applies
+    /// the event acknowledges it.
     fn event(
         state: &mut Self,
         _: &ZwlrLayerSurfaceV1,
@@ -159,12 +164,35 @@ impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
                 width,
                 height,
             } => {
-                let event = state.layer_configure(*id, serial, width, height);
-                state.surface_event(*id, event);
+                if state.surface_records.is_open(*id)
+                    && let Err(error) = state.receive_layer_configure(*id, serial)
+                {
+                    state.stops.record(error);
+                }
+                match state.layer_configure(*id, width, height) {
+                    Ok(event) => state.surface_event(*id, event),
+                    Err(error) => state.stops.record(error),
+                }
             }
             zwlr_layer_surface_v1::Event::Closed => state.surface_event(*id, SurfaceEvent::Closed),
             _ => {}
         }
+    }
+}
+
+impl Platform {
+    /// Sends the configure event with `serial` to the control of the layer `id`, and then the surface state that
+    /// applies the event to the scene pipeline. Every frame and every commit that applies the state follows the
+    /// configure event in the mailbox of the renderer.
+    fn receive_layer_configure(&mut self, id: SurfaceId, serial: u32) -> Result<(), Error> {
+        let token = ConfigureToken::default();
+        let message = LayerConfigure { token, serial };
+        (self.renderer).send(RendererInput::Control {
+            surface: id,
+            message,
+        })?;
+        let mut sink = self.scene.sink(id, None);
+        (sink.set_state(SurfaceChange::Configure(token))).map_err(|Closed| Error::SceneStopped)
     }
 }
 
