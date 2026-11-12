@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{TestResult, app, growing_bar, presentation_times};
+use super::{KEYBOARD, TestResult, app, growing_bar, key_a, presentation_times};
 use crate::{Error, FrameInterval, HostScript, Pace, StepsPace, TestPlatform};
 use lavashell_core::prelude::{Density, constant};
 use lavashell_core::view::View;
+use lavashell_platform::DeviceEvent;
 use lavashell_runtime::{App, RunError, run};
-use std::mem;
 use std::time::Duration;
+use std::{cell::Cell, mem, rc::Rc};
 
 /// `app` with a view observer that publishes to `pace` what `steps` returns for each frame.
 fn publishing(app: App, pace: &Pace, steps: impl Fn(&View) -> StepsPace + 'static) -> App {
@@ -39,7 +40,10 @@ fn paced_play_moves_the_clock_to_the_due_time_of_the_steps() -> TestResult {
 fn paced_play_samples_a_motion_at_the_interval_of_the_steps_until_it_rests() -> TestResult {
     let pace = Pace::default();
     let every = Some(constant!(FrameInterval::per_second(40)));
-    let app = publishing(growing_bar()?, &pace, move |_| StepsPace::Waiting { due: None, every });
+    let app = publishing(growing_bar()?, &pace, move |_| StepsPace::Waiting {
+        due: None,
+        every,
+    });
     assert_eq!(
         presentation_times(paced(pace), app)?,
         [0, 25, 50, 75, 100].map(Duration::from_millis)
@@ -81,5 +85,31 @@ fn frames_that_keep_arriving_at_an_unchanged_time_fail_paced_play() -> TestResul
     let (ran, _frames_before_the_failure) =
         paced(Pace::default()).serve(|| run::<TestPlatform>(app));
     assert!(matches!(ran, Err(RunError::Platform(Error::NoRest { time })) if time.is_zero()));
+    Ok(())
+}
+
+#[test]
+fn paced_play_reports_the_input_that_the_steps_hand_to_the_pace() -> TestResult {
+    let (pace, pressed) = (Pace::default(), Rc::new(Cell::new(0)));
+    let (handed, seen) = (pace.clone(), Rc::clone(&pressed));
+    let mut first = true;
+    let app = app(|_| {})?
+        .on_keyboard(move |_| {
+            seen.set(seen.get() + 1);
+            false
+        })
+        .view_observer(move |surface, _, _, _| {
+            if mem::take(&mut first) {
+                handed.report(DeviceEvent::KeyboardFocus {
+                    keyboard: KEYBOARD,
+                    surface: Some(surface),
+                });
+                handed.report(key_a());
+            }
+            handed.publish(StepsPace::Ended);
+        });
+    let (ran, _frames_of_the_empty_window) = paced(pace).serve(|| run::<TestPlatform>(app));
+    ran?;
+    assert_eq!(pressed.get(), 1);
     Ok(())
 }

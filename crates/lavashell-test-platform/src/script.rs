@@ -70,7 +70,8 @@ impl HostScript {
     /// Plays the run at the pace of the steps that publish to `pace`, and records the newest frame of each window
     /// each time it is new. Once the actors have nothing left to do, the clock moves to the earliest of their next
     /// deadline, the due time of the steps and, while the steps sample a motion, the next sample time. While an
-    /// action of the steps waits for its frame, the frames shown are presented without moving the clock. The step
+    /// action of the steps waits for its frame, the frames shown are presented without moving the clock. The events
+    /// that the steps hand to `pace` are reported to the app as soon as the actors have nothing left to do. The step
     /// ends once the steps end, or once the run is at rest as [`is_at_rest`](crate::is_at_rest) describes and the
     /// steps do not wait for a later due time. When nothing publishes to `pace`, the step plays the deadlines of the
     /// actors until the run is at rest.

@@ -28,6 +28,13 @@ impl Session {
                 return Ok(Settled::Ended);
             };
             self.record_new(&mut recorded);
+            let input = pace.take_input();
+            if !input.is_empty() {
+                for event in input {
+                    self.links.reports.report(event);
+                }
+                continue;
+            }
             let now = self.clock.now();
             let shown = !self.unpresented.is_empty();
             let (due, every) = match pace.read() {
