@@ -162,6 +162,18 @@ fn a_recording_contains_the_pixels_of_the_frame_shown_by_each_window() -> TestRe
     Ok(())
 }
 
+#[test]
+fn the_frames_of_a_window_are_found_by_its_app_id() -> TestResult {
+    let app = app(|_| {})?;
+    let script = HostScript::new(Density::ONE).record_until_rest(SIXTY_HERTZ);
+    let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
+    ran?;
+    let frames = frames?;
+    assert_eq!(frames.of_window(APP_ID).count(), 1);
+    assert_eq!(frames.of_window("other.app").count(), 0);
+    Ok(())
+}
+
 /// An app whose blue bar animates its width for 100 ms with a linear tween.
 fn growing_bar() -> Result<App, SetupError> {
     let tween = Tween::new(Duration::from_millis(100))

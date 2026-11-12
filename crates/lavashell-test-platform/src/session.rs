@@ -31,6 +31,8 @@ pub(crate) struct Session {
     shown: Receiver<ShownFrame>,
     /// The windows created and not destroyed yet, in the order of their creation.
     windows: Vec<(SurfaceId, Role)>,
+    /// The app id of each window created during the run.
+    app_ids: BTreeMap<SurfaceId, String>,
     /// The newest frame shown by each window.
     screen: BTreeMap<SurfaceId, ShownFrame>,
     /// The frames shown since the last advance, presented by the display with the next advance.
@@ -61,6 +63,7 @@ impl Session {
             shown_by_controls,
             shown,
             windows: Vec::new(),
+            app_ids: BTreeMap::new(),
             screen: BTreeMap::new(),
             unpresented: Vec::new(),
             recorded: Vec::new(),
@@ -68,7 +71,7 @@ impl Session {
     }
 
     pub(crate) fn into_frames(self) -> RecordedFrames {
-        RecordedFrames::new(self.recorded)
+        RecordedFrames::new(self.recorded, self.app_ids)
     }
 
     /// Plays `steps` while the run lasts, then closes every window and handles the requests from the runtime until
@@ -303,6 +306,9 @@ impl Session {
                 token: None,
             },
         ));
+        if let Role::Window(window) = &spec.role {
+            let _created_once = self.app_ids.insert(surface, window.app_id.clone());
+        }
         self.windows.push((surface, spec.role));
     }
 
