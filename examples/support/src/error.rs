@@ -79,3 +79,15 @@ pub enum Error {
     #[error("cannot decode an icon of the example")]
     Icon(#[source] lavashell_lucide::Error),
 }
+
+/// Fails with [`Error::ComponentsFailed`] when `failures` contains a failed component.
+pub(crate) fn reject_failures(
+    failures: impl IntoIterator<Item = ComponentFailure>,
+) -> Result<(), Error> {
+    let failures: Vec<_> = failures.into_iter().collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::ComponentsFailed(failures))
+    }
+}

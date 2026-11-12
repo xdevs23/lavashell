@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::error::reject_failures;
 use lavashell::{core::frame::PresentationFlag, prelude::*};
 use lavashell_test_platform::{HostScript, RecordedFrames, TestPlatform};
 use serde::Serialize;
@@ -8,28 +9,41 @@ use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 /// Runs `app` and, when `LAVASHELL_FRAME_LOG` is set to a file path, writes its frame reports there as CSV.
 ///
 /// # Errors
-/// Returns an error when the app fails or the frame log cannot be written.
+/// Returns an error when the app fails, when a component failed in a frame, or when the frame log cannot be written.
 pub fn run(app: App) -> Result<(), Error> {
-    logged(app, None, on_platform)
+    reject_component_failures(app, |app| logged(app, None, on_platform))
 }
 
 /// Like [`run`], and passes every frame report to `observer` as well.
 ///
 /// # Errors
-/// Returns an error when the app fails or the frame log cannot be written.
+/// Returns an error when the app fails, when a component failed in a frame, or when the frame log cannot be written.
 pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Result<(), Error> {
-    logged(app, Some(Box::new(observer)), on_platform)
+    reject_component_failures(app, |app| logged(app, Some(Box::new(observer)), on_platform))
 }
 
 /// Like [`run`], on a test platform that plays `script`, and returns the frames recorded by the script.
 ///
 /// # Errors
-/// Returns an error when the app fails, when the frame log cannot be written, or when no test platform connected.
+/// Returns an error when the app fails, when a component failed in a frame, when the frame log cannot be written, or
+/// when no test platform connected.
 pub(crate) fn record(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
     let on_test_platform = |app| lavashell::run::<TestPlatform>(app).map_err(Error::Record);
-    let (ran, frames) = script.serve(|| logged(app, None, on_test_platform));
+    let (ran, frames) =
+        script.serve(|| reject_component_failures(app, |app| logged(app, None, on_test_platform)));
     ran?;
     frames.map_err(Error::NotServed)
+}
+
+/// Runs `app` with `run`, and fails after the run when a component failed in a frame.
+fn reject_component_failures(
+    app: App,
+    run: impl FnOnce(App) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let failures = Rc::new(RefCell::new(Vec::new()));
+    let observed = Rc::clone(&failures);
+    run(app.failure_observer(move |_, failure| observed.borrow_mut().push(failure)))?;
+    reject_failures(failures.take())
 }
 
 fn on_platform(app: App) -> Result<(), Error> {
