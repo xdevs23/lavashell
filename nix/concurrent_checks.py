@@ -2,8 +2,9 @@
 
 import os
 import resource
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
+from threading import Event
 
 
 def available_memory():
@@ -20,7 +21,31 @@ def concurrent_count(count):
     return max(1, min(count, os.process_cpu_count() or 1, available_memory() // max(peak, 1)))
 
 
+class Skipped(Exception):
+    """A check that did not start, because another check had failed or the caller was interrupted."""
+
+
 def run_concurrently(checks):
-    """Runs every check, returns their results in order, and raises the failure of the first check that failed."""
+    """Runs every check and returns their results in order. Once a check fails or the caller is interrupted, the checks
+    that have not started are skipped, and the failure of the first failed check in order is raised."""
+    stopped = Event()
+
+    def start(check):
+        if stopped.is_set():
+            raise Skipped
+        try:
+            return check()
+        except BaseException:
+            stopped.set()
+            raise
+
     with ThreadPoolExecutor(max_workers=concurrent_count(len(checks))) as pool:
-        return [running.result() for running in [pool.submit(check) for check in checks]]
+        try:
+            running = [pool.submit(start, check) for check in checks]
+            wait(running, return_when=FIRST_EXCEPTION)
+        finally:
+            stopped.set()
+    errors = (check.exception() for check in running)
+    if failure := next((error for error in errors if error and not isinstance(error, Skipped)), None):
+        raise failure
+    return [check.result() for check in running]
