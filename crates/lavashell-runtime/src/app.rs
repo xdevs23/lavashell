@@ -153,6 +153,7 @@ impl App {
         self
     }
 
+    /// Ends the run once `predicate` returns true, in addition to each predicate set before.
     #[must_use]
     pub fn exit_when(mut self, predicate: impl FnMut() -> bool + 'static) -> Self {
         self.setup.run_end.exit_when(predicate);
