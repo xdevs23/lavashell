@@ -17,7 +17,7 @@ mod tests;
 
 pub use capture::FrameCapture;
 pub use error::Error;
-pub use frame_interval::FrameInterval;
+pub use frame_interval::{FrameInterval, FrameRateError};
 pub use platform::TestPlatform;
 pub use recording::{RecordedFrame, RecordedFrames};
 pub use rest::is_at_rest;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Error, FrameInterval, HostScript, RecordedFrame, TestPlatform};
 use lavashell_core::keyboard::KeyStroke;
-use lavashell_core::prelude::{Color, Density, DpExt, Easing, Modifier, Tween, Ui};
+use lavashell_core::prelude::{Color, Density, DpExt, Easing, Modifier, Tween, Ui, constant};
 use lavashell_platform::{
     Capability, DeviceEvent, KeyAction, KeyboardDevice, Platform, PlatformRequest, WatchRequest,
 };
@@ -20,6 +20,7 @@ const APP_ID: &str = "test.app";
 const KEYBOARD: KeyboardDevice = KeyboardDevice(1);
 const KEY_A: u32 = 30;
 const BLUE: Color = Color::rgb(0x0030_6090);
+const SIXTY_HERTZ: FrameInterval = constant!(FrameInterval::per_second(60));
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
@@ -33,8 +34,6 @@ enum TestError {
     Pipe(#[from] std::io::Error),
     #[error("cannot watch the pipe")]
     Watch(#[from] watches::Error),
-    #[error("a recording needs a time between its frames")]
-    NoInterval,
 }
 
 type TestResult = Result<(), TestError>;
@@ -47,14 +46,6 @@ fn app(compose: impl FnMut(&mut Ui) + 'static) -> Result<App, SetupError> {
         compose,
     )?;
     Ok(app)
-}
-
-fn interval(every: Duration) -> Result<FrameInterval, TestError> {
-    FrameInterval::new(every).ok_or(TestError::NoInterval)
-}
-
-fn sixty_hertz() -> Result<FrameInterval, TestError> {
-    interval(Duration::from_secs(1) / 60)
 }
 
 fn key_a() -> DeviceEvent {
@@ -131,7 +122,7 @@ fn the_exit_predicate_of_an_app_ends_the_run_before_the_steps_left() -> TestResu
     let script = HostScript::new(Density::ONE)
         .focus_keyboard(KEYBOARD, APP_ID)
         .report(key_a())
-        .record_until_rest(sixty_hertz()?);
+        .record_until_rest(SIXTY_HERTZ);
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
     assert!(frames?.frames().is_empty());
@@ -143,7 +134,7 @@ fn the_exit_time_of_an_app_ends_the_run_on_the_virtual_clock() -> TestResult {
     let app = app(|_| {})?.exit_after(Duration::from_secs(1));
     let script = HostScript::new(Density::ONE)
         .play_until(Duration::from_secs(3600))
-        .record_until_rest(sixty_hertz()?);
+        .record_until_rest(SIXTY_HERTZ);
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
     assert!(frames?.frames().is_empty());
@@ -153,7 +144,7 @@ fn the_exit_time_of_an_app_ends_the_run_on_the_virtual_clock() -> TestResult {
 #[test]
 fn a_recording_contains_the_pixels_of_the_frame_shown_by_each_window() -> TestResult {
     let app = app(|ui| ui.spacer(100.dp(), 100.dp(), Modifier::new().background(BLUE)))?;
-    let script = HostScript::new(Density::ONE).record_until_rest(sixty_hertz()?);
+    let script = HostScript::new(Density::ONE).record_until_rest(SIXTY_HERTZ);
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
     // The renderer paints into a surface with more than 8 bits per channel, so a channel can round to the
@@ -180,7 +171,7 @@ fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
             Err(error) => ui.fail(error),
         },
     )?;
-    let every = interval(Duration::from_millis(25))?;
+    let every = constant!(FrameInterval::per_second(40));
     let script = HostScript::new(Density::ONE).record_until_rest(every);
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
