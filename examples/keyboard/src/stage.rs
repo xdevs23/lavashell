@@ -67,19 +67,13 @@ impl Stage {
 
     #[must_use]
     pub fn node(&self, role: &Role, name: &str) -> Option<&AccessibleNode> {
-        (self.offscreen.view.accessibility().nodes.values())
-            .find(|node| node.role == *role && node.name.as_deref() == Some(name))
+        node(&self.offscreen.view, role, name)
     }
 
     /// # Errors
     /// Returns [`ExampleError::MissingNode`] when the view shows no such node.
     pub fn find(&self, role: &Role, name: &str) -> Result<&AccessibleNode, Error> {
-        self.node(role, name).ok_or_else(|| {
-            Error::Example(ExampleError::MissingNode {
-                role: role.clone(),
-                name: name.to_owned(),
-            })
-        })
+        find(&self.offscreen.view, role, name)
     }
 
     /// The accessibility node of the keyboard panel, found by the panel name set in the keyboard settings.
@@ -87,8 +81,7 @@ impl Stage {
     /// # Errors
     /// Returns [`ExampleError::MissingNode`] when the view shows no keyboard panel.
     pub fn panel(&self) -> Result<&AccessibleNode, Error> {
-        let name = (self.demo.settings).with(|settings| settings.text.keyboard.clone());
-        self.find(&Role::Group, &name)
+        panel(&self.offscreen.view, &self.demo)
     }
 
     #[must_use]
@@ -99,20 +92,20 @@ impl Stage {
     /// # Errors
     /// Returns [`ExampleError::MissingNode`] when the view shows no key named `name`.
     pub fn key_bounds(&self, name: &str) -> Result<Rect, Error> {
-        Ok(self.find(&Role::Button, name)?.bounds)
+        key_bounds(&self.offscreen.view, name)
     }
 
     /// # Errors
     /// Returns [`ExampleError::MissingNode`] when the view shows no key named `name`.
     pub fn key(&self, name: &str) -> Result<Point, Error> {
-        Ok(self.key_bounds(name)?.center())
+        key(&self.offscreen.view, name)
     }
 
     /// # Errors
     /// Returns an error when the frame after the tap cannot be shown.
     pub fn tap_at(&mut self, at: Point) -> Result<(), Error> {
-        self.offscreen.view.input(InputEvent::Press(at));
-        self.input(InputEvent::Release(at))
+        tap_at(&mut self.offscreen.view, at);
+        Ok(self.offscreen.frame()?)
     }
 
     /// # Errors
@@ -127,11 +120,7 @@ impl Stage {
     /// Returns an error when the view shows no key for a character or a frame cannot be shown.
     pub fn type_text(&mut self, text: &str) -> Result<(), Error> {
         for character in text.chars() {
-            let name = match character {
-                ' ' => (self.demo.settings).with(|settings| settings.text.space.clone()),
-                letter => letter.to_string(),
-            };
-            self.tap(&name)?;
+            self.tap(&key_name(&self.demo, character))?;
         }
         Ok(())
     }
@@ -142,10 +131,7 @@ impl Stage {
     /// # Errors
     /// Returns [`Error::MissingField`] when the scene has no search field.
     pub fn field_end(&self) -> Result<Point, Error> {
-        let field = (self.offscreen.view.bounds_of(FIELD)).ok_or(Error::MissingField)?;
-        let text = field.inset(FIELD_TEXT);
-        let pixel = self.offscreen.viewport().pixel();
-        Ok(Point::new(text.x + text.width - pixel, text.center().y))
+        field_end(&self.offscreen.view, self.offscreen.viewport().pixel())
     }
 
     /// # Errors
@@ -153,4 +139,74 @@ impl Stage {
     pub fn focus_field(&mut self) -> Result<(), Error> {
         self.tap_at(self.field_end()?)
     }
+}
+
+/// The accessibility node of `view` with `role` and `name`.
+#[must_use]
+fn node<'v>(view: &'v View, role: &Role, name: &str) -> Option<&'v AccessibleNode> {
+    (view.accessibility().nodes.values())
+        .find(|node| node.role == *role && node.name.as_deref() == Some(name))
+}
+
+/// # Errors
+/// Returns [`ExampleError::MissingNode`] when `view` shows no such node.
+fn find<'v>(view: &'v View, role: &Role, name: &str) -> Result<&'v AccessibleNode, Error> {
+    node(view, role, name).ok_or_else(|| {
+        Error::Example(ExampleError::MissingNode {
+            role: role.clone(),
+            name: name.to_owned(),
+        })
+    })
+}
+
+/// The accessibility node of the keyboard panel of `demo` in `view`, found by the panel name set in the keyboard
+/// settings.
+///
+/// # Errors
+/// Returns [`ExampleError::MissingNode`] when `view` shows no keyboard panel.
+pub(crate) fn panel<'v>(view: &'v View, demo: &Demo) -> Result<&'v AccessibleNode, Error> {
+    let name = (demo.settings).with(|settings| settings.text.keyboard.clone());
+    find(view, &Role::Group, &name)
+}
+
+/// The bounds of the key named `name` in `view`.
+///
+/// # Errors
+/// Returns [`ExampleError::MissingNode`] when `view` shows no key named `name`.
+fn key_bounds(view: &View, name: &str) -> Result<Rect, Error> {
+    Ok(find(view, &Role::Button, name)?.bounds)
+}
+
+/// The center of the key named `name` in `view`.
+///
+/// # Errors
+/// Returns [`ExampleError::MissingNode`] when `view` shows no key named `name`.
+pub(crate) fn key(view: &View, name: &str) -> Result<Point, Error> {
+    Ok(key_bounds(view, name)?.center())
+}
+
+/// The name of the key of `demo` that types `character`.
+#[must_use]
+pub(crate) fn key_name(demo: &Demo, character: char) -> String {
+    match character {
+        ' ' => (demo.settings).with(|settings| settings.text.space.clone()),
+        letter => letter.to_string(),
+    }
+}
+
+/// Presses and releases at `at`, as one tap.
+pub(crate) fn tap_at(view: &mut View, at: Point) {
+    view.input(InputEvent::Press(at));
+    view.input(InputEvent::Release(at));
+}
+
+/// The point `pixel` inside the right end of the text area in the search field of `view`, centered vertically. A
+/// press there puts the caret after the query.
+///
+/// # Errors
+/// Returns [`Error::MissingField`] when the scene has no search field.
+pub(crate) fn field_end(view: &View, pixel: Dp) -> Result<Point, Error> {
+    let field = (view.bounds_of(FIELD)).ok_or(Error::MissingField)?;
+    let text = field.inset(FIELD_TEXT);
+    Ok(Point::new(text.x + text.width - pixel, text.center().y))
 }

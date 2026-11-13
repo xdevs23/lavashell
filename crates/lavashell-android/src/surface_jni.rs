@@ -2,6 +2,7 @@
 //! Conversions between a Java android.view.Surface and the native window behind it.
 
 use crate::Error;
+use crate::error::ensure_no_exception;
 use jni::objects::JObject;
 use jni::{Env, jni_str};
 use ndk::native_window::NativeWindow;
@@ -15,9 +16,7 @@ pub fn surface_of_window<'local>(
     env: &mut Env<'local>,
     window: &NativeWindow,
 ) -> Result<JObject<'local>, Error> {
-    if env.exception_check() {
-        return Err(Error::PendingException);
-    }
+    ensure_no_exception(env)?;
     // SAFETY: Native code can pass a native window to Java only through `ANativeWindow_toSurface`, which ndk 0.9.0 and
     // jni 0.22.4 offer only as an unsafe fn. Its condition is a valid JNIEnv. The JNIEnv pointer comes from the `Env`
     // of the calling thread, which is attached while `env` is borrowed. The check above confirms that no exception is
@@ -39,9 +38,7 @@ pub fn surface_of_window<'local>(
 /// Fails when a Java exception is pending, when `surface` is null or not an android.view.Surface, or when AOSP returns
 /// no native window.
 pub fn window_of_surface(env: &mut Env<'_>, surface: &JObject<'_>) -> Result<NativeWindow, Error> {
-    if env.exception_check() {
-        return Err(Error::PendingException);
-    }
+    ensure_no_exception(env)?;
     if surface.as_raw().is_null() {
         return Err(Error::NullSurface);
     }

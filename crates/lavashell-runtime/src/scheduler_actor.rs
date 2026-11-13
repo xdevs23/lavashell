@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::scheduler::{FrameScheduler, Redraw, SchedulerInput, SchedulerOutput};
-use lavashell_actor::{Actor, Closed, Effect, Flow, Handle, Merge, Outlet, Sender, mailbox, spawn};
+use lavashell_actor::{
+    Actor, Clock, Closed, Effect, Flow, Handle, Merge, Outlet, Sender, mailbox_on, spawn,
+};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::TimingEvent;
 use std::convert::Infallible;
-use std::time::Instant;
+use std::sync::Arc;
 
 mod error;
 
@@ -36,30 +38,30 @@ enum InputKey {
     OutputRefresh(SurfaceId),
 }
 
-/// The frame scheduler with the clock of the app, which sends each output to the observer.
+/// The frame scheduler with the clock used by the app, which sends each output to the observer.
 struct SchedulerActor {
     scheduler: FrameScheduler,
-    /// The start of the clock of the app, from which every time of the scheduler is measured.
-    start: Instant,
+    /// The clock used by the app, on which every time of the scheduler is measured.
+    clock: Arc<dyn Clock>,
     observer: SchedulerObserver,
 }
 
 impl SchedulerThread {
-    /// Starts the frame scheduler for `redraw`, which measures time from `start` and passes each output to `observer`.
+    /// Starts the frame scheduler for `redraw`, which measures time on `clock` and passes each output to `observer`.
     ///
     /// # Errors
     ///
     /// Fails when the thread of the scheduler cannot start.
     pub fn start(
         redraw: Redraw,
-        start: Instant,
+        clock: Arc<dyn Clock>,
         observer: SchedulerObserver,
     ) -> Result<Self, Error> {
-        let (inputs, inbox) = mailbox();
+        let (inputs, inbox) = mailbox_on(clock.as_ref());
         let actor = spawn("frame scheduler", inbox, move || {
             Ok(SchedulerActor {
                 scheduler: FrameScheduler::new(redraw),
-                start,
+                clock,
                 observer,
             })
         })
@@ -137,7 +139,7 @@ impl Actor for SchedulerActor {
         let SchedulerItem::Input(input) = item else {
             return Ok(Flow::Stop);
         };
-        let now = self.start.elapsed();
+        let now = self.clock.now();
         let mut outputs = Vec::new();
         self.scheduler.handle(now, input, &mut outputs);
         let observed = outputs.into_iter().try_for_each(&mut self.observer);

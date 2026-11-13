@@ -295,7 +295,7 @@ fn a_card_is_drawn_from_its_image_only_inside_the_surface_shape_corners() -> Res
         let paint = |painter: &mut Painter, canvas: &Canvas| -> Result<(), TestError> {
             let frame = SurfaceFrame {
                 tree: tree.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
                 damage: Some(Rect::new(0.dp(), 0.dp(), 120.dp(), 80.dp())),
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -308,6 +308,38 @@ fn a_card_is_drawn_from_its_image_only_inside_the_surface_shape_corners() -> Res
         let hits = cache_hits(ColorType::RGBAF16, |_| Ok(()), paint)?;
         assert_eq!(hits, expected, "{place:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_copy_stored_at_one_pixel_scale_is_not_drawn_at_another() -> Result<(), TestError> {
+    let tree = scene(at(12.0, 8.0), None, card())?;
+    let layout = Viewport::new(Size::new(80.dp(), 80.dp()), Density::ONE);
+    let wide = PixelScale::filling(layout, PixelSize::new(120, 80))?;
+    let paint = |painter: &mut Painter, scale: PixelScale| {
+        painted(ColorType::RGBAF16, |canvas| {
+            let frame = SurfaceFrame {
+                tree: tree.at(Duration::ZERO),
+                dp_to_output: scale.dp_to_output(layout.density),
+                damage: Some(Rect::new(0.dp(), 0.dp(), 120.dp(), 80.dp())),
+                clear: skia_safe::Color::TRANSPARENT,
+                scene: None,
+                shape: None,
+                streams: &StreamFrames::default(),
+            };
+            painter.paint_surface(canvas, frame)?;
+            Ok(())
+        })
+    };
+    let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    direct.set_packet_caching(crate::PacketCaching::Disabled);
+    let square = paint(&mut direct, PixelScale::SQUARE)?;
+    let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    for _ in 0..3 {
+        assert_eq!(paint(&mut cached, PixelScale::SQUARE)?, square);
+    }
+    assert_eq!(paint(&mut cached, wide)?, paint(&mut direct, wide)?);
+    assert_eq!(cached.render_stats().cache_hits, 1);
     Ok(())
 }
 

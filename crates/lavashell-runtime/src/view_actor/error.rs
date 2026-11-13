@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::renderer_actor::{RendererError, RendererStopped};
+use crate::renderer_actor::{PlatformRendererError, RendererStopped};
 use crate::run::RunError;
 use crate::shape_geometry::ShapeGeometryError;
 use lavashell_actor::{Closed, SpawnError};
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::FrameError;
+use lavashell_platform::Platform;
+use std::fmt;
 
 /// The actor or the platform thread that ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -55,19 +57,30 @@ impl From<RendererStopped> for ViewError {
     }
 }
 
-/// A failure while the views start. `C` is the error of the controls of the native surfaces.
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum StartError<C> {
+/// A failure while the views start on the platform `P`.
+#[derive(thiserror::Error)]
+pub(crate) enum StartError<P: Platform> {
     #[error("the renderer could not start")]
-    StartRenderer(#[source] SpawnError<RendererError<C>>),
+    StartRenderer(#[source] SpawnError<PlatformRendererError<P>>),
     #[error("the shaper that measures text for the views could not be created")]
     CreateShaper(#[source] lavashell_renderer::Error),
     #[error(transparent)]
     View(#[from] ViewError),
 }
 
-impl<E, C> From<StartError<C>> for RunError<E, C> {
-    fn from(error: StartError<C>) -> Self {
+impl<P: Platform> fmt::Debug for StartError<P> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (name, source): (&str, &dyn fmt::Debug) = match self {
+            Self::StartRenderer(error) => ("StartRenderer", error),
+            Self::CreateShaper(error) => ("CreateShaper", error),
+            Self::View(error) => ("View", error),
+        };
+        formatter.debug_tuple(name).field(source).finish()
+    }
+}
+
+impl<P: Platform> From<StartError<P>> for RunError<P> {
+    fn from(error: StartError<P>) -> Self {
         match error {
             StartError::StartRenderer(error) => Self::StartRenderer(error),
             StartError::CreateShaper(error) => Self::CreateShaper(error),

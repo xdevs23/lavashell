@@ -1,20 +1,49 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    CopyKey, Error, copy,
+    CopyKey, Error, compose, copy,
     islands::{Island, TRACK},
     look::{SCREEN, SPACING},
-    model::{App, Daylight},
-    pause,
-    player::Player,
-    script::{CUES, Cue},
+    model::{App, Daylight, Taskbar},
+    pause, player,
+    script::{CUES, Cue, Script},
 };
 use lavashell::prelude::*;
 use lavashell_example_support::testing::{control, interaction};
-use std::{path::Path, time::Duration};
+use lavashell_example_support::{FrameInterval, OffscreenView};
+use std::{collections::BTreeSet, path::Path, time::Duration};
 
 const ISLANDS: [Island; 3] = [Island::Apps, Island::Media, Island::Status];
 
+struct Player {
+    taskbar: Taskbar,
+    script: Script,
+    offscreen: OffscreenView,
+}
+
 impl Player {
+    /// A player that plays the cues of the script on an offscreen view of `size`. The view has come to rest before
+    /// the first cue plays.
+    fn new(size: Size) -> Result<Self, Error> {
+        let taskbar = Taskbar::new()?;
+        let composed = taskbar.clone();
+        let view = View::new(lavashell_example_support::platform(), move |ui| {
+            compose(ui, &composed);
+        });
+        let mut player = Self {
+            taskbar,
+            script: Script::default(),
+            offscreen: OffscreenView::new(view, Some(size), Density::ONE)?,
+        };
+        player.offscreen.settle()?;
+        Ok(player)
+    }
+
+    /// Plays the next cue of the script and frames the view right after it.
+    fn cue(&mut self) -> Result<(), Error> {
+        (self.script).play(&self.taskbar, &mut self.offscreen.view)?;
+        Ok(self.offscreen.frame()?)
+    }
+
     /// Half the time left until the next deadline of the view.
     fn halfway(&self) -> Result<Duration, Error> {
         let deadline = self.offscreen.next_deadline()?;
@@ -257,4 +286,23 @@ fn daylight(player: &mut Player, captures: &Path) -> Result<(), Error> {
     player.cue()?;
     player.midway()?;
     player.capture(captures, "to-night")
+}
+
+#[derive(Debug, thiserror::Error)]
+enum RecordingError {
+    #[error(transparent)]
+    Taskbar(#[from] Error),
+    #[error("a recording needs a time between its frames")]
+    NoInterval,
+}
+
+#[test]
+fn a_recording_shows_every_cue_in_at_least_one_frame() -> Result<(), RecordingError> {
+    let interval =
+        FrameInterval::new(Duration::from_secs(1) / 10).ok_or(RecordingError::NoInterval)?;
+    let shown: BTreeSet<_> = (player::record_cues(interval, SCREEN)?.into_iter())
+        .map(|(cue, _)| cue)
+        .collect();
+    assert_eq!(shown, (0..CUES.len()).collect());
+    Ok(())
 }

@@ -3,10 +3,9 @@
 
 use super::{rounded, skpath};
 use crate::failure::DrawFailure;
-use crate::scalar::scalar;
 use lavashell_core::shape::{Polygon, RoundedRect};
 use lavashell_core::surface::SurfaceOutline;
-use lavashell_core::units::{Density, Dp};
+use lavashell_core::units::Dp;
 use skia_safe::{Path, PathBuilder, PathFillType};
 
 #[derive(Debug, thiserror::Error)]
@@ -15,8 +14,6 @@ pub enum OutlineError {
     Rounded(RoundedRect),
     #[error("a number of a surface outline lies beyond the range of Skia scalars")]
     Scalar(#[source] DrawFailure),
-    #[error("the surface outline lies beyond the range of Skia scalars once scaled by {0:?}")]
-    Scaled(Density),
 }
 
 /// The path of `outline` in dp.
@@ -30,18 +27,6 @@ pub fn outline_path(outline: &SurfaceOutline) -> Result<Path, OutlineError> {
         SurfaceOutline::Contours(contours) => contour_path(contours),
         SurfaceOutline::Rounded(shape) => rounded_path(shape),
     }
-}
-
-/// `outline`, a path in dp, scaled to physical pixels at `density`.
-///
-/// # Errors
-///
-/// Fails when `density` or the scaled path lies beyond the range of Skia scalars.
-pub fn clip_path(outline: &Path, density: Density) -> Result<Path, OutlineError> {
-    let scale = scalar(density.get()).map_err(OutlineError::Scalar)?;
-    outline
-        .try_make_scale((scale, scale))
-        .ok_or(OutlineError::Scaled(density))
 }
 
 /// The even-odd path through all `contours`.

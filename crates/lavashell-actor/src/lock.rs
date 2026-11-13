@@ -8,7 +8,7 @@ pub fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Waits on `signal` while `condition` holds, with the same rule for a panicked holder as [`lock_ignoring_poison`].
-pub(crate) fn wait_ignoring_poison<'a, T>(
+pub fn wait_ignoring_poison<'a, T>(
     signal: &Condvar,
     guard: MutexGuard<'a, T>,
     condition: impl FnMut(&mut T) -> bool,

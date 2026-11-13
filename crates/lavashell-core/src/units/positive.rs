@@ -18,6 +18,8 @@ const fn checked_positive(number: f64) -> Result<f64, NumberError> {
 pub struct Positive(f64);
 
 impl Positive {
+    pub const ONE: Self = Self(1.0);
+
     /// # Errors
     ///
     /// Fails when `value` is not finite or not above zero.

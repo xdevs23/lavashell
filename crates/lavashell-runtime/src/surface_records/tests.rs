@@ -5,7 +5,7 @@ use super::test_error::SurfaceRecordsTestError;
 use super::*;
 use crate::test_error::TestResult;
 use crate::view_actor::ViewError;
-use lavashell_core::prelude::Modifier;
+use lavashell_core::prelude::{Modifier, PixelSize};
 use lavashell_core::units::DpExt;
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 use std::collections::BTreeSet;
@@ -94,6 +94,21 @@ fn a_density_change_sets_the_density_and_invalidates_the_view() -> TestResult {
     assert_eq!(records.handle(surface, changed), None);
     let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     assert_eq!(viewport.density, density);
+    assert!(needs_frame(&records, surface));
+    Ok(())
+}
+
+#[test]
+fn a_new_surface_has_square_pixels_until_a_scale_change_sets_its_scale() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let surface = open(&mut records)?;
+    frame(&mut records, surface)?;
+    assert_eq!(records.open_scale(surface), Some(PixelScale::SQUARE));
+    let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
+    let wide = PixelScale::filling(viewport, PixelSize::new(160, 50))?;
+    let changed = SurfaceEvent::ScaleChanged(wide);
+    assert_eq!(records.handle(surface, changed), None);
+    assert_eq!(records.open_scale(surface), Some(wide));
     assert!(needs_frame(&records, surface));
     Ok(())
 }

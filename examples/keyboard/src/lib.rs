@@ -3,6 +3,7 @@
 mod error;
 mod look;
 pub mod model;
+pub mod recording;
 pub mod scene;
 pub mod stage;
 

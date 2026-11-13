@@ -180,7 +180,7 @@ fn paint(
     for damage in damages {
         let frame = SurfaceFrame {
             tree: tree.at(Duration::ZERO),
-            density: Density::ONE,
+            dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
             damage: Some(*damage),
             clear: skia_safe::Color::WHITE,
             scene: None,

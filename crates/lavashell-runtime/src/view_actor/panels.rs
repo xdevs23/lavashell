@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::frames::send_surface_state;
+use super::scene_frames::send_surface_state;
 use super::{ViewActor, send_request};
 use crate::panels::{ContentState, Transaction};
+use crate::scene_pipeline::FrameStatus;
 use crate::scheduler::SchedulerInput;
 use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{AxisPlacement, PanelGeometry};
 use lavashell_core::units::{Dp, NonNegativeDp};
-use lavashell_platform::{PanelRequest, PlatformRequest};
-use lavashell_renderer::{SurfaceContents, SurfaceControl};
+use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
+use lavashell_renderer::SurfaceContents;
 
 /// The length at which a surface opens along an axis whose length the host sets: one logical pixel, the smallest
 /// length that a host shows.
 pub(super) const OPENING_LENGTH: Dp = Dp::new(1.0);
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Sends the requests made by the runtime for each panel before a frame is rendered. While the host shows the
     /// current content of a panel, a changed geometry or keyboard mode is committed without a frame once the scene
     /// builder built it and no frame of the panel is composed or drawn.
@@ -29,13 +30,16 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             let Some(viewport) = self.records.open_viewport(id) else {
                 continue;
             };
+            let Some(scale) = self.records.open_scale(id) else {
+                continue;
+            };
             let Some(view) = self.records.open_view_mut(id) else {
                 continue;
             };
             let content = if surface.needs_visual_frame(view) {
                 ContentState::Stale
             } else {
-                match surface.contents(viewport) {
+                match surface.contents(viewport, scale) {
                     SurfaceContents::Current => ContentState::Current,
                     SurfaceContents::Outdated => ContentState::Stale,
                 }
@@ -50,7 +54,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                 Transaction::NeedsFrame => view.invalidate(),
                 Transaction::Committed => {
                     let sink = self.actors.scene.sink(id, None);
-                    if !send_surface_state(sink, &self.panels, id, [])? {
+                    if send_surface_state(sink, &self.panels, id, [])? == FrameStatus::Open {
                         changed_states.push(id);
                     }
                 }
