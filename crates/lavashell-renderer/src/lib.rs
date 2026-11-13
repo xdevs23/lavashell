@@ -43,8 +43,9 @@ pub use paint::{
 };
 pub use skia_safe as skia;
 pub use state::{
-    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, PresentFrame,
-    RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError, SurfaceControl,
+    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, Pixels,
+    PresentFrame, RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError,
+    SurfaceControl,
 };
 pub use stream::{
     BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,
