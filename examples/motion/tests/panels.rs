@@ -20,7 +20,7 @@ type Play = Steps<Demo, Capture, Error>;
 fn panels_retarget_pause_seek_and_settle_with_reduced_motion() -> Result<(), Error> {
     let demo = Demo::new(true)?;
     let mut play = Play::new(demo.clone());
-    play.mark(Start::NEXT, Capture::Intro);
+    play.mark_sequence(Start::NEXT, Capture::Intro);
     retarget(&mut play, &demo);
     pause_seek_and_play(&mut play);
     timeline_semantics(&mut play);

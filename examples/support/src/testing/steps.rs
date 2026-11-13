@@ -65,8 +65,9 @@ impl<C: 'static, L: Clone + 'static, E: From<Error> + 'static> Steps<C, L, E> {
         self.add(start, Work::Press(keys.into_iter().collect()));
     }
 
-    /// Plays the steps on `app` on a test platform whose host has `density`, at the pace of the steps as
-    /// [`HostScript::record_paced`] describes, and returns the frames as [`Steps::record`] does.
+    /// Plays the steps on `app` on a test platform whose host has `density`, and returns the frames as
+    /// [`Steps::record`] does. The test platform plays at the pace of the steps and records the frames that the marks
+    /// ask for, as [`HostScript::record_paced`] describes.
     ///
     /// # Errors
     /// Fails as [`Steps::record`] does.

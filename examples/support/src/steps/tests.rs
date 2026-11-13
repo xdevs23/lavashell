@@ -229,3 +229,44 @@ fn a_press_of_keys_waits_for_the_frame_that_shows_them() {
     assert!(pressed.started.is_empty());
     assert_eq!(pressed.waits_for(), StepsPace::Queued);
 }
+
+/// The label and presentation time of each frame that `steps` record while they play on a window of 10 by 10 dp.
+fn play_labeled_times(
+    steps: Steps<(), &'static str, Error>,
+) -> Result<Vec<(&'static str, Duration)>, Error> {
+    let mut app = App::new(platform());
+    app.window(
+        Window::new("test", "test.steps").size(10.dp(), 10.dp()),
+        |_| {},
+    )?;
+    Ok((steps.play(app, Density::ONE)?.into_iter())
+        .map(|(label, frame)| (label, frame.time.presentation))
+        .collect())
+}
+
+#[test]
+fn a_mark_asks_the_pace_to_record_the_frame_that_started_it() -> Result<(), Error> {
+    let mut steps = Steps::<(), &str, Error>::new(());
+    steps.mark(Start::NEXT, "first");
+    steps.mark(Start::after(milliseconds(100)), "late");
+    assert_eq!(
+        play_labeled_times(steps)?,
+        [("first", Duration::ZERO), ("late", milliseconds(100))]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_sequence_mark_asks_the_pace_to_record_each_frame_until_the_next_mark() -> Result<(), Error> {
+    let mut steps = Steps::<(), &str, Error>::new(());
+    steps.mark_sequence(Start::NEXT, "sequence");
+    steps.check(Start::after(milliseconds(25)), |_, _, ()| Ok(()));
+    steps.mark(Start::after(milliseconds(25)), "end");
+    steps.check(Start::after(milliseconds(25)), |_, _, ()| Ok(()));
+    let expected = [("sequence", 0), ("sequence", 25), ("end", 50), ("end", 75)];
+    assert_eq!(
+        play_labeled_times(steps)?,
+        expected.map(|(label, at)| (label, milliseconds(at)))
+    );
+    Ok(())
+}

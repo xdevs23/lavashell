@@ -47,7 +47,7 @@ pub(crate) enum Work<C, L, E> {
     /// Changes the view after the frame that started the step.
     Act(Action<C, E>),
     /// Labels the frame that started the step, and each later frame until the next mark.
-    Mark(L),
+    Mark(L, MarkRecording),
     /// Reads the view in the frame that started the step.
     #[cfg(any(test, feature = "testing"))]
     Check(Check<C, E>),
@@ -55,6 +55,15 @@ pub(crate) enum Work<C, L, E> {
     /// the step.
     #[cfg(any(test, feature = "testing"))]
     Press(Vec<KeyboardKey>),
+}
+
+/// The frames that a mark asks the pace to record.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MarkRecording {
+    /// The frame that started the mark.
+    FirstFrame,
+    /// Each frame from the one that started the mark until the next mark.
+    EveryFrame,
 }
 
 /// The frame that started a mark.
@@ -71,6 +80,8 @@ struct Playing<C, L, E> {
     phase: Phase<E>,
     /// The frame that started each mark, with the label of the mark.
     started: Vec<(Marked, L)>,
+    /// Whether the newest mark is a sequence mark, which asks the pace to record each frame until the next mark.
+    sequence: bool,
     /// The time at which the step that ran last started.
     previous: Option<Duration>,
     /// Whether an empty action waits to give a view a frame for the next step, whose delay has not passed yet.
@@ -108,6 +119,7 @@ impl<C, L, E> Steps<C, L, E> {
             waiting: self.waiting,
             phase: Phase::Ready,
             started: Vec::new(),
+            sequence: false,
             previous: None,
             frame_requested: false,
             pace: self.pace,
@@ -126,9 +138,16 @@ impl<C: 'static, L: Clone + 'static, E: From<Error> + 'static> Steps<C, L, E> {
     }
 
     /// Adds a mark as the last step, which labels the frame that `start` selects, and each later frame until the next
-    /// mark, with `label`.
+    /// mark, with `label`. The mark asks the pace to record the frame that started it, as
+    /// [`HostScript::record_paced`] describes.
     pub fn mark(&mut self, start: Start, label: L) {
-        self.add(start, Work::Mark(label));
+        self.add(start, Work::Mark(label, MarkRecording::FirstFrame));
+    }
+
+    /// Adds a mark as [`Steps::mark`] does. The mark also asks the pace to record each later frame until the next
+    /// mark, as [`HostScript::record_paced`] describes, so the recorded frames show a motion frame by frame.
+    pub fn mark_sequence(&mut self, start: Start, label: L) {
+        self.add(start, Work::Mark(label, MarkRecording::EveryFrame));
     }
 
     /// Records `app` on a test platform that plays `script`, while the steps play on its views. Returns each recorded
@@ -268,9 +287,11 @@ fn on_screen(frames: &[RecordedFrame], marked: Marked) -> impl Iterator<Item = &
 mod tests;
 
 /// Runs each next step started by `shown`, the frame that shows `view` in `viewport`, and publishes what the steps
-/// wait for then. A check or a mark runs at once. An action, or a press of keys, is queued on `view`, and later steps
-/// wait until it has run. While the delay of the next step has not passed, an empty action waits on `view`, so the
-/// view gets a frame at the next present, which a test platform makes at the time the steps wait for.
+/// wait for then. A check runs at once. A mark runs at once and asks the pace to record the frame shown, and a sequence
+/// mark asks again in each later frame until the next mark, as [`HostScript::record_paced`] describes. An action, or a
+/// press of keys, is queued on `view`, and later steps wait until it has run. While the delay of the next step has not
+/// passed, an empty action waits on `view`, so the view gets a frame at the next present, which a test platform makes
+/// at the time the steps wait for.
 fn observe<C: 'static, L: 'static, E: 'static>(
     playing: &Rc<RefCell<Playing<C, L, E>>>,
     actions: &ViewActions,
@@ -280,11 +301,14 @@ fn observe<C: 'static, L: 'static, E: 'static>(
 ) {
     let now = view.motion().now();
     let mut state = playing.borrow_mut();
+    let mut marked = false;
     while let Some(work) = state.take_started(view, now) {
         match work {
-            Work::Mark(label) => {
+            Work::Mark(label, recording) => {
                 state.started.push((shown, label));
                 state.previous = Some(now);
+                state.sequence = recording == MarkRecording::EveryFrame;
+                marked = true;
             }
             #[cfg(any(test, feature = "testing"))]
             Work::Check(check) => {
@@ -307,7 +331,11 @@ fn observe<C: 'static, L: 'static, E: 'static>(
             }
         }
     }
-    if matches!(state.waits_for(), StepsPace::Waiting { due: Some(due), .. } if due > now)
+    if marked || state.sequence {
+        state.pace.record();
+    }
+    let waits = state.waits_for();
+    if matches!(waits, StepsPace::Waiting { due: Some(due), .. } if due > now)
         && !mem::replace(&mut state.frame_requested, true)
     {
         let requested = Rc::clone(playing);
@@ -315,7 +343,7 @@ fn observe<C: 'static, L: 'static, E: 'static>(
             requested.borrow_mut().frame_requested = false;
         });
     }
-    state.pace.publish(state.waits_for());
+    state.pace.publish(waits);
 }
 
 /// Queues `action` on the view of the frame `shown` in `viewport`. The next step waits until the action has run.
