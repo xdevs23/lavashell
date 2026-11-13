@@ -52,8 +52,7 @@ impl Script {
         cue
     }
 
-    /// Plays the next cue on `view`. The offscreen player and the autoplay in the window both call this function, so
-    /// both play the same cues.
+    /// Plays the next cue on `view`.
     ///
     /// # Errors
     /// Returns an error when the view has no taskbar or no slot for the app of the cue.

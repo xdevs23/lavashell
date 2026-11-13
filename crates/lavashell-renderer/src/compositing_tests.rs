@@ -43,6 +43,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
             &mut painter,
             surface.canvas(),
             &tree,
+            PixelScale::SQUARE.dp_to_output(Density::ONE),
             Some(size),
             skia_safe::Color::BLACK,
         )?;
@@ -63,6 +64,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
                 &mut painter,
                 surface.canvas(),
                 &tree,
+                PixelScale::SQUARE.dp_to_output(Density::ONE),
                 damage,
                 skia_safe::Color::BLACK,
             )?;
@@ -82,6 +84,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
                 &mut painter,
                 surface.canvas(),
                 &tree,
+                PixelScale::SQUARE.dp_to_output(Density::ONE),
                 None,
                 skia_safe::Color::BLACK,
             )?;
@@ -138,7 +141,7 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
                 },
                 frame,
                 frame,
-                Density::ONE,
+                PixelScale::SQUARE.dp_to_output(Density::ONE),
             ),
             QualityChange::Unchanged
         );

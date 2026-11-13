@@ -38,23 +38,25 @@ pub use image::{decode_image, encoded_image, raster_png};
 pub use input_region::{InputSizeError, input_cells};
 pub use packet_cache::{PacketCaching, SurfaceFrame};
 pub use paint::{
-    OutlineError, Painter, StreamFrames, StreamPixels, StreamRejection, UnsampledFormat, clip_path,
+    OutlineError, Painter, StreamFrames, StreamPixels, StreamRejection, UnsampledFormat,
     outline_path, skpoint, skrect,
 };
 pub use skia_safe as skia;
 pub use state::{
-    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, PresentFrame,
-    RendererSetup, RendererState, SceneSetup, StartError, StateError, SurfaceControl,
+    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, Pixels,
+    PresentFrame, RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError,
+    SurfaceControl,
 };
 pub use stream::{
     BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,
-    LatchAccess, LatchedFrames, NoStreams, ProducedFrame, Stream, StreamBackend, Taken,
+    LatchAccess, LatchedFrames, NoStreams, ProducedFrame, RendererStreams, Stream, StreamBackend,
+    Taken,
 };
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
-    ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, PresentationBackend,
-    PresentationPolicy, ReadySignal, SampledMemory, Sampling, SurfaceAlpha, SurfaceContents,
-    SurfaceTarget, SurfaceTiming, VulkanRenderer,
+    ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, HeadlessPresentation,
+    PresentationBackend, PresentationPolicy, ReadySignal, SampledMemory, Sampling, SurfaceAlpha,
+    SurfaceContents, SurfaceTarget, SurfaceTiming, VulkanRenderer,
 };
 
 #[cfg(test)]
@@ -71,6 +73,8 @@ mod packet_cache_tests;
 mod repeated_leaves_tests;
 #[cfg(test)]
 mod retained_tests;
+#[cfg(test)]
+mod scaled_frame_tests;
 #[cfg(test)]
 mod surface_tests;
 #[cfg(test)]

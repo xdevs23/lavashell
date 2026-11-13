@@ -10,26 +10,39 @@ use skia_safe::{Canvas, IRect};
 
 impl Painter {
     pub fn paint_scene(&mut self, canvas: &Canvas, tree: Presented<'_>, density: Density) {
-        let plan = self.plan(canvas, tree, density, None);
-        let streams = StreamFrames::default();
-        self.paint_tree(canvas, &plan, Area::Everything, density, &streams);
+        self.paint_scene_with_streams(canvas, tree, density, &StreamFrames::default());
     }
 
-    pub(crate) fn paint_tree(
+    /// Paints the whole of `tree` at `density`, with the frames of `streams`.
+    pub(crate) fn paint_scene_with_streams(
         &mut self,
         canvas: &Canvas,
-        plan: &Plan<'_>,
-        area: Area,
+        tree: Presented<'_>,
         density: Density,
         streams: &StreamFrames,
     ) {
-        let scale = match scalar(density.get()) {
-            Ok(scale) => scale,
+        let dp_to_pixels = match skmatrix(&PixelScale::SQUARE.dp_to_output(density)) {
+            Ok(matrix) => matrix,
             Err(failure) => {
                 self.failures.record(failure);
                 return;
             }
         };
+        let saved = canvas.save();
+        let _chained_canvas = canvas.concat(&dp_to_pixels);
+        let plan = self.plan(canvas, tree, None);
+        self.paint_tree(canvas, &plan, Area::Everything, streams);
+        let _chained_canvas = canvas.restore_to_count(saved);
+    }
+
+    /// Paints the steps of `plan` that change pixels in `area`, through the matrix of `canvas`.
+    pub(crate) fn paint_tree(
+        &mut self,
+        canvas: &Canvas,
+        plan: &Plan<'_>,
+        area: Area,
+        streams: &StreamFrames,
+    ) {
         let surface = self.effect_planner.current_surface();
         self.shaper.begin_paint(surface);
         self.resources.begin_frame(surface);
@@ -42,7 +55,6 @@ impl Painter {
             self.text_rasterizers
                 .reads_destination(self.shaper.configuration().rendering),
         );
-        let _chained_canvas = canvas.scale((scale, scale));
         self.begin_compositing(canvas);
         self.paint_steps(canvas, &plan.steps, area, plan.pass, streams);
         let _chained_canvas = canvas.restore_to_count(saved);

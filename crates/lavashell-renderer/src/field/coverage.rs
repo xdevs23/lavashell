@@ -3,7 +3,7 @@ use super::FieldTexture;
 use super::program::{Bound, Program};
 use super::programs::{FieldImage, Measure, Texel};
 use crate::failure::DrawFailure;
-use crate::paint::{device_scale, skrect};
+use crate::paint::skrect;
 use crate::scalar::scalar;
 use lavashell_core::prelude::*;
 use skia_safe::{Canvas, ClipOp, Paint, Shader};
@@ -84,10 +84,11 @@ impl Band {
     }
 }
 
-/// The size of a device pixel in dp, or one dp where the transform collapses
+/// The length in dp of the longest side of a device pixel, or one dp where the transform collapses
 /// every length and nothing is drawn.
 fn pixel(canvas: &Canvas) -> f64 {
-    device_scale(canvas).map_or(1.0, |scale| 1.0 / f64::from(scale))
+    let scale = f64::from(canvas.local_to_device_as_3x3().min_scale());
+    if scale > 0.0 { 1.0 / scale } else { 1.0 }
 }
 
 pub(crate) struct Coverage<'a> {

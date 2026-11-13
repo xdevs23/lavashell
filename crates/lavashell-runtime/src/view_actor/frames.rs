@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::scene_frames::{send_frame, send_surface_state};
 use super::{ViewActor, send_request};
 use crate::cpu_time::CpuStamp;
-use crate::failures::log_failures;
-use crate::panels::{PanelContent, PanelRecords, PanelRequests};
+use crate::panels::{PanelContent, PanelRequests};
 use crate::renderer_actor::{Rendered, RendererInput};
-use crate::scene_pipeline::SceneSink;
+use crate::scene_pipeline::{FrameStatus, SceneSink};
 use crate::scheduler::{FrameKind, FrameSequence, SchedulerInput, ViewState};
 use crate::shape::{SurfaceShape, WindowShape};
 use crate::shape_geometry::ShapeGeometry;
 use crate::surface_records::SurfaceRecords;
 use crate::view_actions::ActionBatch;
-use crate::view_actor::{Stopped, ViewError};
-use lavashell_actor::Closed;
+use crate::view_actor::ViewError;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
-use lavashell_core::geometry::Viewport;
+use lavashell_core::geometry::{PixelScale, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
-use lavashell_core::view::{Failures, FrameError, View};
-use lavashell_platform::{PanelRequest, PlatformRequest};
-use lavashell_renderer::{Drawn, FrameOutcome, SurfaceContents, SurfaceControl};
+use lavashell_core::view::View;
+use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
+use lavashell_renderer::{Drawn, FrameOutcome, SurfaceContents};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-/// When a frame started on the wall clock, the CPU time that the views thread spent on the frame, and the time and
-/// the viewport of the frame.
+/// When a frame started on the wall clock, the CPU time that the views thread spent on the frame, and the time, the
+/// viewport and the scale of the frame.
 #[derive(Clone, Copy)]
 struct FrameStart {
     wall: Instant,
@@ -31,14 +30,15 @@ struct FrameStart {
     view_cpu: Option<Duration>,
     timing: FrameTime,
     viewport: Viewport,
+    scale: PixelScale,
 }
 
 /// How far the frame of a surface got between its compose and the report of its draw.
 #[derive(Clone, Copy)]
 enum FrameProgress {
     Idle,
-    /// The view composed the frame. The frame draws in the viewport of the compose, and observers measure it from the
-    /// start of the compose.
+    /// The view composed the frame. The frame is drawn in the viewport and at the scale of the compose, and observers
+    /// measure it from the start of the compose.
     Composed(FrameStart),
     /// The renderer draws the frame. A shown frame applies `panel`.
     Drawing {
@@ -47,10 +47,18 @@ enum FrameProgress {
     },
 }
 
-/// The viewport of the frame drawn last for a surface, and whether the target of the surface contains that frame.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewChange {
+    Changed,
+    Unchanged,
+}
+
+/// The viewport and the scale of the frame drawn last for a surface, and whether the target of the surface contains
+/// that frame.
 #[derive(Clone, Copy)]
 struct LastFrame {
     viewport: Viewport,
+    scale: PixelScale,
     contents: SurfaceContents,
 }
 
@@ -81,16 +89,16 @@ impl ViewSurface {
         view.needs_visual_frame() || self.shape.needs_frame()
     }
 
-    /// Whether the target of the surface contains the frame drawn last at `viewport`.
-    pub(super) fn contents(&self, viewport: Viewport) -> SurfaceContents {
+    /// Whether the target of the surface contains the frame drawn last in `viewport` at `scale`.
+    pub(super) fn contents(&self, viewport: Viewport, scale: PixelScale) -> SurfaceContents {
         match self.last_frame {
-            Some(last) if last.viewport == viewport => last.contents,
+            Some(last) if last.viewport == viewport && last.scale == scale => last.contents,
             _ => SurfaceContents::Outdated,
         }
     }
 }
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Makes the renderer commit each surface state that waits for a commit without a frame, then runs the frame
     /// started by the frame scheduler for each surface, in composition order. A compose frame sends the frames of the
     /// view and the surface state to the scene pipeline, and a render frame makes the renderer draw the newest scene
@@ -155,17 +163,17 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         });
     }
 
-    /// Makes the renderer advance the scene source in the viewport of the first configured surface while the source
-    /// is due, so the scene work runs on the GPU while the views are composed.
+    /// Makes the renderer advance the scene source for the first configured surface while the source is due, so the
+    /// scene work runs on the GPU while the views are composed.
     fn advance_scene(&self) -> Result<(), ViewError> {
-        if self.pacing.scene_due()
-            && let Some(viewport) = (self.surfaces.keys())
-                .find(|&&id| self.records.is_configured(id))
-                .and_then(|&id| self.records.open_viewport(id))
+        if self.pacing.scene_due(self.clock.now())
+            && let Some(&surface) =
+                (self.surfaces.keys()).find(|&&id| self.records.is_configured(id))
+            && let Some(viewport) = self.records.open_viewport(surface)
+            && let Some(scale) = self.records.open_scale(surface)
         {
-            self.actors
-                .renderer
-                .send(RendererInput::AdvanceScene(viewport))?;
+            let advance = RendererInput::AdvanceScene { viewport, scale };
+            self.actors.renderer.send(advance)?;
         }
         Ok(())
     }
@@ -173,7 +181,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Calls the tick callback of the app, and the frame callback of the app with `timing`, the timing of the first
     /// frame composed in a render.
     fn notify_frame(&mut self, timing: FrameTime) {
-        let since_last_tick = self.pacing.tick(self.start.elapsed());
+        let since_last_tick = self.pacing.tick(self.clock.now());
         if let Some(tick) = self.observers.tick.as_mut() {
             tick(since_last_tick);
         }
@@ -210,21 +218,23 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     ) -> Result<(), ViewError> {
         let wall = Instant::now();
         let cpu = self.cpu_stamp();
-        let changed = self.compose_view(id, timing, actions)?;
-        self.update_panel_after_compose(id, changed)?;
+        let change = self.compose_view(id, timing, actions)?;
+        self.update_panel_after_compose(id, change)?;
         let shape_changes = self.update_shape(id)?;
         let sequence = Some(FrameSequence(timing.sequence));
         let sink = self.actors.scene.sink(id, sequence);
-        let sent = send_surface_state(sink, &self.panels, id, shape_changes)?;
+        let status = send_surface_state(sink, &self.panels, id, shape_changes)?;
+        let scale = (self.records.open_scale(id)).ok_or(ViewError::SurfaceNotOpen(id))?;
         let (surface, _, viewport) = open_parts(&mut self.surfaces, &mut self.records, id)?;
         surface.frame = FrameProgress::Composed(FrameStart {
             wall,
             view_cpu: cpu.and_then(CpuStamp::elapsed),
             timing,
             viewport,
+            scale,
         });
         self.publish_accessibility(id)?;
-        if !sent {
+        if status == FrameStatus::Open {
             self.schedule(SchedulerInput::Built {
                 surface: id,
                 sequence,
@@ -234,37 +244,52 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     }
 
     /// Sends the frames of the view of surface `id` for `timing` to the scene pipeline, before and after the queued
-    /// actions of the view run, and returns whether the view changed.
+    /// actions of the view run.
     fn compose_view(
         &mut self,
         id: SurfaceId,
         timing: FrameTime,
         actions: &mut ActionBatch,
-    ) -> Result<bool, ViewError> {
+    ) -> Result<ViewChange, ViewError> {
         let (_, view, viewport) = open_parts(&mut self.surfaces, &mut self.records, id)?;
+        let mut failed = |failures| self.observers.report_failures(id, failures);
         let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
             view.frame_into_at(viewport, &mut self.shaper, timing, sink)
         };
-        let mut changed = view.needs_visual_frame();
-        send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+        let mut change = if view.needs_visual_frame() {
+            ViewChange::Changed
+        } else {
+            ViewChange::Unchanged
+        };
+        send_frame(
+            view,
+            self.actors.scene.sink(id, None),
+            &mut failed,
+            &mut frame,
+        )?;
         actions.run(id, view);
         if view.needs_visual_frame() {
-            changed = true;
-            send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+            change = ViewChange::Changed;
+            send_frame(
+                view,
+                self.actors.scene.sink(id, None),
+                &mut failed,
+                &mut frame,
+            )?;
         }
-        Ok(changed)
+        Ok(change)
     }
 
-    /// Measures the panel of surface `id` again when its view `changed`, and sends the keyboard mode of the panel to
-    /// the platform when it changed. The composed view can change the size of a panel that fits its content, or the
+    /// Measures the panel of surface `id` again when the view changed, and sends the keyboard mode of the panel to the
+    /// platform when it changed. The composed view can change the size of a panel that fits its content, or the
     /// panel layout can change its margins, and the geometry for that is sent with the frame of the compose, so that
     /// the host applies it with the buffer of that frame.
     fn update_panel_after_compose(
         &mut self,
         id: SurfaceId,
-        changed: bool,
+        change: ViewChange,
     ) -> Result<(), ViewError> {
-        if changed {
+        if change == ViewChange::Changed {
             let view = (self.records.open_view_mut(id)).ok_or(ViewError::SurfaceNotOpen(id))?;
             self.panels.measure(id, view, &mut self.shaper)?;
         }
@@ -282,7 +307,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let Viewport { size, density } = viewport;
         let mut clip = None;
         let shape_changes = surface.shape.update(size, density, |outline| {
-            let geometry = ShapeGeometry::new(outline, size, density)?;
+            let geometry = ShapeGeometry::new(outline, size)?;
             clip = Some(geometry.clip);
             Ok::<_, ViewError>(geometry.input_cells)
         })?;
@@ -300,6 +325,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// the surface, or else a frame for `timing` that measures zero view CPU time. The renderer reports the frame once
     /// it is drawn.
     fn render_surface(&mut self, id: SurfaceId, timing: FrameTime) -> Result<(), ViewError> {
+        let scale = (self.records.open_scale(id)).ok_or(ViewError::SurfaceNotOpen(id))?;
         let (surface, _, viewport) = open_parts(&mut self.surfaces, &mut self.records, id)?;
         let start = match surface.frame {
             FrameProgress::Composed(composed) => composed,
@@ -308,6 +334,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                 view_cpu: Some(Duration::ZERO),
                 timing,
                 viewport,
+                scale,
             },
         };
         let built = self.actors.scene.built(id);
@@ -317,6 +344,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             surface: id,
             time: start.timing,
             viewport: start.viewport,
+            scale: start.scale,
             built,
         })?;
         Ok(())
@@ -330,6 +358,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             surface: id,
             time,
             viewport,
+            scale,
             drawn,
             contents,
             next_change,
@@ -340,7 +369,11 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         if self.records.is_open(id)
             && let Some(surface) = self.surfaces.get_mut(&id)
         {
-            surface.last_frame = Some(LastFrame { viewport, contents });
+            surface.last_frame = Some(LastFrame {
+                viewport,
+                scale,
+                contents,
+            });
             if let FrameProgress::Drawing { start, panel } = surface.frame
                 && start.timing.sequence == time.sequence
             {
@@ -383,7 +416,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             return;
         };
         if let Some(observer) = &mut self.observers.view {
-            observer(id, viewport, view);
+            observer(id, start.timing, viewport, view);
         }
         if let Some(info) = drawn.output
             && surface.output != Some(info)
@@ -406,7 +439,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                 surface: id,
                 timing: start.timing,
                 stage: FrameStage::Submitted,
-                observed: self.start.elapsed(),
+                observed: self.clock.now(),
                 presentation_time: None,
                 metrics: None,
                 flags: None,
@@ -435,50 +468,4 @@ pub(super) fn open_parts<'a>(
         .zip(viewport);
     let ((surface, view), viewport) = found.ok_or(ViewError::SurfaceNotOpen(id))?;
     Ok((surface, view, viewport))
-}
-
-/// Runs `frame` to send the next frame of `view` into `sink`, and logs each component that failed in the frame as an
-/// error. A failed frame ends the run when no earlier frame ended into the sink, because the surface then has no scene
-/// to keep showing. Otherwise the failure is logged, and the view sends the whole scene with the next frame.
-pub(super) fn send_frame(
-    view: &mut View,
-    mut sink: SceneSink<'_>,
-    frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
-) -> Result<(), ViewError> {
-    let shows_scene = sink.any_frame_ended();
-    match frame(view, &mut sink) {
-        Ok(failures) => {
-            log_failures(failures);
-            Ok(())
-        }
-        Err(FrameError::Sink(Closed)) => Err(ViewError::Stopped(Stopped::Scene)),
-        Err(error) if shows_scene => {
-            warn_whole_scene_next(&error);
-            Ok(())
-        }
-        Err(error) => Err(ViewError::ShowScene(error)),
-    }
-}
-
-/// Logs `error`, after which the view sends the whole scene with the next frame.
-fn warn_whole_scene_next(error: impl std::error::Error) {
-    log::warn!(
-        "a frame failed, and the whole scene is sent with the next frame: {}",
-        lavashell_core::error::message_chain(error)
-    );
-}
-
-/// Sends `changes` and the geometry of the panel of surface `id` to `sink`, and ends the frame as
-/// [`SceneSink::end_state_frame`] does. Returns whether the frame ended.
-pub(super) fn send_surface_state(
-    mut sink: SceneSink<'_>,
-    panels: &PanelRecords,
-    id: SurfaceId,
-    changes: impl IntoIterator<Item = SurfaceChange>,
-) -> Result<bool, ViewError> {
-    let stopped = |Closed| ViewError::Stopped(Stopped::Scene);
-    for change in changes.into_iter().chain(panels.geometry_change(id)) {
-        sink.set_state(change).map_err(stopped)?;
-    }
-    sink.end_state_frame().map_err(stopped)
 }

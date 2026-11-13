@@ -16,6 +16,7 @@ mod panel;
 mod platform;
 mod request;
 mod settings;
+mod streams;
 mod surface;
 #[cfg(test)]
 mod test_merge;
@@ -45,6 +46,7 @@ pub use panel::{KeyboardMode, PanelRequest};
 pub use platform::{Connection, HostFacts, Platform, PlatformLinks, Reports, SurfaceAttachment};
 pub use request::PlatformRequest;
 pub use settings::SettingsEvent;
+pub use streams::{StreamSetup, StreamTask, no_streams};
 pub use surface::{
     Appearance, PanelRole, Role, SurfaceEvent, SurfaceRequest, SurfaceSpec, WindowRole,
 };

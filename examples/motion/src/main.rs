@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 use clap::Parser;
 use lavashell::prelude::*;
-use lavashell_example_support::{ExampleArguments, SizeArguments, report_failure};
-use lavashell_motion::{CopyKey, Error, copy, model::Demo, ui};
+use lavashell_example_support::{ExampleArguments, SizeArguments, report};
+use lavashell_motion::{Error, model::Demo, ui};
 use std::process::ExitCode;
 
 #[derive(Parser)]
@@ -27,11 +27,6 @@ fn run() -> Result<(), Error> {
     let demo = Demo::new(arguments.autoplay)?;
 
     let state = demo.clone();
-    let mut app = arguments
-        .example
-        .app()?
-        .on_frame(move |frame| report_failure("autoplay", state.step(frame)));
-    let state = demo.clone();
     let show_render_cost = move |report: FrameReport| {
         if let Some(submission) = report.submission {
             state
@@ -41,11 +36,12 @@ fn run() -> Result<(), Error> {
     };
 
     let size = arguments.size.size().unwrap_or(ui::WINDOW);
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.motion")
-            .size(size.width, size.height)
-            .fullscreen(arguments.fullscreen),
-        move |ui| ui::compose(ui, &demo),
+    let app = lavashell_motion::app(
+        arguments.example.app()?,
+        &demo,
+        size,
+        arguments.fullscreen,
+        |error| report("autoplay", error),
     )?;
     Ok(lavashell_example_support::run_observed(
         app,

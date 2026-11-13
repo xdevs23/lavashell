@@ -69,7 +69,7 @@ fn repainted_pixels_on(
             let before = painter.render_stats().damaged_pixels;
             let frame = SurfaceFrame {
                 tree: tree.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
                 damage: Some(damage),
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -196,7 +196,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
         );
         let frame = SurfaceFrame {
             tree: tree.at(Duration::ZERO),
-            density: Density::ONE,
+            dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
             damage,
             clear: skia_safe::Color::TRANSPARENT,
             scene: None,
@@ -235,7 +235,15 @@ fn a_damage_rectangle_repaints_every_pixel_that_it_covers_in_part() -> Result<()
     for (color, damage) in [(0x00ff_0000, viewport), (0x0000_00ff, damaged)] {
         let tree = leaves([Packet::new(Arc::from([disc(color)]))])?;
         let clear = skia_safe::Color::TRANSPARENT;
-        paint_damage(&mut painter, target.canvas(), &tree, Some(damage), clear)?;
+        let dp_to_output = PixelScale::SQUARE.dp_to_output(Density::ONE);
+        paint_damage(
+            &mut painter,
+            target.canvas(),
+            &tree,
+            dp_to_output,
+            Some(damage),
+            clear,
+        )?;
     }
     let shown = pixels(&mut target);
     let pixel = |x: usize, y: usize| &shown[(y * 240 + x) * 4..][..4];
@@ -350,7 +358,7 @@ fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), T
                 },
                 frame,
                 0,
-                Density::ONE,
+                PixelScale::SQUARE.dp_to_output(Density::ONE),
             ),
             QualityChange::Unchanged
         );

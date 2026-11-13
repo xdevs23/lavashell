@@ -3,19 +3,14 @@ use crate::hardware_buffer::HardwareBufferMemory;
 use crate::native_window::NativeWindow;
 use ash::khr::android_surface;
 use ash::vk;
-use lavashell_core::prelude::OutputRequest;
-use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
-use lavashell_renderer::{
-    Attach, AttachError, ForeignMemory, PresentationBackend, RendererState, StateError,
-    StreamBackend, SurfaceAlpha, VulkanRenderer,
-};
+use lavashell_renderer::{ForeignMemory, PresentationBackend};
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
 use std::ffi::CStr;
 use std::sync::Arc;
 
 /// The presentation to AOSP native windows, on a device that samples AOSP hardware buffers.
-pub(crate) struct AospPresentation;
+pub struct AospPresentation;
 
 impl PresentationBackend for AospPresentation {
     fn surface_extension(&self) -> Option<&'static CStr> {
@@ -56,25 +51,9 @@ impl PresentationBackend for AospPresentation {
 /// An `ANativeWindow`, from which Vulkan creates a surface through `VK_KHR_android_surface`.
 struct AndroidWindow(ndk::native_window::NativeWindow);
 
-/// Attaches `window` to `state` as `surface`, with the window as the control of the surface.
-pub(crate) fn attach_window<S: StreamBackend<Gpu = VulkanRenderer>>(
-    state: &mut RendererState<NativeWindow, S>,
-    surface: SurfaceId,
-    window: NativeWindow,
-    alpha: SurfaceAlpha,
-) -> Result<(), StateError> {
-    state
-        .attach(Attach {
-            surface,
-            window: Arc::new(AndroidWindow(window.window.clone())),
-            alpha,
-            timing: window.timing.clone(),
-            output: OutputRequest::default(),
-            hdr_metadata: None,
-            gpu_budget: None,
-            control: window,
-        })
-        .map_err(|AttachError { error, .. }| error)
+/// The Vulkan window of `window`.
+pub(crate) fn vulkan_window(window: &NativeWindow) -> Arc<dyn Window> {
+    Arc::new(AndroidWindow(window.window.clone()))
 }
 
 // SAFETY: A `Surface` destroys the handle that `create_surface` returns and cannot check it, so the trait is unsafe.

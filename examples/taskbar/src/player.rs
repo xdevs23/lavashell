@@ -1,64 +1,60 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{
-    Error, compose,
-    model::Taskbar,
-    script::{CUES, Script},
-};
+use crate::{CopyKey, Error, compose, copy, model::Taskbar, script::CUES};
 use lavashell::prelude::*;
-use lavashell_example_support::{OffscreenView, Recording};
+use lavashell_example_support::{
+    FrameInterval, Recording, Start, Steps, default_app, write_capture,
+};
+use lavashell_test_platform::{HostScript, RecordedFrame};
 
-pub struct Player {
-    pub taskbar: Taskbar,
-    script: Script,
-    pub offscreen: OffscreenView,
-}
-
-impl Player {
-    /// A player that plays the cues of the script on an offscreen view of `size`. The view has come to rest before
-    /// the first cue plays.
-    ///
-    /// # Errors
-    /// Returns an error when the offscreen view cannot be created or framed.
-    pub fn new(size: Size) -> Result<Self, Error> {
-        let taskbar = Taskbar::new()?;
-        let composed = taskbar.clone();
-        let view = View::new(lavashell_example_support::platform(), move |ui| {
-            compose(ui, &composed);
-        });
-        let mut player = Self {
-            taskbar,
-            script: Script::default(),
-            offscreen: OffscreenView::new(view, Some(size), Density::ONE)?,
-        };
-        player.offscreen.settle()?;
-        Ok(player)
-    }
-
-    /// Plays the next cue of the script and frames the view right after it.
-    ///
-    /// # Errors
-    /// Returns an error when the view has no taskbar or no slot for the app of the cue, or when the frame cannot be
-    /// shown.
-    pub fn cue(&mut self) -> Result<(), Error> {
-        (self.script).play(&self.taskbar, &mut self.offscreen.view)?;
-        Ok(self.offscreen.frame()?)
-    }
-}
-
-/// Records one cycle of the script as numbered PNG files. After each cue, every frame until the scene comes to rest
-/// is written into the directory of `recording`.
+/// Records one cycle of the script in a window of `size` on the test platform, as numbered PNG files in the directory
+/// set in `recording`.
 pub fn record(recording: &Recording, size: Size) -> Result<(), Error> {
-    let mut player = Player::new(size)?;
-    let mut index = 0_usize;
-    for _ in CUES {
-        player.cue()?;
-        player
-            .offscreen
-            .record_until_rest(recording.interval, |offscreen| {
-                let saved = offscreen.save(recording.directory.join(format!("{index:04}.png")));
-                index += 1;
-                saved
-            })?;
+    for (index, (_, frame)) in record_cues(recording.interval, size)?
+        .into_iter()
+        .enumerate()
+    {
+        write_capture(
+            recording.directory.join(format!("{index:04}.png")),
+            &frame.png,
+        )?;
     }
     Ok(())
+}
+
+/// Records one cycle of the script in a window of `size` on the test platform, a frame each `interval`. Each cue
+/// plays once the scene has come to rest after the cue before. Returns every frame from the first cue until the scene
+/// comes to rest after the last cue, with the index of the cue in [`CUES`] that the frame shows.
+pub(crate) fn record_cues(
+    interval: FrameInterval,
+    size: Size,
+) -> Result<Vec<(usize, RecordedFrame)>, Error> {
+    let taskbar = Taskbar::new()?;
+    let mut steps = Steps::new(taskbar.clone());
+    for (index, cue) in CUES.into_iter().enumerate() {
+        steps.push(Start::at_rest(), move |view, _, taskbar| {
+            cue.apply(taskbar, view)
+        });
+        steps.mark(Start::NEXT, index);
+    }
+    steps.record(
+        app(default_app()?, &taskbar, size, false)?,
+        HostScript::new(Density::ONE).record_until_rest(interval),
+    )
+}
+
+/// `app` with `taskbar` in a window of `size`, which covers the screen when `fullscreen` is set.
+pub(crate) fn app(
+    mut app: App,
+    taskbar: &Taskbar,
+    size: Size,
+    fullscreen: bool,
+) -> Result<App, Error> {
+    let shown = taskbar.clone();
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.taskbar")
+            .size(size.width, size.height)
+            .fullscreen(fullscreen),
+        move |ui| compose(ui, &shown),
+    )?;
+    Ok(app)
 }

@@ -2,7 +2,7 @@
 use super::StateError;
 use crate::effect_registry::QualityChange;
 use crate::{FrameOutcome, SurfaceContents, SurfaceTarget};
-use lavashell_core::prelude::{DamageTracker, Presented, Rect, Viewport};
+use lavashell_core::prelude::{DamageTracker, PixelScale, Presented, Rect, Viewport};
 use lavashell_core::scene::tree::TreeId;
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ pub(super) struct AttachedSurface<C> {
     pub target: SurfaceTarget,
     pub control: C,
     pub gpu_budget: Option<Duration>,
-    /// An outline in physical pixels that clips the drawing of every frame.
+    /// An outline in dp that clips the drawing of every frame.
     pub outline: Option<skia_safe::Path>,
     pub damage: SurfaceDamage,
 }
@@ -61,21 +61,24 @@ impl<C> AttachedSurface<C> {
 pub(super) struct PixelInputs {
     pub lineage: TreeId,
     pub scene_generation: u64,
+    pub scale: PixelScale,
     pub quality: QualityChange,
 }
 
 /// The damage records of the pixels in a target, with the lineage and the scene image of the frame described by the
-/// records.
+/// records, and the scale at which the pixels are drawn.
 #[derive(Default)]
 pub(super) struct SurfaceDamage {
     tracker: DamageTracker,
     described: Option<(TreeId, u64)>,
+    scale: Option<PixelScale>,
 }
 
 impl SurfaceDamage {
-    /// The area of `shown` that differs from the pixels in the target. The whole viewport differs when the lineage or
-    /// the scene image differ from those of the last frame, when the quality of an effect changed, or when `contents`
-    /// reports that the target lost its pixels. `contents` runs only when the other checks find no change.
+    /// The area of `shown` that differs from the pixels in the target. The whole viewport differs when the lineage,
+    /// the scene image or the scale differ from those of the last frame, when the quality of an effect changed, or
+    /// when `contents` reports that the target lost its pixels. `contents` runs only when the other checks find no
+    /// change.
     pub fn area<E>(
         &mut self,
         shown: Presented<'_>,
@@ -85,13 +88,20 @@ impl SurfaceDamage {
     ) -> Result<Option<Rect>, E> {
         let described = (inputs.lineage, inputs.scene_generation);
         if self.described != Some(described)
+            || self.scale != Some(inputs.scale)
             || inputs.quality == QualityChange::Changed
             || contents()? == SurfaceContents::Outdated
         {
             self.invalidate();
             self.described = Some(described);
+            self.scale = Some(inputs.scale);
         }
         Ok(self.tracker.damage(shown, viewport))
+    }
+
+    /// Whether the pixels in the target are drawn at `scale`.
+    pub fn drawn_at(&self, scale: PixelScale) -> bool {
+        self.scale == Some(scale)
     }
 
     /// Forgets the records after a frame that was not presented, because the records describe that frame.
