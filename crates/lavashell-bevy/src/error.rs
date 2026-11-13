@@ -26,7 +26,7 @@ pub enum Error {
     #[error("the overlay cannot draw")]
     OverlayDraw(#[source] RendererError),
     #[error("the choreographer or the scene builder of the overlay cannot start")]
-    StartScene(#[source] lavashell_runtime::Error),
+    StartScene(#[source] lavashell_runtime::scene_pipeline::Error),
     #[error("cannot create an exportable scene image")]
     SceneImage(#[source] lavashell_vulkan::Error),
     #[error("cannot create the commands that hand a scene image over")]
@@ -63,7 +63,7 @@ pub enum ShowFrameError {
     #[error("a change in the frame of the view does not fit the scene shown before")]
     Mirror(#[source] ApplyError),
     #[error("the choreographer or the scene builder of the overlay failed")]
-    Scene(#[source] Arc<lavashell_runtime::Error>),
+    Scene(#[source] Arc<lavashell_runtime::scene_pipeline::Error>),
     #[error("the choreographer and the scene builder of the overlay stopped")]
     SceneStopped,
 }

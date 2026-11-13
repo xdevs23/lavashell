@@ -114,7 +114,7 @@ pub enum SchedulerOutput {
 /// renders once the scene builder built it. The frame clock of each surface predicts when the frame becomes visible
 /// from the reports of the host and the render cost.
 #[derive(Debug)]
-pub struct FrameScheduler {
+pub(crate) struct FrameScheduler {
     redraw: Redraw,
     surfaces: BTreeMap<SurfaceId, Pacing>,
     /// The wake time sent last.

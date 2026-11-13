@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use crate::translator::{Translator, ViewLink};
 use lavashell_platform::{Readiness, WatchEvent, WatchId, WatchRequest};
 use sctk::reexports::calloop::generic::Generic;
@@ -8,13 +7,17 @@ use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;
 
+mod error;
+
+pub use error::WatchError;
+
 /// The event loop source of each watched file descriptor.
 #[derive(Default)]
 pub(crate) struct WatchSources(BTreeMap<WatchId, RegistrationToken>);
 
 impl Translator {
     /// Executes `request` of the runtime on the watched file descriptors.
-    pub(crate) fn execute_watch(&mut self, request: WatchRequest) -> Result<(), Error> {
+    pub(crate) fn execute_watch(&mut self, request: WatchRequest) -> Result<(), WatchError> {
         self.watches
             .execute(&self.loop_handle, request, &self.links.view())
     }
@@ -27,14 +30,14 @@ impl WatchSources {
         handle: &LoopHandle<'static, D>,
         request: WatchRequest,
         view: &ViewLink,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WatchError> {
         match request {
             WatchRequest::Watch(id, source, readiness) => {
                 self.watch(handle, id, source, readiness, view.clone())
             }
             WatchRequest::Resume(id) => {
                 if let Some(token) = self.0.get(&id) {
-                    handle.enable(token).map_err(Error::ResumeWatch)?;
+                    handle.enable(token).map_err(WatchError::ResumeWatch)?;
                 }
                 Ok(())
             }
@@ -56,7 +59,7 @@ impl WatchSources {
         source: OwnedFd,
         readiness: Readiness,
         view: ViewLink,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WatchError> {
         let interest = match readiness {
             Readiness::Readable => Interest::READ,
             Readiness::Writable => Interest::WRITE,
@@ -67,7 +70,7 @@ impl WatchSources {
                 view.report(WatchEvent::Ready(id));
                 Ok(PostAction::Disable)
             })
-            .map_err(|failure| Error::WatchFd(failure.error))?;
+            .map_err(|failure| WatchError::WatchFd(failure.error))?;
         let _no_source_had_the_id = self.0.insert(id, token);
         Ok(())
     }

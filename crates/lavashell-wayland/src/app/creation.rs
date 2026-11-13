@@ -4,6 +4,7 @@ use super::layer::{self, ProtocolLayout};
 use super::owned_wl_surface::OwnedWlSurface;
 use super::{NativeRole, Surface, destroy_objects};
 use crate::Error;
+use crate::LayerError;
 use crate::translator::Translator;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
@@ -136,7 +137,7 @@ impl Translator {
                     Some(None) => return Ok(None),
                     chosen => chosen.flatten(),
                 };
-                let layout = ProtocolLayout::new(panel.geometry).map_err(Error::LayerLayout)?;
+                let layout = ProtocolLayout::new(panel.geometry).map_err(LayerError::Layout)?;
                 let proxy = self.layer_surface(wl, surface, output.as_ref(), panel)?;
                 layer::panel_role(wl, proxy, layout, panel.keyboard)
             }

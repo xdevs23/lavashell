@@ -4,6 +4,7 @@ use super::links::Links;
 use super::requests::{Ending, Requests};
 use super::surfaces::NativeSurfaces;
 use crate::Error;
+use crate::EventLoopError;
 use crate::app::{
     Grabs, Presentation, SeatDevices, Surface, SurfaceProtocols, WatchSources, install_preferences,
 };
@@ -78,7 +79,7 @@ impl Translator {
         let seats = SeatState::new(&globals, &qh);
         let connection_source = WaylandSource::new(connection.clone(), queue)
             .insert(loop_handle.clone())
-            .map_err(|failure| Error::WatchConnection(failure.error))?;
+            .map_err(|failure| EventLoopError::WatchConnection(failure.error))?;
         let mut sources = vec![connection_source];
         install_preferences(&loop_handle, &mut sources, &links.view())?;
         Ok(Self {

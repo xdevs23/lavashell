@@ -5,6 +5,8 @@
 
 mod handlers;
 #[cfg(test)]
+pub(crate) mod test_error;
+#[cfg(test)]
 mod tests;
 
 use crate::translator::ViewLink;

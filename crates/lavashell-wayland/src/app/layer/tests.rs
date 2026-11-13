@@ -7,7 +7,7 @@ use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
 };
 use lavashell_core::units::{Dp, DpExt, FiniteDp};
-use lavashell_runtime::LayerSurface;
+use lavashell_runtime::layer_surface::LayerSurface;
 use zwlr_layer_surface_v1::Anchor;
 
 fn margins(top: Dp, left: Dp) -> Result<LayerMargins, TestError> {

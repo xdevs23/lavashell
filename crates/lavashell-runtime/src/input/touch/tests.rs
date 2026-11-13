@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{InputRouter, RoutedInput};
+use crate::input::{InputRouter, RoutedInput};
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};

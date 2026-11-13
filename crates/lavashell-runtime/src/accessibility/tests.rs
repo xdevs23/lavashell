@@ -3,8 +3,8 @@ mod protected;
 mod surface_accessibility;
 mod text;
 
+use super::test_error::AccessibilityTestError;
 use super::*;
-use crate::test_error::TestError;
 use accesskit::{Action, ActionData, NodeId as NativeId, Role as NativeRole, TreeId, TreeUpdate};
 use lavashell_core::accessibility::*;
 use lavashell_core::prelude::{Axis, DpExt, NodeId, Rect};
@@ -61,30 +61,36 @@ fn tree() -> AccessibilityTree {
     }
 }
 
-fn node_mut(tree: &mut AccessibilityTree, id: NodeId) -> Result<&mut AccessibleNode, TestError> {
-    tree.nodes.get_mut(&id).ok_or(TestError::MissingNode(id))
+fn node_mut(
+    tree: &mut AccessibilityTree,
+    id: NodeId,
+) -> Result<&mut AccessibleNode, AccessibilityTestError> {
+    (tree.nodes.get_mut(&id)).ok_or(AccessibilityTestError::MissingNode(id))
 }
 
-fn root_mut(tree: &mut AccessibilityTree) -> Result<&mut AccessibleNode, TestError> {
+fn root_mut(tree: &mut AccessibilityTree) -> Result<&mut AccessibleNode, AccessibilityTestError> {
     let root = tree.root;
     node_mut(tree, root)
 }
 
-fn text_mut(tree: &mut AccessibilityTree, id: NodeId) -> Result<&mut AccessibleText, TestError> {
+fn text_mut(
+    tree: &mut AccessibilityTree,
+    id: NodeId,
+) -> Result<&mut AccessibleText, AccessibilityTestError> {
     node_mut(tree, id)?
         .text
         .as_mut()
-        .ok_or(TestError::MissingText(id))
+        .ok_or(AccessibilityTestError::MissingText(id))
 }
 
 /// The first node of `update` with `role`.
 fn native_node(
     update: &TreeUpdate,
     role: NativeRole,
-) -> Result<&(NativeId, accesskit::Node), TestError> {
+) -> Result<&(NativeId, accesskit::Node), AccessibilityTestError> {
     (update.nodes.iter())
         .find(|(_, node)| node.role() == role)
-        .ok_or(TestError::MissingNativeRole(role))
+        .ok_or(AccessibilityTestError::MissingNativeRole(role))
 }
 
 fn request(action: Action, node: NativeId, data: Option<ActionData>) -> accesskit::ActionRequest {
@@ -116,7 +122,7 @@ fn native_ids_do_not_alias_full_width_core_or_virtual_nodes() {
 /// tall, the ids of its native nodes, and the native id and node of the scroll view.
 fn scroll_view(
     axis: Axis,
-) -> Result<(AccessibilityTree, ids::Ids, NativeId, accesskit::Node), TestError> {
+) -> Result<(AccessibilityTree, ids::Ids, NativeId, accesskit::Node), AccessibilityTestError> {
     let mut tree = tree();
     let mut view = node(2, Role::ScrollView, "Tabs");
     view.actions = [ActionKind::Scroll(axis)].into();
@@ -131,12 +137,13 @@ fn scroll_view(
     let target = ids.node(NodeId(2));
     let (_, mapped) = (native.nodes.into_iter())
         .find(|(id, _)| *id == target)
-        .ok_or(TestError::MissingNativeNode(target))?;
+        .ok_or(AccessibilityTestError::MissingNativeNode(target))?;
     Ok((tree, ids, target, mapped))
 }
 
 #[test]
-fn a_node_that_scrolls_sideways_has_horizontal_scroll_actions() -> Result<(), TestError> {
+fn a_node_that_scrolls_sideways_has_horizontal_scroll_actions() -> Result<(), AccessibilityTestError>
+{
     let (tree, ids, target, mapped) = scroll_view(Axis::Horizontal)?;
     assert!(mapped.supports_action(Action::ScrollLeft));
     assert!(mapped.supports_action(Action::ScrollRight));
@@ -144,7 +151,7 @@ fn a_node_that_scrolls_sideways_has_horizontal_scroll_actions() -> Result<(), Te
     let page = Some(ActionData::ScrollUnit(accesskit::ScrollUnit::Page));
     let action = actions::request(request(Action::ScrollLeft, target, page), &tree, &ids);
     assert_eq!(
-        action.ok_or(TestError::RefusedAction)?.action,
+        action.ok_or(AccessibilityTestError::RefusedAction)?.action,
         AccessibilityAction::Scroll(Axis::Horizontal, -100.dp())
     );
     let refused = actions::request(request(Action::ScrollDown, target, None), &tree, &ids);
@@ -153,20 +160,22 @@ fn a_node_that_scrolls_sideways_has_horizontal_scroll_actions() -> Result<(), Te
 }
 
 #[test]
-fn a_node_that_scrolls_up_and_down_has_vertical_scroll_actions() -> Result<(), TestError> {
+fn a_node_that_scrolls_up_and_down_has_vertical_scroll_actions()
+-> Result<(), AccessibilityTestError> {
     let (tree, ids, target, mapped) = scroll_view(Axis::Vertical)?;
     assert!(mapped.supports_action(Action::ScrollDown));
     assert!(!mapped.supports_action(Action::ScrollRight));
     let action = actions::request(request(Action::ScrollDown, target, None), &tree, &ids);
     assert_eq!(
-        action.ok_or(TestError::RefusedAction)?.action,
+        action.ok_or(AccessibilityTestError::RefusedAction)?.action,
         AccessibilityAction::Scroll(Axis::Vertical, 12.dp())
     );
     Ok(())
 }
 
 #[test]
-fn removed_nodes_leave_parent_delta_and_stale_actions_are_rejected() -> Result<(), TestError> {
+fn removed_nodes_leave_parent_delta_and_stale_actions_are_rejected()
+-> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     let mut ids = ids::Ids::default();
     let before = mapping::tree(&tree, &mut ids, "");
@@ -175,7 +184,8 @@ fn removed_nodes_leave_parent_delta_and_stale_actions_are_rejected() -> Result<(
     assert_eq!(root_mut(&mut tree)?.children.remove(0), NodeId(1));
     tree.focus = None;
     let after = mapping::tree(&tree, &mut ids, "");
-    let native_root = after.tree.as_ref().ok_or(TestError::MissingTreeInfo)?.root;
+    let info = (after.tree.as_ref()).ok_or(AccessibilityTestError::MissingTreeInfo)?;
+    let native_root = info.root;
     let delta = tree_difference(&after, Some(&before));
     assert_eq!(delta.nodes.len(), 1);
     assert_eq!(delta.nodes[0].0, native_root);
@@ -186,7 +196,8 @@ fn removed_nodes_leave_parent_delta_and_stale_actions_are_rejected() -> Result<(
 }
 
 #[test]
-fn unicode_selection_keeps_scalar_units_and_directed_endpoints() -> Result<(), TestError> {
+fn unicode_selection_keeps_scalar_units_and_directed_endpoints()
+-> Result<(), AccessibilityTestError> {
     let tree = tree();
     let mut ids = ids::Ids::default();
     let native = mapping::tree(&tree, &mut ids, "");
@@ -196,7 +207,7 @@ fn unicode_selection_keeps_scalar_units_and_directed_endpoints() -> Result<(), T
     let selection = field
         .1
         .text_selection()
-        .ok_or(TestError::MissingSelection)?;
+        .ok_or(AccessibilityTestError::MissingSelection)?;
     assert_eq!(
         (
             selection.anchor.character_index,
@@ -213,7 +224,7 @@ fn unicode_selection_keeps_scalar_units_and_directed_endpoints() -> Result<(), T
         &tree,
         &ids,
     )
-    .ok_or(TestError::RefusedAction)?;
+    .ok_or(AccessibilityTestError::RefusedAction)?;
     assert_eq!(
         action.action,
         AccessibilityAction::SetTextSelection(TextSelection {
@@ -226,7 +237,7 @@ fn unicode_selection_keeps_scalar_units_and_directed_endpoints() -> Result<(), T
 
 #[test]
 fn shaped_selectable_units_convert_combining_and_zwj_text_without_splitting_editor_carets()
--> Result<(), TestError> {
+-> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     let text = text_mut(&mut tree, NodeId(1 << 63))?;
     text.value = "ae\u{301}👩\u{200d}🚀ב".into();
@@ -256,7 +267,7 @@ fn shaped_selectable_units_convert_combining_and_zwj_text_without_splitting_edit
     let selection = field
         .1
         .text_selection()
-        .ok_or(TestError::MissingSelection)?;
+        .ok_or(AccessibilityTestError::MissingSelection)?;
     assert_eq!(
         (
             selection.anchor.character_index,
@@ -273,7 +284,7 @@ fn shaped_selectable_units_convert_combining_and_zwj_text_without_splitting_edit
         &tree,
         &ids,
     )
-    .ok_or(TestError::RefusedAction)?;
+    .ok_or(AccessibilityTestError::RefusedAction)?;
     assert_eq!(
         action.action,
         AccessibilityAction::SetTextSelection(TextSelection {
@@ -285,7 +296,7 @@ fn shaped_selectable_units_convert_combining_and_zwj_text_without_splitting_edit
 }
 
 #[test]
-fn right_to_left_geometry_uses_resolved_run_direction() -> Result<(), TestError> {
+fn right_to_left_geometry_uses_resolved_run_direction() -> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     let text = text_mut(&mut tree, NodeId(1 << 63))?;
     text.value = "אבג".into();
@@ -314,7 +325,7 @@ fn right_to_left_geometry_uses_resolved_run_direction() -> Result<(), TestError>
 }
 
 #[test]
-fn unadvertised_disabled_and_non_finite_actions_do_nothing() -> Result<(), TestError> {
+fn unadvertised_disabled_and_non_finite_actions_do_nothing() -> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     let mut ids = ids::Ids::default();
     let native = mapping::tree(&tree, &mut ids, "");
@@ -356,7 +367,8 @@ fn unadvertised_disabled_and_non_finite_actions_do_nothing() -> Result<(), TestE
 }
 
 #[test]
-fn unchanged_live_regions_produce_no_nodes_in_incremental_update() -> Result<(), TestError> {
+fn unchanged_live_regions_produce_no_nodes_in_incremental_update()
+-> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     node_mut(&mut tree, NodeId(1))?.live = LiveRegion::Assertive;
     let mut ids = ids::Ids::default();
@@ -372,7 +384,8 @@ fn unchanged_live_regions_produce_no_nodes_in_incremental_update() -> Result<(),
 }
 
 #[test]
-fn transport_maps_relations_checked_ranges_and_virtualized_positions() -> Result<(), TestError> {
+fn transport_maps_relations_checked_ranges_and_virtualized_positions()
+-> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     let source = node_mut(&mut tree, NodeId(1))?;
     source.role = Role::Checkbox;
@@ -408,7 +421,8 @@ fn transport_maps_relations_checked_ranges_and_virtualized_positions() -> Result
 }
 
 #[test]
-fn heading_levels_and_grid_item_positions_use_portable_logical_indices() -> Result<(), TestError> {
+fn heading_levels_and_grid_item_positions_use_portable_logical_indices()
+-> Result<(), AccessibilityTestError> {
     let mut tree = tree();
     root_mut(&mut tree)?.collection = Some(CollectionInfo {
         rows: Some(34),

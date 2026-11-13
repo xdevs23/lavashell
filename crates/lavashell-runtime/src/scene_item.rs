@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::FrameSequence;
+use crate::scheduler::FrameSequence;
 use lavashell_actor::{Effect, Frame, Merge};
 use lavashell_core::scene::tree::{Change, ChangeEffect, ChangeKey};
 use lavashell_core::surface::{SurfaceChange, SurfaceField};

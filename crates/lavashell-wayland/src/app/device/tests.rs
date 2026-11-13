@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::Error;
 use crate::test_error::TestError;
 use lavashell_core::units::DpExt;
 use sctk::seat::pointer::{AxisScroll, BTN_MIDDLE};
@@ -59,11 +60,14 @@ fn a_scroll_reports_the_absolute_distance_along_each_axis_as_its_delta() {
 
 #[test]
 fn an_input_serial_converts_back_to_wayland_and_a_wider_one_fails() -> Result<(), TestError> {
-    assert_eq!(protocol_serial(input_serial(u32::MAX))?, u32::MAX);
+    assert_eq!(
+        protocol_serial(input_serial(u32::MAX)).map_err(Error::from)?,
+        u32::MAX
+    );
     let wider = InputSerial(u64::from(u32::MAX) + 1);
     assert!(matches!(
         protocol_serial(wider),
-        Err(Error::ProtocolSerial(_))
+        Err(DeviceError::ProtocolSerial(_))
     ));
     Ok(())
 }

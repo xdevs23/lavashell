@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Record, SurfaceRecords};
-use crate::AccessibilityFailure;
 use crate::accessibility::Republish;
-use lavashell_core::accessibility::ActionOutcome;
+use lavashell_core::accessibility::{ActionError, ActionOutcome};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{AccessibilityEvent, AccessibilityRequest};
+
+/// A failure while the runtime handles an event of an assistive technology. `E` is the failure of the platform to
+/// show a frame.
+#[derive(Debug, thiserror::Error)]
+pub enum AccessibilityFailure<E> {
+    #[error("a surface could not show the frame that an assistive technology reads")]
+    Show(#[source] E),
+    #[error("the app could not perform an action requested by an assistive technology")]
+    PerformAction(#[source] ActionError),
+}
 
 /// What follows from an event of an assistive technology. `E` is the failure of the platform to show a frame.
 #[must_use]

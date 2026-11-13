@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{ActionQueue, ClipboardTransfers, Drags, SurfaceRecords, TextClipboard, Watches};
+use crate::clipboard::{ClipboardTransfers, TextClipboard};
+use crate::drag::Drags;
+use crate::surface_records::SurfaceRecords;
+use crate::view_actions::ActionQueue;
+use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::PlatformRequest;
 

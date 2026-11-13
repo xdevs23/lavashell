@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::FrameSequence;
 use crate::choreographer_actor::ChoreographerInput;
 use crate::scene_item::{SceneFrame, SceneItem};
 use crate::scene_pipeline::{BuilderObserver, BuilderReport};
+use crate::scheduler::FrameSequence;
 use crate::surface_slots::{BuiltSurface, SurfaceSlots};
 use lavashell_actor::{Actor, Effect, Flow, Merge, Sender};
 use lavashell_core::scene::tree::ApplyError;

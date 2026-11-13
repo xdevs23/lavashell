@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Panel, PanelRecords, SurfaceRecords};
+use crate::panels::{Panel, PanelRecords};
+use crate::surface_records::SurfaceRecords;
 use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::geometry::Size;
 use lavashell_core::surface::SurfaceId;

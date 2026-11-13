@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::DragRegion;
-use crate::test_error::TestError;
+use crate::surface_records::test_error::SurfaceRecordsTestError;
+use crate::test_error::TestResult;
+use crate::view_actor::ViewError;
+use crate::window::DragRegion;
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::keyboard::{Key, Shortcut};
 use lavashell_core::preferences::PreferenceOverrides;
@@ -330,7 +332,7 @@ fn the_filter_receives_each_pressed_key_and_passes_on_what_it_returns() {
 
 #[test]
 fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_the_view()
--> Result<(), crate::Error> {
+-> Result<(), crate::surface_records::Error> {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let view = View::new(lavashell_test_fixtures::facts(), |_| {});
     let surface = records.open(
@@ -366,7 +368,7 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
 
 #[test]
 fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_the_press()
--> Result<(), TestError> {
+-> TestResult {
     let phases = Rc::new(RefCell::new(Vec::new()));
     let recorded = phases.clone();
     let size = Size::new(10.dp(), 10.dp());
@@ -383,9 +385,11 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
     };
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let upper_half: DragRegion = Rc::new(|at: Point, size: Size| at.y < size.height * 0.5);
-    let surface = records.open(view, size, Density::ONE, Some(upper_half), String::new())?;
-    let viewport = records.open_viewport(surface).ok_or(TestError::NotOpen)?;
-    let view = records.open_view_mut(surface).ok_or(TestError::NotOpen)?;
+    let surface = records
+        .open(view, size, Density::ONE, Some(upper_half), String::new())
+        .map_err(ViewError::from)?;
+    let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
+    let view = (records.open_view_mut(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
     let begin_move = WindowControlRequest::BeginMove {
         surface,

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::layer_surface::LayerSurface;
+use crate::panels::Panel;
 use crate::test_error::{TestError, TestResult};
-use crate::{LayerSurface, Panel};
 use lavashell_core::panel::{ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins};
 use lavashell_core::reactive::State;
 use lavashell_core::units::DpExt;

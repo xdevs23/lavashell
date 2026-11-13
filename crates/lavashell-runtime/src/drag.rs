@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod error;
 mod request;
 mod source;
 mod target;
 mod text;
 
 use crate::pipe_transfers::{PipeTransfers, Transfer};
-use crate::{Error, SurfaceRecords, Watches};
+use crate::surface_records::SurfaceRecords;
+use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance, ReceivedData, TransferId};
 use lavashell_core::view::View;
@@ -21,6 +23,7 @@ use std::sync::Arc;
 use target::DragTargets;
 use text::TextTransfers;
 
+pub use error::Error;
 pub use request::{DragGesture, DragRequest, DropEvent};
 
 type DragObserver = Box<dyn FnMut(DragEvent, &mut View) -> Option<DropAcceptance>>;
@@ -37,7 +40,7 @@ enum Ended {
 /// pipes that move the dragged bytes.
 struct Shared {
     text: Option<TextTransfers>,
-    pipes: PipeTransfers,
+    pipes: PipeTransfers<Error>,
     ended: Rc<RefCell<Vec<Ended>>>,
 }
 

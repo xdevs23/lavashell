@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{BuiltSurface, FrameKind};
+use crate::scheduler::FrameKind;
+use crate::surface_slots::BuiltSurface;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::SurfaceId;
 use std::collections::BTreeMap;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{KeyboardPolicy, PanelOptions, WindowShape};
+use crate::panels::{KeyboardPolicy, PanelOptions};
+use crate::shape::WindowShape;
 use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLayout, LayerLevel};
 use lavashell_core::prelude::{HdrMetadata, OutputRequest};

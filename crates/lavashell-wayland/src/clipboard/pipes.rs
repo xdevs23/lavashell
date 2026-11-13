@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod identity;
+#[cfg(test)]
+pub(crate) mod test_error;
 
 use std::os::fd::AsFd;
 

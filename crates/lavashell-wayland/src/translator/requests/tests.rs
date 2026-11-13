@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::LayerError;
+use crate::WindowError;
 use crate::test_error::TestError;
 use lavashell_actor::mailbox;
 use lavashell_core::surface::SurfaceId;
@@ -29,7 +31,7 @@ fn take(
             return Ok(());
         };
         if failing == Some(surface) {
-            return Err(Error::NoXdgShell);
+            return Err(Error::from(WindowError::NoXdgShell));
         }
         released.push(surface);
         Ok(())
@@ -50,7 +52,9 @@ fn counting_loop(
 #[test]
 fn the_requests_run_in_order_and_serving_ends_once_every_sender_is_gone() -> Result<(), TestError> {
     let (sender, receiver) = mailbox();
-    let (wake, _arrivals) = make_ping().map_err(Error::CreateRequestWake)?;
+    let (wake, _arrivals) = make_ping()
+        .map_err(RequestsError::CreateRequestWake)
+        .map_err(Error::from)?;
     sender.push(release(FIRST))?;
     sender.push(release(SECOND))?;
     drop(sender);
@@ -66,18 +70,25 @@ fn the_requests_run_in_order_and_serving_ends_once_every_sender_is_gone() -> Res
 #[test]
 fn a_failed_request_ends_serving_before_the_requests_after_it() -> Result<(), TestError> {
     let (sender, receiver) = mailbox();
-    let (wake, _arrivals) = make_ping().map_err(Error::CreateRequestWake)?;
+    let (wake, _arrivals) = make_ping()
+        .map_err(RequestsError::CreateRequestWake)
+        .map_err(Error::from)?;
     sender.push(release(FIRST))?;
     sender.push(release(SECOND))?;
     let (released, end) = take(&receiver, &wake, Some(FIRST));
     assert!(released.is_empty());
-    assert!(matches!(end, Some(Err(Error::NoXdgShell))));
+    assert!(matches!(
+        end,
+        Some(Err(Error::Window(WindowError::NoXdgShell)))
+    ));
     Ok(())
 }
 
 #[test]
 fn a_take_that_found_requests_wakes_the_next_take() -> Result<(), TestError> {
-    let (wake, arrivals) = make_ping().map_err(Error::CreateRequestWake)?;
+    let (wake, arrivals) = make_ping()
+        .map_err(RequestsError::CreateRequestWake)
+        .map_err(Error::from)?;
     let (mut event_loop, _source) = counting_loop(arrivals)?;
     let (sender, receiver) = mailbox();
     sender.push(release(FIRST))?;
@@ -93,19 +104,25 @@ fn a_take_that_found_requests_wakes_the_next_take() -> Result<(), TestError> {
 
 #[test]
 fn a_closed_intake_takes_no_request_until_it_opens() -> Result<(), TestError> {
-    let (wake, arrivals) = make_ping().map_err(Error::CreateRequestWake)?;
+    let (wake, arrivals) = make_ping()
+        .map_err(RequestsError::CreateRequestWake)
+        .map_err(Error::from)?;
     let (mut event_loop, source) = counting_loop(arrivals)?;
     let handle = event_loop.handle();
     let (_sender, receiver) = mailbox::<PlatformRequest>();
     let mut requests = Requests::new(receiver.intake(), source);
     let (socket, _peer) = UnixStream::pair().map_err(TestError::CreateSocketPair)?;
-    requests.close(&handle, socket.as_fd())?;
-    requests.close(&handle, socket.as_fd())?;
+    requests
+        .close(&handle, socket.as_fd())
+        .map_err(Error::from)?;
+    requests
+        .close(&handle, socket.as_fd())
+        .map_err(Error::from)?;
     wake.ping();
     let mut wakes = 0;
     event_loop.dispatch(Duration::ZERO, &mut wakes)?;
     assert_eq!(wakes, 0);
-    requests.open(&handle)?;
+    requests.open(&handle).map_err(Error::from)?;
     event_loop.dispatch(Duration::ZERO, &mut wakes)?;
     assert_eq!(wakes, 1);
     Ok(())
@@ -116,10 +133,13 @@ fn the_first_failure_ends_serving_whatever_is_recorded_after_it() {
     let mut ending = Ending::default();
     assert!(ending.take().is_none());
     ending.record(Ok(()));
-    ending.record(Err(Error::NoXdgShell));
-    ending.record(Err(Error::NoLayerShell));
+    ending.record(Err(Error::from(WindowError::NoXdgShell)));
+    ending.record(Err(Error::from(LayerError::NoLayerShell)));
     ending.record(Ok(()));
-    assert!(matches!(ending.take(), Some(Err(Error::NoXdgShell))));
+    assert!(matches!(
+        ending.take(),
+        Some(Err(Error::Window(WindowError::NoXdgShell)))
+    ));
     assert!(ending.take().is_none());
 }
 

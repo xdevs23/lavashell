@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
-use crate::ViewError;
-use crate::{HostKey, KeyboardFocus, RoutedInput};
+use crate::input::RoutedInput;
+use crate::observers::{HostKey, KeyboardFocus};
+use crate::view_actor::ViewError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
     DeviceEvent, KeyAction, KeyboardDevice, PlatformRequest, PressState, WindowControlRequest,

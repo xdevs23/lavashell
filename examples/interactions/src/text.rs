@@ -239,7 +239,7 @@ fn paste_action(
                     match data.and_then(|data| {
                         let size = data.bytes.len();
                         let text =
-                            String::from_utf8(data.bytes).map_err(RuntimeError::DecodeText)?;
+                            String::from_utf8(data.bytes).map_err(ClipboardError::DecodeText)?;
                         Ok((data.mime_type, size, text))
                     }) {
                         Ok((mime, bytes, text)) => {

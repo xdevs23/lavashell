@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The failures that the tests of this crate return in place of a panic.
 
-use crate::{ControlError, Error, LayerLayoutError};
+use crate::ControlError;
+use crate::Error;
+use crate::LayerLayoutError;
 use lavashell_core::units::NumberError;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
-use std::array::TryFromSliceError;
 use std::env::VarError;
 use std::num::TryFromIntError;
-use std::process::ExitStatus;
 use std::{io, sync::mpsc};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TestError {
     #[error("the host failed")]
     Host(#[from] Error),
-    #[error("the runtime failed")]
-    Runtime(#[from] lavashell_runtime::Error),
     #[error("the renderer failed")]
     Renderer(#[from] lavashell_renderer::Error),
     #[error("the event loop failed")]
@@ -30,58 +28,34 @@ pub(crate) enum TestError {
     ObjectPath(#[from] zbus::zvariant::Error),
     #[error("the address of the session bus is not set")]
     BusAddress(#[from] VarError),
-    #[error("the dbus-daemon could not start")]
-    StartBusDaemon(#[source] io::Error),
-    #[error("the address of the private bus could not be read")]
-    ReadBusAddress(#[source] io::Error),
-    #[error("the dbus-daemon printed no address")]
-    NoBusAddress,
     #[error("the path of the test executable is unknown")]
     CurrentExecutable(#[source] io::Error),
-    #[error("the test executable could not be opened")]
-    OpenExecutable(#[source] io::Error),
-    #[error("the child test could not run")]
-    RunChildTest(#[source] io::Error),
-    #[error("the child test ended with {0}")]
-    ChildTestFailed(ExitStatus),
-    #[error("the bus closed before the change arrived")]
-    BusClosed,
-    #[error("the connection of the bus has no unique name")]
-    NoUniqueName,
     #[error("the fixture received no message")]
     Receive(#[from] mpsc::RecvError),
-    #[error("the bridge stopped reporting events before the awaited one arrived")]
-    EventsClosed,
-    #[error("the bridge sent another event than the awaited one")]
-    UnexpectedEvent,
-    #[error("the portal watch closed its updates before the test ended")]
-    UpdatesClosed,
-    #[error("the portal watch ended before the test did")]
-    WatchEnded,
-    #[error("the portal watch failed before the test ended")]
-    WatchFailed(#[source] zbus::Error),
     #[error("a number could not be converted")]
     Number(#[from] NumberError),
     #[error("a number does not fit its type")]
     Narrowing(#[from] TryFromIntError),
-    #[error("a protocol word is shorter than four bytes")]
-    ShortWord(#[from] TryFromSliceError),
-    #[error("the requests of the client could not be read")]
-    ReadProtocol(#[source] io::Error),
     #[error("the socket pair could not be created")]
     CreateSocketPair(#[source] io::Error),
-    #[error("the socket could not be made non-blocking")]
-    ConfigureSocket(#[source] io::Error),
-    #[error("the wire has no layer")]
-    NoLayer,
     #[error("a request for a native surface does not fit the protocol")]
     Control(#[from] ControlError),
     #[error("the layout of a layer does not fit the protocol")]
     LayerLayout(#[from] LayerLayoutError),
     #[error("the pipe could not be created")]
     CreatePipe(#[source] rustix::io::Errno),
-    #[error("the file is not a pipe")]
-    NotPipe,
+    #[error(transparent)]
+    AccessibilityTest(#[from] crate::accessibility::test_error::AccessibilityTestError),
+    #[error(transparent)]
+    LayerTest(#[from] crate::app::layer::test_error::LayerTestError),
+    #[error(transparent)]
+    PipesTest(#[from] crate::clipboard::pipes::test_error::PipesTestError),
+    #[error(transparent)]
+    PreferencesTest(#[from] crate::preferences::test_error::PreferencesTestError),
+    #[error(transparent)]
+    TestBus(#[from] crate::test_bus::test_error::TestBusError),
+    #[error(transparent)]
+    WireTest(#[from] crate::app::wire_messages::test_error::WireTestError),
 }
 
 impl<T> From<InsertError<T>> for TestError {

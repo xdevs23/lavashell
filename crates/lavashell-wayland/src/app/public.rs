@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::App;
+use crate::Wayland;
 use crate::logical::{whole_size, window_size};
-use crate::{RunError, SetupError, Wayland};
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
@@ -13,12 +13,21 @@ use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{Fonts, Painter, RendererSetup};
-use lavashell_runtime::{
-    ActionQueue, Clipboard, ClipboardTransfers, DragGesture, DragRequest, Drags, DropEvent,
-    HostKey, KeyboardFocus, LayerSurface, LockConfiguration, Observers, RunEnd, RuntimeSetup,
-    SessionLock, SurfaceSetup, ViewActions, Watches, Window,
-};
+use lavashell_runtime::clipboard::{Clipboard, ClipboardTransfers};
+use lavashell_runtime::drag::{DragGesture, DragRequest, Drags, DropEvent};
+use lavashell_runtime::layer_surface::LayerSurface;
+use lavashell_runtime::observers::{HostKey, KeyboardFocus, Observers};
+use lavashell_runtime::run::{RuntimeSetup, SurfaceSetup, drive};
+use lavashell_runtime::run_end::RunEnd;
+use lavashell_runtime::session_lock::{LockConfiguration, SessionLock};
+use lavashell_runtime::view_actions::{ActionQueue, ViewActions};
+use lavashell_runtime::watches::Watches;
+use lavashell_runtime::window::Window;
 use std::time::{Duration, Instant};
+
+mod error;
+
+pub use error::{RunError, SetupError};
 
 impl App {
     /// Sets `filter`, which receives each keyboard input event of a surface after its keys are resolved and before
@@ -321,7 +330,7 @@ impl App {
         if self.surfaces.is_empty() && self.session_lock.is_none() && self.output_layers.is_none() {
             return Err(RunError::Setup(SetupError::NoSurfaces));
         }
-        lavashell_runtime::drive::<Wayland>(self.into_setup(Instant::now())).map_err(RunError::Run)
+        drive::<Wayland>(self.into_setup(Instant::now())).map_err(RunError::Run)
     }
 
     fn into_setup(self, start: Instant) -> RuntimeSetup {

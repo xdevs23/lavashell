@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::log_failures;
-use crate::test_error::TestError;
+use super::test_error::FailuresTestError;
+use crate::test_error::TestResult;
 use lavashell_core::prelude::*;
 use lavashell_test_fixtures::{FrameFailure, NoText};
 use log::SetLoggerError;
@@ -25,7 +26,7 @@ impl log::Log for Recorder {
     fn flush(&self) {}
 }
 
-fn recorded(run: impl FnOnce()) -> Result<Vec<(log::Level, String)>, TestError> {
+fn recorded(run: impl FnOnce()) -> TestResult<Vec<(log::Level, String)>> {
     static INSTALLED: OnceLock<Result<(), SetLoggerError>> = OnceLock::new();
     INSTALLED
         .get_or_init(|| {
@@ -35,14 +36,14 @@ fn recorded(run: impl FnOnce()) -> Result<Vec<(log::Level, String)>, TestError> 
         })
         .as_ref()
         .copied()
-        .map_err(TestError::Logger)?;
+        .map_err(FailuresTestError::Logger)?;
     RECORDS.with_borrow_mut(Vec::clear);
     run();
     Ok(RECORDS.take())
 }
 
 #[test]
-fn each_failed_component_is_logged_as_an_error_with_its_causes() -> Result<(), TestError> {
+fn each_failed_component_is_logged_as_an_error_with_its_causes() -> TestResult {
     let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("forecast", Modifier::new().tag("forecast"), |ui| {
             ui.fail(NumberError::OutOfRange);

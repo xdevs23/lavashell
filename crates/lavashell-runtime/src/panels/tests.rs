@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::test_error::PanelsTestError;
 use super::*;
-use crate::test_error::{TestError, TestResult};
+use crate::test_error::TestResult;
 use lavashell_core::geometry::Viewport;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::{Density, Dp, DpExt, FiniteDp, NonNegativeDp};
@@ -29,17 +30,17 @@ fn open(records: &mut PanelRecords, options: PanelOptions, view: &mut View) -> T
     Ok(())
 }
 
-fn panel(records: &PanelRecords) -> Result<&Panel, TestError> {
-    records.get(PANEL).ok_or(TestError::NoPanel)
+fn panel(records: &PanelRecords) -> Result<&Panel, PanelsTestError> {
+    records.get(PANEL).ok_or(PanelsTestError::NoPanel)
 }
 
 /// The requests that a commit sent now applies, with the geometry of the panel in the surface state.
-fn requests(records: &PanelRecords) -> Result<PanelRequests, TestError> {
+fn requests(records: &PanelRecords) -> Result<PanelRequests, PanelsTestError> {
     let mut state = SurfaceState::default();
     if let Some(change) = records.geometry_change(PANEL) {
         state.apply(change);
     }
-    records.requests(PANEL, &state).ok_or(TestError::NoPanel)
+    (records.requests(PANEL, &state)).ok_or(PanelsTestError::NoPanel)
 }
 
 /// Records a shown frame with content of `size` that accepts input, and applies the requests sent before it.

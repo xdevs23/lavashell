@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, measure_content};
+use crate::surface_records::measure_content;
+use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins, PanelGeometry,
@@ -11,8 +12,10 @@ use lavashell_platform::KeyboardMode;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+mod error;
 mod per_output;
 
+pub use error::Error;
 pub use per_output::PanelsPerOutput;
 
 /// When a panel receives the keyboard focus.
@@ -142,7 +145,7 @@ impl Panel {
         options: PanelOptions,
         view: &mut View,
         text: &mut impl TextMeasurer,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ViewError> {
         let layout = options.current_layout();
         let content = measure_panel_content(view, layout, text)?;
         Ok(Self {
@@ -260,7 +263,7 @@ impl PanelRecords {
         surface: SurfaceId,
         view: &mut View,
         text: &mut impl TextMeasurer,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ViewError> {
         if let Some(panel) = self.records.get_mut(&surface) {
             let layout = panel.options.current_layout();
             if layout.follows_content() {
@@ -345,10 +348,12 @@ fn measure_panel_content(
     view: &mut View,
     layout: LayerLayout,
     text: &mut impl TextMeasurer,
-) -> Result<ContentSize, Error> {
+) -> Result<ContentSize, ViewError> {
     let size = measure_content(view, layout.content_proposal(), text)?;
-    ContentSize::try_from(size).map_err(Error::PanelContent)
+    Ok(ContentSize::try_from(size).map_err(Error::Content)?)
 }
 
+#[cfg(test)]
+pub(crate) mod test_error;
 #[cfg(test)]
 mod tests;

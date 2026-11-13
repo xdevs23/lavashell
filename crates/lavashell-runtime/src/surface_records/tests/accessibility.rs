@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::{AccessibilityFailure, InputRouter, RoutedInput};
+use crate::accessibility::test_error::AccessibilityTestError;
+use crate::input::{InputRouter, RoutedInput};
+use crate::surface_records::AccessibilityFailure;
 use accesskit::{Action, Node, NodeId as NativeId, Role as NativeRole, TreeId, TreeUpdate};
 use lavashell_core::accessibility::{
     AccessibilityAction, AccessibleValue, ActionError, ActionKind, Role, Semantics,
@@ -20,7 +22,7 @@ fn open_button(
     records: &mut SurfaceRecords,
     name: &State<String>,
     activate: impl FnMut(AccessibilityAction) -> Result<(), ActionError> + Clone + 'static,
-) -> Result<SurfaceId, TestError> {
+) -> TestResult<SurfaceId> {
     let name = name.clone();
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let button = Semantics {
@@ -33,15 +35,12 @@ fn open_button(
             .on_accessibility_action(ActionKind::Activate, activate.clone());
         ui.spacer(100.dp(), 20.dp(), modifier);
     });
-    open_configured(records, view)
+    Ok(open_configured(records, view)?)
 }
 
 /// Opens a surface, which the host configured, whose view shows a progress indicator with the value held by
 /// `progress`. The value changes the semantics of the view and leaves its drawing unchanged.
-fn open_progress(
-    records: &mut SurfaceRecords,
-    progress: &State<f64>,
-) -> Result<SurfaceId, TestError> {
+fn open_progress(records: &mut SurfaceRecords, progress: &State<f64>) -> TestResult<SurfaceId> {
     let progress = progress.clone();
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let progress = progress.clone();
@@ -57,10 +56,10 @@ fn open_progress(
             });
         ui.spacer(100.dp(), 20.dp(), modifier);
     });
-    open_configured(records, view)
+    Ok(open_configured(records, view)?)
 }
 
-fn open_configured(records: &mut SurfaceRecords, view: View) -> Result<SurfaceId, TestError> {
+fn open_configured(records: &mut SurfaceRecords, view: View) -> Result<SurfaceId, ViewError> {
     let size = Size::new(100.dp(), 20.dp());
     let surface = records.open(view, size, Density::ONE, None, "Window".into())?;
     assert_eq!(records.handle(surface, configure(None)), None);
@@ -81,21 +80,21 @@ fn show(shown: &Cell<u32>) -> impl FnMut(&mut View, Viewport) -> Result<(), Fram
     }
 }
 
-fn fail_to_show(_: &mut View, _: Viewport) -> Result<(), TestError> {
-    Err(TestError::NotShown)
+fn fail_to_show(_: &mut View, _: Viewport) -> Result<(), AccessibilityTestError> {
+    Err(AccessibilityTestError::NotShown)
 }
 
 /// The tree that `request` publishes for `surface`.
 fn published_tree(
     request: Option<AccessibilityRequest>,
     surface: SurfaceId,
-) -> Result<Box<TreeUpdate>, TestError> {
+) -> Result<Box<TreeUpdate>, AccessibilityTestError> {
     match request {
         Some(AccessibilityRequest::Publish {
             surface: published,
             tree,
         }) if published == surface => Ok(tree),
-        _ => Err(TestError::NotPublished),
+        _ => Err(AccessibilityTestError::NotPublished),
     }
 }
 
@@ -103,23 +102,23 @@ fn published_tree(
 fn only_published_tree(
     requests: Vec<AccessibilityRequest>,
     surface: SurfaceId,
-) -> Result<Box<TreeUpdate>, TestError> {
+) -> Result<Box<TreeUpdate>, AccessibilityTestError> {
     assert_eq!(requests.len(), 1);
     published_tree(requests.into_iter().next(), surface)
 }
 
-fn button(tree: &TreeUpdate) -> Result<(NativeId, &Node), TestError> {
+fn button(tree: &TreeUpdate) -> Result<(NativeId, &Node), AccessibilityTestError> {
     (tree.nodes.iter())
         .find(|(_, node)| node.role() == NativeRole::Button)
         .map(|(id, node)| (*id, node))
-        .ok_or(TestError::NoButton)
+        .ok_or(AccessibilityTestError::NoButton)
 }
 
 /// Activates the accessibility of `surface` and returns the tree that the activation publishes.
 fn activate_accessibility(
     records: &mut SurfaceRecords,
     surface: SurfaceId,
-) -> Result<Box<TreeUpdate>, TestError> {
+) -> Result<Box<TreeUpdate>, AccessibilityTestError> {
     let activated = AccessibilityEvent::Activate(surface);
     let outcome = records.handle_accessibility(activated, show(&Cell::new(0)));
     assert!(outcome.failures.is_empty());
@@ -194,7 +193,7 @@ fn a_frame_that_fails_to_show_is_returned_next_to_the_whole_tree() -> TestResult
     let outcome = records.handle_accessibility(AccessibilityEvent::Activate(surface), fail_to_show);
     assert!(matches!(
         outcome.failures.as_slice(),
-        [AccessibilityFailure::Show(TestError::NotShown)]
+        [AccessibilityFailure::Show(AccessibilityTestError::NotShown)]
     ));
     let _tree = published_tree(outcome.publish, surface)?;
     Ok(())

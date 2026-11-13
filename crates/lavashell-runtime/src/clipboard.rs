@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod error;
 mod text;
 
 use crate::pipe_transfers::{PipeTransfers, ReadCompletion, Transfer};
-use crate::{Error, SurfaceRecords, Watches};
+use crate::surface_records::SurfaceRecords;
+use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{Cancellation, ReceivedData, TransferData};
 use lavashell_platform::{
@@ -15,6 +17,8 @@ use std::io;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
+pub use error::Error;
+
 pub(crate) use text::TextClipboard;
 
 type SetCompletion = Box<dyn FnOnce(Result<(), Error>)>;
@@ -24,7 +28,7 @@ enum Request {
     Read {
         surface: SurfaceId,
         formats: Vec<String>,
-        done: ReadCompletion,
+        done: ReadCompletion<Error>,
     },
 }
 
@@ -47,7 +51,7 @@ struct Selection {
 struct PendingRead {
     surface: SurfaceId,
     format: FormatId,
-    done: ReadCompletion,
+    done: ReadCompletion<Error>,
 }
 
 struct State {
@@ -59,7 +63,7 @@ struct State {
     next_selection_id: u64,
     reads: BTreeMap<ReceiveId, PendingRead>,
     next_receive_id: u64,
-    pipes: PipeTransfers,
+    pipes: PipeTransfers<Error>,
     requests: Vec<ClipboardRequest>,
 }
 
@@ -67,7 +71,7 @@ impl State {
     /// The first of `formats` found in the selection offered by the host.
     fn offered_format(&self, formats: &[String]) -> Result<FormatId, Error> {
         if self.offered.is_empty() {
-            return Err(Error::ClipboardEmpty);
+            return Err(Error::Empty);
         }
         (formats.iter())
             .find_map(|format| (self.offered.iter()).find(|offered| offered.0 == *format))
@@ -271,7 +275,7 @@ impl ClipboardTransfers {
     }
 
     /// Asks the platform to read the selection in the first of `formats` offered by the host.
-    fn receive(&self, surface: SurfaceId, formats: &[String], done: ReadCompletion) {
+    fn receive(&self, surface: SurfaceId, formats: &[String], done: ReadCompletion<Error>) {
         let mut state = self.0.borrow_mut();
         let started = state.offered_format(formats).and_then(|format| {
             let id = state.new_receive_id()?;
@@ -352,7 +356,7 @@ impl ClipboardTransfers {
 /// The failure of a read that the platform did not start.
 fn read_error(refusal: ReceiveRefusal) -> Error {
     match refusal {
-        ReceiveRefusal::Empty => Error::ClipboardEmpty,
+        ReceiveRefusal::Empty => Error::Empty,
         ReceiveRefusal::NoFormat => Error::NoRequestedFormat,
         ReceiveRefusal::Pipe(source) => Error::CreatePipe(source),
     }

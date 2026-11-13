@@ -2,8 +2,8 @@
 use crate::builder_actor::BuilderActor;
 use crate::choreographer_actor::{ChoreographerActor, ChoreographerInput};
 use crate::scene_item::SceneItem;
+use crate::scheduler::FrameSequence;
 use crate::surface_slots::{BuiltSurface, SurfaceSlots};
-use crate::{Error, FrameSequence};
 use lavashell_actor::{Closed, Handle, Sender, mailbox, spawn};
 use lavashell_core::error::message_chain;
 use lavashell_core::scene::tree::{ApplyError, Change};
@@ -13,6 +13,10 @@ use lavashell_core::view::View;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
+
+mod error;
+
+pub use error::Error;
 
 /// What the scene builder reports about the scene for a surface.
 #[derive(Clone, Copy, Debug)]

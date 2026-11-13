@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
     hyprland_focus_grab_v1::{self, HyprlandFocusGrabV1 as Grab},
@@ -12,6 +11,10 @@ use sctk::reexports::client::protocol::wl_surface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop};
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
+
+mod error;
+
+pub use error::FocusGrabError;
 
 /// The focus grabs that the compositor made for the layers.
 pub(crate) struct Grabs {
@@ -60,10 +63,10 @@ impl Grabs {
         request: FocusGrabRequest,
         qh: &QueueHandle<Translator>,
         native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), FocusGrabError> {
         match request {
             FocusGrabRequest::Acquire(surface) => {
-                let wl = native(surface).ok_or(Error::FocusGrabWithoutSurface(surface))?;
+                let wl = native(surface).ok_or(FocusGrabError::WithoutSurface(surface))?;
                 self.acquire(surface, wl, qh);
             }
             FocusGrabRequest::Release(surface) => self.release(surface),
@@ -105,7 +108,10 @@ fn destroy(grab: &Grab) {
 impl Translator {
     /// Executes `request` of the runtime on the focus grabs. On a compositor without focus grabs, every request is
     /// ignored.
-    pub(crate) fn execute_focus_grab(&mut self, request: FocusGrabRequest) -> Result<(), Error> {
+    pub(crate) fn execute_focus_grab(
+        &mut self,
+        request: FocusGrabRequest,
+    ) -> Result<(), FocusGrabError> {
         let Some(grabs) = &mut self.focus_grabs else {
             return Ok(());
         };

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
-use crate::watches::{AfterReady, Watches};
+use crate::watches::{self, AfterReady, Watches};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{Readiness, WatchId};
@@ -65,7 +64,7 @@ impl ViewActions {
         source: OwnedFd,
         surface: SurfaceId,
         apply: impl FnOnce(&mut View) + 'static,
-    ) -> Result<(), Error> {
+    ) -> Result<(), watches::Error> {
         let mut queue = self.0.borrow_mut();
         if !queue.accepts(surface) {
             return Ok(());

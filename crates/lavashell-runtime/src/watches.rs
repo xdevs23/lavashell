@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
 use lavashell_core::transfer::Cancellation;
 use lavashell_platform::{Readiness, WatchEvent, WatchId, WatchRequest};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
+
+mod error;
+
+pub use error::Error;
 
 /// Whether a watch goes on after its descriptor was reported as ready.
 pub(crate) enum AfterReady {

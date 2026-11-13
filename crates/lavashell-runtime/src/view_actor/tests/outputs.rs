@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::{Error, LayerSurface, LockConfiguration, PanelsPerOutput, SessionLock};
+use crate::layer_surface::LayerSurface;
+use crate::panels::PanelsPerOutput;
+use crate::session_lock::{self, LockConfiguration, SessionLock};
 use lavashell_core::output::MonitorInfo;
 use lavashell_platform::{LockEvent, OutputEvent, OutputId};
 
@@ -168,7 +170,9 @@ fn a_host_that_ends_the_lock_ends_the_views_with_an_error() -> TestResult {
     let ended = views.step([lock(LockEvent::Finished)]);
     assert!(matches!(
         ended,
-        Err(TestError::View(ViewError::Runtime(Error::SessionLockEnded)))
+        Err(TestError::View(ViewError::SessionLock(
+            session_lock::Error::Ended
+        )))
     ));
     Ok(())
 }
@@ -178,8 +182,8 @@ fn a_session_lock_cannot_start_on_a_host_without_outputs() {
     let started = Views::start(locking(&SessionLock::new()), host([]));
     assert!(matches!(
         started,
-        Err(TestError::Start(StartError::View(ViewError::Runtime(
-            Error::SessionLockWithoutOutput
+        Err(TestError::Start(StartError::View(ViewError::SessionLock(
+            session_lock::Error::WithoutOutput
         ))))
     ));
 }

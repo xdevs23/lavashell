@@ -7,6 +7,8 @@ mod ids;
 mod mapping;
 mod properties;
 #[cfg(test)]
+pub(crate) mod test_error;
+#[cfg(test)]
 mod tests;
 mod text;
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
+use crate::ConnectionError;
 use crate::Error;
 use lavashell_actor::{Closed, Intake, Receiver};
 use lavashell_platform::PlatformRequest;
@@ -10,6 +11,10 @@ use sctk::reexports::client::backend::WaylandError;
 use smithay_client_toolkit as sctk;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd};
+
+mod error;
+
+pub use error::RequestsError;
 
 /// The intake of requests from the runtime. The intake closes while the socket of the connection cannot accept more
 /// data.
@@ -63,13 +68,13 @@ impl Translator {
     pub(super) fn execute(&mut self, request: PlatformRequest) -> Result<(), Error> {
         match request {
             PlatformRequest::Surface(request) => self.execute_surface(request),
-            PlatformRequest::Panel(request) => self.execute_panel(request),
+            PlatformRequest::Panel(request) => self.execute_panel(request).map_err(Error::from),
             PlatformRequest::Input(request) => {
                 self.execute_input(request);
                 Ok(())
             }
             PlatformRequest::WindowControl(request) => self.execute_window_control(request),
-            PlatformRequest::Watch(request) => self.execute_watch(request),
+            PlatformRequest::Watch(request) => self.execute_watch(request).map_err(Error::from),
             PlatformRequest::Clipboard(request) => {
                 self.execute_clipboard(request);
                 Ok(())
@@ -82,8 +87,10 @@ impl Translator {
                 self.execute_drag_source(request);
                 Ok(())
             }
-            PlatformRequest::Lock(request) => self.execute_lock(request),
-            PlatformRequest::FocusGrab(request) => self.execute_focus_grab(request),
+            PlatformRequest::Lock(request) => self.execute_lock(request).map_err(Error::from),
+            PlatformRequest::FocusGrab(request) => {
+                self.execute_focus_grab(request).map_err(Error::from)
+            }
             PlatformRequest::Accessibility(request) => {
                 self.execute_accessibility(request);
                 Ok(())
@@ -95,11 +102,12 @@ impl Translator {
     /// requests of the runtime wait in their mailbox, and they are run again once the socket accepted the rest.
     pub(super) fn flush(&mut self) -> Result<(), Error> {
         match self.connection.flush() {
-            Ok(()) => self.requests.open(&self.loop_handle),
+            Ok(()) => self.requests.open(&self.loop_handle).map_err(Error::from),
             Err(WaylandError::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => self
                 .requests
-                .close(&self.loop_handle, self.connection.as_fd()),
-            Err(error) => Err(Error::Flush(error)),
+                .close(&self.loop_handle, self.connection.as_fd())
+                .map_err(Error::from),
+            Err(error) => Err(Error::from(ConnectionError::Flush(error))),
         }
     }
 }
@@ -118,33 +126,33 @@ impl Requests {
         &mut self,
         handle: &LoopHandle<'static, D>,
         socket: BorrowedFd<'_>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), RequestsError> {
         if self.writable.is_some() {
             return Ok(());
         }
         self.intake.close();
-        handle.disable(&self.source).map_err(Error::PauseRequests)?;
+        (handle.disable(&self.source)).map_err(RequestsError::PauseRequests)?;
         // The event loop watches the socket for reading already, and a file descriptor joins it only once.
         let duplicate = socket
             .try_clone_to_owned()
-            .map_err(Error::DuplicateSocket)?;
+            .map_err(RequestsError::DuplicateSocket)?;
         let writable = Generic::new(duplicate, Interest::WRITE, Mode::Level);
         let token = handle
             .insert_source(writable, |_readiness, _socket, _data| {
                 Ok(PostAction::Continue)
             })
-            .map_err(|failure| Error::WatchWritable(failure.error))?;
+            .map_err(|failure| RequestsError::WatchWritable(failure.error))?;
         self.writable = Some(token);
         Ok(())
     }
 
     /// Opens the intake and runs requests again, once the socket accepted everything written before.
-    fn open<D>(&mut self, handle: &LoopHandle<'static, D>) -> Result<(), Error> {
+    fn open<D>(&mut self, handle: &LoopHandle<'static, D>) -> Result<(), RequestsError> {
         let Some(writable) = self.writable.take() else {
             return Ok(());
         };
         handle.remove(writable);
-        handle.enable(&self.source).map_err(Error::ResumeRequests)?;
+        (handle.enable(&self.source)).map_err(RequestsError::ResumeRequests)?;
         self.intake.open();
         Ok(())
     }

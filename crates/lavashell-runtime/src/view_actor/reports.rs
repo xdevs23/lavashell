@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
-use crate::{
-    BuilderReport, RendererInput, RendererOutput, SchedulerInput, SchedulerOutput, Stopped,
-    ViewError,
-};
+use crate::renderer_actor::{RendererInput, RendererOutput};
+use crate::scene_pipeline::BuilderReport;
+use crate::scheduler::{SchedulerInput, SchedulerOutput};
+use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{PlatformRequest, SurfaceRequest};

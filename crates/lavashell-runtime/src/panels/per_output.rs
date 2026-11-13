@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::SurfaceRecords;
+use crate::surface_records::SurfaceRecords;
 use lavashell_core::output::MonitorInfo;
 use lavashell_core::reactive::State;
 use lavashell_core::surface::SurfaceId;

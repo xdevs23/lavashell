@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::Error;
 use crate::test_error::TestError;
 use icu_locale_core::langid;
 use lavashell_actor::mailbox;
@@ -23,7 +24,7 @@ fn the_languages_of_the_user_reach_the_view_before_the_desktop_reports_a_prefere
     let (sender, view) = mailbox::<PlatformEvent>();
     let mut sources = Vec::new();
     let link = ViewLink::new(sender.outlet(|event| event));
-    install(&event_loop.handle(), &mut sources, &link)?;
+    install(&event_loop.handle(), &mut sources, &link).map_err(Error::from)?;
     assert!(matches!(
         view.take_arrived()?[..],
         [PlatformEvent::Settings(SettingsEvent::Locales(_))]

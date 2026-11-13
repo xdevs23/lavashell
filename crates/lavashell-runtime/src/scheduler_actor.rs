@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::scheduler::FrameScheduler;
-use crate::{Error, Redraw, SchedulerInput, SchedulerOutput};
+use crate::scheduler::{FrameScheduler, Redraw, SchedulerInput, SchedulerOutput};
 use lavashell_actor::{Actor, Closed, Effect, Flow, Handle, Merge, Outlet, Sender, mailbox, spawn};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::TimingEvent;
 use std::convert::Infallible;
 use std::time::Instant;
+
+mod error;
+
+pub use error::Error;
 
 /// Receives each output of the frame scheduler. The scheduler stops once it fails.
 pub type SchedulerObserver = Box<dyn FnMut(SchedulerOutput) -> Result<(), Closed> + Send>;

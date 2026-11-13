@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{ViewActor, send_request};
+use crate::cpu_time::CpuStamp;
 use crate::failures::log_failures;
-use crate::{
-    ActionBatch, CpuStamp, FrameKind, FrameSequence, PanelContent, PanelRecords, PanelRequests,
-    Rendered, RendererInput, SceneSink, SchedulerInput, ShapeGeometry, Stopped, SurfaceRecords,
-    SurfaceShape, ViewError, ViewState, WindowShape,
-};
+use crate::panels::{PanelContent, PanelRecords, PanelRequests};
+use crate::renderer_actor::{Rendered, RendererInput};
+use crate::scene_pipeline::SceneSink;
+use crate::scheduler::{FrameKind, FrameSequence, SchedulerInput, ViewState};
+use crate::shape::{SurfaceShape, WindowShape};
+use crate::shape_geometry::ShapeGeometry;
+use crate::surface_records::SurfaceRecords;
+use crate::view_actions::ActionBatch;
+use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
 use lavashell_core::geometry::Viewport;

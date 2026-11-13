@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::ConnectionError;
+use crate::Error;
+use crate::app::wire_messages::test_error::WireTestError;
 use crate::app::wire_messages::{messages, requests};
 use crate::test_error::TestError;
 use focus_wire::{Wire, top_bar};
@@ -31,8 +34,10 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
 -> Result<(), TestError> {
     let (socket, mut peer) = UnixStream::pair().map_err(TestError::CreateSocketPair)?;
     peer.set_nonblocking(true)
-        .map_err(TestError::ConfigureSocket)?;
-    let connection = Connection::from_socket(socket).map_err(Error::Connect)?;
+        .map_err(WireTestError::ConfigureSocket)?;
+    let connection = Connection::from_socket(socket)
+        .map_err(ConnectionError::Connect)
+        .map_err(Error::from)?;
     let queue = connection.new_event_queue::<Client>();
     let qh = queue.handle();
     let registry = connection.display().get_registry(&qh, ());
@@ -47,7 +52,10 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
         &qh,
         (),
     );
-    connection.flush().map_err(Error::Flush)?;
+    connection
+        .flush()
+        .map_err(ConnectionError::Flush)
+        .map_err(Error::from)?;
     assert!(!messages(&mut peer)?.is_empty());
     let layout = LayerLayout {
         horizontal: AxisPlacement::Start(Extent::dp(321.dp())?),
@@ -63,7 +71,10 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
     let empty = ContentSize::try_from(Size::ZERO)?;
     let initial = ProtocolLayout::new(PanelGeometry::of(layout, empty))?;
     apply(&layer, None, initial);
-    connection.flush().map_err(Error::Flush)?;
+    connection
+        .flush()
+        .map_err(ConnectionError::Flush)
+        .map_err(Error::from)?;
     assert_eq!(
         requests(&mut peer, layer.id().protocol_id())?,
         vec![
@@ -82,7 +93,10 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
     };
     let moved = ProtocolLayout::new(PanelGeometry::of(moved, empty))?;
     apply(&layer, Some(initial), moved);
-    connection.flush().map_err(Error::Flush)?;
+    connection
+        .flush()
+        .map_err(ConnectionError::Flush)
+        .map_err(Error::from)?;
     assert_eq!(
         requests(&mut peer, layer.id().protocol_id())?,
         vec![(3, vec![48, 0, 0, (-8_i32).cast_unsigned()])]
@@ -99,7 +113,10 @@ fn private_wire_keeps_margin_updates_separate_and_replays_geometry_for_a_new_sur
         (),
     );
     apply(&replacement, None, moved);
-    connection.flush().map_err(Error::Flush)?;
+    connection
+        .flush()
+        .map_err(ConnectionError::Flush)
+        .map_err(Error::from)?;
     assert_eq!(
         requests(&mut peer, replacement.id().protocol_id())?,
         vec![
@@ -123,7 +140,10 @@ fn private_wire_resizes_and_reserves_a_layer_again_for_a_new_content_height()
     let role = layer.proxy.id().protocol_id();
     for sent in [vec![(0, vec![0, 40]), (2, vec![40])], Vec::new()] {
         wire.send_state(&state)?;
-        wire.connection.flush().map_err(Error::Flush)?;
+        wire.connection
+            .flush()
+            .map_err(ConnectionError::Flush)
+            .map_err(Error::from)?;
         assert_eq!(requests(&mut wire.peer, role)?, sent);
     }
     Ok(())

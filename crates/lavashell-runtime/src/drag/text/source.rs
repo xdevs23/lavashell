@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{DragGesture, DragRequest};
+use crate::drag::{DragGesture, DragRequest};
 use lavashell_core::prelude::{NodeId, TextDropTarget, TextSelectionSource, View};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragAction, DragActions, TransferData, TransferId};

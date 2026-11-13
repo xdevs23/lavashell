@@ -11,7 +11,7 @@ use lavashell_core::scene::tree::{ApplyError, Change, SceneNodeId};
 use lavashell_core::ui::Modifier;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::View;
-use lavashell_runtime::FrameSequence;
+use lavashell_runtime::scheduler::FrameSequence;
 use lavashell_test_fixtures::NoText;
 use std::sync::Arc;
 use std::time::Duration;
@@ -75,7 +75,9 @@ fn every_frame_after_the_scene_builder_failed_returns_its_failure() -> Result<()
     let stopped = overlay.scene.stop().err();
     assert!(matches!(
         stopped.as_deref(),
-        Some(lavashell_runtime::Error::RunBuilder(JoinError::Failed(_)))
+        Some(lavashell_runtime::scene_pipeline::Error::RunBuilder(
+            JoinError::Failed(_)
+        ))
     ));
     let mut view = square();
     for _attempt in 0..2 {

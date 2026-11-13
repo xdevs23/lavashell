@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::{HostKey, KeyboardFocus};
+use crate::observers::{HostKey, KeyboardFocus};
 use lavashell_core::geometry::Point;
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::view::InputEvent;

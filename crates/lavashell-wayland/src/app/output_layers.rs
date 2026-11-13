@@ -4,7 +4,8 @@ use crate::SetupError;
 use lavashell_core::output::MonitorInfo;
 use lavashell_core::reactive::State;
 use lavashell_core::view::View;
-use lavashell_runtime::{LayerSurface, PanelsPerOutput};
+use lavashell_runtime::layer_surface::LayerSurface;
+use lavashell_runtime::panels::PanelsPerOutput;
 
 impl App {
     /// Registers `factory`, which runs once for each output that appears and returns the layer surfaces to create on

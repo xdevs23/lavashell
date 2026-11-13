@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::SurfaceRecords;
 use crate::preference_reader::PreferenceReader;
-use crate::test_error::{TestError, TestResult};
+use crate::surface_records::SurfaceRecords;
+use crate::surface_records::test_error::SurfaceRecordsTestError;
+use crate::test_error::TestResult;
+use crate::view_actor::ViewError;
 use icu_locale_core::langid;
 use lavashell_core::geometry::Size;
 use lavashell_core::preferences::{Appearance, ContrastPreference, PreferenceValues, TextScaling};
@@ -11,7 +13,7 @@ use lavashell_core::units::{Density, DpExt, SpExt};
 use lavashell_platform::SurfaceEvent;
 
 /// Opens a surface whose view records the preferences read by that view.
-fn open_reader(records: &mut SurfaceRecords) -> Result<(SurfaceId, PreferenceReader), TestError> {
+fn open_reader(records: &mut SurfaceRecords) -> Result<(SurfaceId, PreferenceReader), ViewError> {
     let (view, reader) = PreferenceReader::view(lavashell_test_fixtures::facts());
     let size = Size::new(100.dp(), 50.dp());
     Ok((
@@ -23,13 +25,16 @@ fn open_reader(records: &mut SurfaceRecords) -> Result<(SurfaceId, PreferenceRea
 fn read(
     records: &mut SurfaceRecords,
     (surface, reader): &(SurfaceId, PreferenceReader),
-) -> Result<PreferenceValues, TestError> {
-    let view = records.open_view_mut(*surface).ok_or(TestError::NotOpen)?;
+) -> TestResult<PreferenceValues> {
+    let view = (records.open_view_mut(*surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     Ok(reader.values(view)?)
 }
 
-fn platform(records: &SurfaceRecords, surface: SurfaceId) -> Result<PlatformFacts, TestError> {
-    let view = records.open_view(surface).ok_or(TestError::NotOpen)?;
+fn platform(
+    records: &SurfaceRecords,
+    surface: SurfaceId,
+) -> Result<PlatformFacts, SurfaceRecordsTestError> {
+    let view = (records.open_view(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     Ok(view.platform())
 }
 
@@ -129,7 +134,7 @@ fn a_closed_surface_gets_no_settings() -> TestResult {
     let (surface, _reader) = open_reader(&mut records)?;
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     records.change_settings(SettingsEvent::KeyRepeat(None));
-    let view = records.view_mut(surface).ok_or(TestError::NotOpen)?;
+    let view = (records.view_mut(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     assert_eq!(view.platform(), lavashell_test_fixtures::facts());
     Ok(())
 }
