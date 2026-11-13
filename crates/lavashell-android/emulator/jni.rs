@@ -8,7 +8,7 @@ use ::jni::objects::JLongArray;
 use ::jni::objects::{JClass, JIntArray, JObject};
 use ::jni::sys::{jboolean, jfloat, jint, jlong};
 use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
-use lavashell_android::{BufferSizes, StreamFormat, surface_of_window};
+use lavashell_android::{BufferSizes, StreamFormat, motion_event_of, surface_of_window};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::{ForeignFormat, skia};
@@ -61,9 +61,8 @@ pub fn create_surface<'local>(
     handle: jlong,
 ) -> JObject<'local> {
     export(env, |env| {
-        with_round_trip(handle, |round_trip| {
-            surface_of_window(env, round_trip.producer_window()).map_err(NativeMethodError::Surface)
-        })
+        let window = with_round_trip(handle, |round_trip| round_trip.producer_window())?;
+        surface_of_window(env, &window).map_err(NativeMethodError::Surface)
     })
 }
 
@@ -108,7 +107,7 @@ pub fn read_drawn_size<'local>(
     handle: jlong,
 ) -> JLongArray<'local> {
     export(env, |env| {
-        let Some(size) = with_round_trip(handle, |round_trip| Ok(round_trip.drawn_size()))? else {
+        let Some(size) = with_round_trip(handle, |round_trip| round_trip.drawn_size())? else {
             return Ok(JLongArray::default());
         };
         to_jvm_long_array(env, &[size.width.into(), size.height.into()])
@@ -120,6 +119,25 @@ pub fn count_wakes<'local>(env: EnvUnowned<'local>, _: JClass<'local>, handle: j
     export(env, |_| {
         with_round_trip(handle, |round_trip| Ok(round_trip.wakes().into()))
     })
+}
+
+#[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
+pub fn report_motion<'local>(
+    env: EnvUnowned<'local>,
+    _: JClass<'local>,
+    handle: jlong,
+    event: JObject<'local>,
+) {
+    export(env, |env| {
+        let read = motion_event_of(env, &event).map_err(NativeMethodError::ReadMotionEvent);
+        let Some(motion) = read? else {
+            return Ok(());
+        };
+        with_round_trip(handle, |round_trip| {
+            round_trip.report_motion(motion);
+            Ok(())
+        })
+    });
 }
 
 #[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
@@ -141,8 +159,7 @@ pub fn resize<'local>(
 #[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
 pub fn destroy<'local>(env: EnvUnowned<'local>, _: JClass<'local>, handle: jlong) {
     export(env, |_| {
-        let round_trip = take_round_trip(handle)?;
-        drop(round_trip);
+        let _unreceived_wakes = take_round_trip(handle)?.close()?;
         Ok(())
     });
 }
@@ -153,7 +170,7 @@ pub fn destroy_counting_wakes<'local>(
     _: JClass<'local>,
     handle: jlong,
 ) -> jlong {
-    export(env, |_| Ok(take_round_trip(handle)?.close().into()))
+    export(env, |_| Ok(take_round_trip(handle)?.close()?.into()))
 }
 
 #[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
@@ -166,7 +183,7 @@ pub fn encode_ycbcr<'local>(
 ) -> JObject<'local> {
     export(env, |env| {
         let buffer = acquire_hardware_buffer(env, &buffer)?;
-        let format = with_round_trip(handle, |round_trip| round_trip.read_buffer_format(&buffer))?;
+        let format = with_round_trip(handle, |round_trip| round_trip.read_buffer_format(buffer))?;
         // The renderer samples `buffer` with the suggested model and range, so the color is encoded with the same ones.
         let model = format.model.try_into();
         let range = format.range.try_into();

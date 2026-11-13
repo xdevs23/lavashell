@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_actor::JoinError;
+use lavashell_actor::{JoinError, SystemClock};
 use lavashell_core::geometry::{Color, Size, Viewport};
 use lavashell_core::prelude::{Modifier, TextStyle};
 use lavashell_core::reactive::State;
@@ -43,7 +43,10 @@ impl TextMeasurer for NoText {
 fn start() -> Result<(ScenePipeline, mpsc::Receiver<BuilderReport>), Error> {
     let (reports, received) = mpsc::channel();
     let observer = move |report: BuilderReport| reports.send(report).map_err(|_unsent| Closed);
-    Ok((ScenePipeline::start(Box::new(observer))?, received))
+    Ok((
+        ScenePipeline::start(Box::new(observer), &SystemClock::start())?,
+        received,
+    ))
 }
 
 /// A view of one square filled with `color`.
@@ -176,7 +179,7 @@ fn a_frame_of_surface_state_changes_the_state_and_keeps_the_scene() -> TestResul
     let configure = new_configure();
     let mut sink = pipeline.sink(SURFACE, None);
     sink.set_state(configure.clone())?;
-    assert!(sink.end_state_frame()?);
+    assert_eq!(sink.end_state_frame()?, FrameStatus::Ended);
     assert!(matches!(
         reports.recv()?,
         BuilderReport::StateChanged { surface: SURFACE }
@@ -193,11 +196,8 @@ fn a_frame_of_surface_state_changes_the_state_and_keeps_the_scene() -> TestResul
 fn a_sink_with_a_sequence_ends_a_frame_without_state_unless_the_frame_waits_for_the_whole_scene()
 -> TestResult {
     let (mut pipeline, reports) = start()?;
-    assert!(
-        pipeline
-            .sink(SURFACE, Some(FrameSequence(3)))
-            .end_state_frame()?
-    );
+    let mut sink = pipeline.sink(SURFACE, Some(FrameSequence(3)));
+    assert_eq!(sink.end_state_frame()?, FrameStatus::Ended);
     assert!(matches!(
         reports.recv()?,
         BuilderReport::Built {
@@ -205,10 +205,11 @@ fn a_sink_with_a_sequence_ends_a_frame_without_state_unless_the_frame_waits_for_
             sequence: Some(FrameSequence(3)),
         }
     ));
-    assert!(!pipeline.sink(SURFACE, None).end_state_frame()?);
+    let mut sink = pipeline.sink(SURFACE, None);
+    assert_eq!(sink.end_state_frame()?, FrameStatus::Open);
     let mut restarted = pipeline.sink(SURFACE, Some(FrameSequence(4)));
     restarted.restart()?;
-    assert!(!restarted.end_state_frame()?);
+    assert_eq!(restarted.end_state_frame()?, FrameStatus::Open);
     pipeline.stop()?;
     Ok(())
 }
@@ -223,7 +224,7 @@ fn after_a_restart_the_state_waits_for_the_whole_scene() -> TestResult {
     let mut sink = pipeline.sink(SURFACE, None);
     sink.restart()?;
     sink.set_state(configure.clone())?;
-    assert!(!sink.end_state_frame()?);
+    assert_eq!(sink.end_state_frame()?, FrameStatus::Open);
     frame(&mut square(&State::new(Color::WHITE)), &mut pipeline, None)?;
     assert!(matches!(reports.recv()?, BuilderReport::Built { .. }));
     let built = pipeline.built(SURFACE);
@@ -239,7 +240,7 @@ fn a_restart_sends_the_surface_state_again_with_the_whole_scene() -> TestResult 
     let configure = new_configure();
     let mut sink = pipeline.sink(SURFACE, None);
     sink.set_state(configure.clone())?;
-    assert!(sink.end_state_frame()?);
+    assert_eq!(sink.end_state_frame()?, FrameStatus::Ended);
     sink.restart()?;
     frame(&mut square(&State::new(Color::WHITE)), &mut pipeline, None)?;
     until_built(&reports)?;

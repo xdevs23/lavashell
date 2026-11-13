@@ -22,7 +22,7 @@ use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{Fonts, Painter, RendererSetup};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod error;
 
@@ -220,7 +220,6 @@ impl App {
             panels_per_output: None,
             session_lock: None,
             renderer,
-            start: Instant::now(),
             ui_budget: None,
             run_end: RunEnd::default(),
             preference_overrides: PreferenceOverrides::default(),

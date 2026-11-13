@@ -1986,11 +1986,16 @@
         "dependencies": [
           "ash",
           "jni",
+          "lavashell-actor",
           "lavashell-core",
+          "lavashell-platform",
           "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "ndk",
+          "ndk-sys",
           "rustix",
           "thiserror 2.0.21"
         ],
@@ -2052,6 +2057,7 @@
           "lavashell",
           "lavashell-core",
           "lavashell-lucide",
+          "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"
         ],
@@ -2096,6 +2102,7 @@
           "lavashell",
           "lavashell-example-copy-keys",
           "lavashell-example-support",
+          "lavashell-test-platform",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-on-screen-keyboard",
@@ -2108,6 +2115,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-renderer",
+          "lavashell-vulkan",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
@@ -2135,7 +2143,6 @@
         "dependencies": [
           "accesskit",
           "accesskit_consumer",
-          "ash",
           "env_logger",
           "icu_locale_core",
           "inventory",
@@ -2144,7 +2151,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "log",
           "num-traits",
           "rustix",
@@ -2161,6 +2167,20 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-test-fixtures",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "lavashell-actor",
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-test-platform",
         "version": "0.1.0"
       },
       {

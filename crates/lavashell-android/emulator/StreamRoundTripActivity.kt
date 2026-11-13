@@ -17,6 +17,7 @@ import android.media.ImageWriter
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.view.MotionEvent
 import android.view.Surface
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -50,6 +51,7 @@ class StreamRoundTripActivity : Activity() {
             checkPrivateStream()
             checkSolidColorRenderer()
             checkYuvStream()
+            checkMotion()
         } catch (failure: Exception) {
             report("run", StepResult(matches = false, buildJson("failure" to failure.toString())))
         }
@@ -225,6 +227,23 @@ class StreamRoundTripActivity : Activity() {
         destroy(roundTrip)
     }
 
+    /**
+     * Reports a touch and a mouse click on the pane of a round trip, then checks that the pane still shows the frames
+     * of the stream.
+     */
+    private fun checkMotion() {
+        val roundTrip = create(displayWidth, displayHeight, displayWidth, displayHeight, rgba = true)
+        val colorDisplay = showColor(createSurface(roundTrip), Color.RED)
+        for (motion in SyntheticMotion.TOUCH_AND_CLICK) {
+            val event = motion.obtain(metrics.widthPixels / 2f, metrics.heightPixels / 2f)
+            reportMotion(roundTrip, event)
+            event.recycle()
+        }
+        report("motion", latchColorChange(roundTrip, NOTHING_SHOWN, Color.RED))
+        colorDisplay.hide()
+        destroy(roundTrip)
+    }
+
     /** Writes [codes] into every sample of the Y, Cb and Cr planes of a YUV 4:2:0 [image]. */
     private fun fillYuvImage(image: Image, codes: List<Int>) {
         image.planes.zip(codes).forEachIndexed { index, (plane, code) ->
@@ -364,6 +383,9 @@ class StreamRoundTripActivity : Activity() {
 
         /** How often the round trip has received a notification of a frame from the stream. */
         @JvmStatic external fun countWakes(roundTrip: Long): Long
+
+        /** Reports [event] on the Surface shown by [roundTrip]. */
+        @JvmStatic external fun reportMotion(roundTrip: Long, event: MotionEvent)
 
         @JvmStatic
         @JvmName("resize")

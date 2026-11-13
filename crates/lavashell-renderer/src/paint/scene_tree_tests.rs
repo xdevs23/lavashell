@@ -267,25 +267,14 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let mut target = surface(WIDTH, HEIGHT)?;
     let _chained_canvas = target.canvas().clear(skia_safe::Color::WHITE);
     let before = pixels(&mut target);
-    let plan = painter.plan(
-        target.canvas(),
-        scene.at(Duration::ZERO),
-        Density::ONE,
-        None,
-    );
+    let plan = painter.plan(target.canvas(), scene.at(Duration::ZERO), None);
     let [crate::plan::Planned::Group { group: planned, .. }] = plan.steps.as_slice() else {
         return Err(TestError::Missing("group"));
     };
     assert_eq!(planned.destination, Destination::Layer);
     assert_eq!(planned.device_extent, None);
     let streams = StreamFrames::default();
-    painter.paint_tree(
-        target.canvas(),
-        &plan,
-        Area::Everything,
-        Density::ONE,
-        &streams,
-    );
+    painter.paint_tree(target.canvas(), &plan, Area::Everything, &streams);
     assert_eq!(pixels(&mut target), before);
     Ok(())
 }
@@ -386,7 +375,13 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
         surface: SurfaceId(3),
         gpu_time: Some(Duration::from_millis(1)),
     };
-    let quality = painter.plan_scene_effects(scene.at(Duration::ZERO), budget, 1, 1, Density::ONE);
+    let quality = painter.plan_scene_effects(
+        scene.at(Duration::ZERO),
+        budget,
+        1,
+        1,
+        PixelScale::SQUARE.dp_to_output(Density::ONE),
+    );
     assert_eq!(quality, QualityChange::Unchanged);
     let mut target = surface(WIDTH, HEIGHT)?;
     painter.paint_scene(target.canvas(), scene.at(Duration::ZERO), Density::ONE);
@@ -433,7 +428,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
             retained.canvas(),
             SurfaceFrame {
                 tree: scene.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
                 damage,
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,

@@ -79,7 +79,8 @@ fn planned_painter(tree: &SceneTree) -> Result<Painter, TestError> {
 /// Plans `tree` as `frame` within `budget`. The only effect has one variant, so the choice never changes.
 fn plan(painter: &mut Painter, tree: &SceneTree, frame: u64, budget: FrameBudget) {
     let at = tree.at(Duration::ZERO);
-    let quality = painter.plan_scene_effects(at, budget, frame, 1, Density::ONE);
+    let dp_to_output = PixelScale::SQUARE.dp_to_output(Density::ONE);
+    let quality = painter.plan_scene_effects(at, budget, frame, 1, dp_to_output);
     assert_eq!(quality, QualityChange::Unchanged);
 }
 

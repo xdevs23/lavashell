@@ -12,12 +12,11 @@ use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::View;
 use lavashell_platform::{
-    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, PlatformEvent,
+    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, Platform, PlatformEvent,
     PlatformRequest, SurfaceEvent,
 };
-use lavashell_renderer::SurfaceControl;
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn platform_event(&mut self, event: PlatformEvent) -> Result<(), ViewError> {
         match event {
             PlatformEvent::Surface(id, event) => self.surface_event(id, event)?,

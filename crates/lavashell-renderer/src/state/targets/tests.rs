@@ -2,7 +2,7 @@
 use super::*;
 use crate::test_error::TestError;
 use lavashell_core::prelude::{
-    Brush, Color, Density, DpExt, DrawCommand, SceneSnapshot, SceneTree, Size,
+    Brush, Color, Density, DpExt, DrawCommand, PixelSize, SceneSnapshot, SceneTree, Size,
 };
 
 fn viewport() -> Viewport {
@@ -25,6 +25,7 @@ fn inputs(lineage: TreeId) -> PixelInputs {
     PixelInputs {
         lineage,
         scene_generation: 0,
+        scale: PixelScale::SQUARE,
         quality: QualityChange::Unchanged,
     }
 }
@@ -89,7 +90,7 @@ fn lost_pixels_damage_the_whole_viewport() -> Result<(), TestError> {
 }
 
 #[test]
-fn a_new_quality_or_scene_image_damages_everything() -> Result<(), TestError> {
+fn a_new_quality_scene_image_or_scale_damages_everything() -> Result<(), TestError> {
     let snapshot = scene()?;
     let shown = snapshot.at(Duration::ZERO);
     let unchanged = inputs(snapshot.lineage());
@@ -100,6 +101,10 @@ fn a_new_quality_or_scene_image_damages_everything() -> Result<(), TestError> {
         },
         PixelInputs {
             scene_generation: 1,
+            ..inputs(snapshot.lineage())
+        },
+        PixelInputs {
+            scale: PixelScale::filling(viewport(), PixelSize::new(64, 30))?,
             ..inputs(snapshot.lineage())
         },
     ];

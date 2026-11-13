@@ -2,14 +2,13 @@
 //! The failures that the tests of this crate return in place of a panic.
 
 use crate::run::RunError;
-use crate::test_host::StandInError;
+use crate::test_host::StandIn;
 use crate::view_actor::{StartError, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::units::NumberError;
 use lavashell_core::view::FrameError;
 use lavashell_test_fixtures::FrameFailure;
 use rustix::io::Errno;
-use std::convert::Infallible;
 use std::sync::mpsc::RecvError;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,13 +22,13 @@ pub(crate) enum TestError {
     #[error("a mailbox of the test closed")]
     Closed(#[from] Closed),
     #[error("the run failed")]
-    Run(#[from] RunError<StandInError, Infallible>),
+    Run(#[from] RunError<StandIn>),
     #[error("the app is not set up to run")]
     Setup(#[from] crate::app::SetupError),
     #[error("a view failed")]
     View(#[from] ViewError),
     #[error("the views could not start")]
-    Start(#[from] StartError<Infallible>),
+    Start(#[from] StartError<StandIn>),
     #[error("the scripted platform did not hand over its requests")]
     NoRequests(#[from] RecvError),
     #[error("a file descriptor could not be created")]
