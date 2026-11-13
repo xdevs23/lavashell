@@ -14,8 +14,9 @@ enum Stage {
     Ready,
     /// The view composed `frame`, and the scene builder has not built it yet.
     Composing { frame: FrameTime },
-    /// The frame with `sequence` renders and has not been reported yet.
-    Drawing { sequence: u64 },
+    /// The frame with `sequence` renders and has not been reported yet. `display_ready` is set once the display is
+    /// ready for the frame that follows.
+    Drawing { sequence: u64, display_ready: bool },
     /// A frame was shown, and the display is not ready for the next one yet.
     Shown,
 }
@@ -28,6 +29,8 @@ pub(super) struct Pacing {
     telemetry: PresentationTracker,
     stage: Stage,
     deadline: Option<Duration>,
+    /// The newest state reported by the view since the last frame started.
+    wanted: Option<ViewState>,
     next_change: Option<Duration>,
     /// Whether the scene builder built a scene that no frame rendered yet.
     undrawn: bool,
@@ -38,9 +41,8 @@ pub(super) struct Pacing {
 }
 
 impl Pacing {
-    /// Records the next deadline of the view. Starts the frame needed by `view` at `now`, when no other frame of the
-    /// surface is in progress or waits for the display. An unchanged view renders the scene when the scene moves or
-    /// when no frame rendered the newest built scene.
+    /// Records the next deadline and the state of the view, and starts the frame needed by `view` as `start_wanted`
+    /// describes.
     pub fn want(
         &mut self,
         view: ViewState,
@@ -49,19 +51,8 @@ impl Pacing {
         now: Duration,
     ) -> Option<(FrameKind, FrameTime)> {
         self.deadline = deadline;
-        if !matches!(self.stage, Stage::Ready) {
-            return None;
-        }
-        let kind = match (view, redraw) {
-            (ViewState::Unconfigured, _) => None,
-            (ViewState::Changed, _) | (ViewState::Unchanged, Redraw::Continuous) => {
-                Some(FrameKind::Compose)
-            }
-            (ViewState::Unchanged, Redraw::OnChange) => {
-                (self.undrawn || self.moving(now)).then_some(FrameKind::Render)
-            }
-        };
-        kind.map(|kind| self.start(kind, now))
+        self.wanted = Some(view);
+        self.start_wanted(redraw, now)
     }
 
     pub fn publish(&mut self, next_change: Option<Duration>) {
@@ -107,24 +98,36 @@ impl Pacing {
         self.clock.output_refresh(refresh);
     }
 
-    /// Records `outcome` of `frame`. A shown frame sets the render cost to `cost`, and waits for the display. A stale
-    /// frame composes again at once, because the view of a frame that was not shown is invalidated. A pending frame
-    /// starts again with the next report of the view. A report about another frame changes nothing.
+    /// Records `outcome` of `frame`. A shown frame sets the render cost to `cost`, and the next frame starts once the
+    /// display is ready. If the display became ready while the frame rendered, the frame wanted by the view starts at
+    /// once. A stale frame composes again at once, because the view of a frame that was not shown is invalidated. A
+    /// pending frame starts again with the next report of the view. A report about another frame changes nothing.
     pub fn rendered(
         &mut self,
         frame: FrameTime,
         outcome: FrameOutcome,
         cost: Duration,
+        redraw: Redraw,
         now: Duration,
     ) -> Option<(FrameKind, FrameTime)> {
-        if !matches!(self.stage, Stage::Drawing { sequence } if sequence == frame.sequence) {
-            return None;
-        }
+        let display_ready = match self.stage {
+            Stage::Drawing {
+                sequence,
+                display_ready,
+            } if sequence == frame.sequence => display_ready,
+            Stage::Ready | Stage::Composing { .. } | Stage::Drawing { .. } | Stage::Shown => {
+                return None;
+            }
+        };
         match outcome {
             FrameOutcome::Shown => {
                 self.clock.render_cost(cost);
-                self.stage = Stage::Shown;
-                None
+                self.stage = if display_ready {
+                    Stage::Ready
+                } else {
+                    Stage::Shown
+                };
+                self.start_wanted(redraw, now)
             }
             FrameOutcome::Stale => Some(self.start(FrameKind::Compose, now)),
             FrameOutcome::Pending => {
@@ -134,12 +137,24 @@ impl Pacing {
         }
     }
 
-    /// Records that the display is ready for the frame that follows a shown frame. That frame starts with the next
-    /// report of the view.
-    pub fn display_ready(&mut self) {
-        if matches!(self.stage, Stage::Shown) {
-            self.stage = Stage::Ready;
+    /// Records that the display is ready for the frame that follows a shown frame, also while that frame renders.
+    /// Once the surface is ready, starts the frame wanted by the view as `start_wanted` describes.
+    pub fn display_ready(
+        &mut self,
+        redraw: Redraw,
+        now: Duration,
+    ) -> Option<(FrameKind, FrameTime)> {
+        match self.stage {
+            Stage::Shown => self.stage = Stage::Ready,
+            Stage::Drawing { sequence, .. } => {
+                self.stage = Stage::Drawing {
+                    sequence,
+                    display_ready: true,
+                };
+            }
+            Stage::Ready | Stage::Composing { .. } => {}
         }
+        self.start_wanted(redraw, now)
     }
 
     /// Records that `frame` became visible at `time`, or at a time that cannot be converted to the clock of the app
@@ -176,7 +191,27 @@ impl Pacing {
             .min()
     }
 
+    /// Starts the frame needed by the newest state of the view at `now`, when no other frame of the surface is in
+    /// progress and the display is ready. An unchanged view renders the scene when the scene moves or when no frame
+    /// rendered the newest built scene.
+    fn start_wanted(&mut self, redraw: Redraw, now: Duration) -> Option<(FrameKind, FrameTime)> {
+        if !matches!(self.stage, Stage::Ready) {
+            return None;
+        }
+        let kind = match (self.wanted?, redraw) {
+            (ViewState::Unconfigured, _) => None,
+            (ViewState::Changed, _) | (ViewState::Unchanged, Redraw::Continuous) => {
+                Some(FrameKind::Compose)
+            }
+            (ViewState::Unchanged, Redraw::OnChange) => {
+                (self.undrawn || self.moving(now)).then_some(FrameKind::Render)
+            }
+        };
+        kind.map(|kind| self.start(kind, now))
+    }
+
     fn start(&mut self, kind: FrameKind, now: Duration) -> (FrameKind, FrameTime) {
+        self.wanted = None;
         let frame = self.clock.sample(now);
         match kind {
             FrameKind::Compose => {
@@ -192,6 +227,7 @@ impl Pacing {
     fn render(&mut self, frame: FrameTime) -> (FrameKind, FrameTime) {
         self.stage = Stage::Drawing {
             sequence: frame.sequence,
+            display_ready: false,
         };
         self.undrawn = false;
         self.uncommitted = false;

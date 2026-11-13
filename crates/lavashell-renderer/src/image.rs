@@ -58,12 +58,9 @@ pub fn raster_png(
         tree,
         Density::ONE,
     );
-    let mut export = skia_safe::surfaces::raster(
-        &skia_safe::ImageInfo::new_n32_premul((width, height), skia_safe::ColorSpace::new_srgb()),
-        None,
-        None,
-    )
-    .ok_or(Error::PngSurface)?;
+    let export_info = png_export_info(skia_safe::ISize::new(width, height));
+    let mut export =
+        skia_safe::surfaces::raster(&export_info, None, None).ok_or(Error::PngSurface)?;
     let _chained_canvas = export.canvas().clear(skia_safe::Color::TRANSPARENT);
     let _chained_canvas = export
         .canvas()
@@ -73,4 +70,9 @@ pub fn raster_png(
         .encode(None, skia_safe::EncodedImageFormat::PNG, None)
         .map(|data| data.as_bytes().to_vec())
         .ok_or(Error::EncodePng)
+}
+
+/// The pixels of every PNG export: SDR sRGB at 8 bits per channel, with premultiplied alpha.
+pub(crate) fn png_export_info(dimensions: skia_safe::ISize) -> skia_safe::ImageInfo {
+    skia_safe::ImageInfo::new_n32_premul(dimensions, skia_safe::ColorSpace::new_srgb())
 }

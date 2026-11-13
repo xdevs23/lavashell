@@ -13,6 +13,7 @@ workspace = true
 clap.workspace = true
 lavashell.workspace = true
 lavashell-example-support.workspace = true
+lavashell-test-platform.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

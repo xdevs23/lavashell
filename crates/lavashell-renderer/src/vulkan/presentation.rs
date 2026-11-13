@@ -40,11 +40,33 @@ pub trait PresentationBackend {
     fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR>;
 }
 
-pub(super) struct Headless;
+/// A backend without a window system, which draws offscreen only or presents to the surfaces of
+/// [`lavashell_vulkan::HeadlessWindow`].
+pub struct HeadlessPresentation {
+    surface_extension: Option<&'static CStr>,
+}
 
-impl PresentationBackend for Headless {
+impl HeadlessPresentation {
+    /// Presents to surfaces through `VK_EXT_headless_surface`.
+    #[must_use]
+    pub fn with_surfaces() -> Self {
+        Self {
+            surface_extension: Some(ash::ext::headless_surface::NAME),
+        }
+    }
+
+    /// Draws offscreen only.
+    #[must_use]
+    pub fn without_surfaces() -> Self {
+        Self {
+            surface_extension: None,
+        }
+    }
+}
+
+impl PresentationBackend for HeadlessPresentation {
     fn surface_extension(&self) -> Option<&'static CStr> {
-        None
+        self.surface_extension
     }
 
     fn features(&self) -> Features {

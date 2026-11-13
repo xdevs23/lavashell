@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Wayland;
-use super::links::Links;
+use super::links::ViewLink;
 use super::requests::{Ending, Requests};
 use super::surfaces::NativeSurfaces;
 use crate::Error;
 use crate::EventLoopError;
 use crate::app::{
-    Grabs, Presentation, SeatDevices, Surface, SurfaceProtocols, WatchSources, install_preferences,
+    Control, Grabs, Presentation, SeatDevices, Surface, SurfaceProtocols, WatchSources,
+    install_preferences,
 };
 use crate::clipboard::ClipboardState;
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::Reports;
+use lavashell_renderer::NoStreams;
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
@@ -30,7 +33,7 @@ pub(crate) struct Translator {
     sources: Vec<RegistrationToken>,
     pub(crate) watches: WatchSources,
     pub(crate) surfaces: NativeSurfaces<Surface>,
-    pub(crate) links: Links,
+    pub(crate) links: Reports<Control, NoStreams>,
     pub(super) requests: Requests,
     pub(super) ending: Ending,
     pub(crate) connection: Connection,
@@ -62,7 +65,7 @@ impl Translator {
     /// reports them through `links` and executes the requests of `requests`.
     pub(super) fn new(
         wayland: Wayland,
-        links: Links,
+        links: Reports<Control, NoStreams>,
         requests: Requests,
         loop_handle: LoopHandle<'static, Self>,
     ) -> Result<Self, Error> {
@@ -83,7 +86,11 @@ impl Translator {
             .insert(loop_handle.clone())
             .map_err(|failure| EventLoopError::WatchConnection(failure.error))?;
         let mut sources = vec![connection_source];
-        install_preferences(&loop_handle, &mut sources, &links.view())?;
+        install_preferences(
+            &loop_handle,
+            &mut sources,
+            &ViewLink::new(links.view.clone()),
+        )?;
         Ok(Self {
             focus_grabs,
             session_lock: None,

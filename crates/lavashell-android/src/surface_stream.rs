@@ -41,8 +41,9 @@ type Wake = Arc<dyn Fn() + Send + Sync>;
 type WakeSlot = Arc<Mutex<Option<Wake>>>;
 
 /// The consumer end of a Surface drawn into by another process, such as an app drawing a window. Pass the
-/// Surface of `native_window` to the producer. Wrap the stream in a `Stream`, latch its newest frame with
-/// `AndroidRenderer::latch` on the render thread and draw the returned image with `Drawing::stream_image`.
+/// Surface of `native_window` to the producer. On the thread of the renderer, attach the stream with
+/// `AospStreams::attach` and latch its newest frame with `AospStreams::latch`. Draw the returned image with
+/// `Drawing::stream_image`.
 ///
 /// The producer never waits for the host. While no latch is called, a newly queued frame replaces the frame
 /// waiting in the reader. A hidden window needs no latch. The newest frame waits for the first latch after
