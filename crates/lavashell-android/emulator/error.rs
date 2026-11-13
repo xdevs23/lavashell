@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_android::{Aosp, RunEnded};
 use lavashell_core::prelude::PixelSize;
-use lavashell_core::scene::tree::ApplyError;
-use lavashell_renderer::{FrameOutcome, StreamRejection, skia};
+use lavashell_renderer::{StreamRejection, skia};
+use lavashell_runtime::{RunError, SetupError};
 use ndk::media_error::MediaError;
 use std::cell::BorrowMutError;
 use std::num::TryFromIntError;
@@ -13,16 +14,30 @@ use std::sync::mpsc::RecvError;
 pub enum NativeMethodError {
     #[error("the default size {0:?} of the stream exceeds the signed lengths of the NDK")]
     TargetSize(PixelSize),
-    #[error("cannot set up the stream and the renderer that draws into the target ImageReader")]
+    #[error("cannot set up the stream that the producer draws into")]
     SetUp(#[source] lavashell_android::Error),
     #[error("cannot create the target ImageReader, the listener of its frames or its window")]
     CreateTarget(#[source] MediaError),
+    #[error("cannot start the thread of the run that draws into the target ImageReader")]
+    SpawnRun(#[source] std::io::Error),
+    #[error("cannot add the window of the pane to the app")]
+    AddWindow(#[source] SetupError),
+    #[error("the run drawing into the target ImageReader failed")]
+    Run(#[source] RunError<Aosp>),
+    #[error("the run drawing into the target ImageReader ended before the round trip finished")]
+    RunEndedEarly,
+    #[error("the renderer used in the round trip has stopped")]
+    RunEnded(#[source] RunEnded),
+    #[error("the stream used in the round trip is not attached to the renderer")]
+    FindStream(#[source] lavashell_android::Error),
     #[error("cannot resize the stream")]
     Resize(#[source] lavashell_android::Error),
     #[error("cannot hand the Surface of the stream to the activity")]
     Surface(#[source] lavashell_android::Error),
     #[error("cannot latch a frame of the stream")]
     Latch(#[source] lavashell_android::Error),
+    #[error("cannot copy the fence of the frame that the producer has not finished writing")]
+    CopyProducerFence(#[source] std::io::Error),
     #[error("the stream released its newest frame without drawing it: {0}")]
     FrameRejected(StreamRejection),
     #[error("cannot wait until the producer has written the frame waiting in the stream")]
@@ -31,12 +46,6 @@ pub enum NativeMethodError {
     AwaitNotification(#[source] RecvError),
     #[error("no frame has been latched from the stream")]
     NothingLatched,
-    #[error("cannot build the scene that draws the latched frame")]
-    BuildScene(#[source] ApplyError),
-    #[error("cannot render the latched frame into the target ImageReader")]
-    Render(#[source] lavashell_android::Error),
-    #[error("the render into the target ImageReader ended with {0:?} instead of a shown frame")]
-    NotShown(FrameOutcome),
     #[error("the target ImageReader announced a frame but has none")]
     NoTargetFrame,
     #[error("cannot read the frame presented to the target ImageReader")]

@@ -3,13 +3,14 @@
 use icu_locale_core::langid;
 use lavashell::keyboard::{ENGLISH, FRENCH, GERMAN, Layout, PORTUGUESE, Placement, Side};
 use lavashell::prelude::*;
+use lavashell_example_support::{FrameInterval, Recording};
 use lavashell_on_screen_keyboard::{
     CopyKey, Error, copy,
     model::{Appearance, Demo, docked},
     scene::{self, FIELD},
     stage::{QUERY, Stage, touch},
 };
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 fn shot(stage: &mut Stage, name: &str) -> Result<(), Error> {
     let captures = Path::new(env!("CARGO_TARGET_TMPDIR")).join("keyboard");
@@ -449,5 +450,35 @@ fn appearances(stage: &mut Stage) -> Result<(), Error> {
     stage.settle()?;
     shot(stage, "opaque")?;
     stage.offscreen.view.provide(&REDUCED_TRANSPARENCY, false);
+    Ok(())
+}
+
+#[derive(Debug, thiserror::Error)]
+enum RecordingError {
+    #[error(transparent)]
+    Keyboard(#[from] Error),
+    #[error("a recording needs a time between its frames")]
+    NoInterval,
+}
+
+#[test]
+fn a_recording_writes_each_sequence_and_each_still() -> Result<(), RecordingError> {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("keyboard-recording");
+    let _absent_before_the_first_run = std::fs::remove_dir_all(&directory);
+    let interval =
+        FrameInterval::new(Duration::from_secs(1) / 10).ok_or(RecordingError::NoInterval)?;
+    let recording = Recording {
+        directory,
+        interval,
+    };
+    lavashell_on_screen_keyboard::recording::record(&recording)?;
+    for sequence in ["show", "hide", "preview", "previews", "dock"] {
+        let first = recording.directory.join(sequence).join("000.png");
+        assert!(first.is_file(), "the sequence {sequence} has a first frame");
+    }
+    for still in ["reduced-motion-before", "reduced-motion-after"] {
+        let path = recording.directory.join(format!("{still}.png"));
+        assert!(path.is_file(), "the still {still} is written");
+    }
     Ok(())
 }

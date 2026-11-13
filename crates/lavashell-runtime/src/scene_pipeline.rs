@@ -4,7 +4,7 @@ use crate::choreographer_actor::{ChoreographerActor, ChoreographerInput};
 use crate::scene_item::SceneItem;
 use crate::scheduler::FrameSequence;
 use crate::surface_slots::{BuiltSurface, SurfaceSlots};
-use lavashell_actor::{Closed, Handle, Sender, mailbox, spawn};
+use lavashell_actor::{Clock, Closed, Handle, Sender, mailbox_on, spawn};
 use lavashell_core::error::message_chain;
 use lavashell_core::scene::tree::{ApplyError, Change};
 use lavashell_core::scene::{ChangeSink, SinkId};
@@ -89,15 +89,22 @@ enum OpenFrame {
     AwaitingScene,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameStatus {
+    Ended,
+    Open,
+}
+
 impl ScenePipeline {
-    /// Starts the choreographer and the scene builder. The builder passes each report to `observer`.
+    /// Starts the choreographer and the scene builder, whose mailboxes `clock` counts. The builder passes each report
+    /// to `observer`.
     ///
     /// # Errors
     ///
     /// Fails when the thread of either actor cannot start.
-    pub fn start(observer: BuilderObserver) -> Result<Self, Error> {
-        let (choreographer, choreographer_inbox) = mailbox();
-        let (builder, builder_inbox) = mailbox();
+    pub fn start(observer: BuilderObserver, clock: &dyn Clock) -> Result<Self, Error> {
+        let (choreographer, choreographer_inbox) = mailbox_on(clock);
+        let (builder, builder_inbox) = mailbox_on(clock);
         let intake = choreographer_inbox.intake();
         let choreographer_actor = spawn("choreographer", choreographer_inbox, move || {
             Ok(ChoreographerActor::new(builder, intake))
@@ -217,22 +224,21 @@ impl SceneSink<'_> {
     }
 
     /// Ends the open frame unless it waits for the whole scene. A sink without a sequence ends only a frame that
-    /// contains a change of the surface state. Returns whether the frame ended.
+    /// contains a change of the surface state.
     ///
     /// # Errors
     ///
     /// Fails when the choreographer is gone.
-    pub fn end_state_frame(&mut self) -> Result<bool, Closed> {
-        let ends = match self.state.open {
-            OpenFrame::WithState => true,
-            OpenFrame::WithoutState => self.end.is_some(),
-            OpenFrame::AwaitingScene => false,
+    pub fn end_state_frame(&mut self) -> Result<FrameStatus, Closed> {
+        let status = match (self.state.open, self.end) {
+            (OpenFrame::WithState, _) | (OpenFrame::WithoutState, Some(_)) => FrameStatus::Ended,
+            (OpenFrame::WithoutState, None) | (OpenFrame::AwaitingScene, _) => FrameStatus::Open,
         };
-        if ends {
+        if status == FrameStatus::Ended {
             (self.choreographer).push(ChoreographerInput::End(self.surface, self.end))?;
             self.state.open = OpenFrame::WithoutState;
         }
-        Ok(ends)
+        Ok(status)
     }
 
     fn push(&self, item: SceneItem) -> Result<(), Closed> {

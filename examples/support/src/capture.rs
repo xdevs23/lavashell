@@ -61,13 +61,6 @@ impl Capture {
         viewport: Viewport,
         path: impl AsRef<Path>,
     ) -> Result<(), Error> {
-        let path = path.as_ref();
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(parent).map_err(|source| Error::CreateDirectory {
-                path: parent.to_owned(),
-                source,
-            })?;
-        }
         let Viewport { size, density } = viewport;
         let pixels = size.buffer_size(density).map_err(Error::BufferSize)?;
         let mut surface = self.gpu.offscreen(pixels).map_err(Error::Offscreen)?;
@@ -75,11 +68,26 @@ impl Capture {
             (surface.canvas()).clear(lavashell::renderer::skia::Color::TRANSPARENT);
         (self.painter).paint_scene(surface.canvas(), tree, density);
         let png = self.gpu.png(&mut surface).map_err(Error::EncodePng)?;
-        std::fs::write(path, png).map_err(|source| Error::WriteCapture {
-            path: path.to_owned(),
-            source,
-        })
+        write_capture(path, &png)
     }
+}
+
+/// Writes the PNG file `png` to `path`, and creates the parent directory of `path` first.
+///
+/// # Errors
+/// Returns an error when the directory cannot be created or the file cannot be written.
+pub fn write_capture(path: impl AsRef<Path>, png: &[u8]) -> Result<(), Error> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(|source| Error::CreateDirectory {
+            path: parent.to_owned(),
+            source,
+        })?;
+    }
+    std::fs::write(path, png).map_err(|source| Error::WriteCapture {
+        path: path.to_owned(),
+        source,
+    })
 }
 
 /// A view that is laid out in a viewport of a fixed size and rendered offscreen by Vulkan. The calling code sets the

@@ -6,12 +6,13 @@ use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl, SurfaceTimi
 use std::convert::Infallible;
 
 /// The producer end of a buffer queue, together with the timing history of the Surface of that queue. A `NativeWindow`
-/// does not extend the lifetime of the consumer of a `SurfaceView`. Detach the renderer before the callback of the host
-/// for the destruction of the surface returns.
+/// does not extend the lifetime of the consumer of a `SurfaceView`. Call `AospHost::surface_destroyed` before the
+/// callback of the host for the destruction of the surface returns. A clone refers to the same native window.
 ///
 /// The policy of `SurfaceTiming` applies to the Surface also after the Surface is detached and attached again. Every
-/// native window acquired from the Surface therefore shares one `SurfaceTiming`, and a Surface with an unknown history
-/// starts with `PresentationPolicy::Explicit`.
+/// native window acquired from the Surface therefore shares one `SurfaceTiming`. The runtime draws without explicit
+/// timestamps, so the timing starts with `PresentationPolicy::Automatic`.
+#[derive(Clone)]
 pub struct NativeWindow {
     pub(crate) window: ndk::native_window::NativeWindow,
     pub(crate) timing: SurfaceTiming,

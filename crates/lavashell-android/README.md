@@ -2,103 +2,92 @@
 
 Requires AOSP 12 (API 31) or later.
 
-## Render into a Surface
+## Run an app on a Surface
 
 ```rust,ignore
-use lavashell::android::{AndroidRenderer, NativeWindow, window_of_surface};
-use lavashell::prelude::{FrameTime, Viewport};
-use lavashell::renderer::{Fonts, FrameOutcome, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell::android::{AospHost, NativeWindow, window_of_surface};
+use lavashell::prelude::Platform;
+use lavashell::renderer::{PresentationPolicy, SurfaceTiming};
 
-// Create, render and drop the renderer on one thread.
-let mut renderer = AndroidRenderer::new(&Fonts::new())?;
-// This Surface has never received an explicit timestamp.
+// Before the Surface exists. The app is built on the run thread.
+let host = AospHost::new();
+let served = host.clone();
+let run = std::thread::spawn(move || served.serve(|| lavashell::run::<Platform>(build_app())));
+
+// In surfaceCreated. No explicit presentation timestamp was ever set for this Surface.
 let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
-let window = NativeWindow::new(window_of_surface(env, &surface)?, timing);
-renderer.attach(window, SurfaceAlpha::Opaque)?;
+host.surface_created(NativeWindow::new(window_of_surface(env, &surface)?, timing));
 
-// In the frame callback of the host:
-let viewport = Viewport::new(size, density);
-let failures = view.frame_into_at(viewport, renderer.shaper(), frame, &mut builder)?;
-for failure in failures {
-    log::error!("{}", lavashell::core::error::message_chain(failure));
-}
-let result = renderer.render(&builder.snapshot(), frame, viewport)?;
-match result {
-    FrameOutcome::Shown => view.record_presentation(frame.presentation),
-    FrameOutcome::Pending | FrameOutcome::Stale => { /* Request another frame from the host. */ }
-}
+// In surfaceChanged:
+host.surface_changed();
 
-// Before surfaceDestroyed returns:
-let window = renderer.detach();
+// In every frame callback of the Choreographer. The host app posts the callback again in each frame until the run ends.
+host.frame();
+
+// In surfaceDestroyed. The call returns after the renderer has retired the Surface. Retiring it closes the window and
+// ends the run.
+host.surface_destroyed();
+let ended = run.join();
 # Ok::<(), lavashell::android::Error>(())
 ```
 
-## Explicit timestamps
-
-```rust,ignore
-if renderer.supports_presentation_time() {
-    renderer.render_at(&builder.snapshot(), frame, viewport, timestamp_ns)?;
-}
-```
-
-After you use an explicit timestamp, every later frame sent to that Surface needs one too. Use the same
-`SurfaceTiming` every time you acquire that Surface. Use `PresentationPolicy::Explicit` for an encoder input or a
-Surface with an unknown history.
-
-## Input
-
-| `MotionEvent` | `InputEvent` |
-| --- | --- |
-| `ACTION_DOWN`, `ACTION_POINTER_DOWN` | `TouchDown` |
-| `ACTION_MOVE`, historical positions first | `TouchMove` for each pointer |
-| `ACTION_UP`, `ACTION_POINTER_UP` | `TouchUp` |
-| `ACTION_CANCEL` | `TouchCancel` for each touch, `CancelPointer` for the primary pointer |
-
-| Tool type | `PointerKind` |
-| --- | --- |
-| `TOOL_TYPE_STYLUS`, `TOOL_TYPE_ERASER` | `Pen` |
-| `TOOL_TYPE_MOUSE` | `Mouse` |
-| `TOOL_TYPE_FINGER`, `TOOL_TYPE_UNKNOWN` | `Finger` |
+Use the same `SurfaceTiming` every time you acquire a Surface. The runtime draws with automatic presentation timing
+only.
 
 ## Frames from another app
 
 ```rust,ignore
-use lavashell::android::surface_of_window;
+use lavashell::android::{BufferSizes, StreamFormat, SurfaceStream, surface_of_window};
 use lavashell::prelude::*;
-use lavashell::renderer::{Latch, Stream};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use lavashell::renderer::Latch;
+use std::sync::mpsc;
 
+// In `build_app`. Each frame shows the newest image sent through `latched`.
+let (latched, images) = mpsc::channel();
+let shown = State::new(None);
+let showing = shown.clone();
+let app = app.on_frame(move |_| {
+    if let Some(image) = images.try_iter().last() {
+        showing.set(Some(image));
+    }
+});
+
+// In the canvas of the pane:
+if let Some(image) = shown.get() {
+    drawing.stream_image(&image, pane, ImageFit::contain());
+}
+
+// The stream is created on the renderer thread. It sends on `arrived` when a frame arrives.
+let (arrived, arrivals) = mpsc::channel();
 let sizes = BufferSizes {
     default: PixelSize::new(1770, 960),
     max: PixelSize::new(2124, 1152),
 };
-let mut stream = Stream::new(SurfaceStream::new(sizes, StreamFormat::Rgba8888)?);
-let arrived = Arc::new(AtomicBool::new(false));
-let wake = arrived.clone();
-stream.source_mut().on_frame(move || wake.store(true, Ordering::Release));
-let surface = surface_of_window(env, stream.source().native_window())?;
-let mut latest: Option<StreamImage> = None;
+let attached = host.run_on_streams(move |streams, _| {
+    let mut stream = SurfaceStream::new(sizes, StreamFormat::Rgba8888)?;
+    stream.on_frame(move || {
+        let _ended_app_reads_nothing = arrived.send(());
+    });
+    let window = stream.native_window().clone();
+    Ok::<_, lavashell::android::Error>((streams.attach(stream), window))
+})?;
+let (stream, window) = attached?;
+let surface = surface_of_window(env, &window)?;
 
-// On the rendering thread, before the View is laid out:
-if arrived.swap(false, Ordering::Acquire) || stream.source().waits_for_producer() {
-    if let Latch::Frame(image) = renderer.latch(&mut stream)? {
-        latest = Some(image);
-    }
+// After `arrivals` received, and again while the producer has not yet written the latched frame:
+let latch = host.run_on_streams(move |streams, painter| streams.latch(painter, stream))?;
+if let Latch::Frame(image) = latch? {
+    latched.send(image)?;
 }
-
-// In the canvas of the pane:
-if let Some(image) = &latest {
-    drawing.stream_image(image, pane, ImageFit::contain());
-}
-# Ok::<(), lavashell::android::Error>(())
 ```
+
+Each `?` converts `RunEnded`, `lavashell::android::Error` or `SendError` into the error type of the function around it.
 
 ## Native build
 
 * Link the shared library with 16 KiB page alignment.
 * The AOSP build of Skia does not decode WOFF2. Supply TTF data.
-* You accept the Android Software Development Kit License Agreement when you build the AOSP packages in the flake.
+* Building the AOSP packages in the flake accepts the Android Software Development Kit License Agreement.
 
 ```sh
 nix develop .#android

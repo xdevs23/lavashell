@@ -17,8 +17,9 @@ use crate::Error;
 use crate::RequestsError;
 use crate::app::{Control, Grabs, Presentation, SurfaceProtocols, advertised_outputs};
 use crate::wayland_presentation::WaylandPresentation;
-use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks};
-use links::Links;
+use lavashell_actor::SystemClock;
+use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks, no_streams};
+use lavashell_renderer::NoStreams;
 use requests::{Requests, execute_arrived};
 use sctk::compositor::CompositorState;
 use sctk::data_device_manager::DataDeviceManagerState;
@@ -29,6 +30,7 @@ use sctk::reexports::client::{Connection, EventQueue};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// The connection to a Wayland compositor and the protocols bound on it, until the platform serves it.
 pub struct Wayland {
@@ -47,6 +49,7 @@ impl Platform for Wayland {
     type Error = Error;
     type Presentation = WaylandPresentation;
     type Control = Control;
+    type Streams = NoStreams;
 
     fn connect() -> Result<lavashell_platform::Connection<Self>, Error> {
         let connection = Connection::connect_to_env().map_err(ConnectionError::Connect)?;
@@ -74,7 +77,9 @@ impl Platform for Wayland {
         Ok(lavashell_platform::Connection {
             platform: wayland,
             presentation: backend,
+            streams: no_streams(),
             host,
+            clock: Arc::new(SystemClock::start()),
         })
     }
 
@@ -92,7 +97,7 @@ impl Platform for Wayland {
             .collect()
     }
 
-    fn serve(self, links: PlatformLinks<Control>) -> Result<(), Error> {
+    fn serve(self, links: PlatformLinks<Control, NoStreams>) -> Result<(), Error> {
         let PlatformLinks { reports, requests } = links;
         let mut event_loop: EventLoop<'static, Translator> =
             EventLoop::try_new().map_err(EventLoopError::CreateEventLoop)?;
@@ -100,8 +105,6 @@ impl Platform for Wayland {
         let (wake, arrivals) = make_ping().map_err(RequestsError::CreateRequestWake)?;
         let arrival = wake.clone();
         requests.on_arrival(move || arrival.ping());
-        // The requests that arrived before the wake was set woke nothing.
-        wake.ping();
         let intake = requests.intake();
         let source = handle
             .insert_source(arrivals, move |(), (), translator: &mut Translator| {
@@ -112,7 +115,7 @@ impl Platform for Wayland {
             })
             .map_err(|failure| RequestsError::WatchRequests(failure.error))?;
         let requests = Requests::new(intake, source);
-        let mut translator = Translator::new(self, Links::new(reports), requests, handle)?;
+        let mut translator = Translator::new(self, reports, requests, handle)?;
         loop {
             let served = (event_loop.dispatch(None, &mut translator))
                 .map_err(EventLoopError::DispatchEvents)

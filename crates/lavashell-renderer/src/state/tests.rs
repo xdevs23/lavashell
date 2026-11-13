@@ -3,67 +3,20 @@ use super::*;
 use crate::stream::FrameDevice;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::{Error, PresentationPolicy, StreamFrames};
-use ash::vk;
+use crate::{Error, HeadlessPresentation, PresentationPolicy, StreamFrames};
 use lavashell_core::prelude::{
     Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelSize, Presented, Rect,
     SceneTree, Size, StreamId, StreamImage,
 };
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
 use lavashell_core::surface::SurfaceChange;
-use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Presentation};
+use lavashell_vulkan::HeadlessWindow;
 use skia_safe::IPoint;
 use std::cell::RefCell;
 use std::convert::Infallible;
-use std::ffi::CStr;
 use std::rc::Rc;
 
 const SURFACE: SurfaceId = SurfaceId(0);
-
-/// Presents to surfaces without a window system, through `VK_EXT_headless_surface`.
-struct HeadlessBackend;
-
-impl PresentationBackend for HeadlessBackend {
-    fn surface_extension(&self) -> Option<&'static CStr> {
-        Some(ash::ext::headless_surface::NAME)
-    }
-
-    fn features(&self) -> Features {
-        Features::default()
-    }
-
-    fn supports(
-        &self,
-        _: &PhysicalDevice<'_>,
-        _: u32,
-    ) -> Result<Presentation, lavashell_vulkan::Error> {
-        Ok(Presentation::Supported)
-    }
-
-    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
-        None
-    }
-}
-
-struct HeadlessWindow;
-
-// SAFETY: A `Surface` destroys the handle that `create_surface` returns and cannot check it, so the trait is unsafe.
-// `create_surface` creates a new headless surface of `instance`, and only the `Surface` that receives it destroys it.
-// A headless surface has no native window that could be destroyed before it.
-unsafe impl Window for HeadlessWindow {
-    fn create_surface(
-        &self,
-        instance: &Instance,
-    ) -> Result<vk::SurfaceKHR, lavashell_vulkan::Error> {
-        instance.require(&[ash::ext::headless_surface::NAME])?;
-        let functions = ash::ext::headless_surface::Instance::new(instance.entry(), instance.ash());
-        let info = vk::HeadlessSurfaceCreateInfoEXT::default();
-        // SAFETY: ash 0.38 has no safe form of vkCreateHeadlessSurfaceEXT. The instance is alive and has the extension
-        // enabled, as `require` checked, and `info` lives through the call.
-        unsafe { functions.create_headless_surface(&info, None) }
-            .map_err(lavashell_vulkan::Error::CreateSurface)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 enum Event {
@@ -176,9 +129,8 @@ fn setup() -> RendererSetup {
 
 fn state() -> Result<RendererState<RecordingControl>, TestError> {
     Ok(RendererState::new(
-        &HeadlessBackend,
+        &HeadlessPresentation::with_surfaces(),
         setup(),
-        Instant::now(),
     )?)
 }
 
@@ -283,8 +235,8 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
     let streams = FailingStreams {
         events: Rc::clone(&events),
     };
-    let mut state =
-        RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| Ok(streams))?;
+    let presentation = HeadlessPresentation::with_surfaces();
+    let mut state = RendererState::with_streams(&presentation, setup(), |_| Ok(streams))?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let frame = frame(1, &surface_state);
@@ -340,10 +292,10 @@ fn painted_pixel<S>(
 #[test]
 fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), TestError> {
     let events = Rc::default();
-    let mut state = RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| {
-        Ok(BoundFrames::default())
-    })
-    .map_err(StartError::into_state)?;
+    let presentation = HeadlessPresentation::with_surfaces();
+    let mut state =
+        RendererState::with_streams(&presentation, setup(), |_| Ok(BoundFrames::default()))
+            .map_err(StartError::into_state)?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let stream = StreamId::next();

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
-mod frames;
 
 use clap::Parser;
 use lavashell::prelude::*;
@@ -33,7 +32,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
     if let Some(recording) = arguments.recording.recording() {
-        return frames::record(&recording);
+        return lavashell_on_screen_keyboard::recording::record(&recording);
     }
 
     let appearance = if arguments.day {
