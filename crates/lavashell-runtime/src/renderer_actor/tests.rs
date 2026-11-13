@@ -1,27 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::test_host::{NoControl, Offscreen, renderer_setup};
-use lavashell_core::geometry::Size;
+use crate::test_host::{NoControl, renderer_setup};
+use lavashell_actor::{SystemClock, mailbox};
+use lavashell_core::geometry::{PixelSize, Size};
+use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
-use lavashell_core::units::{Density, DpExt};
+use lavashell_core::units::{Density, DpExt, NumberError};
+use lavashell_platform::no_streams;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{Painter, PainterSetup};
-use std::convert::Infallible;
+use lavashell_renderer::{
+    Attach, HeadlessPresentation, NoStreams, Painter, PainterSetup, PresentationPolicy,
+    SurfaceAlpha, SurfaceTiming,
+};
+use lavashell_vulkan::HeadlessWindow;
 use std::sync::mpsc;
+
+type TestInput = RendererInput<NoControl, NoStreams>;
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
     #[error("the renderer could not start")]
-    Start(#[from] SpawnError<RendererError<Infallible>>),
+    Start(#[from] SpawnError<RendererError<NoControl, NoStreams>>),
     #[error("the renderer failed")]
-    Join(#[from] JoinError<RendererError<Infallible>>),
+    Join(#[from] JoinError<RendererError<NoControl, NoStreams>>),
     #[error("the renderer stopped")]
     Stopped(#[from] RendererStopped),
     #[error("the mailbox is gone")]
     Closed(#[from] Closed),
     #[error("the output channel closed before the renderer sent an output")]
     Output(#[from] mpsc::RecvError),
+    #[error("a number of the test is out of range")]
+    Number(#[from] NumberError),
 }
 
 type TestResult = Result<(), TestError>;
@@ -29,11 +39,20 @@ type TestResult = Result<(), TestError>;
 /// A started renderer with the setup of its painter, and the outputs of the renderer.
 fn start(
     painter: Option<PainterSetup>,
-) -> Result<(Renderer<NoControl>, mpsc::Receiver<RendererOutput>), TestError> {
+) -> Result<
+    (
+        Renderer<NoControl, NoStreams>,
+        mpsc::Receiver<RendererOutput>,
+    ),
+    TestError,
+> {
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
-    let renderer = Renderer::start(Offscreen, setup, Instant::now(), false, Box::new(observer))?;
+    let presentation = HeadlessPresentation::with_surfaces();
+    let clock = Arc::new(SystemClock::start());
+    let observer = Box::new(observer);
+    let renderer = Renderer::start(presentation, setup, no_streams(), clock, false, observer)?;
     Ok((renderer, received))
 }
 
@@ -45,34 +64,62 @@ fn empty_scene() -> Arc<BuiltSurface> {
     })
 }
 
-fn render(surface: u64, sequence: u64) -> RendererInput<NoControl> {
+fn viewport() -> Viewport {
+    Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE)
+}
+
+/// The frame `sequence` of `SurfaceId(surface)` in `viewport()` at `scale`.
+fn render_at(surface: u64, sequence: u64, scale: PixelScale) -> TestInput {
     RendererInput::Render {
         surface: SurfaceId(surface),
         time: FrameTime {
             sequence,
             ..FrameTime::default()
         },
-        viewport: Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE),
+        viewport: viewport(),
+        scale,
         built: empty_scene(),
     }
 }
 
-fn outline(surface: u64) -> RendererInput<NoControl> {
+fn render(surface: u64, sequence: u64) -> TestInput {
+    render_at(surface, sequence, PixelScale::SQUARE)
+}
+
+/// The attachment of `SurfaceId(surface)` to a window that presents nowhere.
+fn attach(surface: u64) -> TestInput {
+    RendererInput::Surface(SurfaceAttachment::Attach(Box::new(Attach {
+        surface: SurfaceId(surface),
+        window: Arc::new(HeadlessWindow),
+        alpha: SurfaceAlpha::Opaque,
+        timing: SurfaceTiming::new(PresentationPolicy::Automatic),
+        output: OutputRequest::default(),
+        hdr_metadata: None,
+        gpu_budget: None,
+        control: NoControl,
+    })))
+}
+
+fn outline(surface: u64) -> TestInput {
     RendererInput::Outline {
         surface: SurfaceId(surface),
         outline: None,
     }
 }
 
-fn control(surface: u64) -> RendererInput<NoControl> {
+fn control(surface: u64) -> TestInput {
     RendererInput::Surface(SurfaceAttachment::Control {
         surface: SurfaceId(surface),
         message: (),
     })
 }
 
-fn detach(surface: u64) -> RendererInput<NoControl> {
+fn detach(surface: u64) -> TestInput {
     RendererInput::Surface(SurfaceAttachment::Detach(SurfaceId(surface)))
+}
+
+fn stream_task(task: impl FnOnce(&mut NoStreams, &Painter) + Send + 'static) -> TestInput {
+    RendererInput::Streams(Box::new(task))
 }
 
 /// What the renderer takes from its mailbox, without the values that the merge rule ignores.
@@ -85,11 +132,12 @@ enum Taken {
     AdvanceScene,
     Detach(u64),
     Attach,
+    Streams,
     Stop,
 }
 
 impl Taken {
-    fn of(input: &RendererInput<NoControl>) -> Self {
+    fn of(input: &TestInput) -> Self {
         match input {
             RendererInput::Render { surface, time, .. } => Self::Render(surface.0, time.sequence),
             RendererInput::Outline { surface, .. } => Self::Outline(surface.0),
@@ -97,16 +145,17 @@ impl Taken {
                 Self::Control(surface.0)
             }
             RendererInput::CommitState { surface, .. } => Self::CommitState(surface.0),
-            RendererInput::AdvanceScene(_) => Self::AdvanceScene,
+            RendererInput::AdvanceScene { .. } => Self::AdvanceScene,
             RendererInput::Surface(SurfaceAttachment::Detach(surface)) => Self::Detach(surface.0),
             RendererInput::Surface(SurfaceAttachment::Attach(_)) => Self::Attach,
+            RendererInput::Streams(_) => Self::Streams,
             RendererInput::Stop => Self::Stop,
         }
     }
 }
 
 /// The inputs that the renderer takes at once after `inputs` were pushed while it was busy.
-fn taken(inputs: impl IntoIterator<Item = RendererInput<NoControl>>) -> Result<Vec<Taken>, Closed> {
+fn taken(inputs: impl IntoIterator<Item = TestInput>) -> Result<Vec<Taken>, Closed> {
     let (sender, receiver) = mailbox();
     for input in inputs {
         sender.push(input)?;
@@ -159,20 +208,27 @@ fn a_message_a_commit_or_a_detach_keeps_the_frames_on_either_side() -> TestResul
 }
 
 #[test]
+fn a_stream_task_keeps_the_frames_on_either_side() -> TestResult {
+    let inputs = [render(1, 1), stream_task(|_, _| {}), render(1, 2)];
+    let expected = [Taken::Render(1, 1), Taken::Streams, Taken::Render(1, 2)];
+    assert_eq!(taken(inputs)?, expected);
+    Ok(())
+}
+
+#[test]
 fn a_later_scene_advance_replaces_one_not_handled_yet() -> TestResult {
-    let viewport = Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE);
-    let inputs = [
-        RendererInput::AdvanceScene(viewport),
-        render(1, 1),
-        RendererInput::AdvanceScene(viewport),
-    ];
+    let advance = || RendererInput::AdvanceScene {
+        viewport: viewport(),
+        scale: PixelScale::SQUARE,
+    };
+    let inputs = [advance(), render(1, 1), advance()];
     assert_eq!(taken(inputs)?, [Taken::AdvanceScene, Taken::Render(1, 1)]);
     Ok(())
 }
 
 #[test]
 fn the_scene_deadline_is_reported_only_when_an_input_changes_it() {
-    let passed = Instant::now();
+    let passed = Duration::from_secs(1);
     let later = passed + Duration::from_millis(16);
     assert!(scene_wake(Some(passed), Some(passed)).is_none());
     assert!(scene_wake(None, None).is_none());
@@ -210,6 +266,35 @@ fn a_detached_surface_is_reported_after_the_inputs_sent_before_it() -> TestResul
         outputs.recv()?,
         RendererOutput::Retired(SurfaceId(3))
     ));
+    renderer.stop()?;
+    Ok(())
+}
+
+#[test]
+fn each_frame_is_drawn_at_the_scale_that_it_carries() -> TestResult {
+    let (mut renderer, outputs) = start(None)?;
+    renderer.send(attach(1))?;
+    let wide = PixelScale::filling(viewport(), PixelSize::new(8, 4))?;
+    for (sequence, scale) in [(1, wide), (2, PixelScale::SQUARE)] {
+        renderer.send(render_at(1, sequence, scale))?;
+        let drawn = match outputs.recv()? {
+            RendererOutput::Rendered(frame) => Some((frame.scale, frame.contents)),
+            _ => None,
+        };
+        assert_eq!(drawn, Some((scale, SurfaceContents::Current)));
+    }
+    renderer.stop()?;
+    Ok(())
+}
+
+#[test]
+fn a_stream_task_runs_on_the_renderer_with_its_streams() -> TestResult {
+    let (mut renderer, _outputs) = start(None)?;
+    let (ran, received) = mpsc::channel();
+    renderer.send(stream_task(move |_, _| {
+        let _test_waits_below = ran.send(());
+    }))?;
+    received.recv()?;
     renderer.stop()?;
     Ok(())
 }

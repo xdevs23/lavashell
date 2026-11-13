@@ -17,7 +17,7 @@ pub use overlay_gpu::LavashellOverlayPlugin;
 pub use timings::{OverlayImageTrace, OverlayTiming};
 
 use bevy::{prelude::*, render::MainWorld, render::extract_component::ExtractComponent};
-use lavashell_actor::{Closed, Latest};
+use lavashell_actor::{Closed, Latest, SystemClock};
 use lavashell_core::error::message_chain;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::Viewport;
@@ -73,7 +73,8 @@ impl OverlayFrame {
             Ok(())
         };
         Ok(Self {
-            scene: ScenePipeline::start(Box::new(observer)).map_err(Error::StartScene)?,
+            scene: ScenePipeline::start(Box::new(observer), &SystemClock::start())
+                .map_err(Error::StartScene)?,
             restart,
             sent: BTreeMap::new(),
             sequence: 0,

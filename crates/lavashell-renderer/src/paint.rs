@@ -32,7 +32,7 @@ use crate::text::{ParagraphInput, Shaper};
 use brush::brush_paint;
 pub(crate) use brush::{color4f, solid};
 use lavashell_core::prelude::*;
-pub use outline::{OutlineError, clip_path, outline_path};
+pub use outline::{OutlineError, outline_path};
 pub(crate) use skia_geometry::{
     clip_device, device_scale, dp_of, max_image_side, rect_of, rounded, rrect, sklength, skmatrix,
     skpath, skpath_through,

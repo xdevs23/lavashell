@@ -12,6 +12,7 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::*;
+use lavashell_test_fixtures::show_all;
 use skia_safe::Canvas;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
@@ -76,7 +77,7 @@ fn group(transform: Affine, opacity: f64, clip: Option<RoundedRect>) -> Node {
 
 fn tree(changes: impl IntoIterator<Item = Change>) -> Result<SceneTree, TestError> {
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     Ok(tree)
 }
 
@@ -240,17 +241,14 @@ fn a_graft_paints_the_namespace_that_it_shows_in_place() -> Result<(), TestError
     let place = Affine::rotate(0.2).translated(Point::new(30.dp(), 20.dp()));
     let mut grafted = SceneTree::default();
     let guest = grafted.create_namespace();
-    grafted.apply(
-        guest,
-        SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),
-    )?;
+    grafted.apply_change(guest, insert(1, None, 0, leaf(shapes())))?;
     let graft = Node::Leaf(Content::Graft(guest));
-    grafted.apply(
-        SceneTree::ROOT,
-        SceneUpdate::from_iter([
+    show_all(
+        &mut grafted,
+        [
             insert(1, None, 0, group(place, 0.7, None)),
             insert(2, Some(1), 0, graft),
-        ]),
+        ],
     )?;
     assert_eq!(
         painted(&grafted, Density::ONE)?,
@@ -267,25 +265,14 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let mut target = surface(WIDTH, HEIGHT)?;
     let _chained_canvas = target.canvas().clear(skia_safe::Color::WHITE);
     let before = pixels(&mut target);
-    let plan = painter.plan(
-        target.canvas(),
-        scene.at(Duration::ZERO),
-        Density::ONE,
-        None,
-    );
+    let plan = painter.plan(target.canvas(), scene.at(Duration::ZERO), None);
     let [crate::plan::Planned::Group { group: planned, .. }] = plan.steps.as_slice() else {
         return Err(TestError::Missing("group"));
     };
     assert_eq!(planned.destination, Destination::Layer);
     assert_eq!(planned.device_extent, None);
     let streams = StreamFrames::default();
-    painter.paint_tree(
-        target.canvas(),
-        &plan,
-        Area::Everything,
-        Density::ONE,
-        &streams,
-    );
+    painter.paint_tree(target.canvas(), &plan, Area::Everything, &streams);
     assert_eq!(pixels(&mut target), before);
     Ok(())
 }
@@ -324,7 +311,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
             id: SceneNodeId(1),
             slot: SlotChange::Transform(Slot::Value(at(x, y))),
         };
-        scene.show(SceneUpdate::from_iter([moved]))?;
+        scene.show_change(moved)?;
         assert_eq!(
             paint(&mut painter, &scene),
             painted(&scene, Density::ONE)?,
@@ -373,20 +360,23 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
     painter.effect_quality(planned.clone());
     let mut scene = SceneTree::default();
     let guest = scene.create_namespace();
-    scene.apply(
-        guest,
-        SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes()))]),
-    )?;
+    scene.apply_change(guest, insert(1, None, 0, leaf(shapes())))?;
     let root = [
         insert(1, None, 0, leaf(shapes())),
         insert(2, None, 1, Node::Leaf(Content::Graft(guest))),
     ];
-    scene.show(SceneUpdate::from_iter(root))?;
+    show_all(&mut scene, root)?;
     let budget = FrameBudget {
         surface: SurfaceId(3),
         gpu_time: Some(Duration::from_millis(1)),
     };
-    let quality = painter.plan_scene_effects(scene.at(Duration::ZERO), budget, 1, 1, Density::ONE);
+    let quality = painter.plan_scene_effects(
+        scene.at(Duration::ZERO),
+        budget,
+        1,
+        1,
+        PixelScale::SQUARE.dp_to_output(Density::ONE),
+    );
     assert_eq!(quality, QualityChange::Unchanged);
     let mut target = surface(WIDTH, HEIGHT)?;
     painter.paint_scene(target.canvas(), scene.at(Duration::ZERO), Density::ONE);
@@ -427,13 +417,13 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
             id: SceneNodeId(2),
             slot: SlotChange::Transform(Slot::Value(at(f64::from(sequence)))),
         };
-        scene.show(SceneUpdate::from_iter([moved]))?;
+        scene.show_change(moved)?;
         let damage = presented.damage(scene.at(Duration::ZERO), viewport);
         painter.paint_surface(
             retained.canvas(),
             SurfaceFrame {
                 tree: scene.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: PixelScale::SQUARE.dp_to_output(Density::ONE),
                 damage,
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,

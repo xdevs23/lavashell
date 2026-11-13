@@ -3,48 +3,15 @@ use super::*;
 use crate::clipboard::ClipboardTransfers;
 use crate::clipboard::tests::{TestError, TestResult, move_bytes, receive_request, set_request};
 use crate::surface_records::SurfaceRecords;
+use crate::test_host::{FIELD_VIEWPORT, field_view, focus_field};
 use crate::view_actions::ActionQueue;
 use crate::watches::Watches;
 use lavashell_core::prelude::{
-    AccessibilityAction, ActionOutcome, ActionRequest, Density, Dp, DpExt, Modifier, NodeId, Point,
-    PreferenceOverrides, Semantics, Size, State, TextFieldOptions, TextMeasurer, TextSelection,
-    TextStyle, Viewport,
+    AccessibilityAction, ActionOutcome, ActionRequest, Modifier, NodeId, PreferenceOverrides,
+    Semantics, State, TextSelection,
 };
 use lavashell_platform::{ClipboardEvent, FormatId, SelectionRefusal};
-use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
 use std::io::Write;
-
-struct Metrics;
-
-impl TextMeasurer for Metrics {
-    fn measure(&mut self, value: &str, _: &TextStyle<Dp>, width: Dp) -> Size {
-        let natural: Dp = value.chars().map(|_| 10.dp()).sum();
-        Size::new(natural.min(width), 20.dp())
-    }
-}
-
-const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
-
-/// A view that shows a text field named `field` with the text "abc def", after its first frame, and the state of the
-/// text.
-fn field_view(modifier: Modifier) -> Result<(View, State<String>), TestError> {
-    let value = State::new("abc def".to_string());
-    let shown = value.clone();
-    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
-        let shown = shown.clone();
-        ui.text_area(
-            shown.get(),
-            TextFieldOptions::default(),
-            modifier
-                .clone()
-                .accessible_name("field")
-                .size(140.dp(), 60.dp()),
-            move |text| shown.set(text),
-        );
-    });
-    (view.frame_into(WINDOW, &mut Metrics, &mut RecordedScene::default())).without_failures()?;
-    Ok((view, value))
-}
 
 /// A run with one surface, whose view shows a focused text field with the text "abc def" and "def" selected.
 struct Editor {
@@ -76,7 +43,13 @@ impl Editor {
             assert_eq!(outcome, Ok(ActionOutcome::Performed));
         }
         let mut records = SurfaceRecords::new(PreferenceOverrides::default());
-        let surface = records.open(view, WINDOW.size, WINDOW.density, None, String::new())?;
+        let surface = records.open(
+            view,
+            FIELD_VIEWPORT.size,
+            FIELD_VIEWPORT.density,
+            None,
+            String::new(),
+        )?;
         let watches = Watches::default();
         let actions = ActionQueue::new(&watches);
         let transfers = ClipboardTransfers::new(&watches);
@@ -93,12 +66,12 @@ impl Editor {
     }
 
     /// Applies Control with `key` to the view, and starts the clipboard requests that follow from it.
-    fn press(&mut self, key: char) -> Result<bool, TestError> {
+    fn press(&mut self, key: char) -> Result<ShortcutOutcome, TestError> {
         let view =
             (self.records.open_view_mut(self.surface)).ok_or(TestError::Missing("the view"))?;
-        let applied = self.text.apply_shortcut(self.surface, &control(key), view);
+        let outcome = self.text.apply_shortcut(self.surface, &control(key), view);
         self.transfers.submit(&self.records);
-        Ok(applied)
+        Ok(outcome)
     }
 
     fn run_actions(&mut self) -> TestResult {
@@ -121,11 +94,6 @@ fn control(key: char) -> InputEvent {
     InputEvent::Shortcut(Shortcut::control(Key::Character(key)))
 }
 
-fn focus_field(view: &mut View) {
-    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
-    view.input(InputEvent::Release(Point::new(11.dp(), 5.dp())));
-}
-
 fn select_all(view: &mut View) {
     view.input(control('a'));
 }
@@ -137,7 +105,7 @@ fn read_only(semantics: &mut Semantics) {
 #[test]
 fn cut_text_leaves_the_field_once_the_selection_is_set() -> TestResult {
     let mut editor = Editor::new()?;
-    assert!(editor.press('x')?);
+    assert_eq!(editor.press('x')?, ShortcutOutcome::Applied);
     let (id, _) = set_request(editor.transfers.take_requests())?;
     editor.run_actions()?;
     assert_eq!(editor.value.get(), "abc def");
@@ -153,7 +121,7 @@ fn cut_text_leaves_the_field_once_the_selection_is_set() -> TestResult {
 #[test]
 fn cut_text_stays_in_the_field_when_the_selection_is_refused() -> TestResult {
     let mut editor = Editor::new()?;
-    assert!(editor.press('x')?);
+    assert_eq!(editor.press('x')?, ShortcutOutcome::Applied);
     let (id, _) = set_request(editor.transfers.take_requests())?;
     let refusal = Err(SelectionRefusal::NoInput);
     editor
@@ -216,7 +184,10 @@ fn paste_without_an_edited_field_is_not_a_clipboard_shortcut() {
     let transfers = ClipboardTransfers::new(&watches);
     let text = TextClipboard::new(transfers.clipboard(), actions.view_actions());
     let mut view = View::new(lavashell_test_fixtures::facts(), |_| {});
-    assert!(!text.apply_shortcut(SurfaceId(0), &control('v'), &mut view));
+    assert_eq!(
+        text.apply_shortcut(SurfaceId(0), &control('v'), &mut view),
+        ShortcutOutcome::Declined
+    );
     transfers.submit(&SurfaceRecords::new(PreferenceOverrides::default()));
     assert!(transfers.take_requests().is_empty());
 }
@@ -228,7 +199,7 @@ fn pasted_text_lands_in_the_field_without_control_characters() -> TestResult {
     editor
         .transfers
         .handle(ClipboardEvent::SelectionOffered(formats));
-    assert!(editor.press('v')?);
+    assert_eq!(editor.press('v')?, ShortcutOutcome::Applied);
     let (id, _) = receive_request(editor.transfers.take_requests())?;
     let (reader, mut writer) = std::io::pipe()?;
     writer.write_all("x\u{7}y".as_bytes())?;

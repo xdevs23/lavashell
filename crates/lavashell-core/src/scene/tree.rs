@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! A scene tree of groups and leaves, split into namespaces. Each producer writes the nodes of one namespace and
-//! changes them through updates. A leaf can graft one namespace into another.
+//! A scene tree of groups and leaves, split into namespaces. Each producer writes the nodes of one namespace by
+//! applying changes one at a time. A leaf can graft one namespace into another.
 
+mod change;
 mod commands;
 mod damage;
 #[cfg(test)]
@@ -24,8 +25,8 @@ mod tests;
 mod trie;
 #[cfg(test)]
 mod trie_tests;
-mod update;
 
+pub use change::{ApplyError, Change, SlotChange};
 pub use damage::DamageTracker;
 pub use effect::{ChangeEffect, ChangeField, ChangeKey};
 pub use order::{PaintOrder, PaintVisitor, PlacedLeaf, Presented};
@@ -34,7 +35,6 @@ pub(crate) use presence::Stretch;
 pub use presence::{Presence, PresenceMap, PresenceParts, ScaleOrigin};
 pub use slot::{Clamp, Group, GroupValues, Slot, SlotMotion, SlotValue, TransformMotion};
 pub use snapshot::SceneSnapshot;
-pub use update::{ApplyError, Change, SceneUpdate, SlotChange};
 
 use crate::geometry::Rect;
 use crate::retained::Footprint;
@@ -244,15 +244,13 @@ impl SceneTree {
         Ok(tree)
     }
 
+    /// Applies `change` to the root namespace after checking that it fits the tree.
+    ///
     /// # Errors
     ///
-    /// Fails with the first change of `update` that does not fit the tree.
-    pub fn show(&mut self, update: SceneUpdate) -> Result<(), ApplyError> {
-        self.apply(Self::ROOT, update)
-    }
-
-    pub(crate) fn show_change(&mut self, change: Change) -> Result<(), ApplyError> {
-        self.change(Self::ROOT, change)
+    /// Fails when the change does not fit the tree.
+    pub fn show_change(&mut self, change: Change) -> Result<(), ApplyError> {
+        self.apply_change(Self::ROOT, change)
     }
 
     pub(crate) fn children(

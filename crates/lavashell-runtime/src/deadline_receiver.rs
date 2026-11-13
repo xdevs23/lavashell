@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_actor::{Closed, Merge, Receiver};
+use lavashell_actor::{Clock, Closed, Merge, Receiver, Timeout, Waiter};
 use rustix::event::{EventfdFlags, PollFd, PollFlags, eventfd, poll};
 use rustix::io::{Errno, read, write};
 use rustix::time::{
@@ -8,7 +8,7 @@ use rustix::time::{
 };
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod error;
 
@@ -25,11 +25,13 @@ pub(crate) enum Arrival<T> {
     SendersGone,
 }
 
-/// The end of a mailbox that receives its items and also waits for a deadline. The mailbox makes one file descriptor
-/// readable when an item arrives, and a timer of the system makes another readable when the deadline passes, so that
-/// one poll waits for both events.
+/// The end of a mailbox that receives its items and also waits for a deadline on a clock. The mailbox makes one file
+/// descriptor readable when an item arrives, and a timer of the system makes another readable when the deadline
+/// passes on the system clock, so that one poll waits for both events. A clock that does not move by itself wakes
+/// the receiver as an arrival does once it moved past the deadline.
 pub(crate) struct DeadlineReceiver<T: Merge> {
     items: Receiver<T>,
+    waiter: Box<dyn Waiter>,
     arrived: Arc<ArrivalSignal>,
     deadline: OwnedFd,
 }
@@ -40,13 +42,17 @@ struct ArrivalSignal {
     failure: OnceLock<Errno>,
 }
 
-impl<T: Merge> DeadlineReceiver<T> {
-    /// Receives the items of `items`, and replaces the function that `items` runs on arrival.
+impl<T: Merge + Send + 'static> DeadlineReceiver<T>
+where
+    T::Key: Send,
+{
+    /// Receives the items of `items` and waits for deadlines on `clock`, and replaces the function run by `items` on
+    /// arrival.
     ///
     /// # Errors
     ///
     /// Fails when the file descriptor that signals arrivals or the timer cannot be created.
-    pub(crate) fn new(items: Receiver<T>) -> Result<Self, Error> {
+    pub(crate) fn new(items: Receiver<T>, clock: &dyn Clock) -> Result<Self, Error> {
         let flags = EventfdFlags::CLOEXEC | EventfdFlags::NONBLOCK;
         let descriptor = eventfd(0, flags).map_err(Error::CreateInputWake)?;
         let arrived = Arc::new(ArrivalSignal {
@@ -58,21 +64,24 @@ impl<T: Merge> DeadlineReceiver<T> {
             .map_err(Error::CreateInputWake)?;
         let signalled = Arc::clone(&arrived);
         items.on_arrival(move || signalled.signal());
+        let waker = items.waker();
+        let waiter = clock.waiter(Arc::new(move || waker.wake()));
         Ok(Self {
             items,
+            waiter,
             arrived,
             deadline,
         })
     }
 
-    /// Removes every waiting item, or else waits until an item arrives, every sender is gone or `deadline` passes.
-    /// Without a deadline, the wait ends only with an arrival or with the end of the senders.
+    /// Removes every waiting item, or else waits until an item arrives, every sender is gone or `deadline` passes on
+    /// the clock. Without a deadline, the wait ends only with an arrival or with the end of the senders.
     ///
     /// # Errors
     ///
     /// Fails when a sender could not signal an arrival, or when the timer cannot be set or the wait for the file
     /// descriptors fails.
-    pub(crate) fn take_until(&self, deadline: Option<Instant>) -> Result<Arrival<T>, Error> {
+    pub(crate) fn take_until(&self, deadline: Option<Duration>) -> Result<Arrival<T>, Error> {
         loop {
             if let Some(&failure) = self.arrived.failure.get() {
                 return Err(Error::SignalInput(failure));
@@ -82,9 +91,13 @@ impl<T: Merge> DeadlineReceiver<T> {
                 Ok(items) if items.is_empty() => {}
                 Ok(items) => return Ok(Arrival::Items(items)),
             }
-            let left = deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
-            if left == Some(Duration::ZERO) {
-                return Ok(Arrival::DeadlinePassed);
+            let left = match self.waiter.wait_until(deadline) {
+                Timeout::Passed => return Ok(Arrival::DeadlinePassed),
+                Timeout::After(left) => Some(left),
+                Timeout::Unbounded => None,
+            };
+            if !self.items.rest_if_empty() {
+                continue;
             }
             self.arm(left)?;
             let mut waits = [

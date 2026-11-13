@@ -5,8 +5,9 @@ use crate::test_surfaces::{self, ChannelRounding};
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{
-    Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate, Slot,
+    Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, Slot,
 };
+use lavashell_test_fixtures::show_all;
 use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -85,7 +86,7 @@ fn faded(
         insert(3, Some(2), 0, leaf(inside)),
     ];
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     Ok(tree.snapshot())
 }
 

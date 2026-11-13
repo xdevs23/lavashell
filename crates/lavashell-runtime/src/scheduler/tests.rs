@@ -193,8 +193,30 @@ fn a_view_composes_again_only_once_the_display_is_ready() -> TestResult {
     assert!(script.at(3, wants(ViewState::Changed, None)).is_empty());
     assert!(script.at(4, shown(first, ms(4))).is_empty());
     assert!(script.at(5, wants(ViewState::Changed, None)).is_empty());
-    assert!(script.at(16, display_ready()).is_empty());
-    let second = script.compose_at(16, wants(ViewState::Changed, None))?;
+    let second = script.compose_at(16, display_ready())?;
+    assert_eq!(second.sequence, first.sequence + 1);
+    Ok(())
+}
+
+#[test]
+fn a_continuous_redraw_composes_when_the_display_is_ready() -> TestResult {
+    let mut script = Script::opened(Redraw::Continuous);
+    let first = script.compose_at(0, wants(ViewState::Unchanged, None))?;
+    assert!(script.at(1, wants(ViewState::Unchanged, None)).is_empty());
+    let _drawn = script.render_at(2, built(first.sequence))?;
+    assert!(script.at(3, shown(first, ms(1))).is_empty());
+    let second = script.compose_at(16, display_ready())?;
+    assert_eq!(second.sequence, first.sequence + 1);
+    Ok(())
+}
+
+#[test]
+fn a_display_ready_during_the_render_starts_the_next_frame_once_shown() -> TestResult {
+    let mut script = Script::opened(Redraw::OnChange);
+    let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
+    assert!(script.at(1, wants(ViewState::Changed, None)).is_empty());
+    assert!(script.at(2, display_ready()).is_empty());
+    let second = script.compose_at(3, shown(first, ms(1)))?;
     assert_eq!(second.sequence, first.sequence + 1);
     Ok(())
 }

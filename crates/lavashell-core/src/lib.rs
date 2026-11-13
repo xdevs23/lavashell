@@ -67,8 +67,8 @@ pub mod prelude {
         PresentedFrame,
     };
     pub use crate::geometry::{
-        Axis, Color, Constraints, ContourPoint, FinitePoint, Insets, Length, PixelSize, PlainPoint,
-        Point, Rect, Size, Span, VIEWPORT, Viewport,
+        Axis, Color, Constraints, ContourPoint, FinitePoint, Insets, Length, PixelScale, PixelSize,
+        PlainPoint, Point, Rect, Size, Span, VIEWPORT, Viewport,
     };
     pub use crate::gradient::{ColorStop, Gradient, GradientKind, TileMode};
     pub use crate::image::{
@@ -91,7 +91,7 @@ pub mod prelude {
     pub use crate::scene::{
         Affine, Brush, DrawCommand, DrawContext, Drawing, FontSize, FontWeight, Icon, IconPath,
         ParagraphDirection, SceneBuilder, Segment, TEXT_STYLE, TextAlignment, TextSpan, TextStyle,
-        tree::{DamageTracker, Presented, SceneSnapshot, SceneTree, SceneUpdate},
+        tree::{DamageTracker, Presented, SceneSnapshot, SceneTree},
     };
     pub use crate::scroll::{ScrollState, ScrollView, Scrolling};
     pub use crate::shape::{Corners, Polygon, Radius, RoundedRect, Shape, UnionMember};

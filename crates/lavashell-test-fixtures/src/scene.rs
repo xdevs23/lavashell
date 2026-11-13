@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::scene::tree::{ApplyError, Change};
+use lavashell_core::scene::tree::{ApplyError, Change, SceneTree};
 use lavashell_core::scene::{ChangeSink, SceneBuilder, SinkId};
+
+/// Applies `changes` to the root namespace of `tree` one at a time, in order.
+///
+/// # Errors
+/// Fails at the first change that does not fit the tree. The earlier changes are applied.
+pub fn show_all(
+    tree: &mut SceneTree,
+    changes: impl IntoIterator<Item = Change>,
+) -> Result<(), ApplyError> {
+    (changes.into_iter()).try_for_each(|change| tree.show_change(change))
+}
 
 /// A change sink that builds the scene from every frame of a view and records the changes of the last frame.
 #[derive(Default)]

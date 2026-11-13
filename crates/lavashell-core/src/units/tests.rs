@@ -74,8 +74,10 @@ fn a_buffer_covers_every_dp_of_a_size_in_whole_pixels() -> TestResult {
 
 #[test]
 fn a_buffer_of_a_negative_length_is_rejected() {
-    let size = Size::new(Dp::new(-1.0), Dp::new(1.0));
-    assert_eq!(size.buffer_size(Density::ONE), Err(NumberError::Negative));
+    for width in [-1.0, -0.5] {
+        let size = Size::new(Dp::new(width), Dp::new(1.0));
+        assert_eq!(size.buffer_size(Density::ONE), Err(NumberError::Negative));
+    }
 }
 
 #[test]
