@@ -2,6 +2,7 @@
 mod host_surface;
 mod input;
 mod motion;
+mod settings;
 mod stream_tests;
 
 use crate::platform::TestError;

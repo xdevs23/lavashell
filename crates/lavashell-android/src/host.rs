@@ -6,6 +6,8 @@ pub use error::AospError;
 
 use crate::input::{MotionEvent, MotionTranslator};
 use crate::native_window::NativeWindow;
+use crate::output::{HostDisplay, HostOutput};
+use crate::settings::{HostConfiguration, report_configuration};
 use crate::streams::AospStreams;
 use lavashell_actor::{Closed, lock_ignoring_poison};
 use lavashell_platform::{PlatformLinks, PlatformRequest, Reports, StreamTask};
@@ -22,14 +24,23 @@ enum HostMessage {
     SurfaceDestroyed(mpsc::SyncSender<()>),
     Frame,
     Motion(MotionEvent),
+    DisplayChanged(HostDisplay),
+    ConfigurationChanged(HostConfiguration),
     /// Requests of the runtime arrived, or every sender of the requests is gone.
     Requests,
     Streams(StreamTask<AospStreams>),
 }
 
+/// The messages of an `AospHost`, and the display and the configuration passed to `AospHost::new`.
+struct HostStart {
+    messages: mpsc::Receiver<HostMessage>,
+    display: HostDisplay,
+    configuration: HostConfiguration,
+}
+
 /// The link between an `AospHost` and the platform of the run started inside `AospHost::serve`.
 pub(crate) struct HostLink {
-    messages: mpsc::Receiver<HostMessage>,
+    start: HostStart,
     wake: mpsc::Sender<HostMessage>,
     remains: mpsc::Sender<Remains>,
 }
@@ -53,11 +64,18 @@ impl HostLink {
         links: PlatformLinks<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
         let Self {
-            messages,
+            start,
             wake,
             remains,
         } = self;
+        let HostStart {
+            messages,
+            display,
+            configuration,
+        } = start;
         let PlatformLinks { reports, requests } = links;
+        let mut output = HostOutput::added(display, &reports);
+        report_configuration(configuration, &reports);
         requests.on_arrival(move || {
             let _ended_platform_reads_nothing = wake.send(HostMessage::Requests);
         });
@@ -67,6 +85,7 @@ impl HostLink {
             &messages,
             &requests,
             &reports,
+            &mut output,
             &mut surface,
             &mut translator,
         );
@@ -84,6 +103,7 @@ fn execute_messages(
     messages: &mpsc::Receiver<HostMessage>,
     requests: &lavashell_actor::Receiver<PlatformRequest>,
     reports: &Reports<NativeWindow, AospStreams>,
+    output: &mut HostOutput,
     surface: &mut HostSurface,
     translator: &mut MotionTranslator,
 ) -> Result<(), AospError> {
@@ -95,17 +115,27 @@ fn execute_messages(
                     Ok(arrived) if arrived.is_empty() => break,
                     Ok(arrived) => {
                         for request in arrived {
-                            surface.execute(request, reports)?;
+                            surface.execute(request, output.density(), reports)?;
                         }
                     }
                     Err(Closed) => return Ok(()),
                 }
             },
-            HostMessage::SurfaceCreated(window) => surface.created(window, reports)?,
+            HostMessage::SurfaceCreated(window) => {
+                surface.created(window, output.density(), reports)?;
+            }
             HostMessage::SurfaceChanged => surface.changed(reports)?,
             HostMessage::SurfaceDestroyed(retired) => surface.destroyed(retired, reports),
             HostMessage::Frame => surface.frame(reports),
             HostMessage::Motion(event) => translator.report(event, surface.shown(), reports),
+            HostMessage::DisplayChanged(display) => {
+                if let Some(density) = output.changed(display, reports) {
+                    surface.density_changed(density, reports);
+                }
+            }
+            HostMessage::ConfigurationChanged(configuration) => {
+                report_configuration(configuration, reports);
+            }
             HostMessage::Streams(task) => reports.run_on_streams(task),
         }
     }
@@ -139,7 +169,7 @@ impl Drop for Served {
 
 struct Channel {
     sender: mpsc::Sender<HostMessage>,
-    unserved: Mutex<Option<mpsc::Receiver<HostMessage>>>,
+    unserved: Mutex<Option<HostStart>>,
 }
 
 /// The callbacks called by the activity's JNI methods from any thread, for one run of the runtime. A callback that
@@ -153,12 +183,19 @@ pub struct AospHost(Arc<Channel>);
 pub struct RunEnded;
 
 impl AospHost {
+    /// A host whose Surface is shown on `display`, in `configuration`. `display_of` and `configuration_of` read both
+    /// from the activity.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(display: HostDisplay, configuration: HostConfiguration) -> Self {
         let (sender, messages) = mpsc::channel();
+        let start = HostStart {
+            messages,
+            display,
+            configuration,
+        };
         Self(Arc::new(Channel {
             sender,
-            unserved: Mutex::new(Some(messages)),
+            unserved: Mutex::new(Some(start)),
         }))
     }
 
@@ -167,8 +204,8 @@ impl AospHost {
     /// ends returns after `run` has returned, when the run has stopped the renderer.
     pub fn serve<T>(self, run: impl FnOnce() -> T) -> T {
         let (remains, _destroy_callbacks_until_run_returns) = mpsc::channel();
-        let link = (lock_ignoring_poison(&self.0.unserved).take()).map(|messages| HostLink {
-            messages,
+        let link = (lock_ignoring_poison(&self.0.unserved).take()).map(|start| HostLink {
+            start,
             wake: self.0.sender.clone(),
             remains,
         });
@@ -200,6 +237,17 @@ impl AospHost {
         self.send(HostMessage::Frame);
     }
 
+    /// Reports a change of the display that shows the Surface. Call it in `onDisplayChanged` of a `DisplayListener`
+    /// registered for the display that shows the activity.
+    pub fn display_changed(&self, display: HostDisplay) {
+        self.send(HostMessage::DisplayChanged(display));
+    }
+
+    /// Reports a change of the configuration of the host app. Call it in `onConfigurationChanged`.
+    pub fn configuration_changed(&self, configuration: HostConfiguration) {
+        self.send(HostMessage::ConfigurationChanged(configuration));
+    }
+
     /// Reports a motion event on the Surface. Call it in `onTouchEvent` and in `onGenericMotionEvent` of the view that
     /// shows the Surface.
     pub fn motion(&self, event: MotionEvent) {
@@ -226,11 +274,5 @@ impl AospHost {
     /// Sends `message` to the run. The message is dropped when the run has ended.
     fn send(&self, message: HostMessage) {
         let _ended_run_reads_nothing = self.0.sender.send(message);
-    }
-}
-
-impl Default for AospHost {
-    fn default() -> Self {
-        Self::new()
     }
 }

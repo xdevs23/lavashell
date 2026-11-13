@@ -17,7 +17,7 @@ pub enum Pane {
     Grouped {
         image: StreamImage,
         opacity: f64,
-        shift: Dp,
+        shift: Px,
     },
 }
 
@@ -68,6 +68,7 @@ fn compose(ui: &mut Ui, shown: &State<Pane>, size: Size) {
                 .size(size.width, size.height)
                 .background(Color::rgb(0x00_0000));
             ui.layout(Arrangement::Overlay, black, |ui| {
+                let shift = ui.viewport().density.to_dp(shift);
                 let moved = Modifier::new().opacity(opacity).offset(shift, Dp::ZERO);
                 ui.canvas(size, moved, draw(image));
             });

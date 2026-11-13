@@ -6,6 +6,7 @@ use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::StreamId;
+use lavashell_core::units::NumberError;
 use lavashell_renderer::{Error as RendererError, FenceCopyError, MultipleFailures};
 
 /// A failure in the AOSP host integration. Each variant is named after the operation that failed.
@@ -103,6 +104,14 @@ pub enum Error {
     #[cfg(target_os = "android")]
     #[error("the MotionEvent is malformed")]
     MalformedMotion(#[from] MalformedMotion),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the display or the display metrics of the Context")]
+    ReadDisplay(#[source] jni::errors::Error),
+    #[error("cannot convert the dpi of the display into a density")]
+    ConvertDensity(#[source] NumberError),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the configuration of the Context")]
+    ReadConfiguration(#[source] jni::errors::Error),
     /// Failures of one call, in the order in which they happened. After each failure, the call continued with the work
     /// that did not depend on the failed work.
     #[error("{}", in_order(.0))]
@@ -119,6 +128,16 @@ impl MultipleFailures for Error {
             Self::Several(failures) => failures,
             failure => vec![failure],
         }
+    }
+}
+
+/// Fails when a Java exception is pending, because JNI cannot call into Java while one is.
+#[cfg(target_os = "android")]
+pub(crate) fn ensure_no_exception(env: &jni::Env<'_>) -> Result<(), Error> {
+    if env.exception_check() {
+        Err(Error::PendingException)
+    } else {
+        Ok(())
     }
 }
 

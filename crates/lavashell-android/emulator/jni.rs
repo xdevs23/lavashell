@@ -8,7 +8,9 @@ use ::jni::objects::JLongArray;
 use ::jni::objects::{JClass, JIntArray, JObject};
 use ::jni::sys::{jboolean, jfloat, jint, jlong};
 use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
-use lavashell_android::{BufferSizes, StreamFormat, motion_event_of, surface_of_window};
+use lavashell_android::{
+    BufferSizes, StreamFormat, configuration_of, display_of, motion_event_of, surface_of_window,
+};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::{ForeignFormat, skia};
@@ -25,22 +27,27 @@ thread_local! {
 #[jni_mangle("org.lavashell.surfacestream.StreamRoundTripActivity")]
 pub fn create<'local>(
     env: EnvUnowned<'local>,
-    _: JClass<'local>,
+    activity: JObject<'local>,
     width: u32,
     height: u32,
     max_width: u32,
     max_height: u32,
     rgba: jboolean,
 ) -> jlong {
-    export(env, |_| {
+    export(env, |env| {
         let format = if rgba {
             StreamFormat::Rgba8888
         } else {
             StreamFormat::Private
         };
+        let display = display_of(env, &activity).map_err(NativeMethodError::ReadDisplay)?;
+        let configuration =
+            configuration_of(env, &activity).map_err(NativeMethodError::ReadConfiguration)?;
         let round_trip = StreamRoundTrip::new(
             to_buffer_sizes([width, height], [max_width, max_height]),
             format,
+            display,
+            configuration,
         )?;
         ROUND_TRIPS.with(|round_trips| {
             let mut round_trips = round_trips

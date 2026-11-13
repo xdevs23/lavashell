@@ -3,7 +3,8 @@ use crate::error::NativeMethodError;
 use crate::pane::{Pane, run_pane};
 use lavashell_actor::{Receiver, Sender, mailbox};
 use lavashell_android::{
-    AospHost, AospStreams, BufferSizes, MotionEvent, NativeWindow, StreamFormat, SurfaceStream,
+    AospHost, AospStreams, BufferSizes, HostConfiguration, HostDisplay, MotionEvent, NativeWindow,
+    StreamFormat, SurfaceStream,
 };
 use lavashell_core::prelude::*;
 use lavashell_renderer::{
@@ -33,13 +34,20 @@ pub struct StreamRoundTrip {
 }
 
 impl StreamRoundTrip {
-    pub fn new(sizes: BufferSizes, format: StreamFormat) -> Result<Self, NativeMethodError> {
+    /// A round trip whose run shows its pane on `display`, in `configuration`.
+    pub fn new(
+        sizes: BufferSizes,
+        format: StreamFormat,
+        display: HostDisplay,
+        configuration: HostConfiguration,
+    ) -> Result<Self, NativeMethodError> {
         let (width, height) =
             (sizes.default.signed()).ok_or(NativeMethodError::TargetSize(sizes.default))?;
         let (mut target, ended) = TargetReader::new(width, height)?;
         let window = (target.reader.window()).map_err(NativeMethodError::CreateTarget)?;
         let (requested, panes) = mailbox();
-        let run = Run::start(Size::new(width.dp(), height.dp()), panes, ended)?;
+        let size = Size::from_px(width.px(), height.px(), display.density);
+        let run = Run::start(AospHost::new(display, configuration), size, panes, ended)?;
         let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
         run.host.surface_created(NativeWindow::new(window, timing));
         // The run shows the empty pane once the window opens in the Surface. The stream is attached after that frame,
@@ -166,7 +174,7 @@ impl StreamRoundTrip {
         self.show(Pane::Grouped {
             image,
             opacity,
-            shift: left.width().dp(),
+            shift: left.width().px(),
         });
         let (left, right) = (find_center(left), find_center(right));
         self.target
@@ -260,11 +268,11 @@ struct Run {
 
 impl Run {
     fn start(
+        host: AospHost,
         size: Size,
         requested: Receiver<Pane>,
         ended: mpsc::Sender<TargetEvent>,
     ) -> Result<Self, NativeMethodError> {
-        let host = AospHost::new();
         let served = host.clone();
         let thread = (thread::Builder::new().name("round trip".to_owned()))
             .spawn(move || {

@@ -14,14 +14,18 @@ mod fenced_image;
 #[cfg(target_os = "android")]
 mod hardware_buffer;
 mod host;
+#[cfg(target_os = "android")]
+mod host_jni;
 mod input;
 #[cfg(target_os = "android")]
 mod motion_jni;
 mod native_window;
+mod output;
 #[cfg_attr(not(target_os = "android"), path = "platform/simulated.rs")]
 mod platform;
 #[cfg(target_os = "android")]
 mod presentation;
+mod settings;
 mod streams;
 #[cfg(target_os = "android")]
 mod surface_jni;
@@ -33,12 +37,16 @@ pub use error::Error;
 #[cfg(target_os = "android")]
 pub use hardware_buffer::PropertiesError;
 pub use host::{AospError, AospHost, RunEnded};
+#[cfg(target_os = "android")]
+pub use host_jni::{configuration_of, display_of};
 pub use input::MotionEvent;
 #[cfg(target_os = "android")]
 pub use motion_jni::{MalformedMotion, motion_event_of};
 pub use native_window::NativeWindow;
+pub use output::HostDisplay;
 #[cfg(target_os = "android")]
 pub use presentation::AospPresentation;
+pub use settings::HostConfiguration;
 pub use streams::AospStreams;
 #[cfg(target_os = "android")]
 pub use surface_jni::{surface_of_window, window_of_surface};

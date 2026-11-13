@@ -5,14 +5,22 @@ Requires AOSP 12 (API 31) or later.
 ## Run an app on a Surface
 
 ```rust,ignore
-use lavashell::android::{AospHost, NativeWindow, motion_event_of, window_of_surface};
+use lavashell::android::{
+    AospHost, NativeWindow, configuration_of, display_of, motion_event_of, window_of_surface,
+};
 use lavashell::prelude::Platform;
 use lavashell::renderer::{PresentationPolicy, SurfaceTiming};
 
 // Before the Surface exists. The app is built on the run thread.
-let host = AospHost::new();
+let host = AospHost::new(display_of(env, &activity)?, configuration_of(env, &activity)?);
 let served = host.clone();
 let run = std::thread::spawn(move || served.serve(|| lavashell::run::<Platform>(build_app())));
+
+// In onDisplayChanged of a DisplayListener registered for the display that shows the activity:
+host.display_changed(display_of(env, &activity)?);
+
+// In onConfigurationChanged:
+host.configuration_changed(configuration_of(env, &activity)?);
 
 // In surfaceCreated. No explicit presentation timestamp was ever set for this Surface.
 let timing = SurfaceTiming::new(PresentationPolicy::Automatic);

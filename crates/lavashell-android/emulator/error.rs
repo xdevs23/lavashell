@@ -64,6 +64,10 @@ pub enum NativeMethodError {
     ClosedBuffer,
     #[error("cannot read the android.view.MotionEvent to report")]
     ReadMotionEvent(#[source] lavashell_android::Error),
+    #[error("cannot read the display of the activity")]
+    ReadDisplay(#[source] lavashell_android::Error),
+    #[error("cannot read the configuration of the activity")]
+    ReadConfiguration(#[source] lavashell_android::Error),
     #[error("the handle of a new round trip exceeds the range of a JVM long")]
     TooManyRoundTrips(#[source] TryFromIntError),
     #[error("cannot create the JVM object or array returned to the activity")]

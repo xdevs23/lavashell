@@ -11,6 +11,7 @@ workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 ash.workspace = true
+icu_locale_core.workspace = true
 jni.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
@@ -30,6 +31,7 @@ lavashell-test-fixtures.workspace = true
 # The tests run the adapter on the host against a simulated platform.
 [target.'cfg(not(target_os = "android"))'.dev-dependencies]
 ash.workspace = true
+icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-platform.workspace = true

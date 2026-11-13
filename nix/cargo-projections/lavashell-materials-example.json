@@ -1911,6 +1911,7 @@
       {
         "dependencies": [
           "ash",
+          "icu_locale_core",
           "jni",
           "lavashell-actor",
           "lavashell-core",

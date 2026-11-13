@@ -3,6 +3,7 @@ use crate::Error;
 use crate::host::AospError;
 use lavashell_actor::Closed;
 use lavashell_core::scene::tree::ApplyError;
+use lavashell_core::units::NumberError;
 use lavashell_renderer::{Error as RendererError, Latch};
 use log::SetLoggerError;
 
@@ -19,6 +20,8 @@ pub(crate) enum TestError {
     Closed(#[from] Closed),
     #[error("cannot build the scene of a test")]
     Scene(#[from] ApplyError),
+    #[error("a number of a test is not a valid value")]
+    Number(#[from] NumberError),
     #[error("cannot install the logger that records the warnings of a test")]
     InstallLogger(#[source] &'static SetLoggerError),
     #[error("the latch found no new frame, but {0:?}")]

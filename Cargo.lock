@@ -2561,6 +2561,7 @@ name = "lavashell-android"
 version = "0.1.0"
 dependencies = [
  "ash",
+ "icu_locale_core",
  "jni",
  "lavashell-actor",
  "lavashell-core",

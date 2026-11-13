@@ -333,6 +333,10 @@ class StreamRoundTripActivity : Activity() {
         virtualDisplay.release()
     }
 
+    /** Called on the thread of [run]. */
+    @JvmName("create")
+    private external fun create(width: UInt, height: UInt, maxWidth: UInt, maxHeight: UInt, rgba: Boolean): Long
+
     companion object {
         /**
          * A buffer queue in AOSP has at most BufferQueueDefs::NUM_BUFFER_SLOTS buffers:
@@ -356,10 +360,6 @@ class StreamRoundTripActivity : Activity() {
         // Every native method is called on the thread of `run`, because the native library stores the round trips per
         // thread. A failed native method throws a RuntimeException. A JvmName keeps the JNI name of a method that takes
         // a UInt, which Kotlin would otherwise change.
-        @JvmStatic
-        @JvmName("create")
-        external fun create(width: UInt, height: UInt, maxWidth: UInt, maxHeight: UInt, rgba: Boolean): Long
-
         @JvmStatic external fun createSurface(roundTrip: Long): Surface
 
         /** Blocks until the stream latches a frame that it has not latched before. */
