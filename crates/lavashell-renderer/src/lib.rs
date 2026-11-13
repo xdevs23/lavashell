@@ -34,7 +34,7 @@ pub use error::{ContextState, Error, FailureList, MultipleFailures, SkslDiagnost
 pub use failure::DrawFailure;
 pub use field::{FieldRoom, UniformRange};
 pub use fonts::Fonts;
-pub use image::{decode_image, encoded_image, raster_png};
+pub use image::{Pixels, decode_image, encoded_image, raster_png};
 pub use input_region::{InputSizeError, input_cells};
 pub use packet_cache::{PacketCaching, SurfaceFrame};
 pub use paint::{
@@ -43,9 +43,8 @@ pub use paint::{
 };
 pub use skia_safe as skia;
 pub use state::{
-    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, Pixels,
-    PresentFrame, RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError,
-    SurfaceControl,
+    Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, PresentFrame,
+    RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError, SurfaceControl,
 };
 pub use stream::{
     BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,

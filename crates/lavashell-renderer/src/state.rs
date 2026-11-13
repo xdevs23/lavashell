@@ -10,7 +10,7 @@ mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
 pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
-pub use snapshot::{Pixels, Snapshot};
+pub use snapshot::Snapshot;
 
 use crate::stream::{NoStreams, StreamBackend};
 use crate::text::{Shaper, TextRendering};

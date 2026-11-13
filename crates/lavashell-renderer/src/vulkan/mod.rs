@@ -172,7 +172,7 @@ impl VulkanRenderer {
     }
 
     /// # Errors
-    /// Fails when Skia cannot allocate, draw or encode the SDR copy of `surface`.
+    /// Fails when Skia cannot allocate, draw, read or encode the SDR copy of `surface`.
     pub fn png(&mut self, surface: &mut Surface) -> Result<Vec<u8>, Error> {
         let context = &mut *self.context;
         context.flush_and_submit_surface(surface, Some(SyncCpu::Yes));
@@ -192,11 +192,7 @@ impl VulkanRenderer {
             .canvas()
             .draw_image(surface.image_snapshot(), (0, 0), None);
         context.flush_and_submit_surface(&mut export, Some(SyncCpu::Yes));
-        let image = export.image_snapshot();
-        let data = image
-            .encode(context, skia_safe::EncodedImageFormat::PNG, None)
-            .ok_or(Error::EncodePng)?;
-        Ok(data.as_bytes().to_vec())
+        crate::Pixels::read(export.canvas())?.png()
     }
 
     #[must_use]
