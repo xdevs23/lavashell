@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::AospError;
+use super::layout::LayoutSize;
+use super::shown::Shown;
 use crate::input::ShownSurface;
 use crate::native_window::NativeWindow;
 use crate::output::HostOutput;
 use crate::platform::vulkan_window;
 use crate::streams::AospStreams;
-use lavashell_core::geometry::{PixelScale, Size};
+use lavashell_core::geometry::PixelSize;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::units::{Density, Px};
+use lavashell_core::units::Density;
 use lavashell_platform::{
     PlatformRequest, Reports, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec,
     TimingEvent,
@@ -27,13 +29,8 @@ enum RuntimeSurface {
         spec: Box<SurfaceSpec>,
         gpu_budget: Option<Duration>,
     },
-    /// The renderer draws the surface into the Surface of the host, which has `size` in pixels, at the `density` of
-    /// the display.
-    Shown {
-        surface: SurfaceId,
-        size: (u32, u32),
-        density: Density,
-    },
+    /// The renderer draws the surface into the Surface of the host.
+    Shown(Shown),
     /// The surface closed, and is released once the renderer has retired it.
     Closing(SurfaceId),
 }
@@ -42,9 +39,8 @@ impl RuntimeSurface {
     fn id(&self) -> Option<SurfaceId> {
         match *self {
             Self::Absent => None,
-            Self::Requested { surface, .. }
-            | Self::Shown { surface, .. }
-            | Self::Closing(surface) => Some(surface),
+            Self::Requested { surface, .. } | Self::Closing(surface) => Some(surface),
+            Self::Shown(shown) => Some(shown.id()),
         }
     }
 }
@@ -55,6 +51,9 @@ pub(crate) struct HostSurface {
     surface: RuntimeSurface,
     /// The native window of the Surface of the host, while the Surface exists.
     window: Option<NativeWindow>,
+    /// The size set by the host for the layout of every shown surface, or `None` for the whole Surface at the
+    /// density of the display.
+    layout_size: Option<LayoutSize>,
     /// The callbacks waiting for the renderer to retire the surface.
     destroying: Vec<mpsc::SyncSender<()>>,
 }
@@ -63,8 +62,8 @@ impl HostSurface {
     /// A surface requested by `request` is shown at `density`.
     ///
     /// # Errors
-    /// Fails for a second surface, for a request that an AOSP host does not support, and when the size of the
-    /// native window cannot be read.
+    /// Fails for a second surface, for a request that an AOSP host does not support, when the size of the native
+    /// window cannot be read, and when the layout size cannot fill the Surface.
     pub(crate) fn execute(
         &mut self,
         request: PlatformRequest,
@@ -114,7 +113,8 @@ impl HostSurface {
     /// A requested surface is shown in `window` at `density`.
     ///
     /// # Errors
-    /// Fails when the host reports a Surface while another one exists, and when the size of `window` cannot be read.
+    /// Fails when the host reports a Surface while another one exists, when the size of `window` cannot be read, and
+    /// when the layout size cannot fill the Surface.
     pub(crate) fn created(
         &mut self,
         window: NativeWindow,
@@ -128,38 +128,49 @@ impl HostSurface {
         self.show(density, reports)
     }
 
-    /// Reports the new size of the Surface of the host to the shown surface.
+    /// Lays the shown surface out again in the new size of the Surface of the host.
     ///
     /// # Errors
-    /// Fails when the size of the native window cannot be read.
+    /// Fails when the size of the native window cannot be read, and when the layout size cannot fill the Surface.
     pub(crate) fn changed(
         &mut self,
         reports: &Reports<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
-        if let (
-            RuntimeSurface::Shown {
-                surface,
-                size,
-                density,
-            },
-            Some(window),
-        ) = (&mut self.surface, &self.window)
-        {
-            *size = window_size(window)?;
-            configure(reports, *surface, *size, *density);
+        if let (RuntimeSurface::Shown(shown), Some(window)) = (&mut self.surface, &self.window) {
+            shown.resize(window_size(window)?, reports)?;
         }
         Ok(())
     }
 
-    /// Reports `density`, the new density of the display, to the shown surface.
+    /// Reports `density`, the new density of the display, to the shown surface, and lays it out again.
+    ///
+    /// # Errors
+    /// Fails when the layout size cannot fill the Surface at `density`.
     pub(crate) fn density_changed(
         &mut self,
         density: Density,
         reports: &Reports<NativeWindow, AospStreams>,
-    ) {
-        if let RuntimeSurface::Shown { surface, size, .. } = self.surface {
-            self.surface = apply_density(reports, surface, size, density);
+    ) -> Result<(), AospError> {
+        if let RuntimeSurface::Shown(shown) = &mut self.surface {
+            shown.change_density(density, reports)?;
         }
+        Ok(())
+    }
+
+    /// Lays the shown surface and every later one out in `layout_size`.
+    ///
+    /// # Errors
+    /// Fails when `layout_size` cannot fill the Surface.
+    pub(crate) fn layout_size_changed(
+        &mut self,
+        layout_size: Option<LayoutSize>,
+        reports: &Reports<NativeWindow, AospStreams>,
+    ) -> Result<(), AospError> {
+        self.layout_size = layout_size;
+        if let RuntimeSurface::Shown(shown) = &mut self.surface {
+            shown.change_layout_size(layout_size, reports)?;
+        }
+        Ok(())
     }
 
     /// Closes the surface shown in the destroyed Surface of the host. Sends on `retired` after the renderer has
@@ -171,7 +182,8 @@ impl HostSurface {
     ) {
         drop(self.window.take());
         match self.surface {
-            RuntimeSurface::Shown { surface, .. } => {
+            RuntimeSurface::Shown(shown) => {
+                let surface = shown.id();
                 reports.report((surface, SurfaceEvent::Closed));
                 self.surface = RuntimeSurface::Closing(surface);
                 self.destroying.push(retired);
@@ -185,26 +197,17 @@ impl HostSurface {
 
     /// Reports that the display is ready for the next frame of the shown surface.
     pub(crate) fn frame(&self, reports: &Reports<NativeWindow, AospStreams>) {
-        if let RuntimeSurface::Shown { surface, .. } = self.surface {
-            reports.time(TimingEvent::DisplayReady(surface));
+        if let RuntimeSurface::Shown(shown) = &self.surface {
+            reports.time(TimingEvent::DisplayReady(shown.id()));
         }
     }
 
-    /// The shown surface, the size of the Surface, and the density of the display.
+    /// The shown surface and its layout, once the Surface has had pixels.
     pub(crate) fn shown(&self) -> Option<ShownSurface> {
-        let RuntimeSurface::Shown {
-            surface,
-            size,
-            density,
-        } = self.surface
-        else {
+        let RuntimeSurface::Shown(shown) = &self.surface else {
             return None;
         };
-        Some(ShownSurface {
-            id: surface,
-            size: surface_size(size, density),
-            density,
-        })
+        shown.surface()
     }
 
     /// The callbacks waiting for the renderer to retire the surface.
@@ -212,7 +215,7 @@ impl HostSurface {
         self.destroying
     }
 
-    /// Attaches the requested surface to the native window once both exist, shows it at `density` and reports it as
+    /// Attaches the requested surface to the native window once both exist. Shows it at `density` and reports it as
     /// shown on the display.
     fn show(
         &mut self,
@@ -230,67 +233,24 @@ impl HostSurface {
         else {
             return Ok(());
         };
-        let surface = *surface;
         let size = window_size(window)?;
         let timing = window.timing.clone();
         let attach = spec.attach(
-            surface,
+            *surface,
             vulkan_window(window),
             timing,
             *gpu_budget,
             window.clone(),
         );
-        reports.attach(SurfaceAttachment::Attach {
-            attach: Box::new(attach),
-            scale: PixelScale::SQUARE,
-        });
-        self.surface = apply_density(reports, surface, size, density);
-        HostOutput::entered(surface, reports);
+        reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
+        let shown = Shown::show(*surface, size, density, self.layout_size, reports)?;
+        HostOutput::entered(shown.id(), reports);
+        self.surface = RuntimeSurface::Shown(shown);
         Ok(())
     }
 }
 
-fn window_size(window: &NativeWindow) -> Result<(u32, u32), AospError> {
-    window.size().map_err(AospError::WindowSize)
-}
-
-/// Reports `density` and the size of the Surface at `density` to `surface`, and returns the surface shown at
-/// `density`.
-fn apply_density(
-    reports: &Reports<NativeWindow, AospStreams>,
-    surface: SurfaceId,
-    size: (u32, u32),
-    density: Density,
-) -> RuntimeSurface {
-    reports.report((surface, SurfaceEvent::DensityChanged(density)));
-    configure(reports, surface, size, density);
-    RuntimeSurface::Shown {
-        surface,
-        size,
-        density,
-    }
-}
-
-/// Reports the size of the Surface at `density` to `surface`. A Surface of zero width or height is not configured.
-fn configure(
-    reports: &Reports<NativeWindow, AospStreams>,
-    surface: SurfaceId,
-    (width, height): (u32, u32),
-    density: Density,
-) {
-    if width > 0 && height > 0 {
-        let size = surface_size((width, height), density);
-        let configured = SurfaceEvent::Configured {
-            width: Some(size.width),
-            height: Some(size.height),
-            token: None,
-        };
-        reports.report((surface, configured));
-    }
-}
-
-/// The size in dp of a Surface of `width` × `height` pixels at `density`.
-fn surface_size((width, height): (u32, u32), density: Density) -> Size {
-    let to_px = |pixels: u32| Px::new(f64::from(pixels));
-    Size::from_px(to_px(width), to_px(height), density)
+fn window_size(window: &NativeWindow) -> Result<PixelSize, AospError> {
+    let (width, height) = window.size().map_err(AospError::WindowSize)?;
+    Ok(PixelSize::new(width, height))
 }

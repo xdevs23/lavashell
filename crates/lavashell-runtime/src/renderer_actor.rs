@@ -16,7 +16,6 @@ use lavashell_renderer::{
     CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, RendererStreams,
     StartError, StateError, StreamBackend, SurfaceContents, SurfaceControl,
 };
-use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
@@ -34,12 +33,14 @@ pub enum RendererInput<C: SurfaceControl, S> {
         surface: SurfaceId,
         outline: Option<Path>,
     },
-    /// Draws the scene of `built` as the frame of `surface` for `time` in `viewport`, and applies the surface state
-    /// of `built` with the frame. A later frame of the surface replaces a frame that the renderer has not drawn yet.
+    /// Draws the scene of `built` as the frame of `surface` for `time` in `viewport` at `scale`, and applies the
+    /// surface state of `built` with the frame. A later frame of the surface replaces a frame that the renderer has
+    /// not drawn yet.
     Render {
         surface: SurfaceId,
         time: FrameTime,
         viewport: Viewport,
+        scale: PixelScale,
         built: Arc<BuiltSurface>,
     },
     /// Makes the host apply the surface state of `built` to `surface` without a frame. The renderer reports each
@@ -48,11 +49,10 @@ pub enum RendererInput<C: SurfaceControl, S> {
         surface: SurfaceId,
         built: Arc<BuiltSurface>,
     },
-    /// Asks the scene source for the next image in `viewport` at the scale of `surface` once the image is due, while
-    /// `surface` is attached.
+    /// Asks the scene source for the next image in `viewport` at `scale` once the image is due.
     AdvanceScene {
-        surface: SurfaceId,
         viewport: Viewport,
+        scale: PixelScale,
     },
     /// Ends the renderer after the inputs sent before, also while other senders to the inbox exist.
     Stop,
@@ -211,7 +211,6 @@ where
             let _sent = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
-                scales: BTreeMap::new(),
                 clock,
                 cpu_timing,
                 observer,
@@ -292,8 +291,6 @@ where
 /// The GPU renderer, the painter, the attached surfaces and the streams, on the renderer thread.
 struct RendererActor<C: SurfaceControl, S> {
     state: RendererState<C, S>,
-    /// The scale at which the frames of each attached surface are drawn.
-    scales: BTreeMap<SurfaceId, PixelScale>,
     /// The clock on which the scene source measures the time of each image.
     clock: Arc<dyn Clock>,
     cpu_timing: bool,
@@ -324,18 +321,17 @@ where
                 surface,
                 time,
                 viewport,
+                scale,
                 built,
-            } => Some(self.render(surface, time, viewport, &built)?),
+            } => Some(self.render(surface, time, viewport, scale, &built)?),
             RendererInput::CommitState { surface, built } => {
                 (self.state.commit_state(surface, &built.state))
                     .map_err(RendererError::CommitState)?;
                 Some(RendererOutput::Committed(surface))
             }
-            RendererInput::AdvanceScene { surface, viewport } => {
-                if let Some(&scale) = self.scales.get(&surface) {
-                    (self.state.advance_scene(viewport, scale, self.clock.now()))
-                        .map_err(RendererError::AdvanceScene)?;
-                }
+            RendererInput::AdvanceScene { viewport, scale } => {
+                (self.state.advance_scene(viewport, scale, self.clock.now()))
+                    .map_err(RendererError::AdvanceScene)?;
                 None
             }
             RendererInput::Stop => return Ok(Flow::Stop),
@@ -357,11 +353,9 @@ where
         attachment: SurfaceAttachment<C>,
     ) -> Result<Option<RendererOutput>, RendererError<C, S>> {
         match attachment {
-            SurfaceAttachment::Attach { attach, scale } => {
-                let surface = attach.surface;
+            SurfaceAttachment::Attach(attach) => {
                 (self.state.attach(*attach))
                     .map_err(|failed| RendererError::Attach(failed.error))?;
-                let _replaced_scale = self.scales.insert(surface, scale);
                 Ok(None)
             }
             SurfaceAttachment::Control { surface, message } => {
@@ -372,24 +366,22 @@ where
             }
             SurfaceAttachment::Detach(surface) => {
                 drop(self.state.retire(surface));
-                let _retired_scale = self.scales.remove(&surface);
                 Ok(Some(RendererOutput::Retired(surface)))
             }
         }
     }
 
-    /// Draws the scene of `built` with the surface state built from the same frames.
+    /// Draws the scene of `built` at `scale` with the surface state built from the same frames.
     fn render(
         &mut self,
         surface: SurfaceId,
         time: FrameTime,
         viewport: Viewport,
+        scale: PixelScale,
         built: &BuiltSurface,
     ) -> Result<RendererOutput, RendererError<C, S>> {
         let started = Instant::now();
         let cpu_start = self.cpu_timing.then(CpuStamp::now).flatten();
-        let unknown = || RendererError::Draw(StateError::UnknownSurface(surface).into());
-        let scale = *self.scales.get(&surface).ok_or_else(unknown)?;
         let frame = PresentFrame {
             time,
             viewport,

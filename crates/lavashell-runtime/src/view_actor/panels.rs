@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::frames::send_surface_state;
+use super::scene_frames::send_surface_state;
 use super::{ViewActor, send_request};
 use crate::panels::{ContentState, Transaction};
 use crate::scene_pipeline::FrameStatus;
@@ -30,13 +30,16 @@ impl<P: Platform> ViewActor<P> {
             let Some(viewport) = self.records.open_viewport(id) else {
                 continue;
             };
+            let Some(scale) = self.records.open_scale(id) else {
+                continue;
+            };
             let Some(view) = self.records.open_view_mut(id) else {
                 continue;
             };
             let content = if surface.needs_visual_frame(view) {
                 ContentState::Stale
             } else {
-                match surface.contents(viewport) {
+                match surface.contents(viewport, scale) {
                     SurfaceContents::Current => ContentState::Current,
                     SurfaceContents::Outdated => ContentState::Stale,
                 }

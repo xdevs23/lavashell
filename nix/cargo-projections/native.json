@@ -4052,7 +4052,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "f1fc110a575df4dbbbfde267101fb018276ec3e306a999fe45a7a07fd3b9ec2f"
+        "seedHash": "7a46d0ff7a455db3ebb382e9f296756de3037ff072a9e81849389ce610b47a6c"
       }
     }
   },
@@ -5236,6 +5236,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
           "log",
           "num-traits",
           "rustix",

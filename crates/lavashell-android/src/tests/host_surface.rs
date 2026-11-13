@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::motion::{finger, hovering, mouse, touch};
 use crate::host::surface::HostSurface;
-use crate::host::{AospError, AospHost, take_served_link};
+use crate::host::{AospError, AospHost, LayoutSize, take_served_link};
 use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, TouchAction};
 use crate::native_window::NativeWindow;
 use crate::output::{DISPLAY, HostDisplay, HostOutput};
@@ -13,7 +13,7 @@ use lavashell_actor::{Effect, Merge, Receiver, SystemClock, mailbox};
 use lavashell_core::output::{MonitorInfo, OutputRequest};
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences;
-use lavashell_core::prelude::{Density, DpExt, Point, PxExt, Size};
+use lavashell_core::prelude::{Density, DpExt, PixelScale, Point, PxExt, Size};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::Cursor;
 use lavashell_platform::{
@@ -26,6 +26,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 mod host_display;
+mod layout_size;
 
 const SURFACE: SurfaceId = SurfaceId(1);
 const REFRESH: Duration = Duration::from_millis(16);
@@ -69,7 +70,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
         }),
         renderer: sender.outlet(
             |attachment: SurfaceAttachment<NativeWindow>| match attachment {
-                SurfaceAttachment::Attach { attach, .. } => Sent::Attach(attach.surface),
+                SurfaceAttachment::Attach(attach) => Sent::Attach(attach.surface),
                 SurfaceAttachment::Control { message, .. } => match message {},
                 SurfaceAttachment::Detach(surface) => Sent::Detach(surface),
             },
@@ -121,10 +122,15 @@ impl Host {
         self.surface.changed(&self.reports)
     }
 
-    fn display_changed(&mut self, display: HostDisplay) {
+    fn set_layout_size(&mut self, size: Option<LayoutSize>) -> Result<(), AospError> {
+        self.surface.layout_size_changed(size, &self.reports)
+    }
+
+    fn display_changed(&mut self, display: HostDisplay) -> Result<(), AospError> {
         if let Some(density) = self.output.changed(display, &self.reports) {
-            self.surface.density_changed(density, &self.reports);
+            self.surface.density_changed(density, &self.reports)?;
         }
+        Ok(())
     }
 
     /// Destroys the Surface of the host, and returns the receiver on which the platform lets the destroy return.
@@ -241,12 +247,20 @@ fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
     Sent::Surface(surface, configured)
 }
 
-/// The reports sent when `surface` is shown, configured to `width` × `height` dp at `density`.
+/// The reports sent when `surface` is laid out in `width` × `height` dp at `scale`.
+fn laid_out(surface: SurfaceId, scale: PixelScale, width: i32, height: i32) -> [Sent; 2] {
+    let scaled = Sent::Surface(surface, SurfaceEvent::ScaleChanged(scale));
+    [scaled, configured(surface, width, height)]
+}
+
+/// The reports sent when `surface` is shown, laid out in `width` × `height` dp at `density` with square pixels.
 fn showing(surface: SurfaceId, width: i32, height: i32, density: Density) -> Vec<Sent> {
+    let [scaled, configured] = laid_out(surface, PixelScale::SQUARE, width, height);
     vec![
         Sent::Attach(surface),
         Sent::Surface(surface, SurfaceEvent::DensityChanged(density)),
-        configured(surface, width, height),
+        scaled,
+        configured,
         Sent::Output(OutputEvent::Entered(DISPLAY, surface)),
     ]
 }
@@ -282,25 +296,6 @@ fn a_surface_requested_while_the_host_surface_exists_is_shown_at_once() -> Resul
     assert_eq!(host.sent()?, []);
     host.execute(create(SURFACE))?;
     assert_eq!(host.sent()?, showing(SURFACE, SIDE, SIDE, Density::ONE));
-    Ok(())
-}
-
-#[test]
-fn a_host_surface_without_a_size_is_configured_once_it_has_one() -> Result<(), TestError> {
-    let mut host = displayed(display(Density::ONE))?;
-    let surface = DisplaySurface::new(0, 0);
-    host.created(window(&surface))?;
-    host.changed()?;
-    host.execute(create(SURFACE))?;
-    let unconfigured = [
-        Sent::Attach(SURFACE),
-        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(Density::ONE)),
-        Sent::Output(OutputEvent::Entered(DISPLAY, SURFACE)),
-    ];
-    assert_eq!(host.sent()?, unconfigured);
-    surface.resize(SIDE, SIDE / 2);
-    host.changed()?;
-    assert_eq!(host.sent()?, [configured(SURFACE, SIDE, SIDE / 2)]);
     Ok(())
 }
 

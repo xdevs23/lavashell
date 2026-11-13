@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{KeyboardMode, OutputId};
-use lavashell_core::geometry::Size;
+use lavashell_core::geometry::{PixelScale, Size};
 use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
@@ -24,6 +24,9 @@ pub enum SurfaceEvent {
     /// The surface closed, whatever the cause.
     Closed,
     DensityChanged(Density),
+    /// The number of output pixels covered by one viewport pixel in the frames of the surface. The frames of a
+    /// surface whose platform reports no scale have square pixels.
+    ScaleChanged(PixelScale),
 }
 
 /// What the runtime asks a platform to do with a surface.

@@ -2076,6 +2076,7 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
+          "lavashell-vulkan",
           "log",
           "num-traits",
           "rustix",

@@ -36,7 +36,7 @@ use std::convert::Infallible;
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
-/// A control for a surface that is never attached.
+/// A control that makes no requests.
 pub(crate) struct NoControl;
 
 impl SurfaceControl for NoControl {

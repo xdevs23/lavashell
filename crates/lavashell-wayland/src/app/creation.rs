@@ -6,7 +6,6 @@ use super::{NativeRole, Surface, destroy_objects};
 use crate::Error;
 use crate::LayerError;
 use crate::translator::{Translator, ViewLink};
-use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
 use lavashell_renderer::{PresentationPolicy, SurfaceTiming};
@@ -107,10 +106,8 @@ impl Translator {
             background,
         };
         self.surfaces.insert(surface, native);
-        self.links.attach(SurfaceAttachment::Attach {
-            attach: Box::new(attach),
-            scale: PixelScale::SQUARE,
-        });
+        self.links
+            .attach(SurfaceAttachment::Attach(Box::new(attach)));
         Ok(())
     }
 

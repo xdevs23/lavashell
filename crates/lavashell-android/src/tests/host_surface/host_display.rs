@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    Host, SURFACE, Sent, added, configured, create, display, displayed, showing, shown, window,
+    Host, SURFACE, Sent, added, create, display, displayed, laid_out, showing, shown, window,
 };
 use crate::Error;
 use crate::input::TouchAction;
@@ -8,7 +8,7 @@ use crate::output::{DISPLAY, DisplayReading, HostDisplay, display_from};
 use crate::platform::{DisplaySurface, SIDE, TestError};
 use crate::tests::motion::{finger, touch};
 use lavashell_core::output::MonitorInfo;
-use lavashell_core::prelude::{Density, DpExt, Point, PxExt, Size};
+use lavashell_core::prelude::{Density, DpExt, PixelScale, Point, PxExt, Size};
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::view::TouchSample;
 use lavashell_platform::{DeviceEvent, OutputEvent, SurfaceEvent, SurfaceRequest};
@@ -61,7 +61,7 @@ fn a_display_reading_without_a_positive_dpi_fails() {
 fn a_display_report_adds_the_output_once_and_updates_it_after() -> Result<(), TestError> {
     let mut host = Host::new(display(double()?));
     assert_eq!(host.sent()?, added(SIDE / 2));
-    host.display_changed(display(Density::ONE));
+    host.display_changed(display(Density::ONE))?;
     let [_, updated, refresh] = added(SIDE);
     assert_eq!(host.sent()?, [updated, refresh]);
     Ok(())
@@ -80,7 +80,7 @@ fn a_surface_is_shown_at_the_density_of_the_display() -> Result<(), TestError> {
 #[test]
 fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(), TestError> {
     let mut host = shown()?;
-    host.display_changed(display(double()?));
+    host.display_changed(display(double()?))?;
     host.motion(touch(0, TouchAction::Down(finger(0, 8.0, 4.0))));
     let monitor = MonitorInfo {
         name: None,
@@ -93,11 +93,13 @@ fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(),
         at: Point::new(4.dp(), 2.dp()),
         kind: PointerKind::Finger,
     };
+    let [scaled, configured] = laid_out(SURFACE, PixelScale::SQUARE, SIDE / 2, SIDE / 2);
     let reported = [
         Sent::Output(OutputEvent::Updated(DISPLAY, monitor)),
         refresh,
         Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(double()?)),
-        configured(SURFACE, SIDE / 2, SIDE / 2),
+        scaled,
+        configured,
         Sent::Device(DeviceEvent::TouchDown {
             surface: SURFACE,
             sample: touched,
@@ -110,20 +112,20 @@ fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(),
 #[test]
 fn a_display_change_reaches_only_a_shown_surface_at_another_density() -> Result<(), TestError> {
     let mut same = shown()?;
-    same.display_changed(display(Density::ONE));
+    same.display_changed(display(Density::ONE))?;
     let [_, updated, refresh] = added(SIDE);
     assert_eq!(same.sent()?, [updated, refresh]);
 
     let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
-    requested.display_changed(display(double()?));
+    requested.display_changed(display(double()?))?;
     let [_, updated, refresh] = added(SIDE / 2);
     assert_eq!(requested.sent()?, [updated, refresh]);
 
     let mut closing = shown()?;
     closing.execute(SurfaceRequest::Destroy(SURFACE))?;
     let _detached = closing.sent()?;
-    closing.display_changed(display(double()?));
+    closing.display_changed(display(double()?))?;
     let [_, updated, refresh] = added(SIDE / 2);
     assert_eq!(closing.sent()?, [updated, refresh]);
     Ok(())

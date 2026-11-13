@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod error;
+pub(crate) mod layout;
+mod shown;
 pub(crate) mod surface;
 
 pub use error::AospError;
+pub use layout::LayoutSize;
 
 use crate::input::{MotionEvent, MotionTranslator};
 use crate::native_window::NativeWindow;
@@ -26,6 +29,7 @@ enum HostMessage {
     Motion(MotionEvent),
     DisplayChanged(HostDisplay),
     ConfigurationChanged(HostConfiguration),
+    LayoutSize(Option<LayoutSize>),
     /// Requests of the runtime arrived, or every sender of the requests is gone.
     Requests,
     Streams(StreamTask<AospStreams>),
@@ -57,8 +61,8 @@ impl HostLink {
     /// requests is gone.
     ///
     /// # Errors
-    /// Fails for a request that an AOSP host does not support, for a second surface or Surface, and when the size of
-    /// a native window cannot be read.
+    /// Fails for a request that an AOSP host does not support, for a second surface or Surface, when the size of a
+    /// native window cannot be read, and when the layout size cannot fill the Surface.
     pub(crate) fn serve(
         self,
         links: PlatformLinks<NativeWindow, AospStreams>,
@@ -130,9 +134,10 @@ fn execute_messages(
             HostMessage::Motion(event) => translator.report(event, surface.shown(), reports),
             HostMessage::DisplayChanged(display) => {
                 if let Some(density) = output.changed(display, reports) {
-                    surface.density_changed(density, reports);
+                    surface.density_changed(density, reports)?;
                 }
             }
+            HostMessage::LayoutSize(size) => surface.layout_size_changed(size, reports)?,
             HostMessage::ConfigurationChanged(configuration) => {
                 report_configuration(configuration, reports);
             }
@@ -241,6 +246,13 @@ impl AospHost {
     /// registered for the display that shows the activity.
     pub fn display_changed(&self, display: HostDisplay) {
         self.send(HostMessage::DisplayChanged(display));
+    }
+
+    /// Lays the app out in `size`, and draws its frames to fill the Surface, whose pixels then need not be square.
+    /// `None` lays the app out in the whole Surface at the density of the display, which is the layout until the
+    /// first call.
+    pub fn set_layout_size(&self, size: Option<LayoutSize>) {
+        self.send(HostMessage::LayoutSize(size));
     }
 
     /// Reports a change of the configuration of the host app. Call it in `onConfigurationChanged`.

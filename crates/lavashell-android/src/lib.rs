@@ -36,7 +36,7 @@ pub use aosp::Aosp;
 pub use error::Error;
 #[cfg(target_os = "android")]
 pub use hardware_buffer::PropertiesError;
-pub use host::{AospError, AospHost, RunEnded};
+pub use host::{AospError, AospHost, LayoutSize, RunEnded};
 #[cfg(target_os = "android")]
 pub use host_jni::{configuration_of, display_of};
 pub use input::MotionEvent;

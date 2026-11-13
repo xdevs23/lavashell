@@ -10,6 +10,7 @@ mod input;
 mod pacing;
 mod panels;
 mod reports;
+mod scene_frames;
 mod surfaces;
 mod transfers;
 

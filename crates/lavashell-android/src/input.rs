@@ -2,12 +2,13 @@
 //! Motion events on the Surface shown by an AOSP host, and the device events of the platform that they are translated
 //! into.
 
+use crate::host::layout::Layout;
 use crate::native_window::NativeWindow;
 use crate::streams::AospStreams;
-use lavashell_core::geometry::{Point, Rect, Size};
+use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
-use lavashell_core::units::{Density, Px};
+use lavashell_core::units::Px;
 use lavashell_core::view::TouchSample;
 use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState, Reports};
 
@@ -73,22 +74,18 @@ pub(crate) struct MousePosition {
     pub(crate) held: bool,
 }
 
-/// The surface of the runtime shown in the Surface of the host, and the size of that Surface.
+/// The surface of the runtime shown in the Surface of the host, and its layout.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ShownSurface {
     pub(crate) id: SurfaceId,
-    pub(crate) size: Size,
-    pub(crate) density: Density,
+    pub(crate) layout: Layout,
 }
 
 impl ShownSurface {
-    fn point(self, x: Px, y: Px) -> Point {
-        Point::from_px(x, y, self.density)
-    }
-
     /// Whether the mouse at `position` is over the surface. A mouse with a button down stays over it.
     fn contains_mouse_at(self, position: MousePosition) -> bool {
-        position.held || Rect::from_size(self.size).contains(self.point(position.x, position.y))
+        let at = self.layout.point(position.x, position.y);
+        position.held || self.layout.contains(at)
     }
 }
 
@@ -135,7 +132,7 @@ impl MotionTranslator {
     fn mouse_events(&mut self, action: MouseAction, shown: ShownSurface) -> Vec<DeviceEvent> {
         match action {
             MouseAction::Move(position) if shown.contains_mouse_at(position) => {
-                let at = shown.point(position.x, position.y);
+                let at = shown.layout.point(position.x, position.y);
                 let motion = DeviceEvent::PointerMotion { pointer: MOUSE, at };
                 vec![self.enter(at, shown).unwrap_or(motion)]
             }
@@ -144,7 +141,7 @@ impl MotionTranslator {
                 button,
                 state,
             } => {
-                let at = shown.point(position.x, position.y);
+                let at = shown.layout.point(position.x, position.y);
                 let press = DeviceEvent::Button {
                     pointer: MOUSE,
                     button,
@@ -188,7 +185,7 @@ fn touch_events(seat: u32, action: TouchAction, shown: ShownSurface) -> Vec<Devi
     let id = |point| TouchId { seat, point };
     let sample = |pointer: TouchPointer| TouchSample {
         id: id(pointer.id),
-        at: shown.point(pointer.x, pointer.y),
+        at: shown.layout.point(pointer.x, pointer.y),
         kind: pointer.kind,
     };
     match action {

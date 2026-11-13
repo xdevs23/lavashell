@@ -6,9 +6,10 @@ Requires AOSP 12 (API 31) or later.
 
 ```rust,ignore
 use lavashell::android::{
-    AospHost, NativeWindow, configuration_of, display_of, motion_event_of, window_of_surface,
+    AospHost, LayoutSize, NativeWindow, configuration_of, display_of, motion_event_of,
+    window_of_surface,
 };
-use lavashell::prelude::Platform;
+use lavashell::prelude::{DpExt, Platform, Size};
 use lavashell::renderer::{PresentationPolicy, SurfaceTiming};
 
 // Before the Surface exists. The app is built on the run thread.
@@ -21,6 +22,10 @@ host.display_changed(display_of(env, &activity)?);
 
 // In onConfigurationChanged:
 host.configuration_changed(configuration_of(env, &activity)?);
+
+// Lays the app out in a size set by the host, such as the logical size of a car display with narrow pixels. The frames
+// fill the Surface. `None` lays the app out in the whole Surface at the density of the display.
+host.set_layout_size(Some(LayoutSize::try_new(Size::new(800.dp(), 480.dp()))?));
 
 // In surfaceCreated. No explicit presentation timestamp was ever set for this Surface.
 let timing = SurfaceTiming::new(PresentationPolicy::Automatic);

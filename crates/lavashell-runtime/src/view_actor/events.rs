@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
-use super::frames::send_frame;
 use super::panels::configured_length;
+use super::scene_frames::send_frame;
 use crate::panels::Panel;
 use crate::scheduler::SchedulerInput;
 use crate::surface_records::AccessibilityFailure;
@@ -70,7 +70,9 @@ impl<P: Platform> ViewActor<P> {
                     token,
                 }
             }
-            event @ (SurfaceEvent::Closed | SurfaceEvent::DensityChanged(_)) => event,
+            event @ (SurfaceEvent::Closed
+            | SurfaceEvent::DensityChanged(_)
+            | SurfaceEvent::ScaleChanged(_)) => event,
         };
         self.surface_requests.extend(self.records.handle(id, event));
         Ok(())

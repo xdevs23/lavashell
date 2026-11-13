@@ -5,7 +5,6 @@ use crate::script::Step;
 use crate::{Error, FrameCapture, FrameInterval, RecordedFrame, RecordedFrames, is_at_rest};
 use lavashell_actor::{Clock, Receiver, Sender, mailbox};
 use lavashell_core::frame::{FrameTime, PresentationFlags};
-use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_platform::{
@@ -294,10 +293,9 @@ impl Session {
             gpu_budget,
             control,
         );
-        self.links.reports.attach(SurfaceAttachment::Attach {
-            attach: Box::new(attach),
-            scale: PixelScale::SQUARE,
-        });
+        self.links
+            .reports
+            .attach(SurfaceAttachment::Attach(Box::new(attach)));
         self.links
             .reports
             .report((surface, SurfaceEvent::DensityChanged(self.density)));
