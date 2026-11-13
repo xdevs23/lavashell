@@ -54,6 +54,12 @@ pub enum Error {
     #[cfg(target_os = "linux")]
     #[error("the app failed")]
     App(#[source] lavashell::RunError),
+    #[error("the app failed on the test platform")]
+    Record(#[source] lavashell::PlatformRunError<lavashell_test_platform::TestPlatform>),
+    #[error("the test platform returned no recorded frames")]
+    NotServed(#[source] lavashell_test_platform::Error),
+    #[error("the recording came to rest with {0} steps left to play")]
+    UnplayedSteps(usize),
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]

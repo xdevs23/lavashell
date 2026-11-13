@@ -584,6 +584,12 @@
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
                   },
+                  "lavashell-vulkan": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-vulkan",
+                    "path": "../lavashell-vulkan"
+                  },
                   "thiserror": {
                     "default-features": false,
                     "features": [
@@ -866,6 +872,77 @@
                 }
               },
               "member": "crates/lavashell-runtime",
+              "targets": [
+                {
+                  "main": false,
+                  "path": "src/lib.rs"
+                }
+              ]
+            },
+            {
+              "manifest": {
+                "dependencies": {
+                  "lavashell-actor": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-actor",
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "default-features": false,
+                    "features": [
+                      "serde"
+                    ],
+                    "package": "lavashell-core",
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-platform": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-platform",
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-renderer": {
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "package": "lavashell-renderer",
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-vulkan": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-vulkan",
+                    "path": "../lavashell-vulkan"
+                  },
+                  "thiserror": {
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "package": "thiserror",
+                    "version": "=2.0.21"
+                  }
+                },
+                "features": {},
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "package": {
+                  "autobenches": false,
+                  "autobins": false,
+                  "autoexamples": false,
+                  "autotests": false,
+                  "build": false,
+                  "edition": "2024",
+                  "name": "lavashell-test-platform",
+                  "version": "0.0.0"
+                }
+              },
+              "member": "crates/lavashell-test-platform",
               "targets": [
                 {
                   "main": false,
@@ -1225,6 +1302,12 @@
                     "features": [],
                     "package": "lavashell-lucide",
                     "path": "../../crates/lavashell-lucide"
+                  },
+                  "lavashell-test-platform": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-test-platform",
+                    "path": "../../crates/lavashell-test-platform"
                   },
                   "serde": {
                     "default-features": false,
@@ -2567,6 +2650,7 @@
                   "lavashell",
                   "lavashell-core",
                   "lavashell-lucide",
+                  "lavashell-test-platform",
                   "serde",
                   "thiserror"
                 ],
@@ -2610,6 +2694,7 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-renderer",
+                  "lavashell-vulkan",
                   "thiserror"
                 ],
                 "name": "lavashell-platform",
@@ -2649,6 +2734,18 @@
                   "unicode-segmentation"
                 ],
                 "name": "lavashell-runtime",
+                "version": "0.0.0"
+              },
+              {
+                "dependencies": [
+                  "lavashell-actor",
+                  "lavashell-core",
+                  "lavashell-platform",
+                  "lavashell-renderer",
+                  "lavashell-vulkan",
+                  "thiserror"
+                ],
+                "name": "lavashell-test-platform",
                 "version": "0.0.0"
               },
               {
@@ -3936,6 +4033,7 @@
                 "crates/lavashell-platform",
                 "crates/lavashell-renderer",
                 "crates/lavashell-runtime",
+                "crates/lavashell-test-platform",
                 "crates/lavashell-vulkan",
                 "crates/lavashell-wayland",
                 "examples/support"
@@ -3954,7 +4052,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "6fcfc56f4fd1d1afac9ee2de5e037add91a094018b1a1ff0d8fe6fd9723627e2"
+        "seedHash": "f1fc110a575df4dbbbfde267101fb018276ec3e306a999fe45a7a07fd3b9ec2f"
       }
     }
   },
@@ -4995,12 +5093,18 @@
       {
         "dependencies": [
           "ash",
+          "icu_locale_core",
           "jni",
+          "lavashell-actor",
           "lavashell-core",
+          "lavashell-platform",
           "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "ndk",
+          "ndk-sys",
           "rustix",
           "thiserror 2.0.21"
         ],
@@ -5051,6 +5155,7 @@
           "lavashell",
           "lavashell-core",
           "lavashell-lucide",
+          "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"
         ],
@@ -5095,6 +5200,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-renderer",
+          "lavashell-vulkan",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
@@ -5122,7 +5228,6 @@
         "dependencies": [
           "accesskit",
           "accesskit_consumer",
-          "ash",
           "env_logger",
           "icu_locale_core",
           "inventory",
@@ -5131,7 +5236,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "log",
           "num-traits",
           "rustix",
@@ -5148,6 +5252,20 @@
           "thiserror 2.0.21"
         ],
         "name": "lavashell-test-fixtures",
+        "version": "0.1.0"
+      },
+      {
+        "dependencies": [
+          "lavashell-actor",
+          "lavashell-core",
+          "lavashell-platform",
+          "lavashell-renderer",
+          "lavashell-runtime",
+          "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "thiserror 2.0.21"
+        ],
+        "name": "lavashell-test-platform",
         "version": "0.1.0"
       },
       {

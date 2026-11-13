@@ -31,6 +31,12 @@ fn clipboard_shortcut(view: &mut View, key: Key) -> Option<ClipboardShortcut> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShortcutOutcome {
+    Applied,
+    Declined,
+}
+
 /// Copies, cuts and pastes the text of views through the clipboard. A change to a view that follows from a transfer
 /// runs as a view action.
 pub(crate) struct TextClipboard {
@@ -44,9 +50,14 @@ impl TextClipboard {
         Self { clipboard, actions }
     }
 
-    /// Copies, cuts or pastes text in `view` for a shortcut of Control with C, X or V, and returns whether it did. The
-    /// view receives the shortcut when there is nothing to copy, cut or paste.
-    pub fn apply_shortcut(&self, surface: SurfaceId, input: &InputEvent, view: &mut View) -> bool {
+    /// Copies, cuts or pastes text in `view` for a shortcut of Control with C, X or V. Declines the shortcut when there
+    /// is nothing to copy, cut or paste.
+    pub fn apply_shortcut(
+        &self,
+        surface: SurfaceId,
+        input: &InputEvent,
+        view: &mut View,
+    ) -> ShortcutOutcome {
         let InputEvent::Shortcut(Shortcut {
             key,
             control: true,
@@ -54,17 +65,17 @@ impl TextClipboard {
             ..
         }) = *input
         else {
-            return false;
+            return ShortcutOutcome::Declined;
         };
         let Some(shortcut) = clipboard_shortcut(view, key) else {
-            return false;
+            return ShortcutOutcome::Declined;
         };
         match shortcut {
             ClipboardShortcut::Paste => self.paste_text(surface, view),
             ClipboardShortcut::Cut(source) => self.cut_text(surface, source),
             ClipboardShortcut::Copy(text) => self.copy_text(&text),
         }
-        true
+        ShortcutOutcome::Applied
     }
 
     fn copy_text(&self, text: &str) {

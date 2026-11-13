@@ -5,10 +5,11 @@ use super::owned_wl_surface::OwnedWlSurface;
 use super::{NativeRole, Surface, destroy_objects};
 use crate::Error;
 use crate::LayerError;
-use crate::translator::Translator;
+use crate::translator::{Translator, ViewLink};
+use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
-use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
+use lavashell_renderer::{PresentationPolicy, SurfaceTiming};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -76,37 +77,26 @@ impl Translator {
                 return Err(error);
             }
         };
-        let alpha = if spec.appearance.transparent {
-            SurfaceAlpha::Transparent
-        } else {
-            SurfaceAlpha::Opaque
-        };
         let presentation =
             (self.presentation.as_ref()).map(|presentation| presentation.proxy.clone());
-        let attach = Attach {
+        let control = Control::new(
             surface,
-            window: window.clone(),
-            alpha,
-            timing: SurfaceTiming::new(PresentationPolicy::Automatic),
-            output: spec.appearance.output,
-            hdr_metadata: spec.appearance.hdr_metadata,
-            gpu_budget,
-            control: Control::new(
-                surface,
-                SurfaceObjects {
-                    connection: self.connection.clone(),
-                    wl: wl.clone(),
-                    viewport: wp_viewport.clone(),
-                    presentation,
-                    compositor: self.compositor.wl_compositor().clone(),
-                    background: background.clone(),
-                    role_control,
-                },
-                role_state(&spec.role),
-                self.qh.clone(),
-            ),
-        };
-        let accessibility = crate::accessibility::Bridge::new(surface, self.links.view());
+            SurfaceObjects {
+                connection: self.connection.clone(),
+                wl: wl.clone(),
+                viewport: wp_viewport.clone(),
+                presentation,
+                compositor: self.compositor.wl_compositor().clone(),
+                background: background.clone(),
+                role_control,
+            },
+            role_state(&spec.role),
+            self.qh.clone(),
+        );
+        let timing = SurfaceTiming::new(PresentationPolicy::Automatic);
+        let attach = spec.attach(surface, window.clone(), timing, gpu_budget, control);
+        let accessibility =
+            crate::accessibility::Bridge::new(surface, ViewLink::new(self.links.view.clone()));
         let native = Surface {
             accessibility: Some(accessibility),
             role,
@@ -117,8 +107,10 @@ impl Translator {
             background,
         };
         self.surfaces.insert(surface, native);
-        self.links
-            .attach(SurfaceAttachment::Attach(Box::new(attach)));
+        self.links.attach(SurfaceAttachment::Attach {
+            attach: Box::new(attach),
+            scale: PixelScale::SQUARE,
+        });
         Ok(())
     }
 

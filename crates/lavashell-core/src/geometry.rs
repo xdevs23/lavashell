@@ -138,11 +138,8 @@ impl Size {
     ///
     /// Fails when a length is negative, not finite or too long for a buffer.
     pub fn buffer_size(self, density: Density) -> Result<(u32, u32), NumberError> {
-        let pixels = |length: Dp| {
-            let pixels = NonNegative::try_new(density.to_px(length).get().ceil())?;
-            pixels.get().to_u32().ok_or(NumberError::OutOfRange)
-        };
-        Ok((pixels(self.width)?, pixels(self.height)?))
+        let size = PixelScale::SQUARE.buffer_size(Viewport::new(self, density))?;
+        Ok((size.width, size.height))
     }
 
     /// The width and the height as lengths above zero.
@@ -420,16 +417,17 @@ length!(Dp, Vw, Vh, Pct);
 
 mod axis;
 mod constraints;
+mod pixel_scale;
 
 pub use crate::color::Color;
 use crate::local::Local;
 use crate::output::finest_step;
 use crate::units::{
-    Density, Dp, FiniteDp, NonNegative, NonNegativeDp, NumberError, Pct, PositiveDp, Px, Vh, Vw,
+    Density, Dp, FiniteDp, NonNegativeDp, NumberError, Pct, PositiveDp, Px, Vh, Vw,
 };
 pub use axis::Axis;
 pub use constraints::{Constraints, Span};
-use num_traits::ToPrimitive;
+pub use pixel_scale::PixelScale;
 
 #[cfg(test)]
 mod tests;

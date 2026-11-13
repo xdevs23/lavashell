@@ -10,22 +10,23 @@ use crate::input::InputFilter;
 use crate::layer_surface::LayerSurface;
 use crate::observers::Observers;
 use crate::panels::PanelsPerOutput;
-use crate::renderer_actor::RendererError;
+use crate::renderer_actor::PlatformRendererError;
 use crate::run_end::RunEnd;
 use crate::session_lock::LockConfiguration;
 use crate::view_actions::ActionQueue;
-use crate::view_actor::{StopNotice, Stopped, ViewActor, ViewError, ViewInput};
+use crate::view_actor::{Connected, StopNotice, Stopped, ViewActor, ViewError, ViewInput};
 use crate::watches::Watches;
 use crate::window::Window;
 use crate::{registry, scene_pipeline, standard_error};
-use lavashell_actor::{JoinError, SpawnError, mailbox};
+use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
-use lavashell_platform::{Capability, Platform, PlatformLinks, Reports};
-use lavashell_renderer::{RendererSetup, SurfaceControl};
+use lavashell_platform::{Capability, Platform, PlatformLinks};
+use lavashell_renderer::RendererSetup;
 use std::collections::BTreeSet;
+use std::fmt;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{io, thread};
 
 /// A surface that the app opens when it starts.
@@ -41,8 +42,6 @@ pub(crate) struct RuntimeSetup {
     pub panels_per_output: Option<PanelsPerOutput<LayerSurface>>,
     pub session_lock: Option<LockConfiguration>,
     pub renderer: RendererSetup,
-    /// The start of the run, from which every time of the run is measured. `drive` sets it when the run starts.
-    pub start: Instant,
     /// The GPU time per frame available to the effects of each surface, or `None` for no limit.
     pub ui_budget: Option<Duration>,
     pub run_end: RunEnd,
@@ -78,10 +77,9 @@ impl RuntimeSetup {
     }
 }
 
-/// A failure of a run, named after the part that failed. `E` is the error of the platform, and `C` the error of the
-/// controls of the native surfaces.
-#[derive(Debug, thiserror::Error)]
-pub enum RunError<E, C> {
+/// A failure of a run on the platform `P`, named after the part that failed.
+#[derive(thiserror::Error)]
+pub enum RunError<P: Platform> {
     #[error("the app has not added a window, a layer or a session lock")]
     NoSurfaces,
     #[error(
@@ -91,15 +89,15 @@ pub enum RunError<E, C> {
     )]
     Unsupported(BTreeSet<Capability>),
     #[error(transparent)]
-    Platform(E),
+    Platform(P::Error),
     #[error("the thread of the platform could not be started")]
     SpawnPlatform(#[source] io::Error),
     #[error("the thread of the platform panicked")]
     PlatformPanicked,
     #[error("the renderer could not start")]
-    StartRenderer(#[source] SpawnError<RendererError<C>>),
+    StartRenderer(#[source] SpawnError<PlatformRendererError<P>>),
     #[error("the renderer failed")]
-    RunRenderer(#[source] JoinError<RendererError<C>>),
+    RunRenderer(#[source] JoinError<PlatformRendererError<P>>),
     #[error("the shaper that measures text for the views could not be created")]
     CreateShaper(#[source] lavashell_renderer::Error),
     #[error("the choreographer or the scene builder failed")]
@@ -108,9 +106,27 @@ pub enum RunError<E, C> {
     View(#[from] ViewError),
 }
 
-/// The failure of a run on the platform `P`.
-pub type PlatformRunError<P> =
-    RunError<<P as Platform>::Error, <<P as Platform>::Control as SurfaceControl>::Error>;
+impl<P: Platform> fmt::Debug for RunError<P> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (name, field): (&str, Option<&dyn fmt::Debug>) = match self {
+            Self::NoSurfaces => ("NoSurfaces", None),
+            Self::Unsupported(missing) => ("Unsupported", Some(missing)),
+            Self::Platform(error) => ("Platform", Some(error)),
+            Self::SpawnPlatform(error) => ("SpawnPlatform", Some(error)),
+            Self::PlatformPanicked => ("PlatformPanicked", None),
+            Self::StartRenderer(error) => ("StartRenderer", Some(error)),
+            Self::RunRenderer(error) => ("RunRenderer", Some(error)),
+            Self::CreateShaper(error) => ("CreateShaper", Some(error)),
+            Self::SceneFailed(error) => ("SceneFailed", Some(error)),
+            Self::View(error) => ("View", Some(error)),
+        };
+        (field.into_iter())
+            .fold(&mut formatter.debug_tuple(name), |tuple, field| {
+                tuple.field(field)
+            })
+            .finish()
+    }
+}
 
 /// Runs `app` on the platform `P` until it ends. The views run on the calling thread and the platform on a thread of
 /// its own.
@@ -121,7 +137,7 @@ pub type PlatformRunError<P> =
 /// view or an actor fails. When a part of the run stopped and the views end because of it, the failure of that part
 /// replaces the stop. Otherwise the run fails with the first failure among the renderer, the frame scheduler, the
 /// scene pipeline and the platform, in that order.
-pub fn run<P: Platform>(app: App) -> Result<(), PlatformRunError<P>> {
+pub fn run<P: Platform>(app: App) -> Result<(), RunError<P>> {
     standard_error::install();
     let setup = app.into_setup();
     if !setup.has_surfaces() {
@@ -131,34 +147,28 @@ pub fn run<P: Platform>(app: App) -> Result<(), PlatformRunError<P>> {
 }
 
 /// Connects to the host of `P` and runs the app described by `setup` until it ends.
-pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), PlatformRunError<P>> {
-    let start = Instant::now();
-    setup.start = start;
+pub(crate) fn drive<P: Platform>(setup: RuntimeSetup) -> Result<(), RunError<P>> {
     let connection = P::connect().map_err(RunError::Platform)?;
+    let clock = connection.clock;
     let offered = connection.platform.capabilities();
     let missing = registry::missing(&setup, &offered);
     if !missing.is_empty() {
         return Err(RunError::Unsupported(missing));
     }
-    let (inbox, inputs) = mailbox();
-    let inputs = DeadlineReceiver::new(inputs).map_err(ViewError::DeadlineReceiver)?;
+    let (inbox, inputs) = mailbox_on(clock.as_ref());
+    let inputs =
+        DeadlineReceiver::new(inputs, clock.as_ref()).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
-    let mut view = ViewActor::<P::Control>::start(
-        setup,
-        &offered,
-        connection.presentation,
-        connection.host,
-        requests,
-        &inbox,
-    )?;
-    let (scheduler, renderer) = view.links().map_err(ViewError::from)?;
+    let connected = Connected {
+        presentation: connection.presentation,
+        streams: connection.streams,
+        host: connection.host,
+        clock: Arc::clone(&clock),
+    };
+    let mut view = ViewActor::<P>::start(setup, &offered, connected, requests, &inbox)?;
+    let reports = (view.reports(inbox.outlet(ViewInput::Platform))).map_err(ViewError::from)?;
     let links = PlatformLinks {
-        reports: Reports {
-            view: inbox.outlet(ViewInput::Platform),
-            scheduler,
-            renderer,
-            start,
-        },
+        reports,
         requests: platform_requests,
     };
     let notice = StopNotice::new(&inbox, Stopped::Platform);
@@ -173,6 +183,7 @@ pub(crate) fn drive<P: Platform>(mut setup: RuntimeSetup) -> Result<(), Platform
     drop(inbox);
     let ran = view.run(&inputs);
     let (ran, stops) = view.stop(&inputs, ran);
+    drop(inputs);
     let renderer = stops.renderer.map_err(RunError::RunRenderer);
     let scheduler = stops
         .scheduler
