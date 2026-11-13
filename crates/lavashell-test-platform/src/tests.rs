@@ -2,6 +2,8 @@
 use crate::{Error, FrameInterval, HostScript, RecordedFrame, TestPlatform};
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::prelude::{Color, Density, DpExt, Easing, Modifier, Tween, Ui, constant};
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::View;
 use lavashell_platform::{
     Capability, DeviceEvent, KeyAction, KeyboardDevice, Platform, PlatformRequest, WatchRequest,
 };
@@ -187,7 +189,8 @@ fn growing_bar() -> Result<App, SetupError> {
     )
 }
 
-fn presentation_times(script: HostScript, app: App) -> Result<Vec<Duration>, TestError> {
+/// The presentation times of the frames that `script` records while `app` runs.
+fn recorded_times(script: HostScript, app: App) -> Result<Vec<Duration>, TestError> {
     let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
     ran?;
     Ok((frames?.frames().iter())
@@ -195,12 +198,31 @@ fn presentation_times(script: HostScript, app: App) -> Result<Vec<Duration>, Tes
         .collect())
 }
 
+/// The presentation times of the frames shown by `app` while `script` plays, read by a view observer that hands each
+/// frame to `observe` afterwards.
+fn observed_times(
+    script: HostScript,
+    app: App,
+    mut observe: impl FnMut(SurfaceId, &View) + 'static,
+) -> Result<Vec<Duration>, TestError> {
+    let times = Rc::new(RefCell::new(Vec::new()));
+    let seen = Rc::clone(&times);
+    let app = app.view_observer(move |surface, timing, _, view| {
+        seen.borrow_mut().push(timing.presentation);
+        observe(surface, view);
+    });
+    let (ran, frames) = script.serve(|| run::<TestPlatform>(app));
+    ran?;
+    let _frames_recorded_by_the_script = frames?;
+    Ok(times.take())
+}
+
 #[test]
 fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
     let every = constant!(FrameInterval::per_second(40));
     let script = HostScript::new(Density::ONE).record_until_rest(every);
     assert_eq!(
-        presentation_times(script, growing_bar()?)?,
+        recorded_times(script, growing_bar()?)?,
         [0, 25, 50, 75, 100].map(Duration::from_millis)
     );
     Ok(())

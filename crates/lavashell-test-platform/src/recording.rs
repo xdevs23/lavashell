@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::Error;
+use crate::capture::ShownFrame;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::SurfaceId;
 use std::collections::BTreeMap;
@@ -16,6 +18,33 @@ pub struct RecordedFrame {
     pub surface: SurfaceId,
     pub time: FrameTime,
     pub png: Vec<u8>,
+}
+
+impl RecordedFrame {
+    /// `frame` as a recording contains it, with its pixels encoded as PNG at most once. `None` when the control for its
+    /// surface did not capture its pixels.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`Error::EncodeFrame`] when the pixels cannot be encoded.
+    pub(crate) fn encode(frame: &ShownFrame) -> Result<Option<Self>, Error> {
+        let Some(pixels) = &frame.pixels else {
+            return Ok(None);
+        };
+        let surface = frame.surface;
+        let png = if let Some(png) = frame.png.get() {
+            png
+        } else {
+            let encoded =
+                (pixels.png()).map_err(|source| Error::EncodeFrame { surface, source })?;
+            frame.png.get_or_init(|| encoded)
+        };
+        Ok(Some(Self {
+            surface,
+            time: frame.time,
+            png: png.clone(),
+        }))
+    }
 }
 
 impl RecordedFrames {

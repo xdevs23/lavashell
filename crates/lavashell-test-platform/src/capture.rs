@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, RecordedFrame};
+use crate::Error;
 use lavashell_actor::{Effect, Merge, Sender};
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
-use lavashell_renderer::{FrameOutcome, PresentFrame, Snapshot, SurfaceControl};
+use lavashell_renderer::{FrameOutcome, Pixels, PresentFrame, Snapshot, SurfaceControl};
+use std::cell::OnceCell;
 
 /// The control for a surface on the test platform, which sends each frame shown by the surface to the script.
 pub struct FrameCapture {
@@ -14,18 +15,20 @@ pub struct FrameCapture {
     painted: Option<ShownFrame>,
 }
 
-/// Whether the control for a surface encodes the pixels of each shown frame.
+/// Whether the control for a surface reads the pixels of each shown frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureMode {
     WithoutPixels,
     WithPixels,
 }
 
-/// A frame shown by a surface, with its pixels encoded as PNG when they were captured.
+/// A frame shown by a surface, with its pixels when they were captured.
 pub(crate) struct ShownFrame {
     pub(crate) surface: SurfaceId,
     pub(crate) time: FrameTime,
-    pub(crate) png: Option<Vec<u8>>,
+    pub(crate) pixels: Option<Pixels>,
+    /// The pixels encoded as PNG, once a recording contains the frame.
+    pub(crate) png: OnceCell<Vec<u8>>,
 }
 
 impl FrameCapture {
@@ -39,22 +42,11 @@ impl FrameCapture {
     }
 }
 
-impl ShownFrame {
-    /// The frame as a recording contains it, when its pixels were captured.
-    pub(crate) fn recorded(&self) -> Option<RecordedFrame> {
-        Some(RecordedFrame {
-            surface: self.surface,
-            time: self.time,
-            png: self.png.clone()?,
-        })
-    }
-}
-
 impl CaptureMode {
-    fn png(self, snapshot: &Snapshot<'_>) -> Result<Option<Vec<u8>>, lavashell_renderer::Error> {
+    fn pixels(self, snapshot: &Snapshot<'_>) -> Result<Option<Pixels>, lavashell_renderer::Error> {
         match self {
             Self::WithoutPixels => Ok(None),
-            Self::WithPixels => snapshot.png().map(Some),
+            Self::WithPixels => snapshot.pixels().map(Some),
         }
     }
 }
@@ -75,12 +67,13 @@ impl SurfaceControl for FrameCapture {
 
     fn painted(&mut self, frame: &PresentFrame, snapshot: Snapshot<'_>) -> Result<(), Error> {
         let surface = self.surface;
-        let png =
-            (self.mode.png(&snapshot)).map_err(|source| Error::EncodeFrame { surface, source })?;
+        let pixels =
+            (self.mode.pixels(&snapshot)).map_err(|source| Error::ReadFrame { surface, source })?;
         self.painted = Some(ShownFrame {
             surface,
             time: frame.time,
-            png,
+            pixels,
+            png: OnceCell::new(),
         });
         Ok(())
     }

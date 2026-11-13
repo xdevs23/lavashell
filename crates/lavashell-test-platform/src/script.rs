@@ -67,14 +67,17 @@ impl HostScript {
         self
     }
 
-    /// Plays the run at the pace of the steps that publish to `pace`, and records the newest frame of each window
-    /// each time it is new. Once the actors have nothing left to do, the clock moves to the earliest of their next
-    /// deadline, the due time of the steps and, while the steps sample a motion, the next sample time. While an
-    /// action of the steps waits for its frame, the frames shown are presented without moving the clock. The events
-    /// that the steps hand to `pace` are reported to the app as soon as the actors have nothing left to do. The step
-    /// ends once the steps end, or once the run is at rest as [`is_at_rest`](crate::is_at_rest) describes and the
-    /// steps do not wait for a later due time. When nothing publishes to `pace`, the step plays the deadlines of the
-    /// actors until the run is at rest.
+    /// Plays the run at the pace of the steps that publish to `pace`. Once the actors have nothing left to do, the
+    /// clock moves to the earliest of their next deadline, the due time of the steps and, while the steps sample a
+    /// motion, the next sample time. While an action of the steps waits for its frame, the frames shown are presented
+    /// without moving the clock. The events that the steps hand to `pace` are reported to the app as soon as the actors
+    /// have nothing left to do. The step ends once the steps end, once the runtime ends, or once the run is at rest as
+    /// [`is_at_rest`](crate::is_at_rest) describes and the steps do not wait for a later due time. When nothing
+    /// publishes to `pace`, the step plays the deadlines of the actors until the run is at rest.
+    ///
+    /// The step records only the newest frame of each window, when it is new, once the actors have nothing left to do
+    /// after the steps asked `pace` to record, and once more when the step ends. The record at the end also contains
+    /// the newest frame of each window destroyed during the step.
     #[must_use]
     pub fn record_paced(mut self, pace: Pace) -> Self {
         self.steps.push(Step::RecordPaced(pace));

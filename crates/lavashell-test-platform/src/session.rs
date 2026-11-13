@@ -35,6 +35,8 @@ pub(crate) struct Session {
     app_ids: BTreeMap<SurfaceId, String>,
     /// The newest frame shown by each window.
     screen: BTreeMap<SurfaceId, ShownFrame>,
+    /// The newest frame of each window destroyed during the step that plays.
+    closed: Vec<ShownFrame>,
     /// The frames shown since the last advance, presented by the display with the next advance.
     unpresented: Vec<(SurfaceId, FrameTime)>,
     recorded: Vec<RecordedFrame>,
@@ -65,6 +67,7 @@ impl Session {
             windows: Vec::new(),
             app_ids: BTreeMap::new(),
             screen: BTreeMap::new(),
+            closed: Vec::new(),
             unpresented: Vec::new(),
             recorded: Vec::new(),
         }
@@ -103,6 +106,7 @@ impl Session {
     }
 
     fn play_step(&mut self, step: Step) -> Result<Settled, Error> {
+        self.closed.clear();
         match step {
             Step::Report(event) => self.report_settled(|_| Ok(event)),
             Step::FocusKeyboard { keyboard, app_id } => self.report_settled(|session| {
@@ -129,8 +133,8 @@ impl Session {
     }
 
     /// Handles the requests from the runtime until its actors have nothing left to do at the current time, and takes
-    /// the frames shown meanwhile. The frames are taken before the requests, so a destroyed window drops its last
-    /// frame.
+    /// the frames shown meanwhile. The frames are taken before the requests, so the newest frame of a destroyed window
+    /// moves to `closed`.
     fn settle(&mut self) -> Result<Settled, Error> {
         loop {
             let deadline = self.clock.next_deadline_when_idle();
@@ -198,7 +202,7 @@ impl Session {
     fn record_until_rest(&mut self, every: FrameInterval) -> Result<Settled, Error> {
         let mut settled = self.settle()?;
         while let Settled::Waiting(_) = settled {
-            self.record();
+            record(&mut self.recorded, self.screen.values())?;
             let recorded = self.newest_frames();
             settled = self.play_until(self.clock.now() + every.get())?;
             if let Settled::Waiting(deadline) = settled
@@ -208,11 +212,6 @@ impl Session {
             }
         }
         Ok(settled)
-    }
-
-    /// Records the newest frame of each window, whose pixels the controls captured.
-    fn record(&mut self) {
-        (self.recorded).extend(self.screen.values().filter_map(ShownFrame::recorded));
     }
 
     /// The sequence of the newest frame of each window.
@@ -314,10 +313,21 @@ impl Session {
 
     fn destroy(&mut self, surface: SurfaceId) {
         self.windows.retain(|&(window, _)| window != surface);
-        let _last_frame = self.screen.remove(&surface);
+        self.closed.extend(self.screen.remove(&surface));
         self.unpresented.retain(|&(shown, _)| shown != surface);
         self.links
             .reports
             .attach(SurfaceAttachment::Detach(surface));
     }
+}
+
+/// Adds to `recorded` each of `frames` whose pixels the controls captured.
+fn record<'a>(
+    recorded: &mut Vec<RecordedFrame>,
+    frames: impl IntoIterator<Item = &'a ShownFrame>,
+) -> Result<(), Error> {
+    for frame in frames {
+        recorded.extend(RecordedFrame::encode(frame)?);
+    }
+    Ok(())
 }

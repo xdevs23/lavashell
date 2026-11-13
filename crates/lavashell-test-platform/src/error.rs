@@ -21,6 +21,12 @@ pub enum Error {
         "frames keep arriving at {time:?} on the virtual clock, so the run never comes to rest"
     )]
     NoRest { time: Duration },
+    #[error("cannot read the pixels of the frame painted by surface {}", surface.0)]
+    ReadFrame {
+        surface: SurfaceId,
+        #[source]
+        source: lavashell_renderer::Error,
+    },
     #[error("cannot encode the frame shown by surface {} as PNG", surface.0)]
     EncodeFrame {
         surface: SurfaceId,

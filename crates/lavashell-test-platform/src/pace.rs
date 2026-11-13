@@ -6,14 +6,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// The bridge through which steps that play on the views of an app tell the host of a test platform when to move its
-/// clock, and hand it the events to report to the app. The steps publish on the thread of the views, and the host
-/// reads the newest publication once the actors have nothing left to do.
+/// clock and when to record, as [`HostScript::record_paced`](crate::HostScript::record_paced) describes, and hand it
+/// the events to report to the app. The steps publish on the thread of the views, and the host reads the newest
+/// publication once the actors have nothing left to do.
 #[derive(Clone)]
 pub struct Pace {
     steps: Arc<Latest<StepsPace>>,
     input: Sender<PlatformEvent>,
     reported: Arc<Receiver<PlatformEvent>>,
+    recording: Arc<Latest<RecordRequest>>,
 }
+
+/// A request of the steps to record the frames that the windows show.
+struct RecordRequest;
 
 /// What the steps that play on the views of an app wait for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +42,7 @@ impl Default for Pace {
             steps: Arc::default(),
             input,
             reported: Arc::new(reported),
+            recording: Arc::default(),
         }
     }
 }
@@ -51,6 +57,11 @@ impl Pace {
         let _open_while_the_pace_has_a_sender = self.input.push(event.into());
     }
 
+    /// Asks the host to record the frames that the windows show.
+    pub fn record(&self) {
+        self.recording.publish(RecordRequest);
+    }
+
     pub(crate) fn read(&self) -> Option<StepsPace> {
         self.steps.read().as_deref().copied()
     }
@@ -58,5 +69,10 @@ impl Pace {
     /// The events handed to the host since the last call, in the order of their report.
     pub(crate) fn take_input(&self) -> Vec<PlatformEvent> {
         (self.reported.take_arrived().into_iter().flatten()).collect()
+    }
+
+    /// Whether the steps asked to record since the last call.
+    pub(crate) fn take_record_request(&self) -> bool {
+        self.recording.take().is_some()
     }
 }
