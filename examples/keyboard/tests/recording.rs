@@ -11,7 +11,7 @@ fn a_recording_writes_each_sequence_and_each_still() -> Result<(), Error> {
     let _absent_before_the_first_run = std::fs::remove_dir_all(&directory);
     let recording = Recording {
         directory,
-        interval: constant!(FrameInterval::per_second(10)),
+        interval: constant!(FrameInterval::per_second(1)),
     };
     lavashell_on_screen_keyboard::recording::record(&recording)?;
     for sequence in ["show", "hide", "preview", "previews", "dock"] {
