@@ -8,7 +8,6 @@ use crate::LayerError;
 use crate::translator::Translator;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_platform::{Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec};
-use lavashell_renderer::{Attach, PresentationPolicy, SurfaceAlpha, SurfaceTiming};
 use sctk::reexports::client::protocol::wl_surface;
 use smithay_client_toolkit as sctk;
 use std::sync::Arc;
@@ -76,36 +75,23 @@ impl Translator {
                 return Err(error);
             }
         };
-        let alpha = if spec.appearance.transparent {
-            SurfaceAlpha::Transparent
-        } else {
-            SurfaceAlpha::Opaque
-        };
         let presentation =
             (self.presentation.as_ref()).map(|presentation| presentation.proxy.clone());
-        let attach = Attach {
+        let control = Control::new(
             surface,
-            window: window.clone(),
-            alpha,
-            timing: SurfaceTiming::new(PresentationPolicy::Automatic),
-            output: spec.appearance.output,
-            hdr_metadata: spec.appearance.hdr_metadata,
-            gpu_budget,
-            control: Control::new(
-                surface,
-                SurfaceObjects {
-                    connection: self.connection.clone(),
-                    wl: wl.clone(),
-                    viewport: wp_viewport.clone(),
-                    presentation,
-                    compositor: self.compositor.wl_compositor().clone(),
-                    background: background.clone(),
-                    role_control,
-                },
-                role_state(&spec.role),
-                self.qh.clone(),
-            ),
-        };
+            SurfaceObjects {
+                connection: self.connection.clone(),
+                wl: wl.clone(),
+                viewport: wp_viewport.clone(),
+                presentation,
+                compositor: self.compositor.wl_compositor().clone(),
+                background: background.clone(),
+                role_control,
+            },
+            role_state(&spec.role),
+            self.qh.clone(),
+        );
+        let attach = spec.attach(surface, window.clone(), gpu_budget, control);
         let accessibility = crate::accessibility::Bridge::new(surface, self.links.view());
         let native = Surface {
             accessibility: Some(accessibility),

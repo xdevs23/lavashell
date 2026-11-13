@@ -2,6 +2,7 @@
 use super::frames::send_surface_state;
 use super::{ViewActor, send_request};
 use crate::panels::{ContentState, Transaction};
+use crate::scene_pipeline::FrameStatus;
 use crate::scheduler::SchedulerInput;
 use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
@@ -50,7 +51,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                 Transaction::NeedsFrame => view.invalidate(),
                 Transaction::Committed => {
                     let sink = self.actors.scene.sink(id, None);
-                    if !send_surface_state(sink, &self.panels, id, [])? {
+                    if send_surface_state(sink, &self.panels, id, [])? == FrameStatus::Open {
                         changed_states.push(id);
                     }
                 }

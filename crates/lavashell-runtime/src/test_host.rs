@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! A scripted platform and an offscreen presentation for the tests that run the actors of the runtime.
+//! A scripted platform for the tests that run the actors of the runtime.
 
 use crate::clipboard::ClipboardTransfers;
 use crate::drag::Drags;
@@ -10,54 +10,30 @@ use crate::test_error::TestError;
 use crate::view_actions::ActionQueue;
 use crate::watches::Watches;
 use crate::window::Window;
-use ash::vk;
-use lavashell_actor::Closed;
+use lavashell_actor::{Closed, SystemClock};
 use lavashell_core::frame::{FrameReport, FrameTime};
+use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::prelude::{Modifier, TextFieldOptions};
+use lavashell_core::reactive::State;
+use lavashell_core::scene::TextStyle;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
-use lavashell_core::units::DpExt;
-use lavashell_core::view::View;
+use lavashell_core::units::{Density, Dp, DpExt};
+use lavashell_core::view::{InputEvent, TextMeasurer, View};
 use lavashell_platform::{
     Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
     PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
 };
-use lavashell_renderer::vulkan::PresentationBackend;
 use lavashell_renderer::{
-    Fonts, FrameOutcome, PainterSetup, PresentFrame, RendererSetup, SurfaceControl,
+    Fonts, FrameOutcome, HeadlessPresentation, PainterSetup, PresentFrame, RendererSetup,
+    SurfaceControl,
 };
-use lavashell_vulkan::{Features, PhysicalDevice, Presentation};
+use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, VecDeque};
 use std::convert::Infallible;
-use std::ffi::CStr;
 use std::rc::Rc;
-use std::sync::mpsc;
-use std::time::Instant;
-
-/// A backend whose renderer draws offscreen only.
-pub(crate) struct Offscreen;
-
-impl PresentationBackend for Offscreen {
-    fn surface_extension(&self) -> Option<&'static CStr> {
-        None
-    }
-
-    fn features(&self) -> Features {
-        Features::default()
-    }
-
-    fn supports(
-        &self,
-        _: &PhysicalDevice<'_>,
-        _: u32,
-    ) -> Result<Presentation, lavashell_vulkan::Error> {
-        Ok(Presentation::Supported)
-    }
-
-    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
-        None
-    }
-}
+use std::sync::{Arc, mpsc};
 
 /// A control for a surface that is never attached.
 pub(crate) struct NoControl;
@@ -99,7 +75,6 @@ pub(crate) fn runtime_setup(surfaces: Vec<SurfaceSetup>) -> RuntimeSetup {
         panels_per_output: None,
         session_lock: None,
         renderer: renderer_setup(None),
-        start: Instant::now(),
         ui_budget: None,
         run_end: RunEnd::default(),
         preference_overrides: PreferenceOverrides::default(),
@@ -160,6 +135,46 @@ pub(crate) fn window(title: &str) -> SurfaceSetup {
     SurfaceSetup::Window(window, empty_view())
 }
 
+struct Metrics;
+
+impl TextMeasurer for Metrics {
+    fn measure(&mut self, value: &str, _: &TextStyle<Dp>, width: Dp) -> Size {
+        let natural: Dp = value.chars().map(|_| 10.dp()).sum();
+        Size::new(natural.min(width), 20.dp())
+    }
+}
+
+pub(crate) const FIELD_VIEWPORT: Viewport =
+    Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
+
+/// A view that shows a text field named `field` with the text "abc def", after its first frame, and the state of the
+/// text.
+pub(crate) fn field_view(modifier: Modifier) -> Result<(View, State<String>), FrameFailure> {
+    let value = State::new("abc def".to_string());
+    let shown = value.clone();
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        let shown = shown.clone();
+        ui.text_area(
+            shown.get(),
+            TextFieldOptions::default(),
+            modifier
+                .clone()
+                .accessible_name("field")
+                .size(140.dp(), 60.dp()),
+            move |text| shown.set(text),
+        );
+    });
+    let mut scene = RecordedScene::default();
+    (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    Ok((view, value))
+}
+
+/// Focuses the text field of a view made by [`field_view`] with a press and a release on it.
+pub(crate) fn focus_field(view: &mut View) {
+    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
+    view.input(InputEvent::Release(Point::new(11.dp(), 5.dp())));
+}
+
 /// The event of a host that closed `surface`.
 pub(crate) fn closed(surface: SurfaceId) -> PlatformEvent {
     PlatformEvent::Surface(surface, SurfaceEvent::Closed)
@@ -210,7 +225,7 @@ pub(crate) struct StandIn {
 
 impl Platform for StandIn {
     type Error = StandInError;
-    type Presentation = Offscreen;
+    type Presentation = HeadlessPresentation;
     type Control = NoControl;
 
     fn connect() -> Result<Connection<Self>, StandInError> {
@@ -226,8 +241,9 @@ impl Platform for StandIn {
                     script,
                     log,
                 },
-                presentation: Offscreen,
+                presentation: HeadlessPresentation::without_surfaces(),
                 host,
+                clock: Arc::new(SystemClock::start()),
             }),
             Some(Scenario::Unreachable) => Err(StandInError::Unreachable),
             None => Err(StandInError::Unscripted),

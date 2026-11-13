@@ -119,8 +119,8 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         view: View,
         opening: Opening,
     ) -> Result<SurfaceId, ViewError> {
-        let start = self.start;
-        view.motion().time_source(move || start.elapsed());
+        let clock = self.clock.clone();
+        view.motion().time_source(move || clock.now());
         let id = self.records.open(
             view,
             spec.size,

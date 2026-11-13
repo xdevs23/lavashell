@@ -34,7 +34,7 @@ use crate::surface_records::SurfaceRecords;
 use crate::view_actions::ActionQueue;
 use actors::{ActorStops, Actors};
 use frames::ViewSurface;
-use lavashell_actor::{Closed, Effect, Merge, Outlet, Sender};
+use lavashell_actor::{Clock, Closed, Effect, Merge, Outlet, Sender};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
     Capability, HostFacts, LockRequest, PlatformEvent, PlatformRequest, SurfaceAttachment,
@@ -44,7 +44,8 @@ use lavashell_renderer::text::Shaper;
 use lavashell_renderer::{PresentationBackend, SurfaceControl};
 use pacing::FramePacing;
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 use transfers::Transfers;
 
 /// What reaches the views from the platform and from the other actors.
@@ -164,13 +165,13 @@ pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
     /// The requests that follow from the events of the host, executed by the next render.
     surface_requests: Vec<SurfaceRequest>,
     pacing: FramePacing,
-    start: Instant,
+    clock: Arc<dyn Clock>,
 }
 
 impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Starts the scene pipeline, the renderer for the surfaces of `presentation` and the frame scheduler, which
-    /// report to `inbox`, and asks the platform through `requests` for the surfaces of `setup`. The built-in parts
-    /// that need a capability missing from `offered` stay off.
+    /// report to `inbox` and measure time on `clock`, and asks the platform through `requests` for the surfaces of
+    /// `setup`. The built-in parts that need a capability missing from `offered` are switched off.
     ///
     /// # Errors
     ///
@@ -180,6 +181,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         offered: &BTreeSet<Capability>,
         presentation: impl PresentationBackend + Send + 'static,
         host: HostFacts,
+        clock: &Arc<dyn Clock>,
         requests: Sender<PlatformRequest>,
         inbox: &Sender<ViewInput>,
     ) -> Result<Self, StartError<C::Error>> {
@@ -188,7 +190,6 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             panels_per_output,
             session_lock,
             renderer: renderer_setup,
-            start,
             ui_budget,
             run_end,
             preference_overrides,
@@ -213,7 +214,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             presentation,
             renderer_setup,
             redraw,
-            start,
+            clock,
             cpu_timing,
             inbox,
         )?;
@@ -240,7 +241,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             ui_budget,
             surface_requests: Vec::new(),
             pacing: FramePacing::default(),
-            start,
+            clock: Arc::clone(clock),
         };
         actor.open_setup_surfaces(surfaces, session_lock)?;
         Ok(actor)
@@ -391,15 +392,12 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let _gone_scheduler_ends_the_run = self.actors.scheduler.send(input);
     }
 
-    /// The instant at which the views take their next turn without an input: the earlier of the exit time and the
-    /// deadline of [`FramePacing::deadline`], or `None` without either.
-    fn deadline(&mut self) -> Option<Instant> {
-        let now = Instant::now();
-        let exit =
-            (self.run_end.exit_in(self.start.elapsed())).and_then(|wait| now.checked_add(wait));
-        exit.into_iter()
-            .chain(self.pacing.deadline(self.start, now))
-            .min()
+    /// The time on the clock at which the views next run without an input: the earlier of the exit time
+    /// and the deadline of [`FramePacing::deadline`], or `None` without either.
+    fn deadline(&mut self) -> Option<Duration> {
+        let now = self.clock.now();
+        let exit = (self.run_end.exit_in(now)).and_then(|wait| now.checked_add(wait));
+        exit.into_iter().chain(self.pacing.deadline(now)).min()
     }
 
     /// Whether the run ends now. The session lock and the panels per output count as open until they end.
@@ -407,7 +405,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let anything_open = self.session_lock.is_some()
             || self.panels_per_output.is_some()
             || self.records.any_open();
-        (self.run_end).finished(self.start.elapsed(), anything_open)
+        (self.run_end).finished(self.clock.now(), anything_open)
     }
 
     /// Asks the host for the session lock of `lock`, and opens a lock surface on each output known at connect. The

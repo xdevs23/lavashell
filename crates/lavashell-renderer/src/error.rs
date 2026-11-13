@@ -322,6 +322,8 @@ pub enum Error {
     PngSurface,
     #[error("Skia cannot encode a PNG export")]
     EncodePng,
+    #[error("Skia cannot read the pixels of a painted frame")]
+    ReadPaintedFrame,
     #[error("Skia did not submit the semaphore that presentation waits for")]
     PresentationSemaphore,
     #[error("Skia cannot submit the frame")]

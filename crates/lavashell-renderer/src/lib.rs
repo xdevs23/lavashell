@@ -44,7 +44,7 @@ pub use paint::{
 pub use skia_safe as skia;
 pub use state::{
     Attach, AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, PresentFrame,
-    RendererSetup, RendererState, SceneSetup, StartError, StateError, SurfaceControl,
+    RendererSetup, RendererState, SceneSetup, Snapshot, StartError, StateError, SurfaceControl,
 };
 pub use stream::{
     BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSource, Latch,
@@ -52,9 +52,9 @@ pub use stream::{
 };
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
-    ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, PresentationBackend,
-    PresentationPolicy, ReadySignal, SampledMemory, Sampling, SurfaceAlpha, SurfaceContents,
-    SurfaceTarget, SurfaceTiming, VulkanRenderer,
+    ForeignImport, ForeignImporter, ForeignMemory, FrameOutcome, HeadlessPresentation,
+    PresentationBackend, PresentationPolicy, ReadySignal, SampledMemory, Sampling, SurfaceAlpha,
+    SurfaceContents, SurfaceTarget, SurfaceTiming, VulkanRenderer,
 };
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ members = [
     "crates/lavashell-bevy",
     "crates/lavashell-lucide",
     "crates/lavashell-test-fixtures",
+    "crates/lavashell-test-platform",
     "crates/lavashell-build-script",
     "examples/support",
     "examples/copy-keys",
@@ -75,6 +76,7 @@ lavashell-android = { path = "crates/lavashell-android" }
 lavashell = { path = "crates/lavashell" }
 lavashell-lucide = { path = "crates/lavashell-lucide" }
 lavashell-test-fixtures = { path = "crates/lavashell-test-fixtures" }
+lavashell-test-platform = { path = "crates/lavashell-test-platform" }
 lavashell-build-script = { path = "crates/lavashell-build-script" }
 lavashell-example-support = { path = "examples/support" }
 lavashell-example-copy-keys = { path = "examples/copy-keys" }
