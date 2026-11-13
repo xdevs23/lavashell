@@ -14,16 +14,28 @@ pub(crate) fn surface() -> Result<Surface, TestError> {
     crate::test_surfaces::surface(96, 48)
 }
 
-pub(crate) fn sample(surface: &mut Surface, x: i32, y: i32) -> [f32; 4] {
-    let info = ImageInfo::new(
-        (1, 1),
+fn linear_floats(width: i32, height: i32) -> ImageInfo {
+    ImageInfo::new(
+        (width, height),
         ColorType::RGBAF32,
         AlphaType::Unpremul,
         skia_safe::ColorSpace::new_srgb_linear(),
-    );
+    )
+}
+
+pub(crate) fn sample(surface: &mut Surface, x: i32, y: i32) -> [f32; 4] {
     let mut bytes = [0u8; 16];
-    assert!(surface.read_pixels(&info, &mut bytes, 16, (x, y)));
+    assert!(surface.read_pixels(&linear_floats(1, 1), &mut bytes, 16, (x, y)));
     floats(&bytes)
+}
+
+/// Every pixel of `surface` in linear floats, row by row.
+pub(crate) fn linear_pixels(surface: &mut Surface) -> Vec<[f32; 4]> {
+    let info = linear_floats(surface.width(), surface.height());
+    let mut bytes = vec![0u8; info.compute_min_byte_size()];
+    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
+    let (pixels, _) = bytes.as_chunks::<16>();
+    pixels.iter().map(|pixel| floats(pixel)).collect()
 }
 
 pub(crate) fn draw(
@@ -31,14 +43,14 @@ pub(crate) fn draw(
     paint: impl FnOnce(&mut Drawing<'_>),
 ) -> Result<(), TestError> {
     draw_with(
-        Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
+        &mut Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
         surface,
         paint,
     )
 }
 
 pub(crate) fn draw_with(
-    mut painter: Painter,
+    painter: &mut Painter,
     surface: &mut Surface,
     paint: impl FnOnce(&mut Drawing<'_>),
 ) -> Result<(), TestError> {
@@ -215,15 +227,8 @@ fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
                     )),
                 );
             })?;
-            let info = ImageInfo::new(
-                (96, 48),
-                ColorType::RGBAF32,
-                AlphaType::Unpremul,
-                skia_safe::ColorSpace::new_srgb_linear(),
-            );
-            let mut pixels = vec![0u8; 96 * 48 * 16];
-            assert!(s.read_pixels(&info, &mut pixels, 96 * 16, (0, 0)));
-            let red = |x: usize, y: usize| floats::<1>(&pixels[(y * 96 + x) * 16..])[0];
+            let pixels = linear_pixels(s);
+            let red = |x: usize, y: usize| pixels[y * 96 + x][0];
             for y in 18..31 {
                 for x in 26..70 {
                     for (a, c) in [

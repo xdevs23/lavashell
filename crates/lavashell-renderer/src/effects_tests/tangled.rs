@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{draw, sample, stripes, surface};
+use super::{draw, linear_pixels, stripes, surface};
 use crate::test_error::TestError;
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
@@ -60,12 +60,11 @@ fn a_tangled_contour_draws_its_fill_and_its_glass() -> Result<(), TestError> {
         let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
         painter.paint_as_leaf(drawn.canvas(), &commands, Density::ONE)?;
         let (mut inside, mut changed) = (0, 0);
+        let (drawn, expected) = (linear_pixels(&mut drawn), linear_pixels(&mut expected));
         for (x, y) in (0..48_i16).flat_map(|y| (0..96_i16).map(move |x| (x, y))) {
             let radius = (f64::from(x) + 0.5 - 48.0).hypot(f64::from(y) + 0.5 - 24.0);
-            let (pixel, stripe) = (
-                sample(&mut drawn, i32::from(x), i32::from(y)),
-                sample(&mut expected, i32::from(x), i32::from(y)),
-            );
+            let index = usize::try_from(y)? * 96 + usize::try_from(x)?;
+            let (pixel, stripe) = (drawn[index], expected[index]);
             let same = pixel.map(f32::to_bits) == stripe.map(f32::to_bits);
             if radius > 17.5 {
                 assert!(same, "{label} drew {pixel:?} over {stripe:?} at {x}, {y}");

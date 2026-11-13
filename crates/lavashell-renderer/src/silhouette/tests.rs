@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::BandEdges;
-use crate::effects_tests::{draw, draw_with, sample, stripes, surface, tangle};
+use crate::effects_tests::{draw, draw_with, linear_pixels, sample, stripes, surface, tangle};
 use crate::field::Band;
 use crate::field::Route;
 use crate::field::test_shapes::{star, union};
@@ -341,11 +341,8 @@ fn blurred_contour_shadows_from_raster_tiles_reach_into_the_clip() -> Result<(),
 fn render(raster: bool, paint: impl FnOnce(&mut Drawing<'_>)) -> Result<Vec<[f32; 4]>, TestError> {
     let mut s = surface()?;
     let painter = crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    draw_with(painter.with_raster_paths(raster), &mut s, paint)?;
-    Ok((0..48)
-        .flat_map(|y| (0..96).map(move |x| (x, y)))
-        .map(|(x, y)| sample(&mut s, x, y))
-        .collect())
+    draw_with(&mut painter.with_raster_paths(raster), &mut s, paint)?;
+    Ok(linear_pixels(&mut s))
 }
 
 fn difference(a: &[[f32; 4]], b: &[[f32; 4]]) -> f32 {
@@ -422,9 +419,10 @@ fn a_border_that_path_operations_give_up_on_draws_from_the_field() -> Result<(),
         crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
     let mut rim: u16 = 0;
+    let pixels = linear_pixels(&mut surface);
     for (x, y) in (0..48_i16).flat_map(|y| (0..96_i16).map(move |x| (x, y))) {
         let radius = (f64::from(x) + 0.5 - 48.0).hypot(f64::from(y) + 0.5 - 24.0);
-        let alpha = sample(&mut surface, i32::from(x), i32::from(y))[3];
+        let alpha = pixels[usize::try_from(y)? * 96 + usize::try_from(x)?][3];
         if radius > 19.0 {
             assert!(same_at(alpha, 0.0, 0.0), "the border reaches {x}, {y}");
         } else if radius > 16.5 && alpha > 0.5 {
