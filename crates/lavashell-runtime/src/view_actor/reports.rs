@@ -6,10 +6,9 @@ use crate::scheduler::{SchedulerInput, SchedulerOutput};
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{PlatformRequest, SurfaceRequest};
-use lavashell_renderer::SurfaceControl;
+use lavashell_platform::{Platform, PlatformRequest, SurfaceRequest};
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Renders a composed frame of the surface once its scene is built. A surface state built without a frame waits
     /// for a commit without a frame, which the frame scheduler starts. After a frame that did not fit the scene, the
     /// view of the surface sends the whole scene to a restarted sink.

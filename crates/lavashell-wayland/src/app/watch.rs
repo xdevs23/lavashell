@@ -18,8 +18,11 @@ pub(crate) struct WatchSources(BTreeMap<WatchId, RegistrationToken>);
 impl Translator {
     /// Executes `request` of the runtime on the watched file descriptors.
     pub(crate) fn execute_watch(&mut self, request: WatchRequest) -> Result<(), WatchError> {
-        self.watches
-            .execute(&self.loop_handle, request, &self.links.view())
+        self.watches.execute(
+            &self.loop_handle,
+            request,
+            &ViewLink::new(self.links.view.clone()),
+        )
     }
 }
 

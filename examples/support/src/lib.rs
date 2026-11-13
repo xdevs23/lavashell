@@ -10,22 +10,25 @@ mod error;
 mod frame_log;
 mod platform;
 mod report;
+#[cfg(target_os = "linux")]
+mod steps;
 #[cfg(feature = "testing")]
 pub mod testing;
 
-pub use arguments::{
-    ExampleArguments, FrameInterval, Recording, RecordingArguments, SizeArguments,
-};
+pub use arguments::{ExampleArguments, Recording, RecordingArguments, SizeArguments};
 pub use breakpoint::Breakpoint;
 #[cfg(target_os = "linux")]
-pub use capture::{Capture, OffscreenView};
+pub use capture::{Capture, OffscreenView, write_capture};
 pub use cover::cover;
 pub use error::Error;
 #[cfg(target_os = "linux")]
 pub use frame_log::{run, run_observed};
 pub use lavashell_lucide as lucide;
+pub use lavashell_test_platform::FrameInterval;
 pub use platform::platform;
 pub use report::{exit_code, report, report_failure, report_failures};
+#[cfg(target_os = "linux")]
+pub use steps::Steps;
 
 use lavashell::prelude::*;
 #[cfg(target_os = "linux")]

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use lavashell::{core::frame::PresentationFlag, prelude::*};
+use lavashell_test_platform::{HostScript, RecordedFrames, TestPlatform};
 use serde::Serialize;
 use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 
@@ -9,7 +10,7 @@ use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 /// # Errors
 /// Returns an error when the app fails or the frame log cannot be written.
 pub fn run(app: App) -> Result<(), Error> {
-    logged(app, None)
+    logged(app, None, on_platform)
 }
 
 /// Like [`run`], and passes every frame report to `observer` as well.
@@ -17,10 +18,29 @@ pub fn run(app: App) -> Result<(), Error> {
 /// # Errors
 /// Returns an error when the app fails or the frame log cannot be written.
 pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Result<(), Error> {
-    logged(app, Some(Box::new(observer)))
+    logged(app, Some(Box::new(observer)), on_platform)
 }
 
-fn logged(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result<(), Error> {
+/// Like [`run`], on a test platform that plays `script`, and returns the frames recorded by the script.
+///
+/// # Errors
+/// Returns an error when the app fails, when the frame log cannot be written, or when no test platform connected.
+pub(crate) fn record(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
+    let on_test_platform = |app| lavashell::run::<TestPlatform>(app).map_err(Error::Record);
+    let (ran, frames) = script.serve(|| logged(app, None, on_test_platform));
+    ran?;
+    frames.map_err(Error::NotServed)
+}
+
+fn on_platform(app: App) -> Result<(), Error> {
+    lavashell::run::<Platform>(app).map_err(Error::App)
+}
+
+fn logged(
+    app: App,
+    mut observer: Option<Box<dyn FnMut(FrameReport)>>,
+    run: impl FnOnce(App) -> Result<(), Error>,
+) -> Result<(), Error> {
     let path = std::env::var_os("LAVASHELL_FRAME_LOG");
     let reports = Rc::new(RefCell::new(Vec::new()));
     let log = path.is_some().then(|| reports.clone());
@@ -42,7 +62,7 @@ fn logged(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result
         app
     };
 
-    lavashell::run::<Platform>(app).map_err(Error::App)?;
+    run(app)?;
 
     match path {
         Some(path) => write_frame_reports(&path, &reports.borrow()),

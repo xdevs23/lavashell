@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::host::AospError;
+use lavashell_actor::Closed;
 use lavashell_core::scene::tree::ApplyError;
-use lavashell_renderer::{FrameOutcome, Latch};
+use lavashell_renderer::{Error as RendererError, Latch};
 use log::SetLoggerError;
 
 /// A failure of a test or of the platform that the tests simulate.
@@ -9,19 +11,21 @@ use log::SetLoggerError;
 pub(crate) enum TestError {
     #[error(transparent)]
     Adapter(#[from] Error),
+    #[error("the simulated renderer failed")]
+    Renderer(#[from] RendererError),
+    #[error("the platform of the AOSP host failed")]
+    Aosp(#[from] AospError),
+    #[error("the mailbox of the reports closed")]
+    Closed(#[from] Closed),
     #[error("cannot build the scene of a test")]
     Scene(#[from] ApplyError),
     #[error("cannot install the logger that records the warnings of a test")]
     InstallLogger(#[source] &'static SetLoggerError),
     #[error("the latch found no new frame, but {0:?}")]
     NoNewFrame(Latch),
-    #[error("the renderer has no native window attached")]
-    NothingAttached,
-    #[error("the render on a lost device drew with the outcome {0:?}")]
-    RenderSucceeded(FrameOutcome),
     #[error("the pixel {x}, {y} lies outside the simulated surface")]
     PixelOutside { x: i32, y: i32 },
-    #[error("the native window belongs to a display, not to the reader of a stream")]
+    #[error("the native window belongs to a display or to a deleted reader")]
     NotAReaderWindow,
     #[error("the producer is not writing the buffer {0}")]
     NotBeingWritten(u64),

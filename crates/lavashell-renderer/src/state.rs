@@ -3,19 +3,19 @@ mod control;
 mod error;
 mod present;
 mod scene_source;
+mod snapshot;
 mod targets;
 #[cfg(test)]
 mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
 pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
+pub use snapshot::Snapshot;
 
-use crate::stream::{FrameImporter, FrameSource, LatchedFrames, NoStreams, StreamBackend};
+use crate::stream::{NoStreams, StreamBackend};
 use crate::text::{Shaper, TextRendering};
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
-use crate::{
-    Fonts, FrameOutcome, Latch, Painter, Stream, SurfaceAlpha, SurfaceContents, SurfaceTiming,
-};
+use crate::{Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents, SurfaceTiming};
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputRequest, SceneSnapshot, Viewport};
 use lavashell_core::surface::{SurfaceId, SurfaceState};
@@ -26,7 +26,7 @@ use scene_source::SceneImages;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use targets::{AttachedSurface, PixelInputs};
 
 /// Runs on the painter once it exists.
@@ -95,13 +95,11 @@ pub struct RendererState<C: SurfaceControl, S = NoStreams> {
     /// Declared after the device, so the frames of the streams drop once the GPU is idle and Skia has released their
     /// images.
     streams: S,
-    start: Instant,
     full_redraw: bool,
 }
 
 impl<C: SurfaceControl> RendererState<C> {
-    /// A state without streams whose device presents to surfaces created for `backend`. The times passed to the scene
-    /// source are measured from `start`.
+    /// A state without streams whose device presents to surfaces created for `backend`.
     ///
     /// # Errors
     ///
@@ -109,16 +107,15 @@ impl<C: SurfaceControl> RendererState<C> {
     pub fn new(
         backend: &impl PresentationBackend,
         setup: RendererSetup,
-        start: Instant,
     ) -> Result<Self, StateError> {
-        Self::with_streams(backend, setup, start, |_| Ok(NoStreams::default()))
+        Self::with_streams(backend, setup, |_| Ok(NoStreams::default()))
             .map_err(StartError::into_state)
     }
 }
 
 impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C, S> {
     /// A state whose device presents to surfaces created for `backend`, with the streams made by `streams` on that
-    /// device. The times passed to the scene source are measured from `start`.
+    /// device.
     ///
     /// # Errors
     ///
@@ -126,7 +123,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn with_streams(
         backend: &impl PresentationBackend,
         setup: RendererSetup,
-        start: Instant,
         streams: impl FnOnce(&VulkanRenderer) -> Result<S, S::Error>,
     ) -> Result<Self, StartError<S::Error>> {
         let RendererSetup {
@@ -155,7 +151,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             scene: scene.map(|make| SceneImages::new(make())),
             gpu,
             streams,
-            start,
             full_redraw,
         })
     }
@@ -291,9 +286,11 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.painter.shaper()
     }
 
-    #[must_use]
-    pub fn streams(&self) -> &S {
-        &self.streams
+    /// Runs `task` with the streams and with the painter, which records each frame of a stream that is not drawn.
+    /// Compose the snapshot that draws a frame latched by `task` after the task, because a frame draws nothing for an
+    /// image older than the one latched last.
+    pub fn run_on_streams<T>(&mut self, task: impl FnOnce(&mut S, &Painter) -> T) -> T {
+        task(&mut self.streams, &self.painter)
     }
 
     /// The text rendering of the painter, which a shaper made by [`crate::text::Shaper::with_rendering`] follows to
@@ -303,37 +300,33 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.painter.text_rendering()
     }
 
-    /// The instant at which the scene source produces its next scene, or `None` without a scene source or while it
-    /// cannot submit another scene.
+    /// The time on the clock of the caller at which the scene source produces its next scene, or `None` without a
+    /// scene source or while it cannot submit another scene.
     #[must_use]
-    pub fn scene_deadline(&self) -> Option<Instant> {
-        let wake = self.scene.as_ref().and_then(SceneImages::wake)?;
-        self.start.checked_add(wake)
+    pub fn scene_deadline(&self) -> Option<Duration> {
+        self.scene.as_ref().and_then(SceneImages::wake)
     }
 
-    /// Reads the completed scene images, and asks the scene source for the next one in `viewport` when it is due. A
-    /// platform calls it before composing the views, so the scene work runs on the GPU while the views are composed.
+    /// Reads the completed scene images, and asks the scene source for the next one in `viewport` when it is due at
+    /// `now`, on the clock of the caller. A platform calls it before composing the views, so the scene work runs on
+    /// the GPU while the views are composed.
     ///
     /// # Errors
     ///
     /// Fails when the scene source or the scene mailbox fails.
-    pub fn advance_scene(&mut self, viewport: Viewport) -> Result<(), StateError> {
+    pub fn advance_scene(&mut self, viewport: Viewport, now: Duration) -> Result<(), StateError> {
         let frames_in_flight = self.scene_frames_in_flight();
         match &mut self.scene {
-            Some(scene) => scene.tick(
-                &mut self.gpu,
-                self.start.elapsed(),
-                viewport,
-                frames_in_flight,
-            ),
+            Some(scene) => scene.tick(&mut self.gpu, now, viewport, frames_in_flight),
             None => Ok(()),
         }
     }
 
     /// Draws `snapshot` into `surface` as `frame`, above the latest completed scene image. It advances the scene
-    /// source first, which picks up a scene that completed since the last advance. Damage records of the surface are
-    /// forgotten when the lineage of `snapshot` differs from the lineage of the last frame. The streams import the
-    /// latched frames drawn by `snapshot` before the present and return the frames that the GPU has read after it.
+    /// source to the time at which `frame` started first, which picks up a scene that completed since the last
+    /// advance. Damage records of the surface are forgotten when the lineage of `snapshot` differs from the lineage of
+    /// the last frame. The streams import the latched frames drawn by `snapshot` before the present and return the
+    /// frames that the GPU has read after it.
     ///
     /// # Errors
     ///
@@ -346,7 +339,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
-        self.advance_scene(frame.viewport)?;
+        self.advance_scene(frame.viewport, frame.time.now)?;
         let scene = self.scene.as_ref().and_then(SceneImages::latest);
         let physical = physical_size(frame.viewport)?;
         let shown = snapshot.at(frame.time.presentation);
@@ -415,23 +408,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         (self.surfaces.values())
             .filter_map(|attached| attached.target.frames_in_flight())
             .min()
-    }
-}
-
-impl<C: SurfaceControl, I: FrameImporter> RendererState<C, LatchedFrames<I>> {
-    /// Latches the newest frame of `stream` and releases the frame latched before, as [`LatchedFrames::latch`]
-    /// describes. Compose the snapshot that draws the returned image after the latch, because a frame draws nothing
-    /// for an image older than the one latched last.
-    ///
-    /// # Errors
-    ///
-    /// Fails as [`LatchedFrames::latch`] does.
-    pub fn latch<F>(&mut self, stream: &mut Stream<F>) -> Result<Latch, I::Error>
-    where
-        F: FrameSource<Frame = I::Frame>,
-        I::Error: From<F::Error>,
-    {
-        self.streams.latch(&self.painter, stream)
     }
 }
 
