@@ -1,27 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::input::{HostKey, KeyboardFocus};
-use super::{App, AppConfig, Platform, Request};
-use crate::Error;
+use super::App;
 use crate::logical::{whole_size, window_size};
-use crate::surface::LayerSurface;
+use crate::{RunError, SetupError, Wayland};
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::platform::PlatformFacts;
+use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
-use lavashell_renderer::{Fonts, Painter};
+use lavashell_renderer::{Fonts, Painter, RendererSetup};
 use lavashell_runtime::{
-    Clipboard, ClipboardTransfers, DragGesture, DragRequest, DropEvent, LockConfiguration, RunEnd,
-    SessionLock, ViewActions, Window,
+    ActionQueue, Clipboard, ClipboardTransfers, DragGesture, DragRequest, Drags, DropEvent,
+    HostKey, KeyboardFocus, LayerSurface, LockConfiguration, Observers, RunEnd, RuntimeSetup,
+    SessionLock, SurfaceSetup, ViewActions, Watches, Window,
 };
-use sctk::reexports::calloop::EventLoop;
-use sctk::reexports::client::Connection;
-use sctk::reexports::client::globals::registry_queue_init;
-use smithay_client_toolkit as sctk;
 use std::time::{Duration, Instant};
 
 impl App {
@@ -48,9 +44,9 @@ impl App {
         &mut self,
         handle: SessionLock,
         compose: impl FnMut(&mut Ui) + 'static,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SetupError> {
         if self.session_lock.is_some() {
-            return Err(Error::SessionLockConfigured);
+            return Err(SetupError::SessionLockConfigured);
         }
         self.session_lock = Some(LockConfiguration::new(
             handle,
@@ -64,7 +60,7 @@ impl App {
     /// id assigned when the surface was created, which no other surface gets.
     #[must_use]
     pub fn view_actions(&self) -> ViewActions {
-        self.config.action_queue.view_actions()
+        self.action_queue.view_actions()
     }
 
     /// Sets `callback`, which runs for each event of a drag offered by another client and returns whether the drag
@@ -75,7 +71,7 @@ impl App {
         mut self,
         callback: impl FnMut(DragEvent, &mut View) -> Option<DropAcceptance> + 'static,
     ) -> Self {
-        self.config.drags.on_drag(callback);
+        self.drags.on_drag(callback);
         self
     }
 
@@ -83,7 +79,7 @@ impl App {
     /// event, and commits the drop. Returning true finishes the Wayland transfer, but only when the data was received.
     #[must_use]
     pub fn on_drop(mut self, callback: impl FnMut(DropEvent, &mut View) -> bool + 'static) -> Self {
-        self.config.drags.on_drop(callback);
+        self.drags.on_drop(callback);
         self
     }
 
@@ -95,7 +91,7 @@ impl App {
         mut self,
         callback: impl FnMut(DragGesture, &mut View) -> Option<DragRequest> + 'static,
     ) -> Self {
-        self.config.drags.on_drag_source(callback);
+        self.drags.on_drag_source(callback);
         self
     }
 
@@ -104,17 +100,14 @@ impl App {
     /// the drags that the app did not accept.
     #[must_use]
     pub fn text_transfers(mut self) -> Self {
-        self.config.drags.enable_text_transfers();
+        self.drags.enable_text_transfers();
         self
     }
 
     /// Sets preferences of the app that override the preferences of the system, also after the system preferences
     /// change.
     #[must_use]
-    pub fn preference_overrides(
-        mut self,
-        overrides: lavashell_core::preferences::PreferenceOverrides,
-    ) -> Self {
+    pub fn preference_overrides(mut self, overrides: PreferenceOverrides) -> Self {
         self.preference_overrides = overrides;
         self
     }
@@ -123,14 +116,14 @@ impl App {
     /// the key, so the view does not see it.
     #[must_use]
     pub fn on_keyboard(mut self, callback: impl FnMut(HostKey) -> bool + 'static) -> Self {
-        self.config.key_observer = Some(Box::new(callback));
+        self.observers.key = Some(Box::new(callback));
         self
     }
 
     /// Sets `callback`, which runs each time a surface gains or loses the keyboard focus.
     #[must_use]
     pub fn on_keyboard_focus(mut self, callback: impl FnMut(KeyboardFocus) + 'static) -> Self {
-        self.config.focus_observer = Some(Box::new(callback));
+        self.observers.keyboard_focus = Some(Box::new(callback));
         self
     }
 
@@ -142,7 +135,7 @@ impl App {
         mut self,
         callback: impl FnMut(SurfaceId, Viewport, &View) + 'static,
     ) -> Self {
-        self.config.view_observer = Some(Box::new(callback));
+        self.observers.view = Some(Box::new(callback));
         self
     }
 
@@ -156,7 +149,7 @@ impl App {
     /// comparisons or for a host that changes content in ways that the damage tracking does not detect.
     #[must_use]
     pub fn incremental(mut self, enabled: bool) -> Self {
-        self.config.full_redraw = !enabled;
+        self.full_redraw = !enabled;
         self
     }
 
@@ -192,7 +185,7 @@ impl App {
     /// Sets `budget`, the time per frame available to the UI. The chooser of the effect quality cannot raise it.
     #[must_use]
     pub fn ui_budget(mut self, budget: Duration) -> Self {
-        self.config.ui_budget = Some(budget);
+        self.ui_budget = Some(budget);
         self
     }
 
@@ -200,20 +193,25 @@ impl App {
     /// reports replaces the supplied one.
     #[must_use]
     pub fn new(platform: PlatformFacts) -> Self {
-        let config = AppConfig::default();
+        let watches = Watches::default();
         Self {
-            requests: Vec::new(),
+            surfaces: Vec::new(),
             output_layers: None,
             fonts: Fonts::default(),
             session_lock: None,
             run_end: RunEnd::default(),
-            clipboard: ClipboardTransfers::new(&config.watches),
             painter_setup: None,
             scene: None,
             gpu_timing: false,
-            preference_overrides: lavashell_core::preferences::PreferenceOverrides::default(),
+            full_redraw: false,
+            ui_budget: None,
+            preference_overrides: PreferenceOverrides::default(),
             input_filter: None,
-            config,
+            observers: Observers::default(),
+            clipboard: ClipboardTransfers::new(&watches),
+            action_queue: ActionQueue::new(&watches),
+            drags: Drags::new(&watches),
+            watches,
             platform,
         }
     }
@@ -237,7 +235,7 @@ impl App {
 
     #[must_use]
     pub fn on_tick(mut self, tick: impl FnMut(Duration) + 'static) -> Self {
-        self.config.tick = Some(Box::new(tick));
+        self.observers.tick = Some(Box::new(tick));
         self
     }
 
@@ -245,7 +243,7 @@ impl App {
     /// frame based on its presentation time.
     #[must_use]
     pub fn on_frame(mut self, callback: impl FnMut(FrameTime) + 'static) -> Self {
-        self.config.on_frame = Some(Box::new(callback));
+        self.observers.frame = Some(Box::new(callback));
         self
     }
 
@@ -258,10 +256,10 @@ impl App {
     }
 
     /// Sets `callback`, which receives a [`FrameReport`] when a frame is submitted, presented or discarded. The
-    /// callback runs on the event loop, so it must return quickly and buffer its writes to disk.
+    /// callback runs on the thread of the views, so it must return quickly and buffer writes to disk.
     #[must_use]
     pub fn frame_observer(mut self, callback: impl FnMut(FrameReport) + 'static) -> Self {
-        self.config.observer = Some(Box::new(callback));
+        self.observers.frame_report = Some(Box::new(callback));
         self
     }
 
@@ -270,7 +268,7 @@ impl App {
         mut self,
         observer: impl FnMut(SurfaceId, OutputInfo) + 'static,
     ) -> Self {
-        self.config.output_observer = Some(Box::new(observer));
+        self.observers.output = Some(Box::new(observer));
         self
     }
 
@@ -283,17 +281,17 @@ impl App {
         &mut self,
         window: Window,
         compose: impl FnMut(&mut Ui) + 'static,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SetupError> {
         if let Some(size) = window.size.filter(|&size| window_size(size).is_none()) {
-            return Err(Error::WindowSize(size));
+            return Err(SetupError::WindowSize(size));
         }
         if let Some(minimum) = window
             .min_size
             .filter(|&minimum| whole_size(minimum).is_none())
         {
-            return Err(Error::MinimumWindowSize(minimum));
+            return Err(SetupError::MinimumWindowSize(minimum));
         }
-        self.requests.push(Request::Window(
+        self.surfaces.push(SurfaceSetup::Window(
             window,
             View::new(self.platform.clone(), compose),
         ));
@@ -301,7 +299,7 @@ impl App {
     }
 
     pub fn layer(&mut self, layer: LayerSurface, compose: impl FnMut(&mut Ui) + 'static) {
-        self.requests.push(Request::Layer(
+        self.surfaces.push(SurfaceSetup::Panel(
             layer,
             View::new(self.platform.clone(), compose),
         ));
@@ -316,110 +314,38 @@ impl App {
     /// protocol the surfaces need, the renderer, a frame or a window move fails.
     pub fn run(
         mut self,
-        startup: impl FnOnce(&mut Self) -> Result<(), Error>,
-    ) -> Result<(), Error> {
+        startup: impl FnOnce(&mut Self) -> Result<(), SetupError>,
+    ) -> Result<(), RunError> {
         super::standard_error::install();
-        startup(&mut self)?;
-        if self.requests.is_empty() && self.session_lock.is_none() && self.output_layers.is_none() {
-            return Err(Error::NoSurfaces);
+        startup(&mut self).map_err(RunError::Setup)?;
+        if self.surfaces.is_empty() && self.session_lock.is_none() && self.output_layers.is_none() {
+            return Err(RunError::Setup(SetupError::NoSurfaces));
         }
-        let connection = Connection::connect_to_env().map_err(Error::Connect)?;
-        let (globals, queue) =
-            registry_queue_init::<Platform>(&connection).map_err(Error::ReadGlobals)?;
-        let qh = queue.handle();
-        let mut event_loop: EventLoop<Platform> =
-            EventLoop::try_new().map_err(Error::CreateEventLoop)?;
-        let mut platform =
-            Platform::new(&connection, &globals, qh, queue, self, event_loop.handle())?;
-        let ran = platform
-            .run(&mut event_loop)
-            .and_then(|()| platform.stop_actors(&mut event_loop));
-        ran.map_err(|error| platform.stopped_actor_failure(error))
-    }
-}
-
-impl Platform {
-    /// Runs the event loop until the session lock is released or the run ends.
-    fn run(&mut self, event_loop: &mut EventLoop<'static, Self>) -> Result<(), Error> {
-        loop {
-            if let Some(error) = self.input_failure.take() {
-                return Err(error);
-            }
-            if let Some(layers) = &mut self.output_layers {
-                layers.check()?;
-            }
-            self.update_layers()?;
-            self.update_lock()?;
-            self.render()?;
-            self.update_focus_grabs()?;
-            if self.finished() {
-                return Ok(());
-            }
-            self.execute_watch_requests()?;
-            event_loop
-                .dispatch(self.timeout(), self)
-                .map_err(Error::DispatchEvents)?;
-        }
+        lavashell_runtime::drive::<Wayland>(self.into_setup(Instant::now())).map_err(RunError::Run)
     }
 
-    /// Stops the renderer, then the frame scheduler and then the scene pipeline at the end of a run, and waits for
-    /// their threads. The last outputs of the renderer reach the scheduler before it stops, and the frame observer of
-    /// the app receives the last reports of the scheduler.
-    ///
-    /// # Errors
-    ///
-    /// Fails with the first failure among the renderer, the frame scheduler and the scene pipeline, in that order.
-    fn stop_actors(&mut self, event_loop: &mut EventLoop<'static, Self>) -> Result<(), Error> {
-        self.renderer.stop().map_err(Error::RunRenderer)?;
-        super::actor_link::dispatch_until(self, event_loop, |platform| platform.stops.renderer)?;
-        self.drain_scheduler(event_loop)?;
-        self.scene.stop().map_err(Error::SceneFailed)
-    }
-
-    /// Joins the scene pipeline, the frame scheduler or the renderer when `error` reports that it stopped, and
-    /// returns the failure of the actor that stopped in place of `error`. Returns `error` when the actor did not fail.
-    pub(super) fn stopped_actor_failure(&mut self, error: Error) -> Error {
-        match error {
-            Error::SceneStopped => match self.scene.stop() {
-                Ok(()) => Error::SceneStopped,
-                Err(failure) => Error::SceneFailed(failure),
+    fn into_setup(self, start: Instant) -> RuntimeSetup {
+        RuntimeSetup {
+            surfaces: self.surfaces,
+            panels_per_output: self.output_layers,
+            session_lock: self.session_lock,
+            renderer: RendererSetup {
+                fonts: self.fonts,
+                painter: self.painter_setup,
+                scene: self.scene,
+                gpu_timing: self.gpu_timing,
+                full_redraw: self.full_redraw,
             },
-            Error::SchedulerStopped => self.stopped_scheduler_error(),
-            Error::RendererStopped(stopped) => match self.renderer.stop() {
-                Ok(()) => Error::RendererStopped(stopped),
-                Err(failure) => Error::RunRenderer(failure),
-            },
-            error => error,
+            start,
+            ui_budget: self.ui_budget,
+            run_end: self.run_end,
+            preference_overrides: self.preference_overrides,
+            input_filter: self.input_filter,
+            observers: self.observers,
+            watches: self.watches,
+            clipboard: self.clipboard,
+            action_queue: self.action_queue,
+            drags: self.drags,
         }
-    }
-
-    /// How long the event loop waits: not at all while started frames or commits wait for the next render, and
-    /// otherwise until the earliest of the exit time, the next scene image and the time at which the scheduler asks
-    /// the views to report again. A scene deadline that has passed is left out, because the render before this wait
-    /// asked the scene source to advance, and the renderer reports the next deadline once it changes. A wake time that
-    /// is due ends the wait at once and is used up by the next render. The loop then waits for the timing events of
-    /// the surfaces that were drawn and the outputs of the scheduler and the renderer.
-    fn timeout(&mut self) -> Option<Duration> {
-        if !(self.started_frames.is_empty() && self.state_commits.is_empty()) {
-            return Some(Duration::ZERO);
-        }
-        let elapsed = self.start.elapsed();
-        let exit = self.run_end.exit_in(elapsed);
-        let scene = (self.scene_deadline)
-            .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
-            .filter(|wait| !wait.is_zero());
-        let wake = (self.scheduler_wake).map(|wake| wake.saturating_sub(elapsed));
-        if wake.is_some_and(|wait| wait.is_zero()) {
-            self.scheduler_wake = None;
-        }
-        exit.into_iter().chain(scene).chain(wake).min()
-    }
-
-    /// Whether the run ends now. The session lock and the per-output layers count as open until they end.
-    fn finished(&mut self) -> bool {
-        let anything_open = self.session_lock.is_some()
-            || self.output_layers.is_some()
-            || self.surface_records.any_open();
-        (self.run_end).finished(self.start.elapsed(), anything_open)
     }
 }

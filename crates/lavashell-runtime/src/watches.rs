@@ -67,7 +67,8 @@ impl Watches {
         std::mem::take(&mut self.0.borrow_mut().requests)
     }
 
-    /// Runs what waits for the watch that the platform reported as ready, and ends the watch when that asks for it.
+    /// Runs what waits for the watch that the platform reported as ready. Asks the platform to report the watch again
+    /// when it goes on, or ends the watch when that asks for it.
     pub fn handle(&self, event: WatchEvent) {
         let WatchEvent::Ready(id) = event;
         let on_ready = self.0.borrow_mut().watches.remove(&id);
@@ -82,6 +83,7 @@ impl Watches {
         match after {
             AfterReady::Keep => {
                 let _no_watch_had_the_id = registry.watches.insert(id, on_ready);
+                registry.requests.push(WatchRequest::Resume(id));
             }
             AfterReady::End => registry.requests.push(WatchRequest::Unwatch(id)),
         }

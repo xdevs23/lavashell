@@ -3,7 +3,7 @@ use std::time::Duration;
 
 /// A reading of the CPU clock of the thread that took it.
 #[derive(Clone, Copy, Debug)]
-pub struct CpuStamp(Duration);
+pub(crate) struct CpuStamp(Duration);
 
 impl CpuStamp {
     /// Reads the CPU clock of the calling thread, or returns `None` when the clock reports a negative time.

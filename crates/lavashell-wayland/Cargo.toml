@@ -40,5 +40,4 @@ quote.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-lavashell-test-fixtures.workspace = true
 zbus = { workspace = true, features = ["async-io", "blocking-api"] }

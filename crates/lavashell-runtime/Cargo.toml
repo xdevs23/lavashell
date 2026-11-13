@@ -18,7 +18,7 @@ lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 log.workspace = true
 num-traits.workspace = true
-rustix = { workspace = true, features = ["time"] }
+rustix = { workspace = true, features = ["event", "time"] }
 thiserror.workspace = true
 unicode-segmentation.workspace = true
 

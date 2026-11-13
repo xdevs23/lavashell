@@ -1,87 +1,47 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
 use crate::Error;
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
     hyprland_focus_grab_v1::{self, HyprlandFocusGrabV1 as Grab},
 };
-use lavashell_core::focus_grab::FocusGrab;
+use crate::translator::Translator;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{FocusGrabEvent, FocusGrabRequest};
-use lavashell_runtime::{FocusGrabs, PanelRecords, SurfaceRecords};
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_surface;
 use sctk::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop};
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 
-/// The focus grabs of the layers: the rules from the runtime, and the grabs made by the compositor for them.
-pub(super) struct Grabs {
-    rules: FocusGrabs,
+/// The focus grabs that the compositor made for the layers.
+pub(crate) struct Grabs {
     manager: Manager,
     proxies: BTreeMap<SurfaceId, Grab>,
 }
 
 impl Grabs {
     /// The focus grabs through the manager of the compositor, or `None` when the compositor offers no focus grab.
-    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Option<Self> {
+    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Translator>) -> Option<Self> {
         globals.bind(qh, 1..=1, ()).ok().map(Self::new)
     }
 
     pub fn new(manager: Manager) -> Self {
         Self {
-            rules: FocusGrabs::default(),
             manager,
             proxies: BTreeMap::new(),
         }
     }
 
-    pub fn open(&mut self, surface: SurfaceId, grab: FocusGrab) {
-        self.rules.open(surface, grab);
-    }
-
-    /// Removes the focus grab of `surface` and ends the grab of the compositor, if the surface held one. `native`
-    /// returns the native surface of a layer.
-    pub fn forget<'a>(
-        &mut self,
-        surface: SurfaceId,
-        qh: &QueueHandle<Platform>,
-        native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
-    ) -> Result<(), Error> {
-        if let Some(request) = self.rules.forget(surface) {
-            self.execute(request, qh, &native)?;
-        }
-        Ok(())
-    }
-
-    /// Updates the focus grabs of the layers and executes the requests of the runtime. `native` returns the native
-    /// surface of a layer.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the runtime asks for a grab on a surface without a native surface.
-    pub fn update<'a>(
-        &mut self,
-        panels: &PanelRecords,
-        surfaces: &SurfaceRecords,
-        qh: &QueueHandle<Platform>,
-        native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
-    ) -> Result<(), Error> {
-        for request in self.rules.update(panels, surfaces) {
-            self.execute(request, qh, &native)?;
-        }
-        Ok(())
-    }
-
-    pub fn cleared(&mut self, surface: SurfaceId) {
+    /// Ends the grab of `surface`, which the compositor cleared, and returns the event that reports the clear.
+    pub fn cleared(&mut self, surface: SurfaceId) -> FocusGrabEvent {
         self.release(surface);
-        self.rules.handle(FocusGrabEvent::Cleared(surface));
+        FocusGrabEvent::Cleared(surface)
     }
 
-    pub fn cleared_by(&mut self, surface: SurfaceId, grab: &Grab) {
-        if self.holds(surface, grab) {
-            self.cleared(surface);
-        }
+    /// Ends the grab of `surface` when the compositor cleared `grab`, the grab used by the surface, and returns the
+    /// event that reports the clear.
+    pub fn cleared_by(&mut self, surface: SurfaceId, grab: &Grab) -> Option<FocusGrabEvent> {
+        self.holds(surface, grab).then(|| self.cleared(surface))
     }
 
     /// Whether `grab` is the grab of the compositor for `surface`. A grab that was released before the compositor
@@ -90,11 +50,16 @@ impl Grabs {
         self.proxies.get(&surface) == Some(grab)
     }
 
-    fn execute<'a>(
+    /// Executes `request` of the runtime. `native` returns the native surface of a layer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the runtime asks for a grab on a surface without a native surface.
+    pub fn execute<'a>(
         &mut self,
         request: FocusGrabRequest,
-        qh: &QueueHandle<Platform>,
-        native: &impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
+        qh: &QueueHandle<Translator>,
+        native: impl Fn(SurfaceId) -> Option<&'a wl_surface::WlSurface>,
     ) -> Result<(), Error> {
         match request {
             FocusGrabRequest::Acquire(surface) => {
@@ -110,7 +75,7 @@ impl Grabs {
         &mut self,
         surface: SurfaceId,
         wl: &wl_surface::WlSurface,
-        qh: &QueueHandle<Platform>,
+        qh: &QueueHandle<Translator>,
     ) {
         let grab = self.manager.create_grab(qh, surface);
         grab.add_surface(wl);
@@ -137,33 +102,20 @@ fn destroy(grab: &Grab) {
     }
 }
 
-impl Platform {
-    pub(super) fn open_focus_grab(&mut self, surface: SurfaceId, grab: FocusGrab) {
-        if let Some(grabs) = &mut self.focus_grabs {
-            grabs.open(surface, grab);
-        }
-    }
-
-    pub(super) fn forget_focus_grab(&mut self, surface: SurfaceId) -> Result<(), Error> {
+impl Translator {
+    /// Executes `request` of the runtime on the focus grabs. On a compositor without focus grabs, every request is
+    /// ignored.
+    pub(crate) fn execute_focus_grab(&mut self, request: FocusGrabRequest) -> Result<(), Error> {
         let Some(grabs) = &mut self.focus_grabs else {
             return Ok(());
         };
-        grabs.forget(surface, &self.qh, |surface| {
-            self.surfaces.get(&surface).map(|native| &native.wl)
-        })
-    }
-
-    pub(super) fn update_focus_grabs(&mut self) -> Result<(), Error> {
-        let Some(grabs) = &mut self.focus_grabs else {
-            return Ok(());
-        };
-        grabs.update(&self.panels, &self.surface_records, &self.qh, |surface| {
-            self.surfaces.get(&surface).map(|native| &native.wl)
+        grabs.execute(request, &self.qh, |surface| {
+            self.surfaces.live(surface).map(|native| &native.wl)
         })
     }
 }
 
-impl Dispatch<Grab, SurfaceId> for Platform {
+impl Dispatch<Grab, SurfaceId> for Translator {
     fn event(
         state: &mut Self,
         proxy: &Grab,
@@ -174,10 +126,11 @@ impl Dispatch<Grab, SurfaceId> for Platform {
     ) {
         if let hyprland_focus_grab_v1::Event::Cleared = event
             && let Some(grabs) = &mut state.focus_grabs
+            && let Some(cleared) = grabs.cleared_by(*surface, proxy)
         {
-            grabs.cleared_by(*surface, proxy);
+            state.links.report(cleared);
         }
     }
 }
 
-delegate_noop!(Platform: ignore Manager);
+delegate_noop!(Translator: ignore Manager);

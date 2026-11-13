@@ -2,14 +2,12 @@
 use super::protocol_layout::{GeometryRequest, protocol_zone};
 use super::*;
 use crate::test_error::TestError;
-use focus_wire::empty_view;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
 };
-use lavashell_core::reactive::State;
 use lavashell_core::units::{Dp, DpExt, FiniteDp};
-use lavashell_test_fixtures::NoText;
+use lavashell_runtime::LayerSurface;
 use zwlr_layer_surface_v1::Anchor;
 
 fn margins(top: Dp, left: Dp) -> Result<LayerMargins, TestError> {
@@ -109,33 +107,6 @@ fn a_layer_length_below_one_logical_pixel_is_sent_as_one_and_never_as_fill() -> 
     };
     let sent = protocol(thin)?;
     assert_eq!((sent.width, sent.height), (1, 1));
-    let bar = LayerLayout {
-        horizontal: AxisPlacement::Fill,
-        ..thin
-    };
-    assert_eq!(initial_size(protocol(bar)?), (1, 1));
-    Ok(())
-}
-
-#[test]
-fn the_initial_size_of_a_layer_follows_the_layout_state_over_the_static_placement()
--> Result<(), TestError> {
-    let layout = LayerLayout {
-        horizontal: AxisPlacement::Start(fixed(321.dp())?),
-        vertical: AxisPlacement::Start(fixed(345.dp())?),
-        exclusive_zone: ExclusiveZone::IgnoreOthers,
-        margins: LayerMargins::default(),
-    };
-    let short = AxisPlacement::Start(fixed(10.dp())?);
-    let options = LayerSurface::new("stateful")
-        .placement(AxisPlacement::Fill, short)
-        .layout_state(State::new(layout));
-    let panel =
-        Panel::new(options.panel.clone(), &mut empty_view(), &mut NoText).map_err(Error::from)?;
-    let protocol = ProtocolLayout::new(panel.geometry())?;
-    let spec = NativeSpec::layer(&options, empty_view(), panel.geometry(), protocol);
-    assert_eq!(spec.size, (321, 345));
-    assert_eq!(spec.size, (protocol.width, protocol.height));
     Ok(())
 }
 
@@ -197,26 +168,5 @@ fn a_default_layer_takes_and_reserves_the_measured_height_of_its_content() -> Re
         .placement(AxisPlacement::Center(Extent::Content), AxisPlacement::Fill);
     let column = Anchor::Top | Anchor::Bottom;
     assert_eq!(anchored(centered, 61.6.dp())?, (column, 500, 0, 0));
-    Ok(())
-}
-
-#[test]
-fn an_axis_left_to_the_layer_by_a_configure_event_takes_the_length_requested_last()
--> Result<(), TestError> {
-    let first = LayerLayout {
-        horizontal: AxisPlacement::Fill,
-        vertical: AxisPlacement::Start(fixed(344.dp())?),
-        exclusive_zone: ExclusiveZone::IgnoreOthers,
-        margins: LayerMargins::default(),
-    };
-    let grown = LayerLayout {
-        vertical: AxisPlacement::Start(fixed(400.dp())?),
-        ..first
-    };
-    let requested = protocol(grown)?;
-    assert_eq!(configured_length(0, requested.height), Some(400));
-    assert_eq!(configured_length(380, requested.height), Some(380));
-    assert_eq!(configured_length(1920, requested.width), Some(1920));
-    assert_eq!(configured_length(0, requested.width), None);
     Ok(())
 }

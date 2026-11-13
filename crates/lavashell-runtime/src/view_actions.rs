@@ -111,13 +111,13 @@ impl ActionQueue {
     }
 
     /// Removes the queued actions as a batch. The actions queued while the batch runs wait for the next batch.
-    pub fn take_batch(&self) -> ActionBatch {
+    pub(crate) fn take_batch(&self) -> ActionBatch {
         ActionBatch(self.0.borrow_mut().pending.drain(..).collect())
     }
 
     /// Puts the actions of `batch` that did not run back at the front of the queue, in the order in which they were
     /// queued. An action for a forgotten surface is dropped.
-    pub fn requeue(&self, batch: ActionBatch) {
+    pub(crate) fn requeue(&self, batch: ActionBatch) {
         let mut queue = self.0.borrow_mut();
         let (kept, dropped): (Vec<_>, Vec<_>) = batch
             .0
@@ -174,7 +174,7 @@ impl ActionQueue {
 /// The actions removed from the queue for one frame. Each action runs after the view of the surface it targets is
 /// composed.
 #[must_use]
-pub struct ActionBatch(Vec<PendingAction>);
+pub(crate) struct ActionBatch(Vec<PendingAction>);
 
 impl ActionBatch {
     /// Runs the actions of the batch for `surface` on `view`, in the order in which they were queued.

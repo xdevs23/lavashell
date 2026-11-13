@@ -3,7 +3,7 @@ mod destination;
 mod handlers;
 
 use super::state::{ClipboardState, SeatTransfers};
-use crate::app::Platform;
+use crate::translator::Translator;
 use lavashell_core::transfer::{DragAction, DragActions, TransferId};
 use lavashell_platform::{DragDevice, PointerDevice};
 use sctk::reexports::client::Proxy;
@@ -12,26 +12,7 @@ use sctk::reexports::client::protocol::{
 };
 use smithay_client_toolkit as sctk;
 
-impl Platform {
-    /// Reports the drag transfers that ended to the runtime and executes the drag and drop requests made by it, until
-    /// executing them makes no new request.
-    pub(super) fn execute_drag_requests(&mut self) {
-        loop {
-            self.config.drags.submit(&mut self.surface_records);
-            let targets = self.config.drags.take_target_requests();
-            let sources = self.config.drags.take_source_requests();
-            if targets.is_empty() && sources.is_empty() {
-                return;
-            }
-            for request in targets {
-                self.execute_target_request(request);
-            }
-            for request in sources {
-                self.execute_source_request(request);
-            }
-        }
-    }
-
+impl Translator {
     /// Notes the serial of a press of the primary button of `pointer`, which a drag started by the app needs.
     pub(crate) fn note_primary_press(&mut self, pointer: PointerDevice, serial: u32) {
         let Some(seat) = self.pointer_seat(pointer).cloned() else {

@@ -1,0 +1,424 @@
+// SPDX-License-Identifier: GPL-3.0-only
+//! Runs the views of an app on the calling thread. The view actor turns the events of the platform and the reports
+//! of the other actors into frames, and sends the requests that follow to the platform.
+
+mod actors;
+mod error;
+mod events;
+mod frames;
+mod input;
+mod pacing;
+mod panels;
+mod reports;
+mod surfaces;
+mod transfers;
+
+pub use error::{Stopped, ViewError};
+
+pub(crate) use error::StartError;
+
+use crate::deadline_receiver::{Arrival, DeadlineReceiver};
+use crate::run::{RuntimeSetup, SurfaceSetup};
+use crate::{
+    ActionQueue, ActiveLock, BuilderReport, FocusGrabs, InputRouter, LayerSurface,
+    LockConfiguration, Observers, OutputRecords, PanelRecords, PanelsPerOutput, Redraw,
+    RendererOutput, RendererStopped, RunEnd, SchedulerInput, SchedulerOutput, SurfaceRecords,
+};
+use actors::{ActorStops, Actors};
+use frames::ViewSurface;
+use lavashell_actor::{Closed, Effect, Merge, Outlet, Sender};
+use lavashell_core::surface::SurfaceId;
+use lavashell_platform::{
+    HostFacts, LockRequest, PlatformEvent, PlatformRequest, SurfaceAttachment, SurfaceRequest,
+    TimingEvent,
+};
+use lavashell_renderer::text::Shaper;
+use lavashell_renderer::{PresentationBackend, SurfaceControl};
+use pacing::FramePacing;
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
+use transfers::Transfers;
+
+/// What reaches the views from the platform and from the other actors.
+pub(crate) enum ViewInput {
+    Platform(PlatformEvent),
+    Scheduler(SchedulerOutput),
+    Renderer(RendererOutput),
+    Builder(BuilderReport),
+    Stopped(Stopped),
+}
+
+/// The value that an input of the views overwrites.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ViewKey {
+    Platform(<PlatformEvent as Merge>::Key),
+    SceneWake,
+    SchedulerWake,
+}
+
+impl Merge for ViewInput {
+    type Key = ViewKey;
+
+    /// A platform event merges as [`PlatformEvent`] describes. A newer wake time of the scene source or of the frame
+    /// scheduler replaces the earlier one. Every other input builds on the inputs before it.
+    fn effect(&self) -> Effect<ViewKey> {
+        match self {
+            Self::Platform(event) => event.effect().map(ViewKey::Platform),
+            Self::Scheduler(SchedulerOutput::WakeAt(_)) => {
+                Effect::Overwrites(ViewKey::SchedulerWake)
+            }
+            Self::Renderer(RendererOutput::SceneWake(_)) => Effect::Overwrites(ViewKey::SceneWake),
+            Self::Scheduler(_) | Self::Renderer(_) | Self::Builder(_) | Self::Stopped(_) => {
+                Effect::BuildsOn
+            }
+        }
+    }
+
+    /// A platform event absorbs a later one as [`PlatformEvent`] describes. Every other later input replaces the
+    /// earlier one.
+    fn absorb(&mut self, later: Self) {
+        match (self, later) {
+            (Self::Platform(event), Self::Platform(later)) => event.absorb(later),
+            (earlier, later) => *earlier = later,
+        }
+    }
+}
+
+/// Reports to the views that an actor stopped, once the actor drops the observer that contains it.
+pub(crate) struct StopNotice {
+    inbox: Sender<ViewInput>,
+    stopped: Stopped,
+}
+
+impl StopNotice {
+    pub(crate) fn new(inbox: &Sender<ViewInput>, stopped: Stopped) -> Self {
+        Self {
+            inbox: inbox.clone(),
+            stopped,
+        }
+    }
+}
+
+impl Drop for StopNotice {
+    fn drop(&mut self) {
+        let _views_gone = self.inbox.push(ViewInput::Stopped(self.stopped));
+    }
+}
+
+/// The link from an actor to the views, which reports the stop of the actor once the actor drops it.
+struct ActorOutlet<T> {
+    outlet: Outlet<T>,
+    _notice: StopNotice,
+}
+
+/// The observer of an actor, which pushes each output of the actor into `inbox` as `wrap` makes it, and reports
+/// `stopped` once the actor drops it.
+fn observer<T: 'static>(
+    inbox: &Sender<ViewInput>,
+    wrap: fn(T) -> ViewInput,
+    stopped: Stopped,
+) -> Box<dyn FnMut(T) -> Result<(), Closed> + Send> {
+    let link = ActorOutlet {
+        outlet: inbox.outlet(wrap),
+        _notice: StopNotice::new(inbox, stopped),
+    };
+    Box::new(move |output| link.push(output))
+}
+
+impl<T> ActorOutlet<T> {
+    fn push(&self, output: T) -> Result<(), Closed> {
+        self.outlet.push(output)
+    }
+}
+
+/// The views of an app, the records of their surfaces and the actors between them and the host.
+pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
+    records: SurfaceRecords,
+    panels: PanelRecords,
+    surfaces: BTreeMap<SurfaceId, ViewSurface>,
+    actors: Actors<C>,
+    /// Measures text for the views as the painter of the renderer shapes it.
+    shaper: Shaper,
+    requests: Sender<PlatformRequest>,
+    host: HostFacts,
+    input: InputRouter,
+    outputs: OutputRecords,
+    focus_grabs: FocusGrabs,
+    panels_per_output: Option<PanelsPerOutput<LayerSurface>>,
+    session_lock: Option<ActiveLock>,
+    transfers: Transfers,
+    action_queue: ActionQueue,
+    observers: Observers,
+    run_end: RunEnd,
+    ui_budget: Option<Duration>,
+    /// The requests that follow from the events of the host, executed by the next render.
+    surface_requests: Vec<SurfaceRequest>,
+    pacing: FramePacing,
+    start: Instant,
+}
+
+impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+    /// Starts the scene pipeline, the renderer for the surfaces of `presentation` and the frame scheduler, which
+    /// report to `inbox`, and asks the platform through `requests` for the surfaces of `setup`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when an actor cannot start, or when a surface of `setup` cannot be opened.
+    pub(crate) fn start(
+        setup: RuntimeSetup,
+        presentation: impl PresentationBackend + Send + 'static,
+        host: HostFacts,
+        requests: Sender<PlatformRequest>,
+        inbox: &Sender<ViewInput>,
+    ) -> Result<Self, StartError<C::Error>> {
+        let RuntimeSetup {
+            surfaces,
+            panels_per_output,
+            session_lock,
+            renderer: renderer_setup,
+            start,
+            ui_budget,
+            run_end,
+            preference_overrides,
+            input_filter,
+            observers,
+            watches,
+            clipboard,
+            action_queue,
+            drags,
+        } = setup;
+        let redraw = if observers.tick.is_some()
+            || observers.frame.is_some()
+            || renderer_setup.shows_scene()
+        {
+            Redraw::Continuous
+        } else {
+            Redraw::OnChange
+        };
+        let fonts = renderer_setup.fonts.clone();
+        let cpu_timing = observers.frame_report.is_some();
+        let actors = Actors::start(
+            presentation,
+            renderer_setup,
+            redraw,
+            start,
+            cpu_timing,
+            inbox,
+        )?;
+        let shaper = Shaper::with_rendering(&fonts, actors.renderer.text_rendering())
+            .map_err(StartError::CreateShaper)?;
+        let mut actor = Self {
+            records: SurfaceRecords::new(preference_overrides),
+            panels: PanelRecords::default(),
+            surfaces: BTreeMap::new(),
+            actors,
+            shaper,
+            requests,
+            host,
+            input: InputRouter::new(input_filter),
+            outputs: OutputRecords::default(),
+            focus_grabs: FocusGrabs::default(),
+            panels_per_output,
+            session_lock: None,
+            transfers: Transfers::new(clipboard, drags, watches, &action_queue),
+            action_queue,
+            observers,
+            run_end,
+            ui_budget,
+            surface_requests: Vec::new(),
+            pacing: FramePacing::default(),
+            start,
+        };
+        actor.open_setup_surfaces(surfaces, session_lock)?;
+        Ok(actor)
+    }
+
+    /// The outlets through which a platform reports the timing of the frames to the frame scheduler and attaches its
+    /// native surfaces to the renderer.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the renderer stopped.
+    pub(crate) fn links(
+        &self,
+    ) -> Result<(Outlet<TimingEvent>, Outlet<SurfaceAttachment<C>>), RendererStopped> {
+        self.actors.links()
+    }
+
+    /// Runs turns until the run ends. Each turn renders, and then waits for the inputs from the platform and the
+    /// actors, or until the next deadline.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a view, a request or a surface fails, or when an actor or the platform stopped.
+    pub(crate) fn run(&mut self, inputs: &DeadlineReceiver<ViewInput>) -> Result<(), ViewError> {
+        loop {
+            self.turn()?;
+            if self.finished() {
+                return Ok(());
+            }
+            for request in self.transfers.watches.take_requests() {
+                self.request(PlatformRequest::Watch(request))?;
+            }
+            match inputs.take_until(self.deadline())? {
+                Arrival::Items(items) => {
+                    for input in items {
+                        self.handle(input)?;
+                    }
+                }
+                Arrival::DeadlinePassed => {}
+                Arrival::SendersGone => return Err(ViewError::Stopped(Stopped::Platform)),
+            }
+        }
+    }
+
+    /// Ends the run that `ran` returned. Stops the renderer, then the frame scheduler and then the scene pipeline,
+    /// each after the inputs sent before. After a run that ended without a failure, the views handle the last outputs
+    /// of the renderer, which reach the scheduler before it stops, and then the last outputs of the scheduler, so that
+    /// the frame observer of the app receives every report. Then ends the queues of the app, so that every action,
+    /// transfer and watch is cancelled, and drops the views, which ends the requests to the platform.
+    ///
+    /// Returns `ran`, or the failure of an output handled after it, with what each actor returned when it stopped.
+    pub(crate) fn stop(
+        mut self,
+        inputs: &DeadlineReceiver<ViewInput>,
+        ran: Result<(), ViewError>,
+    ) -> (Result<(), ViewError>, ActorStops<C::Error>) {
+        let renderer = self.actors.renderer.stop();
+        let ran = ran.and_then(|()| self.handle_until(inputs, Stopped::Renderer));
+        let scheduler = self.actors.scheduler.stop();
+        let ran = ran.and_then(|()| self.handle_until(inputs, Stopped::Scheduler));
+        let scene = self.actors.scene.stop();
+        self.action_queue.close();
+        self.transfers.close(&mut self.records);
+        let stops = ActorStops {
+            renderer,
+            scheduler,
+            scene,
+        };
+        (ran, stops)
+    }
+
+    /// Handles the inputs until `part` reports that it stopped, so that every output that it sent before is handled.
+    fn handle_until(
+        &mut self,
+        inputs: &DeadlineReceiver<ViewInput>,
+        part: Stopped,
+    ) -> Result<(), ViewError> {
+        loop {
+            let Arrival::Items(items) = inputs.take_until(None)? else {
+                return Err(ViewError::Stopped(part));
+            };
+            let mut stopped = false;
+            for input in items {
+                match input {
+                    ViewInput::Stopped(ended) if ended == part => stopped = true,
+                    input => self.handle(input)?,
+                }
+            }
+            if stopped {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Opens the windows and panels of the setup, and starts the session lock of `session_lock`.
+    fn open_setup_surfaces(
+        &mut self,
+        surfaces: Vec<SurfaceSetup>,
+        session_lock: Option<LockConfiguration>,
+    ) -> Result<(), ViewError> {
+        for surface in surfaces {
+            match surface {
+                SurfaceSetup::Window(window, view) => self.open_window(window, view)?,
+                SurfaceSetup::Panel(options, view) => {
+                    let _panel = self.open_panel(options, view, None)?;
+                }
+            }
+        }
+        if let Some(configuration) = session_lock {
+            let lock = ActiveLock::start(configuration, &self.host.outputs)?;
+            self.start_lock(lock)?;
+        }
+        Ok(())
+    }
+
+    fn turn(&mut self) -> Result<(), ViewError> {
+        self.update_panels()?;
+        self.update_lock()?;
+        self.render()?;
+        for request in self.focus_grabs.update(&self.panels, &self.records) {
+            self.request(PlatformRequest::FocusGrab(request))?;
+        }
+        Ok(())
+    }
+
+    fn handle(&mut self, input: ViewInput) -> Result<(), ViewError> {
+        match input {
+            ViewInput::Platform(event) => self.platform_event(event),
+            ViewInput::Scheduler(output) => {
+                self.scheduler_output(output);
+                Ok(())
+            }
+            ViewInput::Renderer(output) => self.renderer_output(output),
+            ViewInput::Builder(report) => {
+                self.scene_report(report);
+                Ok(())
+            }
+            ViewInput::Stopped(stopped) => Err(stopped.into()),
+        }
+    }
+
+    fn request(&self, request: PlatformRequest) -> Result<(), ViewError> {
+        send_request(&self.requests, request)
+    }
+
+    /// Sends `input` to the frame scheduler. A scheduler that is gone reports its stop, which ends the run.
+    fn schedule(&self, input: SchedulerInput) {
+        let _gone_scheduler_ends_the_run = self.actors.scheduler.send(input);
+    }
+
+    /// The instant at which the views take their next turn without an input: the earlier of the exit time and the
+    /// deadline of [`FramePacing::deadline`], or `None` without either.
+    fn deadline(&mut self) -> Option<Instant> {
+        let now = Instant::now();
+        let exit =
+            (self.run_end.exit_in(self.start.elapsed())).and_then(|wait| now.checked_add(wait));
+        exit.into_iter()
+            .chain(self.pacing.deadline(self.start, now))
+            .min()
+    }
+
+    /// Whether the run ends now. The session lock and the panels per output count as open until they end.
+    fn finished(&mut self) -> bool {
+        let anything_open = self.session_lock.is_some()
+            || self.panels_per_output.is_some()
+            || self.records.any_open();
+        (self.run_end).finished(self.start.elapsed(), anything_open)
+    }
+
+    /// Asks the host for the session lock of `lock`, and opens a lock surface on each output known at connect. The
+    /// platform reports the same outputs as added afterwards, and `open_lock_surface` skips an output with a lock
+    /// surface.
+    fn start_lock(&mut self, lock: ActiveLock) -> Result<(), ViewError> {
+        self.request(PlatformRequest::Lock(LockRequest::Lock))?;
+        self.session_lock = Some(lock);
+        for output in self.host.outputs.clone() {
+            self.open_lock_surface(output)?;
+        }
+        Ok(())
+    }
+}
+
+/// Sends `request` to the platform. Blocks while the platform cannot receive more requests.
+fn send_request(
+    requests: &Sender<PlatformRequest>,
+    request: PlatformRequest,
+) -> Result<(), ViewError> {
+    requests
+        .push(request)
+        .map_err(|Closed| ViewError::Stopped(Stopped::Platform))
+}
+
+#[cfg(test)]
+mod tests;

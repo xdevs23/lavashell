@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Translates the outputs reported by the compositor, and the outputs entered by its surfaces, into events for the
-//! output records of the runtime.
+//! Translates the outputs reported by the compositor, and the outputs entered by its surfaces, into output events for
+//! the view.
 
-use super::Platform;
+use crate::translator::Translator;
 use lavashell_core::geometry::Size;
 use lavashell_core::output::{Millimetres, MonitorInfo, PhysicalSize};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{OutputEvent, OutputId};
 use sctk::output::{Mode, OutputData, OutputInfo};
 use sctk::reexports::client::Proxy;
+use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::{wl_output, wl_surface};
 use smithay_client_toolkit as sctk;
 use std::time::Duration;
@@ -16,10 +17,27 @@ use std::time::Duration;
 /// `wl_output` sends the refresh rate of a mode in mHz.
 const MILLIHERTZ_PER_HERTZ: f64 = 1000.0;
 
-/// The id of `output`: the name given by the compositor to the output global, never given to another output.
+/// The id of the output with the global `name`: the name given by the compositor to the output global, never given to
+/// another output.
+fn output_id_of_global(name: u32) -> OutputId {
+    OutputId(u64::from(name))
+}
+
+/// The id of `output`. The info of a bound output contains the name of the output global.
 pub(super) fn output_id(output: &wl_output::WlOutput) -> Option<OutputId> {
     let data = output.data::<OutputData>()?;
-    Some(OutputId(u64::from(data.with_output_info(|info| info.id))))
+    Some(output_id_of_global(data.with_output_info(|info| info.id)))
+}
+
+/// The ids of the outputs advertised by the compositor in `globals`, in the order of the advertisements.
+pub(crate) fn advertised_outputs(globals: &GlobalList) -> Vec<OutputId> {
+    let output = wl_output::WlOutput::interface().name;
+    globals.contents().with_list(|list| {
+        (list.iter())
+            .filter(|global| global.interface == output)
+            .map(|global| output_id_of_global(global.name))
+            .collect()
+    })
 }
 
 /// The size in logical pixels of an output: `logical`, or the current mode in `modes` divided by `scale_factor`.
@@ -66,51 +84,60 @@ fn refresh_interval(modes: &[Mode]) -> Option<Duration> {
         .min()
 }
 
-impl Platform {
-    /// Reports the geometry and the refresh interval of `output` to the runtime.
-    pub(super) fn report_output(&mut self, output: &wl_output::WlOutput) {
+impl Translator {
+    /// The output with the id `id`, or `None` once the compositor removed it.
+    pub(super) fn find_output(&self, id: OutputId) -> Option<wl_output::WlOutput> {
+        self.outputs
+            .outputs()
+            .find(|output| output_id(output) == Some(id))
+    }
+
+    /// Reports to the view that the compositor added `output`, and then the geometry and the refresh interval of it.
+    pub(super) fn add_output(&self, output: &wl_output::WlOutput) {
+        if let Some(id) = output_id(output) {
+            self.links.report(OutputEvent::Added(id));
+        }
+        self.report_output(output);
+    }
+
+    /// Reports the geometry and the refresh interval of `output` to the view.
+    pub(super) fn report_output(&self, output: &wl_output::WlOutput) {
         let (Some(id), Some(info)) = (output_id(output), self.outputs.info(output)) else {
             return;
         };
         if let Some(monitor) = monitor_info(&info) {
-            self.output_records
-                .handle(OutputEvent::Updated(id, monitor));
+            self.links.report(OutputEvent::Updated(id, monitor));
         }
-        self.output_records
-            .handle(OutputEvent::Refresh(id, refresh_interval(&info.modes)));
+        self.links
+            .report(OutputEvent::Refresh(id, refresh_interval(&info.modes)));
     }
 
-    /// Reports to the runtime that the compositor removed `output`.
-    pub(super) fn remove_output(&mut self, output: &wl_output::WlOutput) {
+    /// Reports to the view that the compositor removed `output`.
+    pub(super) fn remove_output(&self, output: &wl_output::WlOutput) {
         if let Some(id) = output_id(output) {
-            self.output_records.handle(OutputEvent::Removed(id));
+            self.links.report(OutputEvent::Removed(id));
         }
     }
 
-    /// Reports to the runtime that the surface `wl` entered `output`. A surface that is not open is skipped: `forget`
-    /// removed it, and an enter sent by the compositor before it saw the destroy would add it again.
+    /// Reports to the view that the surface `wl` entered `output`.
     pub(super) fn report_surface_entered(
-        &mut self,
-        wl: &wl_surface::WlSurface,
-        output: &wl_output::WlOutput,
-    ) {
-        if let Some((surface, output)) = self.surface_and_output(wl, output)
-            && self.surface_records.is_open(surface)
-        {
-            self.output_records
-                .handle(OutputEvent::Entered(output, surface));
-        }
-    }
-
-    /// Reports to the runtime that the surface `wl` left `output`.
-    pub(super) fn report_surface_left(
-        &mut self,
+        &self,
         wl: &wl_surface::WlSurface,
         output: &wl_output::WlOutput,
     ) {
         if let Some((surface, output)) = self.surface_and_output(wl, output) {
-            self.output_records
-                .handle(OutputEvent::Left(output, surface));
+            self.links.report(OutputEvent::Entered(output, surface));
+        }
+    }
+
+    /// Reports to the view that the surface `wl` left `output`.
+    pub(super) fn report_surface_left(
+        &self,
+        wl: &wl_surface::WlSurface,
+        output: &wl_output::WlOutput,
+    ) {
+        if let Some((surface, output)) = self.surface_and_output(wl, output) {
+            self.links.report(OutputEvent::Left(output, surface));
         }
     }
 

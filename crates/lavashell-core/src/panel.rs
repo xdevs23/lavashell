@@ -8,7 +8,7 @@ use crate::view::Proposal;
 const SHORTEST_LENGTH: NonNegativeDp = crate::constant!(NonNegativeDp::try_new(Dp::new(1.0)));
 
 /// Where the host stacks a panel, relative to the windows.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerLevel {
     Background,
     Bottom,

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
+use crate::translator::Translator;
 use lavashell_core::frame::{FrameTime, PresentationFlag, PresentationFlags};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::TimingEvent;
-use lavashell_runtime::SchedulerInput;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
 use sctk::reexports::protocols::wp::presentation_time::client::{
@@ -27,14 +26,14 @@ fn presentation_flags(kind: wp_presentation_feedback::Kind) -> PresentationFlags
     .collect()
 }
 
-pub(super) struct Presentation {
+pub(crate) struct Presentation {
     pub proxy: WpPresentation,
     epoch: Option<Duration>,
     clock: Option<rustix::time::ClockId>,
 }
 
 impl Presentation {
-    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Platform>) -> Option<Self> {
+    pub fn bind(globals: &GlobalList, qh: &QueueHandle<Translator>) -> Option<Self> {
         Some(Self {
             proxy: globals.bind(qh, 1..=2, ()).ok()?,
             epoch: None,
@@ -68,7 +67,7 @@ pub(super) struct Feedback {
     pub timing: FrameTime,
 }
 
-impl Dispatch<WpPresentation, ()> for Platform {
+impl Dispatch<WpPresentation, ()> for Translator {
     fn event(
         state: &mut Self,
         _: &WpPresentation,
@@ -88,14 +87,14 @@ impl Dispatch<WpPresentation, ()> for Platform {
                 && let Ok(absolute) = Duration::try_from(rustix::time::clock_gettime(clock))
                 && let Some(presentation) = &mut state.presentation
             {
-                presentation.epoch = absolute.checked_sub(state.start.elapsed());
+                presentation.epoch = absolute.checked_sub(state.links.start().elapsed());
                 presentation.clock = Some(clock);
             }
         }
     }
 }
 
-impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
+impl Dispatch<WpPresentationFeedback, Feedback> for Translator {
     fn event(
         state: &mut Self,
         _: &WpPresentationFeedback,
@@ -104,6 +103,9 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        if !state.surfaces.is_live(data.surface) {
+            return;
+        }
         let timing = match event {
             wp_presentation_feedback::Event::Presented {
                 tv_sec_hi,
@@ -118,8 +120,9 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
                 TimingEvent::Presented {
                     surface: data.surface,
                     frame: data.timing,
-                    time: (state.presentation.as_ref())
-                        .and_then(|presentation| presentation.observed(absolute, state.start)),
+                    time: (state.presentation.as_ref()).and_then(|presentation| {
+                        presentation.observed(absolute, state.links.start())
+                    }),
                     refresh: (refresh != 0).then(|| Duration::from_nanos(u64::from(refresh))),
                     flags: presentation_flags(wp_presentation_feedback::Kind::from_bits_truncate(
                         flags.into(),
@@ -132,7 +135,7 @@ impl Dispatch<WpPresentationFeedback, Feedback> for Platform {
             },
             _ => return,
         };
-        state.schedule(SchedulerInput::Timing(timing));
+        state.links.time(timing);
     }
 }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Platform, SeatDevices};
+use super::SeatDevices;
+use crate::translator::Translator;
 use lavashell_core::geometry::Point;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::view::TouchSample;
@@ -24,7 +25,7 @@ fn finger_sample(id: TouchId, at: Point) -> TouchSample {
     }
 }
 
-impl Platform {
+impl Translator {
     fn touch_devices(&mut self, touch: &wl_touch::WlTouch) -> Option<&mut SeatDevices> {
         (self.devices.iter_mut()).find(|seat| seat.touch.as_ref() == Some(touch))
     }
@@ -35,12 +36,13 @@ impl Platform {
             .map(|devices| std::mem::take(&mut devices.touch_positions))
             .unwrap_or_default();
         for point in positions.into_keys() {
-            self.route_input(DeviceEvent::TouchCancel(touch_id(seat, point)));
+            self.links
+                .report(DeviceEvent::TouchCancel(touch_id(seat, point)));
         }
     }
 }
 
-impl TouchHandler for Platform {
+impl TouchHandler for Translator {
     fn down(
         &mut self,
         _: &Connection,
@@ -65,7 +67,8 @@ impl TouchHandler for Platform {
         let seat = devices.seat.clone();
         let sample = finger_sample(touch_id(&seat, id), at);
         self.note_input_serial(seat, serial);
-        self.route_input(DeviceEvent::TouchDown { surface, sample });
+        self.links
+            .report(DeviceEvent::TouchDown { surface, sample });
     }
 
     fn up(
@@ -81,7 +84,7 @@ impl TouchHandler for Platform {
             && let Some(at) = devices.touch_positions.remove(&id)
         {
             let sample = finger_sample(touch_id(&devices.seat, id), at);
-            self.route_input(DeviceEvent::TouchUp(sample));
+            self.links.report(DeviceEvent::TouchUp(sample));
         }
     }
 
@@ -100,7 +103,7 @@ impl TouchHandler for Platform {
         {
             *last = at;
             let sample = finger_sample(touch_id(&devices.seat, id), at);
-            self.route_input(DeviceEvent::TouchMotion(sample));
+            self.links.report(DeviceEvent::TouchMotion(sample));
         }
     }
 

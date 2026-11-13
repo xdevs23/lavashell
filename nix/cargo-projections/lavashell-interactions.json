@@ -3269,6 +3269,7 @@
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-renderer",
           "thiserror 2.0.21"
         ],
         "name": "lavashell-platform",
@@ -3348,7 +3349,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
-          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
           "num-traits",

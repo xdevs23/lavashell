@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
 use super::layer::{LayerConfigure, LayerControl, LayerRequest};
 use super::presentation::Feedback;
 use crate::ControlError;
 use crate::logical::whole;
+use crate::translator::Translator;
 use lavashell_core::geometry::Rect;
 use lavashell_core::prelude::{Density, Viewport};
 use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
@@ -35,10 +35,10 @@ pub(super) enum RoleControl {
 }
 
 /// The requests that the draw of each frame of one native surface applies.
-pub(super) struct Control {
+pub struct Control {
     surface: SurfaceId,
     objects: SurfaceObjects,
-    qh: QueueHandle<Platform>,
+    qh: QueueHandle<Translator>,
     /// Whether a frame callback was requested for a frame that was not shown. The next shown frame commits it.
     frame_requested: bool,
     /// The surface state applied by the host, or to be applied with the next commit.
@@ -64,11 +64,11 @@ struct ProtocolRect {
 
 impl Control {
     /// The control of the native surface `surface`, whose role sent `applied` to the host already.
-    pub fn new(
+    pub(super) fn new(
         surface: SurfaceId,
         objects: SurfaceObjects,
         applied: SurfaceState,
-        qh: QueueHandle<Platform>,
+        qh: QueueHandle<Translator>,
     ) -> Self {
         Self {
             surface,

@@ -2,16 +2,18 @@
 use crate::cpu_time::CpuStamp;
 use crate::surface_slots::BuiltSurface;
 use lavashell_actor::{
-    Actor, Closed, Effect, Flow, Handle, JoinError, Merge, Sender, SpawnError, mailbox, spawn,
+    Actor, Closed, Effect, Flow, Handle, JoinError, Merge, Outlet, Sender, SpawnError, mailbox,
+    spawn,
 };
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::SurfaceAttachment;
 use lavashell_renderer::skia::Path;
 use lavashell_renderer::text::TextRendering;
 use lavashell_renderer::vulkan::PresentationBackend;
 use lavashell_renderer::{
-    Attach, CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, StateError,
+    CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, StateError,
     SurfaceContents, SurfaceControl,
 };
 use std::sync::{Arc, mpsc};
@@ -19,13 +21,9 @@ use std::time::{Duration, Instant};
 
 /// What the platform sends to the renderer.
 pub enum RendererInput<C: SurfaceControl> {
-    /// Creates the target of a surface. The renderer fails when the surface cannot be attached.
-    Attach(Box<Attach<C>>),
-    /// Passes `message` to the control of `surface`, unless the surface retired.
-    Control {
-        surface: SurfaceId,
-        message: C::Message,
-    },
+    /// Attaches, controls or detaches a native surface. The renderer fails when a surface cannot be attached, and
+    /// reports each detached surface with [`RendererOutput::Retired`] after the inputs sent before.
+    Surface(SurfaceAttachment<C>),
     /// Sets `outline`, in physical pixels, to clip every later frame of `surface`. A later outline of the surface
     /// replaces an outline that the renderer has not set yet.
     Outline {
@@ -48,9 +46,8 @@ pub enum RendererInput<C: SurfaceControl> {
     },
     /// Asks the scene source for the next image in `viewport` once the image is due.
     AdvanceScene(Viewport),
-    /// Drops the target and the control of `surface` after the inputs sent before, and reports
-    /// [`RendererOutput::Retired`].
-    Retire(SurfaceId),
+    /// Ends the renderer after the inputs sent before, also while other senders to the inbox exist.
+    Stop,
 }
 
 /// The value that an input to the renderer overwrites.
@@ -69,9 +66,7 @@ impl<C: SurfaceControl> Merge for RendererInput<C> {
             Self::Outline { surface, .. } => Effect::Overwrites(RendererKey::Outline(*surface)),
             Self::Render { surface, .. } => Effect::Overwrites(RendererKey::Render(*surface)),
             Self::AdvanceScene(_) => Effect::Overwrites(RendererKey::AdvanceScene),
-            Self::Attach(_) | Self::Control { .. } | Self::CommitState { .. } | Self::Retire(_) => {
-                Effect::BuildsOn
-            }
+            Self::Surface(_) | Self::CommitState { .. } | Self::Stop => Effect::BuildsOn,
         }
     }
 }
@@ -149,8 +144,8 @@ struct Running<C: SurfaceControl + Send + 'static> {
 
 impl<C: SurfaceControl + Send + 'static> Renderer<C> {
     /// Starts the renderer on a thread that builds the GPU renderer and the painter for the surfaces of `backend` from
-    /// `setup`. The renderer measures the CPU time of each draw when `cpu_timing` is set, and passes each output to
-    /// `observer`.
+    /// `setup`. The renderer measures the times passed to the scene source from `start`, measures the CPU time of each
+    /// draw when `cpu_timing` is set, and passes each output to `observer`.
     ///
     /// # Errors
     ///
@@ -158,13 +153,14 @@ impl<C: SurfaceControl + Send + 'static> Renderer<C> {
     pub fn start<B: PresentationBackend + Send + 'static>(
         backend: B,
         setup: RendererSetup,
+        start: Instant,
         cpu_timing: bool,
         observer: RendererObserver,
     ) -> Result<Self, SpawnError<RendererError<C::Error>>> {
         let (inbox, receiver) = mailbox();
         let (rendering, started_rendering) = mpsc::sync_channel(1);
         let actor = spawn("renderer", receiver, move || {
-            let state = RendererState::new(&backend, setup).map_err(RendererError::Start)?;
+            let state = RendererState::new(&backend, setup, start).map_err(RendererError::Start)?;
             let _sent = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
@@ -189,6 +185,13 @@ impl<C: SurfaceControl + Send + 'static> Renderer<C> {
         self.text_rendering
     }
 
+    /// The outlet through which a platform attaches the native surfaces, passes messages to their controls and
+    /// detaches them. The renderer retires a detached surface after the inputs sent before.
+    pub(crate) fn attachments(&self) -> Result<Outlet<SurfaceAttachment<C>>, RendererStopped> {
+        let running = self.running.as_ref().ok_or(RendererStopped)?;
+        Ok(running.inbox.outlet(RendererInput::Surface))
+    }
+
     /// Sends `input` to the renderer.
     ///
     /// # Errors
@@ -199,8 +202,8 @@ impl<C: SurfaceControl + Send + 'static> Renderer<C> {
         running.inbox.push(input).map_err(|Closed| RendererStopped)
     }
 
-    /// Stops the renderer after the inputs sent before, and waits until the renderer thread has dropped every target
-    /// and control.
+    /// Stops the renderer after the inputs sent before, also while a link from a platform to the renderer exists, and
+    /// waits until the renderer thread has dropped every target and control.
     ///
     /// # Errors
     ///
@@ -209,6 +212,7 @@ impl<C: SurfaceControl + Send + 'static> Renderer<C> {
         let Some(Running { inbox, actor }) = self.running.take() else {
             return Ok(());
         };
+        let _renderer_gone = inbox.push(RendererInput::Stop);
         drop(inbox);
         actor.join()
     }
@@ -234,17 +238,7 @@ impl<C: SurfaceControl + Send + 'static> Actor for RendererActor<C> {
     fn handle(&mut self, input: RendererInput<C>) -> Result<Flow, RendererError<C::Error>> {
         let deadline = self.state.scene_deadline();
         let output = match input {
-            RendererInput::Attach(attach) => {
-                (self.state.attach(*attach))
-                    .map_err(|failed| RendererError::Attach(failed.error))?;
-                None
-            }
-            RendererInput::Control { surface, message } => {
-                if let Some(control) = self.state.control_mut(surface) {
-                    control.receive(message);
-                }
-                None
-            }
+            RendererInput::Surface(attachment) => self.attachment(attachment)?,
             RendererInput::Outline { surface, outline } => {
                 (self.state.set_outline(surface, outline)).map_err(RendererError::Outline)?;
                 None
@@ -264,10 +258,7 @@ impl<C: SurfaceControl + Send + 'static> Actor for RendererActor<C> {
                 (self.state.advance_scene(viewport)).map_err(RendererError::AdvanceScene)?;
                 None
             }
-            RendererInput::Retire(surface) => {
-                drop(self.state.retire(surface));
-                Some(RendererOutput::Retired(surface))
-            }
+            RendererInput::Stop => return Ok(Flow::Stop),
         };
         let wake = scene_wake(deadline, self.state.scene_deadline());
         let sent = (output.into_iter().chain(wake)).try_for_each(&mut self.observer);
@@ -276,6 +267,30 @@ impl<C: SurfaceControl + Send + 'static> Actor for RendererActor<C> {
 }
 
 impl<C: SurfaceControl> RendererActor<C> {
+    /// Attaches, controls or detaches a native surface, and returns the report of a detached surface.
+    fn attachment(
+        &mut self,
+        attachment: SurfaceAttachment<C>,
+    ) -> Result<Option<RendererOutput>, RendererError<C::Error>> {
+        match attachment {
+            SurfaceAttachment::Attach(attach) => {
+                (self.state.attach(*attach))
+                    .map_err(|failed| RendererError::Attach(failed.error))?;
+                Ok(None)
+            }
+            SurfaceAttachment::Control { surface, message } => {
+                if let Some(control) = self.state.control_mut(surface) {
+                    control.receive(message);
+                }
+                Ok(None)
+            }
+            SurfaceAttachment::Detach(surface) => {
+                drop(self.state.retire(surface));
+                Ok(Some(RendererOutput::Retired(surface)))
+            }
+        }
+    }
+
     /// Draws the scene of `built` with the surface state built from the same frames.
     fn render(
         &mut self,

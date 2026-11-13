@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_items::{Item, Sum, set, step};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
 type TestResult = Result<(), Closed>;
@@ -32,6 +33,21 @@ fn an_overwrite_merges_until_an_item_that_does_not_overwrite_fences_every_key() 
         set(0, 5.0),
     ];
     assert_eq!(receiver.take()?, merged);
+    Ok(())
+}
+
+#[test]
+fn an_overwrite_that_fences_merges_by_its_own_key_and_fences_the_other_key() -> TestResult {
+    let (sender, receiver) = mailbox();
+    let fencing = |value| Item::SetFencing {
+        key: 1,
+        fenced: 0,
+        value,
+    };
+    for item in [set(0, 1.0), fencing(1.0), fencing(2.0), set(0, 2.0)] {
+        sender.push(item)?;
+    }
+    assert_eq!(receiver.take()?, [set(0, 1.0), fencing(2.0), set(0, 2.0)]);
     Ok(())
 }
 
@@ -78,5 +94,35 @@ fn take_fails_once_every_sender_is_gone_and_no_item_waits() -> TestResult {
     drop(sender);
     assert_eq!(receiver.take()?, [step(1.0)]);
     assert_eq!(receiver.take(), Err(Closed));
+    Ok(())
+}
+
+#[test]
+fn take_arrived_returns_the_waiting_items_without_waiting_for_one() -> TestResult {
+    let (sender, receiver) = mailbox();
+    assert!(receiver.take_arrived()?.is_empty());
+    sender.push(step(1.0))?;
+    assert_eq!(receiver.take_arrived()?, [step(1.0)]);
+    drop(sender);
+    assert_eq!(receiver.take_arrived(), Err(Closed));
+    Ok(())
+}
+
+#[test]
+fn the_arrival_function_runs_for_an_item_in_the_empty_mailbox_and_when_every_sender_is_gone()
+-> TestResult {
+    let (sender, receiver) = mailbox();
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&wakes);
+    receiver.on_arrival(move || {
+        let _before = counted.fetch_add(1, Ordering::SeqCst);
+    });
+    sender.push(step(1.0))?;
+    sender.push(step(2.0))?;
+    assert_eq!(wakes.load(Ordering::SeqCst), 1);
+    assert_eq!(receiver.take()?, [step(1.0), step(2.0)]);
+    sender.push(step(3.0))?;
+    drop(sender);
+    assert_eq!(wakes.load(Ordering::SeqCst), 3);
     Ok(())
 }

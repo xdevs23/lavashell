@@ -26,12 +26,6 @@ fn anchored_to_one_edge(span: AxisPlacement<NonNegativeDp>) -> bool {
     }
 }
 
-/// The size of a layer before the first configure event arrives, computed from the layout sent with its role. An
-/// axis that fills starts at one logical pixel.
-pub(super) fn initial_size(layout: ProtocolLayout) -> (u32, u32) {
-    (layout.width.max(1), layout.height.max(1))
-}
-
 /// The length that the layer-shell protocol expects along one axis. The protocol expects zero for an
 /// axis that fills the space between its anchors.
 fn protocol_extent(span: AxisPlacement<NonNegativeDp>) -> Result<u32, LayerLayoutError> {

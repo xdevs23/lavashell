@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::scheduler::FrameScheduler;
 use crate::{Error, Redraw, SchedulerInput, SchedulerOutput};
-use lavashell_actor::{Actor, Closed, Effect, Flow, Handle, Merge, Sender, mailbox, spawn};
+use lavashell_actor::{Actor, Closed, Effect, Flow, Handle, Merge, Outlet, Sender, mailbox, spawn};
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::TimingEvent;
 use std::convert::Infallible;
 use std::time::Instant;
 
@@ -11,7 +12,7 @@ pub type SchedulerObserver = Box<dyn FnMut(SchedulerOutput) -> Result<(), Closed
 
 /// Runs the frame scheduler on its own thread. While the scheduler is busy, an input replaces the earlier input of the
 /// same kind for the same surface, unless an input that builds on the earlier inputs came in between.
-pub struct SchedulerThread {
+pub(crate) struct SchedulerThread {
     inputs: Sender<SchedulerItem>,
     actor: Option<Handle<SchedulerActor>>,
 }
@@ -64,6 +65,11 @@ impl SchedulerThread {
             inputs,
             actor: Some(actor),
         })
+    }
+
+    /// The outlet through which a platform reports the timing of the frames.
+    pub(crate) fn timing_outlet(&self) -> Outlet<TimingEvent> {
+        (self.inputs).outlet(|event| SchedulerItem::Input(SchedulerInput::Timing(event)))
     }
 
     /// # Errors

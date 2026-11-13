@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::layer::LayerConfigure;
-use super::{Platform, configure_event};
-use crate::Error;
-use lavashell_actor::Closed;
-use lavashell_core::surface::{ConfigureToken, SurfaceChange, SurfaceId};
+use super::{configure_event, layer};
+use crate::translator::Translator;
+use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
-use lavashell_platform::{SurfaceEvent, TimingEvent};
-use lavashell_runtime::{RendererInput, SchedulerInput};
+use lavashell_platform::{SurfaceAttachment, SurfaceEvent, TimingEvent};
 use sctk::compositor::CompositorHandler;
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::client::protocol::wl_callback::{self, WlCallback};
@@ -33,31 +30,11 @@ use sctk::shell::WaylandSurface;
 use sctk::shell::xdg::window::{Window as NativeWindow, WindowConfigure, WindowHandler};
 use sctk::shm::{Shm, ShmHandler};
 use smithay_client_toolkit as sctk;
-use std::num::NonZero;
 
 /// wp-fractional-scale-v1 sends the preferred scale as the numerator of a fraction over 120.
 const FRACTIONAL_SCALE_DENOMINATOR: u32 = 120;
 
-impl Platform {
-    /// Reports to the scheduler the smallest refresh interval among the outputs that show each surface, when the host
-    /// offers no `wp_presentation`.
-    fn report_output_refreshes(&mut self) {
-        if self.presentation.is_some() {
-            return;
-        }
-        let refreshes: Vec<_> = (self.surfaces.keys())
-            .map(|&surface| SchedulerInput::OutputRefresh {
-                surface,
-                refresh: self.output_records.refreshes(surface).min(),
-            })
-            .collect();
-        for input in refreshes {
-            self.schedule(input);
-        }
-    }
-}
-
-impl Dispatch<WlCallback, SurfaceId> for Platform {
+impl Dispatch<WlCallback, SurfaceId> for Translator {
     fn event(
         state: &mut Self,
         _: &WlCallback,
@@ -66,13 +43,15 @@ impl Dispatch<WlCallback, SurfaceId> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_callback::Event::Done { .. } = event {
-            state.schedule(SchedulerInput::Timing(TimingEvent::DisplayReady(*id)));
+        if let wl_callback::Event::Done { .. } = event
+            && state.surfaces.is_live(*id)
+        {
+            state.links.time(TimingEvent::DisplayReady(*id));
         }
     }
 }
 
-impl CompositorHandler for Platform {
+impl CompositorHandler for Translator {
     fn scale_factor_changed(
         &mut self,
         _: &Connection,
@@ -81,10 +60,15 @@ impl CompositorHandler for Platform {
         scale: i32,
     ) {
         if let Some(id) = self.find_surface(wl)
-            && (self.surfaces.get(&id)).is_some_and(|surface| surface.fractional.is_none())
+            && self
+                .surfaces
+                .live(id)
+                .is_some_and(|surface| surface.fractional.is_none())
         {
             match Density::from_scale(f64::from(scale)) {
-                Some(density) => self.surface_event(id, SurfaceEvent::DensityChanged(density)),
+                Some(density) => self
+                    .links
+                    .report((id, SurfaceEvent::DensityChanged(density))),
                 None => log::warn!("the scale {scale} of a surface is not above zero"),
             }
         }
@@ -109,7 +93,6 @@ impl CompositorHandler for Platform {
         output: &wl_output::WlOutput,
     ) {
         self.report_surface_entered(wl, output);
-        self.report_output_refreshes();
     }
 
     fn surface_leave(
@@ -120,14 +103,13 @@ impl CompositorHandler for Platform {
         output: &wl_output::WlOutput,
     ) {
         self.report_surface_left(wl, output);
-        self.report_output_refreshes();
     }
 }
 
-impl WindowHandler for Platform {
+impl WindowHandler for Translator {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &NativeWindow) {
         if let Some(id) = self.find_surface(window.wl_surface()) {
-            self.surface_event(id, SurfaceEvent::Closed);
+            self.links.report((id, SurfaceEvent::Closed));
         }
     }
 
@@ -141,15 +123,16 @@ impl WindowHandler for Platform {
     ) {
         if let Some(id) = self.find_surface(window.wl_surface()) {
             let (width, height) = configure.new_size;
-            let event = configure_event(width.map(NonZero::get), height.map(NonZero::get));
-            self.surface_event(id, event);
+            self.links
+                .report((id, configure_event(width, height, None)));
         }
     }
 }
 
-impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
+impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Translator {
     /// The control of the layer records the serial of a configure event. The first commit whose surface state applies
-    /// the event acknowledges it.
+    /// the event acknowledges it. The serial is sent to the renderer before the token is sent to the view, so every
+    /// frame that contains the token follows the serial. A destroyed surface reports nothing.
     fn event(
         state: &mut Self,
         _: &ZwlrLayerSurfaceV1,
@@ -158,45 +141,29 @@ impl Dispatch<ZwlrLayerSurfaceV1, SurfaceId> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        if !state.surfaces.is_live(*id) {
+            return;
+        }
         match event {
             zwlr_layer_surface_v1::Event::Configure {
                 serial,
                 width,
                 height,
             } => {
-                if state.surface_records.is_open(*id)
-                    && let Err(error) = state.receive_layer_configure(*id, serial)
-                {
-                    state.stops.record(error);
-                }
-                match state.layer_configure(*id, width, height) {
-                    Ok(event) => state.surface_event(*id, event),
-                    Err(error) => state.stops.record(error),
-                }
+                let (message, event) = layer::translate_configure(serial, width, height);
+                state.links.attach(SurfaceAttachment::Control {
+                    surface: *id,
+                    message,
+                });
+                state.links.report((*id, event));
             }
-            zwlr_layer_surface_v1::Event::Closed => state.surface_event(*id, SurfaceEvent::Closed),
+            zwlr_layer_surface_v1::Event::Closed => state.links.report((*id, SurfaceEvent::Closed)),
             _ => {}
         }
     }
 }
 
-impl Platform {
-    /// Sends the configure event with `serial` to the control of the layer `id`, and then the surface state that
-    /// applies the event to the scene pipeline. Every frame and every commit that applies the state follows the
-    /// configure event in the mailbox of the renderer.
-    fn receive_layer_configure(&mut self, id: SurfaceId, serial: u32) -> Result<(), Error> {
-        let token = ConfigureToken::default();
-        let message = LayerConfigure { token, serial };
-        (self.renderer).send(RendererInput::Control {
-            surface: id,
-            message,
-        })?;
-        let mut sink = self.scene.sink(id, None);
-        (sink.set_state(SurfaceChange::Configure(token))).map_err(|Closed| Error::SceneStopped)
-    }
-}
-
-impl Dispatch<WpFractionalScaleV1, SurfaceId> for Platform {
+impl Dispatch<WpFractionalScaleV1, SurfaceId> for Translator {
     fn event(
         state: &mut Self,
         _: &WpFractionalScaleV1,
@@ -205,24 +172,26 @@ impl Dispatch<WpFractionalScaleV1, SurfaceId> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
+        if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event
+            && state.surfaces.is_live(*id)
+        {
             match Density::from_ratio(f64::from(scale), f64::from(FRACTIONAL_SCALE_DENOMINATOR)) {
-                Ok(density) => state.surface_event(*id, SurfaceEvent::DensityChanged(density)),
+                Ok(density) => state
+                    .links
+                    .report((*id, SurfaceEvent::DensityChanged(density))),
                 Err(error) => log::warn!("the fractional scale {scale} is not usable: {error}"),
             }
         }
     }
 }
 
-impl OutputHandler for Platform {
+impl OutputHandler for Translator {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
     }
 
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, output: wl_output::WlOutput) {
-        self.report_output(&output);
-        self.layers_output_changed(&output);
-        self.lock_output_added(&output);
+        self.add_output(&output);
     }
 
     fn update_output(
@@ -232,8 +201,6 @@ impl OutputHandler for Platform {
         output: wl_output::WlOutput,
     ) {
         self.report_output(&output);
-        self.layers_output_changed(&output);
-        self.report_output_refreshes();
     }
 
     fn output_destroyed(
@@ -242,20 +209,17 @@ impl OutputHandler for Platform {
         _: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
-        self.layers_output_removed(&output);
-        self.lock_output_removed(&output);
         self.remove_output(&output);
-        self.report_output_refreshes();
     }
 }
 
-impl ShmHandler for Platform {
+impl ShmHandler for Translator {
     fn shm_state(&mut self) -> &mut Shm {
         &mut self.shm
     }
 }
 
-impl ProvidesRegistryState for Platform {
+impl ProvidesRegistryState for Translator {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
@@ -263,20 +227,20 @@ impl ProvidesRegistryState for Platform {
     sctk::registry_handlers![OutputState, SeatState];
 }
 
-sctk::delegate_registry!(Platform);
+sctk::delegate_registry!(Translator);
 
-sctk::delegate_dispatch2!(Platform);
+sctk::delegate_dispatch2!(Translator);
 
-delegate_noop!(Platform:ignore ZwlrLayerShellV1);
+delegate_noop!(Translator:ignore ZwlrLayerShellV1);
 
-delegate_noop!(Platform:ignore WpViewporter);
+delegate_noop!(Translator:ignore WpViewporter);
 
-delegate_noop!(Platform:ignore WpViewport);
+delegate_noop!(Translator:ignore WpViewport);
 
-delegate_noop!(Platform:ignore WlRegion);
+delegate_noop!(Translator:ignore WlRegion);
 
-delegate_noop!(Platform:ignore WpFractionalScaleManagerV1);
+delegate_noop!(Translator:ignore WpFractionalScaleManagerV1);
 
-delegate_noop!(Platform:ignore ExtBackgroundEffectManagerV1);
+delegate_noop!(Translator:ignore ExtBackgroundEffectManagerV1);
 
-delegate_noop!(Platform:ignore ExtBackgroundEffectSurfaceV1);
+delegate_noop!(Translator:ignore ExtBackgroundEffectSurfaceV1);

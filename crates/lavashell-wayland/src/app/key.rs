@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Platform;
 use super::device::keyboard_device;
+use crate::translator::Translator;
 use lavashell_core::keyboard::{Key, KeyStroke};
-use lavashell_platform::{DeviceEvent, PressState};
-use lavashell_runtime::RoutedInput;
+use lavashell_core::platform::KeyRepeat;
+use lavashell_platform::{DeviceEvent, KeyAction, KeyboardDevice};
 use sctk::reexports::client::protocol::wl_keyboard;
-use sctk::seat::keyboard::{KeyEvent, Keysym};
+use sctk::seat::keyboard::{KeyEvent, Keysym, RepeatInfo};
 use smithay_client_toolkit as sctk;
+use std::time::Duration;
 
 /// The key resolved by the keymap for `event`: a named key, or else the character of its keysym, with the text typed
 /// by it.
-pub(super) fn stroke(event: KeyEvent) -> KeyStroke {
+fn stroke(event: KeyEvent) -> KeyStroke {
     let named = match event.keysym {
         Keysym::Tab | Keysym::ISO_Left_Tab => Some(Key::Tab),
         Keysym::Return | Keysym::KP_Enter => Some(Key::Enter),
@@ -34,37 +35,44 @@ pub(super) fn stroke(event: KeyEvent) -> KeyStroke {
     }
 }
 
-impl Platform {
-    /// Routes a pressed key of `keyboard` to the view of the focused surface. A clipboard shortcut copies, cuts or
-    /// pastes instead.
-    pub(super) fn key(&mut self, keyboard: &wl_keyboard::WlKeyboard, event: KeyEvent) {
-        let pressed = DeviceEvent::Key {
-            keyboard: keyboard_device(keyboard),
-            stroke: stroke(event),
-            state: PressState::Pressed,
-        };
-        for routed in self.input.route(pressed) {
-            if !self.run_clipboard_shortcut(&routed) {
-                let _keys_start_no_move = self.deliver(routed);
-            }
-        }
+/// The event for the key of `event` on `keyboard`, which did `action`.
+fn key_event(keyboard: KeyboardDevice, event: KeyEvent, action: KeyAction) -> DeviceEvent {
+    DeviceEvent::Key {
+        keyboard,
+        code: event.raw_code,
+        stroke: stroke(event),
+        action,
     }
+}
 
-    /// Copies, cuts or pastes text for a clipboard shortcut, and returns whether it did. The view receives the shortcut
-    /// when there is nothing to copy, cut or paste, and when its surface is not open.
-    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput) -> bool {
-        let RoutedInput::Input { surface, input, .. } = routed else {
-            return false;
-        };
-        let text = &self.clipboard.text;
-        (self.surface_records.open_view_mut(*surface))
-            .is_some_and(|view| text.apply_shortcut(*surface, input, view))
+/// How a held key repeats as `info` says, or `None` where it does not repeat.
+pub(super) fn key_repeat(info: RepeatInfo) -> Option<KeyRepeat> {
+    match info {
+        RepeatInfo::Repeat { rate, delay } => KeyRepeat::new(
+            Duration::from_millis(delay.into()),
+            Duration::from_secs(1) / rate.get(),
+        ),
+        RepeatInfo::Disable => None,
+    }
+}
+
+impl Translator {
+    pub(super) fn report_key(
+        &self,
+        keyboard: &wl_keyboard::WlKeyboard,
+        event: KeyEvent,
+        action: KeyAction,
+    ) {
+        self.links
+            .report(key_event(keyboard_device(keyboard), event, action));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_error::TestError;
+    use std::num::NonZeroU32;
 
     fn resolved(keysym: Keysym, text: Option<&str>) -> KeyStroke {
         stroke(KeyEvent {
@@ -88,5 +96,38 @@ mod tests {
             text: Some("a".to_owned()),
         };
         assert_eq!(resolved(Keysym::a, Some("a")), expected);
+    }
+
+    #[test]
+    fn a_repeated_key_carries_its_evdev_code_and_its_repeat() {
+        let event = KeyEvent {
+            time: 0,
+            raw_code: 30,
+            keysym: Keysym::a,
+            utf8: Some("a".to_owned()),
+        };
+        let expected = DeviceEvent::Key {
+            keyboard: KeyboardDevice(3),
+            code: 30,
+            stroke: KeyStroke {
+                key: Some(Key::Character('a')),
+                text: Some("a".to_owned()),
+            },
+            action: KeyAction::Repeated,
+        };
+        let translated = key_event(KeyboardDevice(3), event, KeyAction::Repeated);
+        assert_eq!(translated, expected);
+    }
+
+    #[test]
+    fn the_repeat_rate_becomes_the_interval_between_two_repeats() -> Result<(), TestError> {
+        let info = RepeatInfo::Repeat {
+            rate: NonZeroU32::try_from(25_u32)?,
+            delay: 600,
+        };
+        let expected = KeyRepeat::new(Duration::from_millis(600), Duration::from_millis(40));
+        assert_eq!(key_repeat(info), expected);
+        assert_eq!(key_repeat(RepeatInfo::Disable), None);
+        Ok(())
     }
 }

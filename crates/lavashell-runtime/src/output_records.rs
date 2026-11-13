@@ -14,17 +14,20 @@ struct Record {
 
 /// The record of every output reported by the host, with the surfaces shown on it.
 #[derive(Default)]
-pub struct OutputRecords {
+pub(crate) struct OutputRecords {
     records: BTreeMap<OutputId, Record>,
 }
 
 impl OutputRecords {
-    /// Applies `event` reported by the host. `Updated`, `Refresh` and `Entered` create the record of an output that
-    /// has none, so a surface that enters an output before the geometry of the output arrives is still recorded.
-    /// `Removed` deletes the record with the surfaces shown on the output. `Left` for an output without a record
-    /// changes nothing.
+    /// Applies `event` reported by the host. `Added`, `Updated`, `Refresh` and `Entered` create the record of an
+    /// output that has none, so a surface that enters an output before the geometry of the output arrives is still
+    /// recorded. `Removed` deletes the record with the surfaces shown on the output. `Left` for an output without a
+    /// record changes nothing.
     pub fn handle(&mut self, event: OutputEvent) {
         match event {
+            OutputEvent::Added(output) => {
+                let _record = self.record_mut(output);
+            }
             OutputEvent::Updated(output, info) => self.record_mut(output).info = Some(info),
             OutputEvent::Removed(output) => {
                 let _removed_record = self.records.remove(&output);

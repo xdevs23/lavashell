@@ -15,6 +15,7 @@ pub fn mailbox<T: Merge>() -> (Sender<T>, Receiver<T>) {
             senders: 1,
             receiving: true,
             closed_intake: false,
+            wake: None,
         }),
         arrived: Condvar::new(),
         opened: Condvar::new(),
@@ -58,6 +59,14 @@ struct State<T: Merge> {
     senders: usize,
     receiving: bool,
     closed_intake: bool,
+    /// Runs on the pushing thread when an item arrives in the empty mailbox and when the last sender is gone.
+    wake: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl<T: Merge> State<T> {
+    fn awaits_items(&self) -> bool {
+        self.waiting.is_empty() && self.senders > 0
+    }
 }
 
 impl<T: Merge> Sender<T> {
@@ -77,9 +86,13 @@ impl<T: Merge> Sender<T> {
         }
         let was_empty = state.waiting.is_empty();
         state.waiting.push(item);
+        let wake = was_empty.then(|| state.wake.clone()).flatten();
         drop(state);
         if was_empty {
             self.shared.arrived.notify_one();
+        }
+        if let Some(wake) = wake {
+            wake();
         }
         Ok(())
     }
@@ -96,8 +109,14 @@ impl<T: Merge> Clone for Sender<T> {
 
 impl<T: Merge> Drop for Sender<T> {
     fn drop(&mut self) {
-        self.shared.lock().senders -= 1;
+        let mut state = self.shared.lock();
+        state.senders -= 1;
+        let wake = (state.senders == 0).then(|| state.wake.clone()).flatten();
+        drop(state);
         self.shared.arrived.notify_one();
+        if let Some(wake) = wake {
+            wake();
+        }
     }
 }
 
@@ -108,13 +127,26 @@ impl<T: Merge> Receiver<T> {
     ///
     /// Fails once no item waits and every sender is gone.
     pub fn take(&self) -> Result<Vec<T>, Closed> {
-        let mut state = wait_ignoring_poison(&self.shared.arrived, self.shared.lock(), |state| {
-            state.waiting.is_empty() && state.senders > 0
-        });
-        if state.waiting.is_empty() {
-            return Err(Closed);
-        }
-        Ok(state.waiting.take())
+        let awaits_items = |state: &mut State<T>| state.awaits_items();
+        let state = wait_ignoring_poison(&self.shared.arrived, self.shared.lock(), awaits_items);
+        take_waiting(state)
+    }
+
+    /// Removes and returns every waiting item, in order, without waiting for one. For a receiver that `on_arrival`
+    /// wakes.
+    ///
+    /// # Errors
+    ///
+    /// Fails once no item waits and every sender is gone.
+    pub fn take_arrived(&self) -> Result<Vec<T>, Closed> {
+        take_waiting(self.shared.lock())
+    }
+
+    /// Runs `wake` on the pushing thread each time an item arrives in the empty mailbox, and once every sender is
+    /// gone, so that a receiver that also waits for other sources learns that it can take items. Replaces the function
+    /// set before.
+    pub fn on_arrival(&self, wake: impl Fn() + Send + Sync + 'static) {
+        self.shared.lock().wake = Some(Arc::new(wake));
     }
 
     #[must_use]
@@ -145,6 +177,14 @@ impl<T: Merge> Intake<T> {
             self.shared.opened.notify_all();
         }
     }
+}
+
+/// Removes and returns every waiting item, or fails when no item waits and every sender is gone.
+fn take_waiting<T: Merge>(mut state: MutexGuard<'_, State<T>>) -> Result<Vec<T>, Closed> {
+    if state.waiting.is_empty() && state.senders == 0 {
+        return Err(Closed);
+    }
+    Ok(state.waiting.take())
 }
 
 impl<T: Merge> Shared<T> {

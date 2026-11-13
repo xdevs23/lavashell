@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use ash::vk;
+use crate::test_host::{NoControl, Offscreen, renderer_setup};
 use lavashell_core::geometry::Size;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, PainterSetup};
-use lavashell_vulkan::{Features, PhysicalDevice, Presentation};
+use lavashell_renderer::{Painter, PainterSetup};
 use std::convert::Infallible;
-use std::ffi::CStr;
 use std::sync::mpsc;
 
 #[derive(Debug, thiserror::Error)]
@@ -28,71 +26,14 @@ enum TestError {
 
 type TestResult = Result<(), TestError>;
 
-/// A backend whose renderer draws offscreen only.
-struct Offscreen;
-
-impl PresentationBackend for Offscreen {
-    fn surface_extension(&self) -> Option<&'static CStr> {
-        None
-    }
-
-    fn features(&self) -> Features {
-        Features::default()
-    }
-
-    fn supports(
-        &self,
-        _: &PhysicalDevice<'_>,
-        _: u32,
-    ) -> Result<Presentation, lavashell_vulkan::Error> {
-        Ok(Presentation::Supported)
-    }
-
-    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
-        None
-    }
-}
-
-/// A control for a surface that is never attached.
-struct NoControl;
-
-impl SurfaceControl for NoControl {
-    type Error = Infallible;
-    type Message = ();
-
-    fn receive(&mut self, (): ()) {}
-
-    fn prepare(&mut self, _: &PresentFrame) -> Result<(), Infallible> {
-        Ok(())
-    }
-
-    fn before_present(&mut self, _: &PresentFrame) {}
-
-    fn after_present(&mut self, _: FrameOutcome) {}
-
-    fn commit_state(&mut self, _: &SurfaceState) -> Result<(), Infallible> {
-        Ok(())
-    }
-}
-
-fn setup(painter: Option<PainterSetup>) -> RendererSetup {
-    RendererSetup {
-        fonts: Fonts::new(),
-        painter,
-        scene: None,
-        gpu_timing: false,
-        full_redraw: false,
-        start: Instant::now(),
-    }
-}
-
 /// A started renderer with the setup of its painter, and the outputs of the renderer.
 fn start(
     painter: Option<PainterSetup>,
 ) -> Result<(Renderer<NoControl>, mpsc::Receiver<RendererOutput>), TestError> {
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
-    let renderer = Renderer::start(Offscreen, setup(painter), false, Box::new(observer))?;
+    let setup = renderer_setup(painter);
+    let renderer = Renderer::start(Offscreen, setup, Instant::now(), false, Box::new(observer))?;
     Ok((renderer, received))
 }
 
@@ -123,6 +64,17 @@ fn outline(surface: u64) -> RendererInput<NoControl> {
     }
 }
 
+fn control(surface: u64) -> RendererInput<NoControl> {
+    RendererInput::Surface(SurfaceAttachment::Control {
+        surface: SurfaceId(surface),
+        message: (),
+    })
+}
+
+fn detach(surface: u64) -> RendererInput<NoControl> {
+    RendererInput::Surface(SurfaceAttachment::Detach(SurfaceId(surface)))
+}
+
 /// What the renderer takes from its mailbox, without the values that the merge rule ignores.
 #[derive(Debug, PartialEq, Eq)]
 enum Taken {
@@ -131,8 +83,9 @@ enum Taken {
     Control(u64),
     CommitState(u64),
     AdvanceScene,
-    Retire(u64),
+    Detach(u64),
     Attach,
+    Stop,
 }
 
 impl Taken {
@@ -140,11 +93,14 @@ impl Taken {
         match input {
             RendererInput::Render { surface, time, .. } => Self::Render(surface.0, time.sequence),
             RendererInput::Outline { surface, .. } => Self::Outline(surface.0),
-            RendererInput::Control { surface, .. } => Self::Control(surface.0),
+            RendererInput::Surface(SurfaceAttachment::Control { surface, .. }) => {
+                Self::Control(surface.0)
+            }
             RendererInput::CommitState { surface, .. } => Self::CommitState(surface.0),
             RendererInput::AdvanceScene(_) => Self::AdvanceScene,
-            RendererInput::Retire(surface) => Self::Retire(surface.0),
-            RendererInput::Attach(_) => Self::Attach,
+            RendererInput::Surface(SurfaceAttachment::Detach(surface)) => Self::Detach(surface.0),
+            RendererInput::Surface(SurfaceAttachment::Attach(_)) => Self::Attach,
+            RendererInput::Stop => Self::Stop,
         }
     }
 }
@@ -175,22 +131,18 @@ fn a_later_frame_or_outline_of_a_surface_replaces_one_not_handled_yet() -> TestR
 }
 
 #[test]
-fn a_message_a_commit_or_a_retire_keeps_the_frames_on_either_side() -> TestResult {
-    let message = RendererInput::Control {
-        surface: SurfaceId(1),
-        message: (),
-    };
+fn a_message_a_commit_or_a_detach_keeps_the_frames_on_either_side() -> TestResult {
     let commit = RendererInput::CommitState {
         surface: SurfaceId(1),
         built: empty_scene(),
     };
     let inputs = [
         render(1, 1),
-        message,
+        control(1),
         render(1, 2),
         commit,
         render(1, 3),
-        RendererInput::Retire(SurfaceId(1)),
+        detach(1),
         render(1, 4),
     ];
     let expected = [
@@ -199,7 +151,7 @@ fn a_message_a_commit_or_a_retire_keeps_the_frames_on_either_side() -> TestResul
         Taken::Render(1, 2),
         Taken::CommitState(1),
         Taken::Render(1, 3),
-        Taken::Retire(1),
+        Taken::Detach(1),
         Taken::Render(1, 4),
     ];
     assert_eq!(taken(inputs)?, expected);
@@ -250,14 +202,10 @@ fn the_renderer_reports_the_text_rendering_set_up_for_its_painter() -> TestResul
 }
 
 #[test]
-fn a_retire_is_reported_after_the_inputs_sent_before_it() -> TestResult {
+fn a_detached_surface_is_reported_after_the_inputs_sent_before_it() -> TestResult {
     let (mut renderer, outputs) = start(None)?;
-    let message = RendererInput::Control {
-        surface: SurfaceId(3),
-        message: (),
-    };
-    renderer.send(message)?;
-    renderer.send(RendererInput::Retire(SurfaceId(3)))?;
+    renderer.send(control(3))?;
+    renderer.send(detach(3))?;
     assert!(matches!(
         outputs.recv()?,
         RendererOutput::Retired(SurfaceId(3))
@@ -286,8 +234,17 @@ fn a_failed_commit_ends_the_renderer_and_stop_returns_the_failure() -> TestResul
 fn a_stopped_renderer_handles_no_more_inputs() -> TestResult {
     let (mut renderer, outputs) = start(None)?;
     renderer.stop()?;
-    let retire = renderer.send(RendererInput::Retire(SurfaceId(0)));
-    assert_eq!(retire.err(), Some(RendererStopped));
+    assert_eq!(renderer.send(detach(0)).err(), Some(RendererStopped));
     assert!(outputs.recv().is_err());
+    Ok(())
+}
+
+#[test]
+fn a_renderer_stops_while_a_link_from_a_platform_exists() -> TestResult {
+    let (mut renderer, _outputs) = start(None)?;
+    let link = renderer.attachments()?;
+    renderer.stop()?;
+    let detach = link.push(SurfaceAttachment::Detach(SurfaceId(0)));
+    assert_eq!(detach, Err(Closed));
     Ok(())
 }

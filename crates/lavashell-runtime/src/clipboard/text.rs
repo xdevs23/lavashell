@@ -33,7 +33,7 @@ fn clipboard_shortcut(view: &mut View, key: Key) -> Option<ClipboardShortcut> {
 
 /// Copies, cuts and pastes the text of views through the clipboard. A change to a view that follows from a transfer
 /// runs as a view action.
-pub struct TextClipboard {
+pub(crate) struct TextClipboard {
     clipboard: Clipboard,
     actions: ViewActions,
 }

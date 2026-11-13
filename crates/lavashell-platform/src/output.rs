@@ -11,6 +11,8 @@ pub struct OutputId(pub u64);
 /// What the host did with an output, or with the surfaces shown on it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum OutputEvent {
+    /// The host added the output. The geometry of the output follows with `Updated` once the host reports it.
+    Added(OutputId),
     /// The geometry of the output, sent when the output appears and each time the geometry changes.
     Updated(OutputId, MonitorInfo),
     Removed(OutputId),

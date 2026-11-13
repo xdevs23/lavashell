@@ -33,9 +33,8 @@ impl AndroidRenderer {
             scene: None,
             gpu_timing: false,
             full_redraw: false,
-            start: Instant::now(),
         };
-        let state = RendererState::with_streams(&AospPresentation, setup, |gpu| {
+        let state = RendererState::with_streams(&AospPresentation, setup, Instant::now(), |gpu| {
             HardwareBufferImporter::new(gpu).map(LatchedFrames::new)
         })?;
         Ok(Self { state })

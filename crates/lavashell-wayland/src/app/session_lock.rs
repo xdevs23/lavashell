@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::control::RoleControl;
-use super::creation::NativeSpec;
-use super::outputs::output_id;
-use super::{Platform, Role, configure_event};
+use super::{NativeRole, configure_event};
 use crate::Error;
-use lavashell_core::output::OutputRequest;
-use lavashell_core::surface::{SurfaceId, SurfaceState};
-use lavashell_core::view::View;
-use lavashell_platform::{Appearance, LockEvent, OutputId, SurfaceEvent};
-use lavashell_runtime::{ActiveLock, LockConfiguration, LockStep};
-use sctk::reexports::client::globals::GlobalList;
-use sctk::reexports::client::protocol::{wl_callback, wl_output};
+use crate::translator::Translator;
+use lavashell_core::surface::SurfaceId;
+use lavashell_platform::{LockEvent, LockRequest};
+use sctk::reexports::client::protocol::{wl_callback, wl_output, wl_surface};
 use sctk::reexports::client::{Connection, Dispatch, QueueHandle, delegate_noop};
 use sctk::reexports::protocols::ext::session_lock::v1::client::{
     ext_session_lock_manager_v1::ExtSessionLockManagerV1,
@@ -22,154 +17,57 @@ use std::num::NonZeroU32;
 
 pub(super) type LockSurface = ExtSessionLockSurfaceV1;
 
-/// The session lock while the run has one: the lock rules from the runtime and the lock object created by the
-/// compositor.
-pub(super) struct Runtime {
-    proxy: ExtSessionLockV1,
-    rules: ActiveLock,
-    /// The first failure of a lock surface opened for a new output, which the next lock step returns.
-    failure: Option<Error>,
-}
-
-impl NativeSpec {
-    pub(super) fn lock(view: View) -> Self {
-        Self {
-            view,
-            size: (1, 1),
-            appearance: Appearance {
-                transparent: false,
-                output: OutputRequest::default(),
-                hdr_metadata: None,
-                background_blur: false,
-            },
-            shape: None,
-            drag_region: None,
-            accessible_name: String::new(),
-            role_state: SurfaceState::default(),
-        }
-    }
-}
-
-fn resolve_output_id(output: &wl_output::WlOutput) -> Result<OutputId, Error> {
-    output_id(output).ok_or(Error::OutputWithoutId)
-}
-
-/// Starts the lock set by `configuration` on `outputs` and requests it from the compositor through `manager`. The
-/// lock rules run first, so a lock that they refuse is never requested.
+/// Asks the compositor through `manager` to lock the session. A run locks the session once, so the manager is
+/// destroyed.
 fn request_lock(
     manager: &ExtSessionLockManagerV1,
-    qh: &QueueHandle<Platform>,
-    configuration: LockConfiguration,
-    outputs: &[OutputId],
-) -> Result<Runtime, Error> {
-    let rules = ActiveLock::start(configuration, outputs)?;
+    qh: &QueueHandle<Translator>,
+) -> ExtSessionLockV1 {
     let proxy = manager.lock(qh, ());
     manager.destroy();
-    Ok(Runtime {
-        proxy,
-        rules,
-        failure: None,
-    })
+    proxy
 }
 
-fn send_unlock(proxy: &ExtSessionLockV1, connection: &Connection, qh: &QueueHandle<Platform>) {
+fn send_unlock(proxy: &ExtSessionLockV1, connection: &Connection, qh: &QueueHandle<Translator>) {
     proxy.unlock_and_destroy();
     // The reply to the sync request shows that the compositor processed the unlock. A compositor that exits before
     // the reply ends the connection instead.
     let _sync = connection.display().sync(qh, UnlockSync);
 }
 
-impl Platform {
-    /// Locks the session as set by `configuration`, with a lock surface on every output advertised by the compositor.
-    pub(super) fn start_lock(
-        &mut self,
-        globals: &GlobalList,
-        configuration: LockConfiguration,
-    ) -> Result<(), Error> {
-        let manager: ExtSessionLockManagerV1 = globals
-            .bind(&self.qh, 1..=1, ())
-            .map_err(Error::BindSessionLock)?;
-        let outputs = (self.outputs.outputs())
-            .map(|output| resolve_output_id(&output).map(|id| (id, output)))
-            .collect::<Result<Vec<_>, _>>()?;
-        let ids: Vec<_> = outputs.iter().map(|(id, _)| *id).collect();
-        self.session_lock = Some(request_lock(&manager, &self.qh, configuration, &ids)?);
-        for (id, output) in &outputs {
-            self.add_lock_output(*id, output)?;
-        }
-        Ok(())
+impl Translator {
+    /// Gives `wl` the role of the lock surface `surface` of the session lock on `output`.
+    pub(super) fn lock_role(
+        &self,
+        wl: &wl_surface::WlSurface,
+        output: &wl_output::WlOutput,
+        surface: SurfaceId,
+    ) -> Result<(NativeRole, RoleControl), Error> {
+        let lock = (self.session_lock.as_ref()).ok_or(Error::LockSurfaceWithoutLock(surface))?;
+        let lock_surface = lock.get_lock_surface(wl, output, &self.qh, surface);
+        Ok((NativeRole::Lock(lock_surface), RoleControl::Stateless))
     }
 
-    fn add_lock_output(&mut self, id: OutputId, output: &wl_output::WlOutput) -> Result<(), Error> {
-        let Some(lock) = &self.session_lock else {
-            return Ok(());
-        };
-        let Some(view) = lock.rules.view_for(id) else {
-            return Ok(());
-        };
-        let proxy = lock.proxy.clone();
-        let surface = self.create_surface(NativeSpec::lock(view), |platform, wl, surface| {
-            let lock_surface = proxy.get_lock_surface(wl, output, &platform.qh, surface);
-            Ok((Role::Lock(lock_surface), RoleControl::Stateless))
-        })?;
-        if let Some(lock) = &mut self.session_lock {
-            lock.rules.opened(id, surface);
-        }
-        Ok(())
-    }
-
-    pub(super) fn lock_output_added(&mut self, output: &wl_output::WlOutput) {
-        if self.session_lock.is_none() {
-            return;
-        }
-        let added = resolve_output_id(output).and_then(|id| self.add_lock_output(id, output));
-        if let Err(error) = added
-            && let Some(lock) = &mut self.session_lock
-            && lock.failure.is_none()
-        {
-            lock.failure = Some(error);
-        }
-    }
-
-    pub(super) fn lock_output_removed(&mut self, output: &wl_output::WlOutput) {
-        if let Some(id) = output_id(output)
-            && let Some(lock) = &mut self.session_lock
-            && let Some(surface) = lock.rules.remove_output(id)
-        {
-            self.surface_event(surface, SurfaceEvent::Closed);
-        }
-    }
-
-    /// Runs the lock step of this turn. The unlock closes every surface of the run, and the release ends the run.
-    pub(super) fn update_lock(&mut self) -> Result<(), Error> {
-        let Some(lock) = &mut self.session_lock else {
-            return Ok(());
-        };
-        if let Some(error) = lock.failure.take() {
-            return Err(error);
-        }
-        match lock.rules.step()? {
-            LockStep::Running => {}
-            LockStep::Unlock => {
-                send_unlock(&lock.proxy, &self.connection, &self.qh);
-                let surfaces: Vec<_> = self.surfaces.keys().copied().collect();
-                for surface in surfaces {
-                    self.surface_event(surface, SurfaceEvent::Closed);
-                }
-                self.connection.flush().map_err(Error::Flush)?;
+    /// Executes `request` of the runtime on the session lock. The compositor reports what it did as lock events.
+    pub(crate) fn execute_lock(&mut self, request: LockRequest) -> Result<(), Error> {
+        match request {
+            LockRequest::Lock => {
+                let manager = (self.registry.bind_one(&self.qh, 1..=1, ()))
+                    .map_err(Error::BindSessionLock)?;
+                self.session_lock = Some(request_lock(&manager, &self.qh));
             }
-            LockStep::Released => {
-                self.session_lock = None;
-                self.run_end.end();
+            LockRequest::Unlock => {
+                let lock = self.session_lock.take().ok_or(Error::UnlockWithoutLock)?;
+                send_unlock(&lock, &self.connection, &self.qh);
             }
         }
         Ok(())
     }
 }
 
-delegate_noop!(Platform: ignore ExtSessionLockManagerV1);
+delegate_noop!(Translator: ignore ExtSessionLockManagerV1);
 
-impl Dispatch<ExtSessionLockV1, ()> for Platform {
+impl Dispatch<ExtSessionLockV1, ()> for Translator {
     fn event(
         state: &mut Self,
         _: &ExtSessionLockV1,
@@ -183,13 +81,11 @@ impl Dispatch<ExtSessionLockV1, ()> for Platform {
             ext_session_lock_v1::Event::Finished => LockEvent::Finished,
             _ => return,
         };
-        if let Some(lock) = &mut state.session_lock {
-            lock.rules.handle(event);
-        }
+        state.links.report(event);
     }
 }
 
-impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Platform {
+impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Translator {
     fn event(
         state: &mut Self,
         surface: &ExtSessionLockSurfaceV1,
@@ -203,6 +99,7 @@ impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Platform {
             width,
             height,
         } = event
+            && state.surfaces.is_live(*id)
         {
             // A lock surface cannot be drawn at a size of zero. Such a configure is not acknowledged, and the
             // surface continues with the size of the last configure.
@@ -215,15 +112,16 @@ impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Platform {
                 return;
             };
             surface.ack_configure(serial);
-            let event = configure_event(Some(width.get()), Some(height.get()));
-            state.surface_event(*id, event);
+            state
+                .links
+                .report((*id, configure_event(Some(width), Some(height), None)));
         }
     }
 }
 
 pub(super) struct UnlockSync;
 
-impl Dispatch<wl_callback::WlCallback, UnlockSync> for Platform {
+impl Dispatch<wl_callback::WlCallback, UnlockSync> for Translator {
     fn event(
         state: &mut Self,
         _: &wl_callback::WlCallback,
@@ -232,10 +130,8 @@ impl Dispatch<wl_callback::WlCallback, UnlockSync> for Platform {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_callback::Event::Done { .. } = event
-            && let Some(lock) = &mut state.session_lock
-        {
-            lock.rules.handle(LockEvent::UnlockConfirmed);
+        if let wl_callback::Event::Done { .. } = event {
+            state.links.report(LockEvent::UnlockConfirmed);
         }
     }
 }

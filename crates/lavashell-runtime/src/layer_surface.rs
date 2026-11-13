@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::{KeyboardPolicy, PanelOptions, WindowShape};
+use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::panel::{AxisPlacement, ExclusiveZone, LayerLayout, LayerLevel};
 use lavashell_core::prelude::{HdrMetadata, OutputRequest};
 use lavashell_platform::KeyboardMode;
-use lavashell_runtime::{KeyboardPolicy, PanelOptions, WindowShape};
 
+/// A panel that the host places at the edges of an output, such as a bar or a dock.
 #[derive(Clone)]
 pub struct LayerSurface {
     pub composition_order: i32,
-    pub focus_grab: Option<crate::FocusGrab>,
+    pub focus_grab: Option<FocusGrab>,
     pub shape: Option<WindowShape>,
     pub namespace: String,
     pub output: OutputRequest,
@@ -36,20 +38,20 @@ impl LayerSurface {
     /// Sets the focus grab of this layer, which limits input focus to the layer while `grab` is active, such as
     /// for a popover.
     #[must_use]
-    pub fn focus_grab(mut self, grab: crate::FocusGrab) -> Self {
+    pub fn focus_grab(mut self, grab: FocusGrab) -> Self {
         self.focus_grab = Some(grab);
         self
     }
 
-    /// Sets the reactive state that contains the layout of the layer: its margins, its placement on both axes and
-    /// its exclusive zone. A change of the state is sent to the compositor with the next frame of the layer.
+    /// Sets the reactive state that contains the layout of the layer: the margins, the placement on both axes and the
+    /// exclusive zone. A change of the state is sent to the host with the next frame of the layer.
     #[must_use]
     pub fn layout_state(mut self, state: lavashell_core::reactive::State<LayerLayout>) -> Self {
         self.panel.layout_state = Some(state);
         self
     }
 
-    /// Sets the shape of the layer. Its outline clips painting and sets the input region sent to the compositor.
+    /// Sets the shape of the layer. The outline of the shape clips painting and sets the input region sent to the host.
     #[must_use]
     pub fn shape(mut self, shape: WindowShape) -> Self {
         self.shape = Some(shape);
@@ -88,7 +90,7 @@ impl LayerSurface {
     }
 
     /// Sets the order in which the app composes this layer among its surfaces in each frame. Smaller orders are
-    /// composed first. The order does not change the stacking by the compositor. A layer that reads geometry
+    /// composed first. The order does not change the stacking by the host. A layer that reads geometry
     /// published by the view of another surface gets a larger order, so that it reads the geometry of the same
     /// frame. Surfaces with equal orders are composed in the order of their creation. The default order is zero.
     #[must_use]
@@ -114,8 +116,8 @@ impl LayerSurface {
         self
     }
 
-    /// Allows the keyboard focus on demand only while `active` returns true. A change of `active` is sent to the
-    /// compositor in the same commit as the next change of the layer geometry and content.
+    /// Allows the keyboard focus on demand only while `active` returns true. A change of `active` is sent to the host
+    /// in the same commit as the next change of the layer geometry and content.
     #[must_use]
     pub fn keyboard_when(mut self, active: impl Fn() -> bool + 'static) -> Self {
         self.panel.keyboard = KeyboardPolicy::OnDemandWhen(std::rc::Rc::new(active));

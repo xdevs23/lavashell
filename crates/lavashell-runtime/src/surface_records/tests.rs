@@ -44,6 +44,7 @@ fn configure(width: Option<Dp>) -> SurfaceEvent {
     SurfaceEvent::Configured {
         width,
         height: None,
+        token: None,
     }
 }
 

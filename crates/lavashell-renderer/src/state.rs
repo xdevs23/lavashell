@@ -47,8 +47,6 @@ pub struct RendererSetup {
     pub gpu_timing: bool,
     /// Paints the whole surface in every frame instead of the area that changed.
     pub full_redraw: bool,
-    /// The instant from which the times passed to the scene source are measured.
-    pub start: Instant,
 }
 
 impl RendererSetup {
@@ -102,7 +100,8 @@ pub struct RendererState<C: SurfaceControl, S = NoStreams> {
 }
 
 impl<C: SurfaceControl> RendererState<C> {
-    /// A state without streams whose device presents to surfaces created for `backend`.
+    /// A state without streams whose device presents to surfaces created for `backend`. The times passed to the scene
+    /// source are measured from `start`.
     ///
     /// # Errors
     ///
@@ -110,15 +109,16 @@ impl<C: SurfaceControl> RendererState<C> {
     pub fn new(
         backend: &impl PresentationBackend,
         setup: RendererSetup,
+        start: Instant,
     ) -> Result<Self, StateError> {
-        Self::with_streams(backend, setup, |_| Ok(NoStreams::default()))
+        Self::with_streams(backend, setup, start, |_| Ok(NoStreams::default()))
             .map_err(StartError::into_state)
     }
 }
 
 impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C, S> {
     /// A state whose device presents to surfaces created for `backend`, with the streams made by `streams` on that
-    /// device.
+    /// device. The times passed to the scene source are measured from `start`.
     ///
     /// # Errors
     ///
@@ -126,6 +126,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn with_streams(
         backend: &impl PresentationBackend,
         setup: RendererSetup,
+        start: Instant,
         streams: impl FnOnce(&VulkanRenderer) -> Result<S, S::Error>,
     ) -> Result<Self, StartError<S::Error>> {
         let RendererSetup {
@@ -134,7 +135,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             scene,
             gpu_timing,
             full_redraw,
-            start,
         } = setup;
         let mut gpu = VulkanRenderer::new(backend).map_err(StateError::CreateRenderer)?;
         let mut painter = gpu.painter(&fonts).map_err(StateError::CreatePainter)?;

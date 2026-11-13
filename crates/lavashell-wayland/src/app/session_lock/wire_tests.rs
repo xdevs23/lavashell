@@ -2,7 +2,6 @@
 use super::*;
 use crate::app::wire_messages::messages;
 use crate::test_error::TestError;
-use lavashell_runtime::SessionLock;
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::wl_registry;
 use std::os::unix::net::UnixStream;
@@ -15,7 +14,7 @@ delegate_noop!(Registry: ignore wl_registry::WlRegistry);
 struct Wire {
     connection: Connection,
     peer: UnixStream,
-    qh: QueueHandle<Platform>,
+    qh: QueueHandle<Translator>,
     manager: ExtSessionLockManagerV1,
 }
 
@@ -25,7 +24,7 @@ impl Wire {
         peer.set_nonblocking(true)
             .map_err(TestError::ConfigureSocket)?;
         let connection = Connection::from_socket(socket).map_err(Error::Connect)?;
-        let qh = connection.new_event_queue::<Platform>().handle();
+        let qh = connection.new_event_queue::<Translator>().handle();
         let registry_qh = connection.new_event_queue::<Registry>().handle();
         let registry = connection.display().get_registry(&registry_qh, ());
         let manager = registry.bind::<ExtSessionLockManagerV1, _, _>(1, 1, &qh, ());
@@ -45,36 +44,18 @@ impl Wire {
     }
 }
 
-fn configuration() -> LockConfiguration {
-    LockConfiguration::new(SessionLock::new(), lavashell_test_fixtures::facts(), |_| {})
-}
-
-#[test]
-fn private_wire_a_lock_without_an_output_is_never_requested() -> Result<(), TestError> {
-    let mut wire = Wire::new()?;
-    let started = request_lock(&wire.manager, &wire.qh, configuration(), &[]);
-    assert!(matches!(
-        started,
-        Err(Error::Runtime(
-            lavashell_runtime::Error::SessionLockWithoutOutput
-        ))
-    ));
-    assert!(wire.flush()?.is_empty());
-    Ok(())
-}
-
 #[test]
 fn private_wire_an_unlock_is_sent_before_the_sync_that_confirms_it() -> Result<(), TestError> {
     let mut wire = Wire::new()?;
-    let lock = request_lock(&wire.manager, &wire.qh, configuration(), &[OutputId(1)])?;
+    let lock = request_lock(&wire.manager, &wire.qh);
     let manager = wire.manager.id().protocol_id();
-    let proxy = lock.proxy.id().protocol_id();
+    let proxy = lock.id().protocol_id();
     // Opcode 1 of ext_session_lock_manager_v1 is lock, and opcode 0 is destroy.
     assert_eq!(
         wire.flush()?,
         vec![(manager, 1, vec![proxy]), (manager, 0, vec![])]
     );
-    send_unlock(&lock.proxy, &wire.connection, &wire.qh);
+    send_unlock(&lock, &wire.connection, &wire.qh);
     let sent = wire.flush()?;
     let display = wire.connection.display().id().protocol_id();
     let callback = sent[1].2[0];

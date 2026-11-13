@@ -7,6 +7,8 @@ pub enum Effect<K> {
     /// The item sets the whole value of `K`, so it replaces the earlier write of `K` that has not been taken, unless a
     /// fence of `K` came after that write.
     Overwrites(K),
+    /// The item overwrites `key` like `Overwrites` and fences `fenced`, so that no later write of `fenced` passes it.
+    OverwritesAndFences { key: K, fenced: K },
     /// The item depends on every item before it, so it is taken after them. A mailbox treats it as a fence of every
     /// key.
     BuildsOn,
@@ -16,9 +18,13 @@ pub enum Effect<K> {
 
 impl<K> Effect<K> {
     /// Returns the same effect with its key converted by `convert`.
-    pub fn map<L>(self, convert: impl FnOnce(K) -> L) -> Effect<L> {
+    pub fn map<L>(self, convert: impl Fn(K) -> L) -> Effect<L> {
         match self {
             Self::Overwrites(key) => Effect::Overwrites(convert(key)),
+            Self::OverwritesAndFences { key, fenced } => Effect::OverwritesAndFences {
+                key: convert(key),
+                fenced: convert(fenced),
+            },
             Self::BuildsOn => Effect::BuildsOn,
             Self::Fences(key) => Effect::Fences(convert(key)),
         }
@@ -40,7 +46,8 @@ pub trait Merge: Sized {
     }
 
     /// Whether a push of the item enters a mailbox while its intake is closed, instead of waiting until the intake
-    /// opens. An overwrite enters by default, because while the intake is closed each key adds at most one item.
+    /// opens. An overwrite that fences nothing enters by default, because while the intake is closed each key adds at
+    /// most one such item.
     fn passes_closed_intake(&self) -> bool {
         matches!(self.effect(), Effect::Overwrites(_))
     }

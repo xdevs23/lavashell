@@ -4,6 +4,8 @@ mod native;
 use super::*;
 use crate::test_error::TestError;
 use accesskit::{Action, Node, NodeId, Role, TextDirection, TreeId, TreeInfo};
+use lavashell_actor::mailbox;
+use lavashell_platform::{AccessibilityEvent, PlatformEvent};
 
 const WINDOW: NodeId = NodeId(1);
 const BUTTON: NodeId = NodeId(2);
@@ -75,27 +77,30 @@ fn tree(runs: &[Run]) -> Result<TreeUpdate, TestError> {
     })
 }
 
+/// The accessibility events among `events`, in order.
+fn accessibility_events(events: Vec<PlatformEvent>) -> Vec<AccessibilityEvent> {
+    let accessibility = |event| match event {
+        PlatformEvent::Accessibility(event) => Some(event),
+        _ => None,
+    };
+    events.into_iter().filter_map(accessibility).collect()
+}
+
 #[test]
-fn worker_requests_wake_idle_event_loop_and_activation_always_returns_full_tree()
+fn worker_events_reach_the_view_in_order_and_activation_always_returns_full_tree()
 -> Result<(), TestError> {
     use accesskit::{ActionHandler, ActivationHandler};
-    use sctk::reexports::calloop::{EventLoop, channel};
-    let mut loop_: EventLoop<Vec<AccessibilityEvent>> = EventLoop::try_new()?;
-    let (sender, receiver) = channel::channel();
-    let requests = loop_
-        .handle()
-        .insert_source(receiver, |event, (), events| match event {
-            channel::Event::Msg(event) => events.push(event),
-            channel::Event::Closed => assert_eq!(events.len(), 3, "the worker ended early"),
-        })?;
+    let (sender, view) = mailbox::<PlatformEvent>();
+    let outlet = ViewLink::new(sender.outlet(|event| event));
+    drop(sender);
     let full = tree(&[Run::line("a💡é", &[0])])?;
     let snapshot = Arc::new(Latest::new());
     snapshot.publish(full.clone());
     let worker = std::thread::spawn(move || {
-        let mut activation = handlers::Activation::new(SurfaceId(7), sender.clone(), snapshot);
+        let mut activation = handlers::Activation::new(SurfaceId(7), outlet.clone(), snapshot);
         assert_eq!(activation.request_initial_tree(), Some(full.clone()));
         assert_eq!(activation.request_initial_tree(), Some(full));
-        handlers::Actions::new(SurfaceId(7), sender).do_action(accesskit::ActionRequest {
+        handlers::Actions::new(SurfaceId(7), outlet).do_action(accesskit::ActionRequest {
             action: Action::Click,
             target_tree: TreeId::ROOT,
             target_node: BUTTON,
@@ -103,24 +108,36 @@ fn worker_requests_wake_idle_event_loop_and_activation_always_returns_full_tree(
         });
     });
     let mut events = Vec::new();
-    while events.len() < 3 {
-        loop_.dispatch(None, &mut events)?;
+    while let Ok(arrived) = view.take() {
+        events.extend(accessibility_events(arrived));
     }
     if let Err(panic) = worker.join() {
         std::panic::resume_unwind(panic);
     }
     assert!(matches!(
-        events[0],
-        AccessibilityEvent::Activate(SurfaceId(7))
+        events[..],
+        [
+            AccessibilityEvent::Activate(SurfaceId(7)),
+            AccessibilityEvent::Activate(SurfaceId(7)),
+            AccessibilityEvent::Action(SurfaceId(7), _),
+        ]
     ));
+    Ok(())
+}
+
+#[test]
+fn a_deactivation_drops_the_stored_tree_before_it_reaches_the_view() -> Result<(), TestError> {
+    use accesskit::DeactivationHandler;
+    let (sender, view) = mailbox::<PlatformEvent>();
+    let snapshot = Arc::new(Latest::new());
+    snapshot.publish(tree(&[Run::line("text", &[0])])?);
+    let view_link = ViewLink::new(sender.outlet(|event| event));
+    let mut deactivation = handlers::Deactivation::new(SurfaceId(3), view_link, snapshot.clone());
+    deactivation.deactivate_accessibility();
+    assert!(snapshot.read().is_none());
     assert!(matches!(
-        events[1],
-        AccessibilityEvent::Activate(SurfaceId(7))
+        accessibility_events(view.take_arrived()?)[..],
+        [AccessibilityEvent::Deactivate(SurfaceId(3))]
     ));
-    assert!(matches!(
-        events[2],
-        AccessibilityEvent::Action(SurfaceId(7), _)
-    ));
-    loop_.handle().remove(requests);
     Ok(())
 }

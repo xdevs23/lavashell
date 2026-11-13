@@ -5,9 +5,11 @@ use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::transfer::Cancellation;
 use lavashell_core::units::NumberError;
 use lavashell_platform::{DragReceiveRefusal, DragRefusal, SelectionRefusal};
+use rustix::io::Errno;
 use std::collections::TryReserveError;
 use std::convert::Infallible;
 use std::io;
+use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
 
 /// A failure of the runtime, named after the operation that failed.
@@ -77,6 +79,14 @@ pub enum Error {
     StartScheduler(#[source] SpawnError<Infallible>),
     #[error("the frame scheduler failed")]
     RunScheduler(#[source] JoinError<Infallible>),
+    #[error("the file descriptor that wakes the views for an input could not be created")]
+    CreateInputWake(#[source] Errno),
+    #[error("a sender could not wake the views for an input")]
+    SignalInput(#[source] Errno),
+    #[error("the wait of the views for an input failed")]
+    WaitForInput(#[source] Errno),
+    #[error("the deadline of the wait for an input lies too far ahead for the system")]
+    InputDeadline(#[source] TryFromIntError),
 }
 
 /// A failure while the runtime handles an event of an assistive technology. `E` is the failure of the platform to

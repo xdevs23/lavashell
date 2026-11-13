@@ -51,7 +51,7 @@ pub enum Error {
     MissingNode { role: Role, name: String },
     #[cfg(target_os = "linux")]
     #[error("the app failed")]
-    App(#[source] lavashell::wayland::Error),
+    App(#[source] lavashell::wayland::RunError),
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]

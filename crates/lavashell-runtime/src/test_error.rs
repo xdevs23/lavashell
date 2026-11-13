@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The failures returned by the tests of this crate instead of a panic.
 
-use crate::Error;
+use crate::test_host::StandInError;
+use crate::view_actor::StartError;
+use crate::{Error, RunError, ViewError};
 use accesskit::{NodeId as NativeId, Role as NativeRole};
+use lavashell_actor::Closed;
 use lavashell_core::prelude::NodeId;
 use lavashell_core::units::NumberError;
 use lavashell_core::view::FrameError;
 use lavashell_test_fixtures::FrameFailure;
+use log::SetLoggerError;
+use rustix::io::Errno;
+use std::convert::Infallible;
+use std::sync::mpsc::RecvError;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TestError {
@@ -48,6 +55,20 @@ pub(crate) enum TestError {
     MissingPosition(usize),
     #[error("the native text has no line {0}")]
     MissingLine(usize),
+    #[error("the test process has a logger that is not the recorder of the test")]
+    Logger(#[source] &'static SetLoggerError),
+    #[error("a mailbox of the test closed")]
+    Closed(#[from] Closed),
+    #[error("the run failed")]
+    Run(#[from] RunError<StandInError, Infallible>),
+    #[error("a view failed")]
+    View(#[from] ViewError),
+    #[error("the views could not start")]
+    Start(#[from] StartError<Infallible>),
+    #[error("the scripted platform did not hand over its requests")]
+    NoRequests(#[from] RecvError),
+    #[error("a file descriptor could not be created")]
+    Descriptor(#[from] Errno),
 }
 
 pub(crate) type TestResult = Result<(), TestError>;
