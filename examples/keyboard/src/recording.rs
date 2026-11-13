@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    CopyKey, Error, copy,
+    CopyKey, Error, app, copy,
     model::{Appearance, Demo, docked},
     scene::{self, FIELD},
-    stage::{self, QUERY, touch},
+    stage::{self, QUERY, finger, tap, tap_field_end},
 };
 use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
-use lavashell_example_support::{Recording, Steps, write_capture};
+use lavashell_example_support::{Recording, Start, Steps, default_app, write_capture};
 use lavashell_test_platform::{HostScript, RecordedFrame};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
@@ -31,55 +31,66 @@ enum Take {
 pub fn record(recording: &Recording) -> Result<(), Error> {
     let demo = Demo::new(Appearance::Night)?;
     let steps = steps(&demo);
-    let screen = scene::screen();
-    let mut app =
-        App::new(lavashell_example_support::platform()).fonts(lavashell_example_support::fonts()?);
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.keyboard").size(screen.width, screen.height),
-        move |ui| scene::compose(ui, &demo),
-    )?;
     let script = HostScript::new(scene::density()).record_until_rest(recording.interval);
+    let app = app(default_app()?, &demo, scene::screen(), false)?;
     write(recording, steps.record(app, script)?)
 }
 
-fn steps(demo: &Demo) -> Steps<Take, Error> {
+fn steps(demo: &Demo) -> Steps<Demo, Take, Error> {
     let pixel = Viewport::new(scene::screen(), scene::density()).pixel();
-    let mut steps = Steps::default();
-    steps.push(Take::Sequence("show"), move |view| {
+    let mut steps = Steps::new(demo.clone());
+    push_take(&mut steps, Take::Sequence("show"), move |view, _, _| {
         tap_field_end(view, pixel)
     });
-    let typed = demo.clone();
-    steps.push(Take::Unrecorded, move |view| {
-        (QUERY.chars()).try_for_each(|character| tap(view, &stage::key_name(&typed, character)))
+    push_take(&mut steps, Take::Unrecorded, |view, _, typed| {
+        (QUERY.chars()).try_for_each(|character| tap(view, &stage::key_name(typed, character)))
     });
-    let shown = demo.clone();
-    steps.push(Take::Sequence("hide"), move |view| {
-        let outside = outside_field(view, &shown)?;
+    push_take(&mut steps, Take::Sequence("hide"), |view, _, shown| {
+        let outside = outside_field(view, shown)?;
         stage::tap_at(view, outside);
         Ok(())
     });
-    steps.push(Take::Unrecorded, move |view| tap_field_end(view, pixel));
+    push_take(&mut steps, Take::Unrecorded, move |view, _, _| {
+        tap_field_end(view, pixel)
+    });
     previews(&mut steps);
     for placement in [docked(Side::Left), Placement::FullWidth] {
-        let placed = demo.clone();
-        steps.push(Take::Sequence("dock"), move |_| {
+        push_take(&mut steps, Take::Sequence("dock"), move |_, _, placed| {
             placed.placement.set(placement);
             Ok(())
         });
     }
-    steps.push(Take::Unrecorded, |view| tap(view, copy(CopyKey::Back)));
-    steps.push(Take::Still("reduced-motion-before"), |view| {
-        view.provide(&REDUCED_MOTION, true);
-        Ok(())
+    push_take(&mut steps, Take::Unrecorded, |view, _, _| {
+        tap(view, copy(CopyKey::Back))
     });
-    steps.push(Take::Still("reduced-motion-after"), move |view| {
-        tap_field_end(view, pixel)
-    });
+    push_take(
+        &mut steps,
+        Take::Still("reduced-motion-before"),
+        |view, _, _| {
+            view.provide(&REDUCED_MOTION, true);
+            Ok(())
+        },
+    );
+    push_take(
+        &mut steps,
+        Take::Still("reduced-motion-after"),
+        move |view, _, _| tap_field_end(view, pixel),
+    );
     steps
 }
 
+/// Adds `action` as a step once the scene is at rest, and labels the frames from the one that shows it on with `take`.
+fn push_take(
+    steps: &mut Steps<Demo, Take, Error>,
+    take: Take,
+    action: impl FnOnce(&mut View, Viewport, &Demo) -> Result<(), Error> + 'static,
+) {
+    steps.push(Start::at_rest(), action);
+    steps.mark(Start::NEXT, take);
+}
+
 /// A key preview for one finger, then previews for a finger that lifts while the next one touches down.
-fn previews(steps: &mut Steps<Take, Error>) {
+fn previews(steps: &mut Steps<Demo, Take, Error>) {
     let fingers = Fingers::default();
     let (preview, previews) = (Take::Sequence("preview"), Take::Sequence("previews"));
     let gestures = [
@@ -91,7 +102,7 @@ fn previews(steps: &mut Steps<Take, Error>) {
     ];
     for (take, moves) in gestures {
         let fingers = fingers.clone();
-        steps.push(take, move |view| {
+        push_take(steps, take, move |view, _, _| {
             moves
                 .into_iter()
                 .try_for_each(|change| fingers.apply(view, change))
@@ -116,36 +127,16 @@ impl Fingers {
             Finger::Down(point, key) => {
                 let at = stage::key(view, key)?;
                 let _not_down_before = self.0.borrow_mut().insert(point, at);
-                view.input(InputEvent::TouchDown(finger(touch(point), at)));
+                view.input(InputEvent::TouchDown(finger(point, at)));
             }
             Finger::Up(point) => {
                 if let Some(at) = self.0.borrow_mut().remove(&point) {
-                    view.input(InputEvent::TouchUp(finger(touch(point), at)));
+                    view.input(InputEvent::TouchUp(finger(point, at)));
                 }
             }
         }
         Ok(())
     }
-}
-
-fn finger(id: TouchId, at: Point) -> TouchSample {
-    TouchSample {
-        id,
-        at,
-        kind: PointerKind::Finger,
-    }
-}
-
-fn tap(view: &mut View, name: &str) -> Result<(), Error> {
-    let at = stage::key(view, name)?;
-    stage::tap_at(view, at);
-    Ok(())
-}
-
-fn tap_field_end(view: &mut View, pixel: Dp) -> Result<(), Error> {
-    let at = stage::field_end(view, pixel)?;
-    stage::tap_at(view, at);
-    Ok(())
 }
 
 /// The point halfway between the bottom of the search field and the top of the keyboard, centered across the

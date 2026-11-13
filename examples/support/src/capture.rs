@@ -1,76 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{Error, FrameInterval, fonts, report_failures};
-use lavashell::core::scene::tree::{ApplyError, Change};
-use lavashell::core::scene::{ChangeSink, SinkId};
-use lavashell::prelude::*;
-use std::{path::Path, time::Duration};
-
-pub struct Capture {
-    pub painter: Painter,
-    gpu: VulkanRenderer,
-}
-
-impl Capture {
-    /// # Errors
-    /// Returns an error when the fonts, the renderer or the painter cannot be created.
-    pub fn new() -> Result<Self, Error> {
-        let gpu = VulkanRenderer::headless().map_err(Error::Renderer)?;
-        Ok(Self {
-            painter: gpu.painter(&fonts()?).map_err(Error::Painter)?,
-            gpu,
-        })
-    }
-
-    /// The size of the content of `view`, measured with a proposal that leaves both the width and the height open.
-    ///
-    /// # Errors
-    /// Returns an error when the view cannot be measured within that proposal.
-    pub fn preferred_size(&mut self, view: &mut View) -> Result<Size, Error> {
-        let unbounded = Proposal {
-            width: None,
-            height: None,
-        };
-        (view.size_that_fits(unbounded, self.painter.shaper())).map_err(Error::Measure)
-    }
-
-    /// Paints a frame of `view` in `viewport` into the PNG file at `path`, and reports each component that failed in
-    /// that frame.
-    ///
-    /// # Errors
-    /// Returns an error when the frame cannot be shown, rendered or written.
-    pub fn save(
-        &mut self,
-        view: &mut View,
-        viewport: Viewport,
-        path: impl AsRef<Path>,
-    ) -> Result<(), Error> {
-        let mut builder = SceneBuilder::default();
-        (view.frame_into(viewport, self.painter.shaper(), &mut builder))
-            .map(report_failures)
-            .map_err(Error::Frame)?;
-        self.paint(builder.snapshot().at(view.motion().now()), viewport, path)
-    }
-
-    /// Paints `tree` in `viewport` into the PNG file at `path`.
-    ///
-    /// # Errors
-    /// Returns an error when the scene cannot be rendered or written.
-    pub fn paint(
-        &mut self,
-        tree: Presented<'_>,
-        viewport: Viewport,
-        path: impl AsRef<Path>,
-    ) -> Result<(), Error> {
-        let Viewport { size, density } = viewport;
-        let pixels = size.buffer_size(density).map_err(Error::BufferSize)?;
-        let mut surface = self.gpu.offscreen(pixels).map_err(Error::Offscreen)?;
-        let _chained_canvas =
-            (surface.canvas()).clear(lavashell::renderer::skia::Color::TRANSPARENT);
-        (self.painter).paint_scene(surface.canvas(), tree, density);
-        let png = self.gpu.png(&mut surface).map_err(Error::EncodePng)?;
-        write_capture(path, &png)
-    }
-}
+use crate::Error;
+#[cfg(target_os = "linux")]
+use crate::frame_log::record_unlogged;
+#[cfg(target_os = "linux")]
+use lavashell::prelude::{App, Density};
+#[cfg(target_os = "linux")]
+use lavashell_test_platform::{HostScript, Pace};
+use std::path::Path;
 
 /// Writes the PNG file `png` to `path`, and creates the parent directory of `path` first.
 ///
@@ -90,183 +26,20 @@ pub fn write_capture(path: impl AsRef<Path>, png: &[u8]) -> Result<(), Error> {
     })
 }
 
-/// A view that is laid out in a viewport of a fixed size and rendered offscreen by Vulkan. The calling code sets the
-/// time of each frame, so a capture does not depend on a display or a clock.
-pub struct OffscreenView {
-    pub view: View,
-    capture: Capture,
-    scene: OffscreenScene,
-    viewport: Viewport,
-    time: Duration,
-}
-
-impl OffscreenView {
-    /// A view in a viewport of `size` with pixels of `density`. Without `size`, the viewport has the size of the
-    /// content of `view`, measured with a proposal that leaves both the width and the height open.
-    ///
-    /// # Errors
-    /// Returns an error when the capture cannot be created or the content of the view cannot be
-    /// measured.
-    pub fn new(mut view: View, size: Option<Size>, density: Density) -> Result<Self, Error> {
-        let mut capture = Capture::new()?;
-        let size = match size {
-            Some(size) => size,
-            None => capture.preferred_size(&mut view)?,
-        };
-        Ok(Self {
-            view,
-            capture,
-            scene: OffscreenScene::default(),
-            viewport: Viewport::new(size, density),
-            time: Duration::ZERO,
-        })
-    }
-
-    #[must_use]
-    pub fn time(&self) -> Duration {
-        self.time
-    }
-
-    /// The viewport of the captures: their size and the density of their pixels.
-    #[must_use]
-    pub fn viewport(&self) -> Viewport {
-        self.viewport
-    }
-
-    /// Frames the view at each of its deadlines before `time`, the way a host that wakes at `View::next_deadline`
-    /// does. Then frames the view at `time`.
-    ///
-    /// # Errors
-    /// Returns an error when a frame cannot be shown.
-    pub fn at(&mut self, time: Duration) -> Result<(), Error> {
-        while let Some(deadline) = (self.view.next_deadline()).filter(|deadline| *deadline < time) {
-            self.time = deadline.max(self.time);
-            self.frame()?;
-        }
-        self.time = time;
-        self.frame()
-    }
-
-    /// Frames the view at the time of the last frame, as a host does right after input.
-    ///
-    /// # Errors
-    /// Returns an error when the frame cannot be shown.
-    pub fn frame(&mut self) -> Result<(), Error> {
-        let timing = FrameTime {
-            now: self.time,
-            presentation: self.time,
-            ..FrameTime::default()
-        };
-        let shaper = self.capture.painter.shaper();
-        let frame = (self.view).frame_into_at(self.viewport, shaper, timing, &mut self.scene);
-        frame.map(report_failures).map_err(Error::Frame)
-    }
-
-    /// The next deadline of the view after the last frame: when a timer fires or a motion comes to
-    /// rest.
-    ///
-    /// # Errors
-    /// Returns [`Error::NothingMoves`] when the view has no later deadline.
-    pub fn next_deadline(&self) -> Result<Duration, Error> {
-        (self.view.next_deadline())
-            .filter(|deadline| *deadline > self.time)
-            .ok_or(Error::NothingMoves)
-    }
-
-    /// Frames the view at its next deadline.
-    ///
-    /// # Errors
-    /// Returns an error when the view has no later deadline or the frame cannot be shown.
-    pub fn advance(&mut self) -> Result<(), Error> {
-        self.time = self.next_deadline()?;
-        self.frame()
-    }
-
-    /// Frames the view now, again while it needs a frame, and at each deadline until no motion
-    /// runs, as a host that wakes at `View::next_deadline` does. A timer that fires after the last
-    /// motion comes to rest remains pending.
-    ///
-    /// # Errors
-    /// Returns an error when a motion runs without a deadline, when a frame at an unchanged time
-    /// changes nothing in the scene and the view still needs another frame, or when a frame cannot be shown.
-    pub fn settle(&mut self) -> Result<(), Error> {
-        loop {
-            self.frame()?;
-            if self.view.motion().is_active() {
-                self.time = self.next_deadline()?;
-            } else if !self.view.needs_frame() {
-                return Ok(());
-            } else if !self.scene.last_frame_changed {
-                return Err(Error::NoRest);
-            }
-        }
-    }
-
-    /// Frames the view every `interval` from now until it needs no frame and no motion runs, and
-    /// passes each frame to `record`.
-    ///
-    /// # Errors
-    /// Returns an error when a motion runs without a deadline, or when framing or `record` fails.
-    pub fn record_until_rest(
-        &mut self,
-        interval: FrameInterval,
-        mut record: impl FnMut(&mut Self) -> Result<(), Error>,
-    ) -> Result<(), Error> {
-        self.frame()?;
-        record(self)?;
-        while self.view.motion().is_active() || self.view.needs_frame() {
-            if self.view.motion().is_active() && self.view.next_deadline().is_none() {
-                return Err(Error::NothingMoves);
-            }
-            self.at(self.time + interval.get())?;
-            record(self)?;
-        }
-        Ok(())
-    }
-
-    /// Paints the scene of the last frame into the PNG file at `path`.
-    ///
-    /// # Errors
-    /// Returns an error when the scene cannot be rendered or written.
-    pub fn save(&mut self, path: impl AsRef<Path>) -> Result<(), Error> {
-        let snapshot = self.scene.builder.snapshot();
-        (self.capture).paint(snapshot.at(self.time), self.viewport, path)
+/// Runs `app` on a test platform until it comes to rest, then writes the last frame shown by its window with `app_id`
+/// to `path`, as [`write_capture`] does.
+///
+/// # Errors
+/// Returns an error when the app fails, when a component failed in a frame, when the window did not show a frame, or
+/// when the file cannot be written.
+#[cfg(target_os = "linux")]
+pub fn write_screenshot(app: App, app_id: &str, path: &Path) -> Result<(), Error> {
+    let script = HostScript::new(Density::ONE).record_paced(Pace::default());
+    let frames = record_unlogged(app, script)?;
+    match frames.of_window(app_id).last() {
+        Some(frame) => write_capture(path, &frame.png),
+        None => Err(Error::NothingShown {
+            app_id: app_id.to_owned(),
+        }),
     }
 }
-
-/// The scene of an offscreen view, built by a scene builder from every frame of the view.
-#[derive(Default)]
-struct OffscreenScene {
-    builder: SceneBuilder,
-    /// Whether the scene changed or restarted since the last end of a frame.
-    open_frame_changed: bool,
-    /// Whether the last frame that ended changed or restarted the scene.
-    last_frame_changed: bool,
-}
-
-impl ChangeSink for OffscreenScene {
-    type Error = ApplyError;
-
-    fn id(&self) -> SinkId {
-        self.builder.id()
-    }
-
-    fn change(&mut self, change: Change) -> Result<(), ApplyError> {
-        self.open_frame_changed = true;
-        self.builder.change(change)
-    }
-
-    fn end_frame(&mut self) -> Result<(), ApplyError> {
-        self.builder.end_frame()?;
-        self.last_frame_changed = std::mem::take(&mut self.open_frame_changed);
-        Ok(())
-    }
-
-    fn restart(&mut self) -> Result<(), ApplyError> {
-        self.open_frame_changed = true;
-        self.builder.restart()
-    }
-}
-
-#[cfg(test)]
-mod tests;

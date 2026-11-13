@@ -1348,6 +1348,12 @@
                     "package": "lavashell-lucide",
                     "path": "../../crates/lavashell-lucide"
                   },
+                  "lavashell-platform": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "lavashell-platform",
+                    "path": "../../crates/lavashell-platform"
+                  },
                   "lavashell-test-platform": {
                     "default-features": false,
                     "features": [],
@@ -2704,6 +2710,7 @@
                   "lavashell",
                   "lavashell-core",
                   "lavashell-lucide",
+                  "lavashell-platform",
                   "lavashell-test-platform",
                   "serde",
                   "thiserror"
@@ -4107,7 +4114,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "26f6e237ae5ec5657188d7da3571ddd7def86ce6df9ab723c0aa2929485214ac"
+        "seedHash": "7e1f20c89b9fcc95c775db801af7711f41162b60381b19543c8896b1163778a3"
       }
     }
   },
@@ -5219,6 +5226,7 @@
           "lavashell",
           "lavashell-core",
           "lavashell-lucide",
+          "lavashell-platform",
           "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"

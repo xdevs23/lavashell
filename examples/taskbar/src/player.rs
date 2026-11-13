@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{CopyKey, Error, compose, copy, model::Taskbar, script::CUES};
 use lavashell::prelude::*;
-use lavashell_example_support::{FrameInterval, Recording, Steps, write_capture};
+use lavashell_example_support::{
+    FrameInterval, Recording, Start, Steps, default_app, write_capture,
+};
 use lavashell_test_platform::{HostScript, RecordedFrame};
 
 /// Records one cycle of the script in a window of `size` on the test platform, as numbered PNG files in the directory
@@ -27,19 +29,32 @@ pub(crate) fn record_cues(
     size: Size,
 ) -> Result<Vec<(usize, RecordedFrame)>, Error> {
     let taskbar = Taskbar::new()?;
-    let mut steps = Steps::default();
+    let mut steps = Steps::new(taskbar.clone());
     for (index, cue) in CUES.into_iter().enumerate() {
-        let taskbar = taskbar.clone();
-        steps.push(index, move |view| cue.apply(&taskbar, view));
+        steps.push(Start::at_rest(), move |view, _, taskbar| {
+            cue.apply(taskbar, view)
+        });
+        steps.mark(Start::NEXT, index);
     }
-    let mut app =
-        App::new(lavashell_example_support::platform()).fonts(lavashell_example_support::fonts()?);
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.taskbar").size(size.width, size.height),
-        move |ui| compose(ui, &taskbar),
-    )?;
     steps.record(
-        app,
+        app(default_app()?, &taskbar, size, false)?,
         HostScript::new(Density::ONE).record_until_rest(interval),
     )
+}
+
+/// `app` with `taskbar` in a window of `size`, which covers the screen when `fullscreen` is set.
+pub(crate) fn app(
+    mut app: App,
+    taskbar: &Taskbar,
+    size: Size,
+    fullscreen: bool,
+) -> Result<App, Error> {
+    let shown = taskbar.clone();
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.taskbar")
+            .size(size.width, size.height)
+            .fullscreen(fullscreen),
+        move |ui| compose(ui, &shown),
+    )?;
+    Ok(app)
 }

@@ -2660,6 +2660,7 @@ dependencies = [
  "lavashell",
  "lavashell-core",
  "lavashell-lucide",
+ "lavashell-platform",
  "lavashell-test-platform",
  "serde",
  "thiserror 2.0.21",

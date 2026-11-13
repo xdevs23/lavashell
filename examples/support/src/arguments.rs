@@ -85,9 +85,8 @@ impl ExampleArguments {
     #[cfg(target_os = "linux")]
     pub fn app(&self) -> Result<App, Error> {
         let full_redraw = self.inherited.full_redraw;
-        let mut app = App::new(crate::platform())
+        let mut app = crate::default_app()?
             .text_transfers()
-            .fonts(crate::fonts()?)
             .preference_overrides(self.preference_overrides())
             .incremental(!full_redraw);
         if full_redraw {

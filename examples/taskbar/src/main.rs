@@ -58,12 +58,7 @@ fn run() -> Result<(), Error> {
         app = app.view_observer(move |surface, _, _, view| autoplay.observe(surface, view));
     }
 
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.taskbar")
-            .size(size.width, size.height)
-            .fullscreen(arguments.fullscreen),
-        move |ui| compose(ui, &taskbar),
-    )?;
+    let app = player::app(app, &taskbar, size, arguments.fullscreen)?;
     Ok(lavashell_example_support::run(app)?)
 }
 
