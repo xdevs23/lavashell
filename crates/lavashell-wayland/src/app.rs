@@ -1,27 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::geometry::Point;
-use lavashell_core::platform::PlatformFacts;
-use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::ConfigureToken;
 use lavashell_platform::SurfaceEvent;
-use lavashell_renderer::{Fonts, PainterSetup, SceneSetup};
-use lavashell_runtime::clipboard::ClipboardTransfers;
-use lavashell_runtime::drag::Drags;
-use lavashell_runtime::input::InputFilter;
-use lavashell_runtime::layer_surface::LayerSurface;
-use lavashell_runtime::observers::Observers;
-use lavashell_runtime::panels::PanelsPerOutput;
-use lavashell_runtime::run::SurfaceSetup;
-use lavashell_runtime::run_end::RunEnd;
-use lavashell_runtime::session_lock::LockConfiguration;
-use lavashell_runtime::view_actions::ActionQueue;
-use lavashell_runtime::watches::Watches;
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_seat, wl_surface, wl_touch};
 use sctk::reexports::protocols::ext::background_effect::v1::client::{
     ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
+use sctk::reexports::protocols::ext::session_lock::v1::client::ext_session_lock_manager_v1::ExtSessionLockManagerV1;
 use sctk::reexports::protocols::wp::{
     fractional_scale::v1::client::{
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -35,7 +22,6 @@ use sctk::shell::xdg::{XdgShell, window::Window as NativeWindow};
 use smithay_client_toolkit as sctk;
 use std::collections::BTreeMap;
 use std::num::NonZero;
-use std::time::Duration;
 
 pub(crate) use control::Control;
 pub(crate) use focus_grab::Grabs;
@@ -52,15 +38,12 @@ pub(crate) mod focus_grab;
 mod input;
 mod key;
 pub(crate) mod layer;
-mod output_layers;
 mod outputs;
 mod owned_wl_surface;
 pub(crate) mod preferences;
 mod presentation;
 mod protocols;
-pub(crate) mod public;
 pub(crate) mod session_lock;
-mod standard_error;
 pub(crate) mod startup;
 mod touch;
 mod transfer;
@@ -68,27 +51,6 @@ pub(crate) mod watch;
 mod window_input;
 #[cfg(test)]
 pub(crate) mod wire_messages;
-
-pub struct App {
-    surfaces: Vec<SurfaceSetup>,
-    output_layers: Option<PanelsPerOutput<LayerSurface>>,
-    fonts: Fonts,
-    session_lock: Option<LockConfiguration>,
-    run_end: RunEnd,
-    painter_setup: Option<PainterSetup>,
-    scene: Option<SceneSetup>,
-    gpu_timing: bool,
-    full_redraw: bool,
-    ui_budget: Option<Duration>,
-    preference_overrides: PreferenceOverrides,
-    input_filter: Option<InputFilter>,
-    observers: Observers,
-    watches: Watches,
-    clipboard: ClipboardTransfers,
-    action_queue: ActionQueue,
-    drags: Drags,
-    platform: PlatformFacts,
-}
 
 enum NativeRole {
     Window { window: NativeWindow },
@@ -154,6 +116,8 @@ impl SeatDevices {
 pub(crate) struct SurfaceProtocols {
     xdg: Option<XdgShell>,
     layers: Option<ZwlrLayerShellV1>,
+    /// The manager of the session lock until a lock uses it, because a run locks the session once.
+    lock: Option<ExtSessionLockManagerV1>,
     viewporter: Option<WpViewporter>,
     fractional: Option<WpFractionalScaleManagerV1>,
     background: Option<ExtBackgroundEffectManagerV1>,

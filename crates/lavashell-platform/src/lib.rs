@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 mod accessibility;
+mod capability;
 mod clipboard;
 mod drag;
 mod event;
@@ -23,6 +24,7 @@ mod watch;
 mod window_control;
 
 pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_difference};
+pub use capability::Capability;
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,

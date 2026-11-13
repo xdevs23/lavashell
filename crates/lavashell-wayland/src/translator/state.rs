@@ -71,6 +71,8 @@ impl Translator {
             globals,
             queue,
             protocols,
+            focus_grabs,
+            data_devices,
             compositor,
             shm,
             presentation,
@@ -83,7 +85,7 @@ impl Translator {
         let mut sources = vec![connection_source];
         install_preferences(&loop_handle, &mut sources, &links.view())?;
         Ok(Self {
-            focus_grabs: Grabs::bind(&globals, &qh),
+            focus_grabs,
             session_lock: None,
             sources,
             watches: WatchSources::default(),
@@ -94,7 +96,7 @@ impl Translator {
             connection,
             registry: RegistryState::new(&globals),
             devices: seats.seats().map(SeatDevices::new).collect(),
-            clipboard: ClipboardState::new(&globals, &qh, seats.seats()),
+            clipboard: ClipboardState::new(data_devices, &qh, seats.seats()),
             seats,
             outputs: OutputState::new(&globals, &qh),
             shm,

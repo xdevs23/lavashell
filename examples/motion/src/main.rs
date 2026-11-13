@@ -27,7 +27,7 @@ fn run() -> Result<(), Error> {
     let demo = Demo::new(arguments.autoplay)?;
 
     let state = demo.clone();
-    let app = arguments
+    let mut app = arguments
         .example
         .app()?
         .on_frame(move |frame| report_failure("autoplay", state.step(frame)));
@@ -41,16 +41,14 @@ fn run() -> Result<(), Error> {
     };
 
     let size = arguments.size.size().unwrap_or(ui::WINDOW);
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.motion")
+            .size(size.width, size.height)
+            .fullscreen(arguments.fullscreen),
+        move |ui| ui::compose(ui, &demo),
+    )?;
     Ok(lavashell_example_support::run_observed(
         app,
         show_render_cost,
-        move |app| {
-            app.window(
-                Window::new(copy(CopyKey::Title), "lavashell.motion")
-                    .size(size.width, size.height)
-                    .fullscreen(arguments.fullscreen),
-                move |ui| ui::compose(ui, &demo),
-            )
-        },
     )?)
 }

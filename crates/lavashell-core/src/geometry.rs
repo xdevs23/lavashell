@@ -144,6 +144,30 @@ impl Size {
         };
         Ok((pixels(self.width)?, pixels(self.height)?))
     }
+
+    /// The width and the height as lengths above zero.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a length is not finite or not above zero.
+    pub fn to_positive(self) -> Result<(PositiveDp, PositiveDp), NumberError> {
+        Ok((
+            PositiveDp::try_new(self.width)?,
+            PositiveDp::try_new(self.height)?,
+        ))
+    }
+
+    /// The width and the height as lengths of at least zero.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a length is negative or not finite.
+    pub fn to_non_negative(self) -> Result<(NonNegativeDp, NonNegativeDp), NumberError> {
+        Ok((
+            NonNegativeDp::try_new(self.width)?,
+            NonNegativeDp::try_new(self.height)?,
+        ))
+    }
 }
 
 /// A width and a height in whole physical pixels, such as the size of a buffer.
@@ -400,7 +424,9 @@ mod constraints;
 pub use crate::color::Color;
 use crate::local::Local;
 use crate::output::finest_step;
-use crate::units::{Density, Dp, FiniteDp, NonNegative, NumberError, Pct, Px, Vh, Vw};
+use crate::units::{
+    Density, Dp, FiniteDp, NonNegative, NonNegativeDp, NumberError, Pct, PositiveDp, Px, Vh, Vw,
+};
 pub use axis::Axis;
 pub use constraints::{Constraints, Span};
 use num_traits::ToPrimitive;

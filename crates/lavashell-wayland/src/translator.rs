@@ -15,18 +15,20 @@ pub(crate) use state::Translator;
 
 use crate::Error;
 use crate::RequestsError;
-use crate::app::{Control, Presentation, SurfaceProtocols, advertised_outputs};
+use crate::app::{Control, Grabs, Presentation, SurfaceProtocols, advertised_outputs};
 use crate::wayland_presentation::WaylandPresentation;
-use lavashell_platform::{HostFacts, Platform, PlatformLinks};
+use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks};
 use links::Links;
 use requests::{Requests, execute_arrived};
 use sctk::compositor::CompositorState;
+use sctk::data_device_manager::DataDeviceManagerState;
 use sctk::reexports::calloop::EventLoop;
 use sctk::reexports::calloop::ping::make_ping;
 use sctk::reexports::client::globals::{GlobalList, registry_queue_init};
 use sctk::reexports::client::{Connection, EventQueue};
 use sctk::shm::Shm;
 use smithay_client_toolkit as sctk;
+use std::collections::BTreeSet;
 
 /// The connection to a Wayland compositor and the protocols bound on it, until the platform serves it.
 pub struct Wayland {
@@ -34,6 +36,8 @@ pub struct Wayland {
     globals: GlobalList,
     queue: EventQueue<Translator>,
     protocols: SurfaceProtocols,
+    focus_grabs: Option<Grabs>,
+    data_devices: Option<DataDeviceManagerState>,
     compositor: CompositorState,
     shm: Shm,
     presentation: Option<Presentation>,
@@ -57,6 +61,8 @@ impl Platform for Wayland {
         let backend = WaylandPresentation::new(connection.backend());
         let wayland = Self {
             protocols: SurfaceProtocols::bind(&globals, &qh),
+            focus_grabs: Grabs::bind(&globals, &qh),
+            data_devices: DataDeviceManagerState::bind(&globals, &qh).ok(),
             compositor: CompositorState::bind(&globals, &qh)
                 .map_err(ConnectionError::BindCompositor)?,
             shm: Shm::bind(&globals, &qh).map_err(ConnectionError::BindShm)?,
@@ -70,6 +76,20 @@ impl Platform for Wayland {
             presentation: backend,
             host,
         })
+    }
+
+    fn capabilities(&self) -> BTreeSet<Capability> {
+        let transfers = self.data_devices.is_some();
+        let bound = [
+            (self.focus_grabs.is_some(), Capability::FocusGrab),
+            (transfers, Capability::Clipboard),
+            (transfers, Capability::DragAndDrop),
+            (true, Capability::Accessibility),
+        ];
+        (self.protocols.capabilities().into_iter())
+            .chain(bound)
+            .filter_map(|(bound, capability)| bound.then_some(capability))
+            .collect()
     }
 
     fn serve(self, links: PlatformLinks<Control>) -> Result<(), Error> {

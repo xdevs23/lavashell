@@ -325,3 +325,14 @@ fn a_drop_whose_read_did_not_start_is_cancelled_when_the_app_closes() -> TestRes
     ));
     Ok(())
 }
+
+#[test]
+fn the_built_in_text_drag_stays_off_on_a_platform_without_drag_and_drop() {
+    let watches = Watches::default();
+    let mut drags = Drags::new(&watches);
+    drags.enable_text_transfers();
+    drags.restrict_to(&BTreeSet::from(Capability::ALL));
+    assert!(drags.shared.text.is_some());
+    drags.restrict_to(&BTreeSet::new());
+    assert!(drags.shared.text.is_none());
+}

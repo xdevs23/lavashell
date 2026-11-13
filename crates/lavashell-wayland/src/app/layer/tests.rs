@@ -7,7 +7,6 @@ use lavashell_core::panel::{
     AxisPlacement, ContentSize, ExclusiveZone, Extent, LayerLayout, LayerMargins,
 };
 use lavashell_core::units::{Dp, DpExt, FiniteDp};
-use lavashell_runtime::layer_surface::LayerSurface;
 use zwlr_layer_surface_v1::Anchor;
 
 fn margins(top: Dp, left: Dp) -> Result<LayerMargins, TestError> {
@@ -137,36 +136,41 @@ fn a_layer_length_too_long_for_the_protocol_is_refused() -> Result<(), TestError
 }
 
 #[test]
-fn a_default_layer_takes_and_reserves_the_measured_height_of_its_content() -> Result<(), TestError>
-{
-    let anchored = |options: LayerSurface, height: Dp| {
-        let sent = measured(options.panel.current_layout(), 500.dp(), height)?;
+fn a_content_sized_layer_takes_and_reserves_the_measured_length() -> Result<(), TestError> {
+    let anchored = |horizontal: AxisPlacement, vertical: AxisPlacement, height: Dp| {
+        let layout = LayerLayout {
+            margins: LayerMargins::default(),
+            horizontal,
+            vertical,
+            exclusive_zone: ExclusiveZone::LayerExtent,
+        };
+        let sent = measured(layout, 500.dp(), height)?;
         Ok::<_, TestError>((sent.anchor, sent.width, sent.height, sent.zone))
     };
+    let content = AxisPlacement::Start(Extent::Content);
     let top = Anchor::Top | Anchor::Left | Anchor::Right;
     assert_eq!(
-        anchored(LayerSurface::new("measured"), 61.6.dp())?,
+        anchored(AxisPlacement::Fill, content, 61.6.dp())?,
         (top, 0, 62, 62)
     );
     assert_eq!(
-        anchored(LayerSurface::new("thin"), 0.3.dp())?,
+        anchored(AxisPlacement::Fill, content, 0.3.dp())?,
         (top, 0, 1, 1)
     );
-    let side = LayerSurface::new("side")
-        .placement(AxisPlacement::Start(Extent::Content), AxisPlacement::Fill);
     let left = Anchor::Left | Anchor::Top | Anchor::Bottom;
-    assert_eq!(anchored(side, 61.6.dp())?, (left, 500, 0, 500));
-    let corner = LayerSurface::new("corner").placement(
-        AxisPlacement::Start(Extent::Content),
-        AxisPlacement::Start(Extent::Content),
+    assert_eq!(
+        anchored(content, AxisPlacement::Fill, 61.6.dp())?,
+        (left, 500, 0, 500)
     );
     assert_eq!(
-        anchored(corner, 61.6.dp())?,
+        anchored(content, content, 61.6.dp())?,
         (Anchor::Top | Anchor::Left, 500, 62, 0)
     );
-    let centered = LayerSurface::new("centered")
-        .placement(AxisPlacement::Center(Extent::Content), AxisPlacement::Fill);
+    let centered = AxisPlacement::Center(Extent::Content);
     let column = Anchor::Top | Anchor::Bottom;
-    assert_eq!(anchored(centered, 61.6.dp())?, (column, 500, 0, 0));
+    assert_eq!(
+        anchored(centered, AxisPlacement::Fill, 61.6.dp())?,
+        (column, 500, 0, 0)
+    );
     Ok(())
 }

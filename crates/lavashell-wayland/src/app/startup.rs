@@ -3,7 +3,7 @@ use super::control::RoleControl;
 use super::{NativeRole, SurfaceProtocols};
 use crate::logical::whole_size;
 use crate::translator::Translator;
-use lavashell_platform::WindowRole;
+use lavashell_platform::{Capability, WindowRole};
 use sctk::reexports::client::QueueHandle;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_surface;
@@ -20,10 +20,20 @@ impl SurfaceProtocols {
         Self {
             xdg: XdgShell::bind(globals, qh).ok(),
             layers: globals.bind(qh, 1..=5, ()).ok(),
+            lock: globals.bind(qh, 1..=1, ()).ok(),
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional: globals.bind(qh, 1..=1, ()).ok(),
             background: globals.bind(qh, 1..=1, ()).ok(),
         }
+    }
+
+    /// Each capability that needs a surface protocol, with whether the protocol is bound.
+    pub(crate) fn capabilities(&self) -> [(bool, Capability); 3] {
+        [
+            (self.layers.is_some(), Capability::Panels),
+            (self.lock.is_some(), Capability::SessionLock),
+            (self.xdg.is_some(), Capability::WindowMove),
+        ]
     }
 }
 
@@ -44,7 +54,9 @@ impl Translator {
         native.set_title(&window.title);
         native.set_app_id(&window.app_id);
         let min_size = (window.min_size)
-            .map(|minimum| whole_size(minimum).ok_or(WindowError::MinimumWindowSize(minimum)))
+            .map(|minimum| {
+                whole_size(minimum).ok_or(WindowError::MinimumSizeBeyondProtocol(minimum))
+            })
             .transpose()?;
         native.set_min_size(min_size);
         if window.fullscreen {

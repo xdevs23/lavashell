@@ -75,9 +75,18 @@ fn platform() -> PlatformFacts {
     }
 }
 
-fn main() -> Result<(), lavashell::wayland::RunError> {
-    let window = Window::new("Counter", "org.example.Counter");
-    App::new(platform()).run(|app| app.window(window, counter))
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("the app is not set up to run")]
+    Setup(#[from] lavashell::SetupError),
+    #[error("the app failed")]
+    App(#[from] lavashell::RunError),
+}
+
+fn main() -> Result<(), Error> {
+    let mut app = App::new(platform());
+    app.window(Window::new("Counter", "org.example.Counter"), counter)?;
+    Ok(lavashell::run::<Platform>(app)?)
 }
 ```
 

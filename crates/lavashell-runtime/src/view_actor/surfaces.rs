@@ -78,7 +78,7 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let id = self.open_surface(spec, view, opening)?;
         self.panels.open(id, panel);
         if let Some(grab) = options.focus_grab {
-            self.focus_grabs.open(id, grab);
+            self.focus_grabs.open(id, grab)?;
         }
         Ok(id)
     }

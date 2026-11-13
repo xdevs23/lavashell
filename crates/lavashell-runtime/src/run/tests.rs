@@ -2,8 +2,8 @@
 use super::*;
 use crate::test_error::TestResult;
 use crate::test_host::{
-    StandInError, Wire, closed, end_on_marker, host, run_scripted, run_unreachable, runtime_setup,
-    surface_requests, window,
+    StandIn, StandInError, closed, empty_view, end_on_marker, host, run_scripted, run_unreachable,
+    runtime_setup, surface_requests, window,
 };
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, PresentationFlags};
 use lavashell_core::surface::SurfaceId;
@@ -37,16 +37,30 @@ fn a_host_that_cannot_be_reached_ends_the_run_with_the_error_of_the_platform() {
 }
 
 #[test]
-fn a_run_without_a_surface_ends_at_once() -> TestResult {
-    let run = run_scripted(host([]), runtime_setup(Vec::new()), Wire::finish);
-    assert!(run.requests()?.is_empty());
-    Ok(())
+fn a_panel_on_a_platform_without_panels_ends_the_run_before_the_platform_serves() {
+    let panel = SurfaceSetup::Panel(LayerSurface::new("bar"), empty_view());
+    let (entered, entries) = mpsc::channel();
+    let run = run_scripted(host([]), [], runtime_setup(vec![panel]), move |wire| {
+        let _test_gone = entered.send(());
+        wire.finish()
+    });
+    assert!(matches!(
+        &run.outcome,
+        Err(RunError::Unsupported(missing)) if *missing == BTreeSet::from([Capability::Panels])
+    ));
+    assert!(entries.recv().is_err());
+}
+
+#[test]
+fn an_app_without_a_surface_fails_before_the_platform_connects() {
+    let app = App::new(lavashell_test_fixtures::facts());
+    assert!(matches!(run::<StandIn>(app), Err(RunError::NoSurfaces)));
 }
 
 #[test]
 fn a_run_ends_once_its_last_surface_closed_and_the_platform_returned() -> TestResult {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
         wire.event(closed(WINDOW))?;
         wire.finish()
     });
@@ -69,7 +83,7 @@ fn a_destroyed_surface_is_released_once_the_platform_detached_it_from_the_render
     let mut setup = runtime_setup(vec![window("window")]);
     setup.panels_per_output = Some(PanelsPerOutput::new(|_| Vec::new()));
     end_on_marker(&mut setup);
-    let run = run_scripted(host([]), setup, |mut wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |mut wire| {
         wire.event(closed(WINDOW))?;
         wire.await_surface_request(&SurfaceRequest::Destroy(WINDOW))?;
         wire.detach(WINDOW)?;
@@ -95,7 +109,7 @@ fn a_destroyed_surface_is_released_once_the_platform_detached_it_from_the_render
 #[test]
 fn an_error_of_the_platform_after_the_run_ended_is_returned() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
         wire.event(closed(WINDOW))?;
         wire.finish()?;
         Err(StandInError::Failed)
@@ -109,7 +123,9 @@ fn an_error_of_the_platform_after_the_run_ended_is_returned() {
 #[test]
 fn an_error_of_the_platform_during_the_run_replaces_the_stop_of_the_views() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |_wire| Err(StandInError::Failed));
+    let run = run_scripted(host([]), Capability::ALL, setup, |_wire| {
+        Err(StandInError::Failed)
+    });
     assert!(matches!(
         run.outcome,
         Err(RunError::Platform(StandInError::Failed))
@@ -119,7 +135,7 @@ fn an_error_of_the_platform_during_the_run_replaces_the_stop_of_the_views() {
 #[test]
 fn a_platform_that_returns_during_the_run_stops_the_views() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |_wire| Ok(()));
+    let run = run_scripted(host([]), Capability::ALL, setup, |_wire| Ok(()));
     assert!(matches!(
         run.outcome,
         Err(RunError::View(ViewError::Stopped(Stopped::Platform)))
@@ -129,7 +145,7 @@ fn a_platform_that_returns_during_the_run_stops_the_views() {
 #[test]
 fn a_platform_that_panics_during_the_run_ends_it_with_a_panic_of_the_platform() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |_wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |_wire| {
         resume_unwind(Box::new("the platform crashed"))
     });
     assert!(matches!(run.outcome, Err(RunError::PlatformPanicked)));
@@ -138,7 +154,7 @@ fn a_platform_that_panics_during_the_run_ends_it_with_a_panic_of_the_platform() 
 #[test]
 fn a_platform_that_panics_after_the_run_ended_is_reported() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
         wire.event(closed(WINDOW))?;
         wire.finish()?;
         resume_unwind(Box::new("the platform crashed"))
@@ -149,7 +165,7 @@ fn a_platform_that_panics_after_the_run_ended_is_reported() {
 #[test]
 fn a_renderer_that_fails_ends_the_run_with_its_failure() {
     let setup = runtime_setup(vec![window("window")]);
-    let run = run_scripted(host([]), setup, |wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
         wire.event(configured())?;
         wire.finish()
     });
@@ -170,7 +186,7 @@ fn frame_reports_reach_the_frame_observer_on_the_thread_of_the_views() -> TestRe
     setup.observers.frame_report = Some(Box::new(move |report: FrameReport| {
         let _observer_gone = seen.send((thread::current().id(), report.surface, report.stage));
     }));
-    let run = run_scripted(host([]), setup, |wire| {
+    let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
         let frame = FrameTime::default();
         wire.timing(TimingEvent::Discarded {
             surface: WINDOW,

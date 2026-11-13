@@ -5,6 +5,8 @@ use lavashell::core::animation::{AnimationError, KeyframesError};
 pub enum Error {
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Setup(#[from] lavashell::SetupError),
     #[error("the keys of the phase loop are invalid")]
     PhaseLoop(#[source] KeyframesError),
     #[error("the motion of the phase loop cannot be made")]

@@ -26,3 +26,23 @@ fn the_bounding_rect_contains_every_point() {
     );
     assert_eq!(Rect::bounding([]), None);
 }
+
+#[test]
+fn a_size_converts_only_when_both_lengths_are_in_range() {
+    let size = |width: f64, height: f64| Size::new(Dp::new(width), Dp::new(height));
+    assert!(size(0.3, 2.0).to_positive().is_ok());
+    assert_eq!(size(0.0, 2.0).to_positive(), Err(NumberError::OutOfRange));
+    assert_eq!(
+        size(2.0, f64::NAN).to_positive(),
+        Err(NumberError::NotFinite)
+    );
+    assert!(size(0.0, 0.0).to_non_negative().is_ok());
+    assert_eq!(
+        size(2.0, -1.0).to_non_negative(),
+        Err(NumberError::Negative)
+    );
+    assert_eq!(
+        size(f64::INFINITY, 2.0).to_non_negative(),
+        Err(NumberError::NotFinite)
+    );
+}

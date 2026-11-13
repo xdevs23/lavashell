@@ -49,9 +49,11 @@ pub enum Error {
     MissingControl(String),
     #[error("the view shows no {role} named {name}")]
     MissingNode { role: Role, name: String },
+    #[error("the app is not set up to run")]
+    Setup(#[from] lavashell::SetupError),
     #[cfg(target_os = "linux")]
     #[error("the app failed")]
-    App(#[source] lavashell::wayland::RunError),
+    App(#[source] lavashell::RunError),
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]

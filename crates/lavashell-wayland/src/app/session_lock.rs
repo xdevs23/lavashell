@@ -56,8 +56,8 @@ impl Translator {
     pub(crate) fn execute_lock(&mut self, request: LockRequest) -> Result<(), SessionLockError> {
         match request {
             LockRequest::Lock => {
-                let manager = (self.registry.bind_one(&self.qh, 1..=1, ()))
-                    .map_err(SessionLockError::BindSessionLock)?;
+                let manager =
+                    (self.protocols.lock.take()).ok_or(SessionLockError::NoSessionLock)?;
                 self.session_lock = Some(request_lock(&manager, &self.qh));
             }
             LockRequest::Unlock => {

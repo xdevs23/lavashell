@@ -18,8 +18,8 @@ use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_core::units::DpExt;
 use lavashell_core::view::View;
 use lavashell_platform::{
-    Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks, PlatformRequest,
-    SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
+    Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
+    PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
 };
 use lavashell_renderer::vulkan::PresentationBackend;
 use lavashell_renderer::{
@@ -27,7 +27,7 @@ use lavashell_renderer::{
 };
 use lavashell_vulkan::{Features, PhysicalDevice, Presentation};
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::convert::Infallible;
 use std::ffi::CStr;
 use std::rc::Rc;
@@ -190,6 +190,7 @@ enum Scenario {
     Unreachable,
     Scripted {
         host: HostFacts,
+        offered: BTreeSet<Capability>,
         script: Script,
         log: RequestLog,
     },
@@ -202,6 +203,7 @@ thread_local! {
 /// A platform that runs the script of a test on the platform thread instead of connecting to a host. The test sets
 /// the script with [`run_scripted`] on the thread that calls `drive`.
 pub(crate) struct StandIn {
+    offered: BTreeSet<Capability>,
     script: Script,
     log: RequestLog,
 }
@@ -213,14 +215,27 @@ impl Platform for StandIn {
 
     fn connect() -> Result<Connection<Self>, StandInError> {
         match SCENARIO.with_borrow_mut(Option::take) {
-            Some(Scenario::Scripted { host, script, log }) => Ok(Connection {
-                platform: Self { script, log },
+            Some(Scenario::Scripted {
+                host,
+                offered,
+                script,
+                log,
+            }) => Ok(Connection {
+                platform: Self {
+                    offered,
+                    script,
+                    log,
+                },
                 presentation: Offscreen,
                 host,
             }),
             Some(Scenario::Unreachable) => Err(StandInError::Unreachable),
             None => Err(StandInError::Unscripted),
         }
+    }
+
+    fn capabilities(&self) -> BTreeSet<Capability> {
+        self.offered.clone()
     }
 
     fn serve(self, links: PlatformLinks<NoControl>) -> Result<(), StandInError> {
@@ -330,15 +345,17 @@ impl Run {
     }
 }
 
-/// Runs `setup` on a platform that connects to `host` and runs `script` on the platform thread.
+/// Runs `setup` on a platform that connects to `host`, offers `offered` and runs `script` on the platform thread.
 pub(crate) fn run_scripted(
     host: HostFacts,
+    offered: impl IntoIterator<Item = Capability>,
     setup: RuntimeSetup,
     script: impl FnOnce(Wire) -> Result<(), StandInError> + Send + 'static,
 ) -> Run {
     let (log, requests) = mpsc::channel();
     SCENARIO.set(Some(Scenario::Scripted {
         host,
+        offered: offered.into_iter().collect(),
         script: Box::new(script),
         log,
     }));

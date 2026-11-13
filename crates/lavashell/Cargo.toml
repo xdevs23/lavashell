@@ -19,7 +19,6 @@ lavashell-runtime.workspace = true
 lavashell-materials.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-lavashell-runtime.workspace = true
 lavashell-wayland.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]

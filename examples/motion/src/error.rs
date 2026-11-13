@@ -6,6 +6,8 @@ use lavashell::prelude::NumberError;
 pub enum Error {
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Setup(#[from] lavashell::SetupError),
     #[error("cannot sample a contour of the morph")]
     Contour(#[source] ContourError),
     #[error("cannot count the samples of the morph")]

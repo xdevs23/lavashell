@@ -29,11 +29,17 @@ struct Views {
 }
 
 impl Views {
-    fn start(setup: RuntimeSetup, host: HostFacts) -> Result<Self, TestError> {
+    fn start(
+        setup: RuntimeSetup,
+        offered: impl IntoIterator<Item = Capability>,
+        host: HostFacts,
+    ) -> Result<Self, TestError> {
         let (inbox, items) = mailbox();
         let inputs = DeadlineReceiver::new(items).map_err(ViewError::from)?;
         let (sender, requests) = mailbox();
-        let actor = ViewActor::<NoControl>::start(setup, Offscreen, host, sender, &inbox)?;
+        let offered = offered.into_iter().collect();
+        let actor =
+            ViewActor::<NoControl>::start(setup, &offered, Offscreen, host, sender, &inbox)?;
         Ok(Self {
             actor,
             inbox,
@@ -73,8 +79,11 @@ impl Views {
     }
 }
 
-fn views_of(surfaces: Vec<SurfaceSetup>) -> Result<Views, TestError> {
-    Views::start(runtime_setup(surfaces), host([]))
+fn views_of(
+    surfaces: Vec<SurfaceSetup>,
+    offered: impl IntoIterator<Item = Capability>,
+) -> Result<Views, TestError> {
+    Views::start(runtime_setup(surfaces), offered, host([]))
 }
 
 fn wake_at(wake: Duration) -> ViewInput {
@@ -94,7 +103,7 @@ fn a_window_is_requested_as_its_description_says() -> TestResult {
     let budget = Duration::from_millis(4);
     let mut setup = runtime_setup(vec![SurfaceSetup::Window(described, empty_view())]);
     setup.ui_budget = Some(budget);
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let expected = SurfaceRequest::Create {
         surface: WINDOW,
         spec: Box::new(SurfaceSpec {
@@ -121,7 +130,7 @@ fn a_window_is_requested_as_its_description_says() -> TestResult {
 
 #[test]
 fn the_surfaces_of_the_setup_are_requested_in_order_under_consecutive_ids() -> TestResult {
-    let mut views = views_of(vec![window("first"), window("second")])?;
+    let mut views = views_of(vec![window("first"), window("second")], Capability::ALL)?;
     let requests = views.step([])?;
     assert!(matches!(
         created(&requests).as_slice(),
@@ -135,7 +144,7 @@ fn the_surfaces_of_the_setup_are_requested_in_order_under_consecutive_ids() -> T
 
 #[test]
 fn a_surface_closed_by_the_host_is_destroyed_once_and_ends_the_run() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     assert!(!views.actor.finished());
     let requests = views.step([closed(WINDOW), closed(WINDOW)])?;
     assert!(matches!(
@@ -154,7 +163,7 @@ fn a_surface_closed_by_the_host_is_destroyed_once_and_ends_the_run() -> TestResu
 
 #[test]
 fn a_close_of_a_surface_that_is_unknown_changes_nothing() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     let requests = views.step([closed(SurfaceId(7))])?;
     assert!(matches!(
         surface_requests(&requests).as_slice(),
@@ -169,7 +178,7 @@ fn a_close_of_a_surface_that_is_unknown_changes_nothing() -> TestResult {
 
 #[test]
 fn the_stop_of_an_actor_ends_the_views_with_the_error_of_that_actor() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     let mut stop = |stopped| views.actor.handle(ViewInput::Stopped(stopped));
     let parts = [
         Stopped::Scene,
@@ -185,7 +194,7 @@ fn the_stop_of_an_actor_ends_the_views_with_the_error_of_that_actor() -> TestRes
 
 #[test]
 fn a_run_ends_with_the_error_of_an_actor_that_stopped() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     views.inbox.push(ViewInput::Stopped(Stopped::Scheduler))?;
     let ended = views.actor.run(&views.inputs);
     assert!(matches!(ended, Err(ViewError::Stopped(Stopped::Scheduler))));
@@ -230,7 +239,7 @@ fn a_newer_wake_time_replaces_an_earlier_one_and_other_inputs_keep_their_order()
 
 #[test]
 fn a_wake_time_that_is_due_ends_the_wait_only_once() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     assert_eq!(views.actor.deadline(), None);
     views.actor.handle(wake_at(Duration::ZERO))?;
     let due = views.actor.deadline();
@@ -241,7 +250,7 @@ fn a_wake_time_that_is_due_ends_the_wait_only_once() -> TestResult {
 
 #[test]
 fn the_wait_ends_at_the_earliest_scene_deadline_or_wake_time_that_is_still_ahead() -> TestResult {
-    let mut views = views_of(vec![window("window")])?;
+    let mut views = views_of(vec![window("window")], Capability::ALL)?;
     let passed = Instant::now();
     let ahead = passed + Duration::from_secs(500);
     views.actor.handle(scene_wake_at(passed))?;
@@ -256,7 +265,7 @@ fn the_wait_ends_at_the_earliest_scene_deadline_or_wake_time_that_is_still_ahead
 fn the_exit_time_of_the_run_ends_the_wait_unless_a_wake_time_is_due_sooner() -> TestResult {
     let mut setup = runtime_setup(vec![window("window")]);
     setup.run_end.exit_after(Duration::from_secs(5000));
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let exit = views.actor.deadline();
     assert!(exit.is_some_and(|at| at > Instant::now()));
     let sooner = Duration::from_secs(10);
@@ -278,7 +287,7 @@ fn a_watch_of_the_app_is_requested_from_the_platform_and_a_ready_report_runs_it(
     let descriptor = eventfd(0, EventfdFlags::CLOEXEC)?;
     let watches = &setup.watches;
     let watch = watches.watch(descriptor, Readiness::Readable, on_ready)?;
-    let mut views = Views::start(setup, host([]))?;
+    let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let ready = PlatformEvent::Watch(WatchEvent::Ready(watch));
     let requests = views.run([ready, closed(WINDOW)])?;
     assert!(ran.get());

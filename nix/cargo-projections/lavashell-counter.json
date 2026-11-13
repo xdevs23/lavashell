@@ -750,6 +750,12 @@
                     "package": "accesskit",
                     "version": "=0.25.1"
                   },
+                  "env_logger": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "env_logger",
+                    "version": "=0.11.11"
+                  },
                   "icu_locale_core": {
                     "default-features": false,
                     "features": [
@@ -757,6 +763,12 @@
                     ],
                     "package": "icu_locale_core",
                     "version": "=2.3.0"
+                  },
+                  "inventory": {
+                    "default-features": false,
+                    "features": [],
+                    "package": "inventory",
+                    "version": "=0.3.25"
                   },
                   "lavashell-actor": {
                     "default-features": false,
@@ -988,12 +1000,6 @@
                     "package": "calloop",
                     "version": "=0.14.4"
                   },
-                  "env_logger": {
-                    "default-features": false,
-                    "features": [],
-                    "package": "env_logger",
-                    "version": "=0.11.11"
-                  },
                   "futures-lite": {
                     "default-features": false,
                     "features": [
@@ -1050,12 +1056,6 @@
                     ],
                     "package": "lavashell-renderer",
                     "path": "../lavashell-renderer"
-                  },
-                  "lavashell-runtime": {
-                    "default-features": false,
-                    "features": [],
-                    "package": "lavashell-runtime",
-                    "path": "../lavashell-runtime"
                   },
                   "lavashell-vulkan": {
                     "default-features": false,
@@ -2689,7 +2689,9 @@
               {
                 "dependencies": [
                   "accesskit",
+                  "env_logger",
                   "icu_locale_core",
+                  "inventory",
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-platform",
@@ -2719,7 +2721,6 @@
                   "accesskit_unix",
                   "ash",
                   "calloop",
-                  "env_logger",
                   "futures-lite",
                   "icu_locale_core",
                   "lavashell-actor",
@@ -2728,7 +2729,6 @@
                   "lavashell-effect-quality",
                   "lavashell-platform",
                   "lavashell-renderer",
-                  "lavashell-runtime",
                   "lavashell-vulkan",
                   "log",
                   "num-traits",
@@ -4009,7 +4009,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "f82a6fcda9c5c3c3cb3fc644a750b665b9f2458561dff4de59d1d3d690fbad3c"
+        "seedHash": "90efdb21165bf41c50e8846e1e56bc964c719781797656423bb9eec30eebfd0e"
       }
     }
   },
@@ -5187,7 +5187,9 @@
           "accesskit",
           "accesskit_consumer",
           "ash",
+          "env_logger",
           "icu_locale_core",
+          "inventory",
           "lavashell-actor",
           "lavashell-core",
           "lavashell-platform",
@@ -5228,7 +5230,6 @@
           "accesskit_unix",
           "ash",
           "calloop",
-          "env_logger",
           "futures-lite",
           "icu_locale_core",
           "lavashell-actor",
@@ -5237,7 +5238,6 @@
           "lavashell-effect-quality",
           "lavashell-platform",
           "lavashell-renderer",
-          "lavashell-runtime",
           "lavashell-vulkan",
           "log",
           "num-traits",

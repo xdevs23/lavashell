@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::registry::Subsystem;
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::Ui;
 use lavashell_core::view::View;
-use lavashell_platform::{LockEvent, OutputId};
+use lavashell_platform::{Capability, LockEvent, OutputId};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -11,6 +12,11 @@ use std::rc::Rc;
 mod error;
 
 pub use error::Error;
+
+inventory::submit! { Subsystem {
+    capability: Capability::SessionLock,
+    used: |setup| setup.session_lock.is_some(),
+} }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Lifetime {

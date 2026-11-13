@@ -58,14 +58,13 @@ fn run() -> Result<(), Error> {
         app = app.view_observer(move |surface, _, view| autoplay.observe(surface, view));
     }
 
-    Ok(lavashell_example_support::run(app, move |app| {
-        app.window(
-            Window::new(copy(CopyKey::Title), "lavashell.taskbar")
-                .size(size.width, size.height)
-                .fullscreen(arguments.fullscreen),
-            move |ui| compose(ui, &taskbar),
-        )
-    })?)
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.taskbar")
+            .size(size.width, size.height)
+            .fullscreen(arguments.fullscreen),
+        move |ui| compose(ui, &taskbar),
+    )?;
+    Ok(lavashell_example_support::run(app)?)
 }
 
 /// Plays the cues of the script in the window. Each cue plays once a frame shows the scene at rest after the

@@ -120,10 +120,11 @@ drawing.image(&wallpaper, screen, ImageFit::Cover(
 ## Output
 
 ```rust
-App::new(platform)
-    .output_observer(|surface, actual| eprintln!("{surface}: {actual:?}"))
-    .run(|app| app.window(Window::new("Panel", "org.example.Panel")
-        .output(OutputRequest::new(OutputProfile::Hdr10, Precision::Ten)), panel))?;
+let mut app = App::new(platform)
+    .output_observer(|surface, actual| eprintln!("{surface}: {actual:?}"));
+app.window(Window::new("Panel", "org.example.Panel")
+    .output(OutputRequest::new(OutputProfile::Hdr10, Precision::Ten)), panel)?;
+lavashell::run::<Platform>(app)?;
 ```
 
 | Profile | Primaries / encoding | Precision |

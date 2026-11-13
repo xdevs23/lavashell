@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use lavashell::{core::frame::PresentationFlag, prelude::*, wayland};
+use lavashell::{core::frame::PresentationFlag, prelude::*};
 use serde::Serialize;
 use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 
@@ -8,30 +8,19 @@ use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 ///
 /// # Errors
 /// Returns an error when the app fails or the frame log cannot be written.
-pub fn run(
-    app: App,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
-) -> Result<(), Error> {
-    logged(app, None, startup)
+pub fn run(app: App) -> Result<(), Error> {
+    logged(app, None)
 }
 
 /// Like [`run`], and passes every frame report to `observer` as well.
 ///
 /// # Errors
 /// Returns an error when the app fails or the frame log cannot be written.
-pub fn run_observed(
-    app: App,
-    observer: impl FnMut(FrameReport) + 'static,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
-) -> Result<(), Error> {
-    logged(app, Some(Box::new(observer)), startup)
+pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Result<(), Error> {
+    logged(app, Some(Box::new(observer)))
 }
 
-fn logged(
-    app: App,
-    mut observer: Option<Box<dyn FnMut(FrameReport)>>,
-    startup: impl FnOnce(&mut App) -> Result<(), wayland::SetupError>,
-) -> Result<(), Error> {
+fn logged(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result<(), Error> {
     let path = std::env::var_os("LAVASHELL_FRAME_LOG");
     let reports = Rc::new(RefCell::new(Vec::new()));
     let log = path.is_some().then(|| reports.clone());
@@ -53,7 +42,7 @@ fn logged(
         app
     };
 
-    app.run(startup).map_err(Error::App)?;
+    lavashell::run::<Platform>(app).map_err(Error::App)?;
 
     match path {
         Some(path) => write_frame_reports(&path, &reports.borrow()),

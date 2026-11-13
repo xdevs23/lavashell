@@ -65,7 +65,7 @@ fn lock_outputs(requests: &[PlatformRequest]) -> Vec<(SurfaceId, OutputId)> {
 
 #[test]
 fn an_output_gets_its_panels_once_the_host_reported_its_geometry() -> TestResult {
-    let mut views = Views::start(bars_on_every_output(), host([]))?;
+    let mut views = Views::start(bars_on_every_output(), Capability::ALL, host([]))?;
     let added = views.step([output(OutputEvent::Added(FIRST))])?;
     assert!(panel_outputs(&added).is_empty());
     let updated = views.step([output(OutputEvent::Updated(FIRST, monitor(1920)))])?;
@@ -77,7 +77,7 @@ fn an_output_gets_its_panels_once_the_host_reported_its_geometry() -> TestResult
 
 #[test]
 fn the_panels_of_an_output_close_when_the_host_removes_the_output() -> TestResult {
-    let mut views = Views::start(bars_on_every_output(), host([]))?;
+    let mut views = Views::start(bars_on_every_output(), Capability::ALL, host([]))?;
     let opened = views.step([output(OutputEvent::Updated(FIRST, monitor(1920)))])?;
     assert_eq!(panel_outputs(&opened), [(SurfaceId(0), Some(FIRST))]);
     let removed = views.step([output(OutputEvent::Removed(FIRST))])?;
@@ -90,16 +90,20 @@ fn the_panels_of_an_output_close_when_the_host_removes_the_output() -> TestResul
 
 #[test]
 fn panels_per_output_keep_a_run_without_surfaces_going() -> TestResult {
-    let mut without = Views::start(runtime_setup(Vec::new()), host([]))?;
+    let mut without = Views::start(runtime_setup(Vec::new()), Capability::ALL, host([]))?;
     assert!(without.actor.finished());
-    let mut with = Views::start(bars_on_every_output(), host([]))?;
+    let mut with = Views::start(bars_on_every_output(), Capability::ALL, host([]))?;
     assert!(!with.actor.finished());
     Ok(())
 }
 
 #[test]
 fn a_session_lock_is_requested_before_its_surfaces_one_per_output() -> TestResult {
-    let mut views = Views::start(locking(&SessionLock::new()), host([FIRST, SECOND]))?;
+    let mut views = Views::start(
+        locking(&SessionLock::new()),
+        Capability::ALL,
+        host([FIRST, SECOND]),
+    )?;
     let requests = views.step([])?;
     assert!(matches!(
         requests.first(),
@@ -115,7 +119,7 @@ fn a_session_lock_is_requested_before_its_surfaces_one_per_output() -> TestResul
 
 #[test]
 fn an_output_that_appears_while_the_session_is_locked_gets_a_lock_surface() -> TestResult {
-    let mut views = Views::start(locking(&SessionLock::new()), host([FIRST]))?;
+    let mut views = Views::start(locking(&SessionLock::new()), Capability::ALL, host([FIRST]))?;
     let started = views.step([])?;
     assert_eq!(lock_outputs(&started), [(SurfaceId(0), FIRST)]);
     let known = views.step([output(OutputEvent::Added(FIRST))])?;
@@ -127,7 +131,11 @@ fn an_output_that_appears_while_the_session_is_locked_gets_a_lock_surface() -> T
 
 #[test]
 fn the_lock_surface_of_an_output_closes_when_the_host_removes_the_output() -> TestResult {
-    let mut views = Views::start(locking(&SessionLock::new()), host([FIRST, SECOND]))?;
+    let mut views = Views::start(
+        locking(&SessionLock::new()),
+        Capability::ALL,
+        host([FIRST, SECOND]),
+    )?;
     let started = views.step([])?;
     assert_eq!(lock_outputs(&started).len(), 2);
     let removed = views.step([output(OutputEvent::Removed(SECOND))])?;
@@ -141,7 +149,7 @@ fn the_lock_surface_of_an_output_closes_when_the_host_removes_the_output() -> Te
 #[test]
 fn an_unlock_destroys_the_lock_surfaces_and_its_confirmation_ends_the_run() -> TestResult {
     let handle = SessionLock::new();
-    let mut views = Views::start(locking(&handle), host([FIRST, SECOND]))?;
+    let mut views = Views::start(locking(&handle), Capability::ALL, host([FIRST, SECOND]))?;
     let locked = views.step([lock(LockEvent::Locked)])?;
     assert_eq!(lock_outputs(&locked).len(), 2);
     handle.unlock();
@@ -166,7 +174,7 @@ fn an_unlock_destroys_the_lock_surfaces_and_its_confirmation_ends_the_run() -> T
 
 #[test]
 fn a_host_that_ends_the_lock_ends_the_views_with_an_error() -> TestResult {
-    let mut views = Views::start(locking(&SessionLock::new()), host([FIRST]))?;
+    let mut views = Views::start(locking(&SessionLock::new()), Capability::ALL, host([FIRST]))?;
     let ended = views.step([lock(LockEvent::Finished)]);
     assert!(matches!(
         ended,
@@ -179,7 +187,7 @@ fn a_host_that_ends_the_lock_ends_the_views_with_an_error() -> TestResult {
 
 #[test]
 fn a_session_lock_cannot_start_on_a_host_without_outputs() {
-    let started = Views::start(locking(&SessionLock::new()), host([]));
+    let started = Views::start(locking(&SessionLock::new()), Capability::ALL, host([]));
     assert!(matches!(
         started,
         Err(TestError::Start(StartError::View(ViewError::SessionLock(

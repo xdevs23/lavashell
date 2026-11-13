@@ -3,16 +3,18 @@ mod error;
 mod text;
 
 use crate::pipe_transfers::{PipeTransfers, ReadCompletion, Transfer};
+use crate::registry::Subsystem;
 use crate::surface_records::SurfaceRecords;
+use crate::view_actions::ViewActions;
 use crate::watches::Watches;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{Cancellation, ReceivedData, TransferData};
 use lavashell_platform::{
-    ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
+    Capability, ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
     SelectionRefusal,
 };
 use std::cell::RefCell;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
@@ -20,6 +22,11 @@ use std::rc::Rc;
 pub use error::Error;
 
 pub(crate) use text::TextClipboard;
+
+inventory::submit! { Subsystem {
+    capability: Capability::Clipboard,
+    used: |setup| setup.clipboard.used(),
+} }
 
 type SetCompletion = Box<dyn FnOnce(Result<(), Error>)>;
 
@@ -57,6 +64,8 @@ struct PendingRead {
 struct State {
     queued: VecDeque<Request>,
     closed: bool,
+    /// Whether the app took a handle through `ClipboardTransfers::clipboard`.
+    taken: bool,
     /// The formats of the selection offered by the host.
     offered: Vec<FormatId>,
     selections: BTreeMap<SelectionId, Selection>,
@@ -143,6 +152,7 @@ impl ClipboardTransfers {
         Self(Rc::new(RefCell::new(State {
             queued: VecDeque::new(),
             closed: false,
+            taken: false,
             offered: Vec::new(),
             selections: BTreeMap::new(),
             next_selection_id: 0,
@@ -153,10 +163,28 @@ impl ClipboardTransfers {
         })))
     }
 
-    /// A handle that puts data on the clipboard and reads data from it.
+    /// A handle that puts data on the clipboard and reads data from it. A run with such a handle needs a platform
+    /// that offers the clipboard.
     #[must_use]
     pub fn clipboard(&self) -> Clipboard {
+        self.0.borrow_mut().taken = true;
         Clipboard(self.0.clone())
+    }
+
+    /// Whether the app took a handle through [`Self::clipboard`].
+    pub(crate) fn used(&self) -> bool {
+        self.0.borrow().taken
+    }
+
+    /// The built-in text copy, cut and paste, which queue their actions in `actions`, or `None` when `offered` lacks
+    /// the clipboard. It is not a use of the clipboard by the app.
+    pub(crate) fn text_clipboard(
+        &self,
+        actions: ViewActions,
+        offered: &BTreeSet<Capability>,
+    ) -> Option<TextClipboard> {
+        (offered.contains(&Capability::Clipboard))
+            .then(|| TextClipboard::new(Clipboard(self.0.clone()), actions))
     }
 
     /// Starts the requests made through `Clipboard`, in the order in which they were made. A read for a surface that

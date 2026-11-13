@@ -5,6 +5,8 @@ use lavashell::prelude::AnimationError;
 pub enum Error {
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Setup(#[from] lavashell::SetupError),
     #[error("the scene has no search field")]
     MissingField,
     #[error("the keyboard of the scene cannot be made")]

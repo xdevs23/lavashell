@@ -185,10 +185,8 @@ impl TryFrom<Size> for ContentSize {
     type Error = NumberError;
 
     fn try_from(size: Size) -> Result<Self, NumberError> {
-        Ok(Self {
-            width: NonNegativeDp::try_new(size.width)?,
-            height: NonNegativeDp::try_new(size.height)?,
-        })
+        let (width, height) = size.to_non_negative()?;
+        Ok(Self { width, height })
     }
 }
 

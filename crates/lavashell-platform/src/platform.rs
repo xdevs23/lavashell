@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{OutputId, PlatformEvent, PlatformRequest, TimingEvent};
+use crate::{Capability, OutputId, PlatformEvent, PlatformRequest, TimingEvent};
 use lavashell_actor::{Outlet, Receiver};
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{Attach, PresentationBackend, SurfaceControl};
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 /// A host system on which the runtime shows its surfaces. The platform runs on its own thread, where it translates
@@ -18,6 +19,9 @@ pub trait Platform: Sized + Send + 'static {
     ///
     /// Fails when the host cannot be reached.
     fn connect() -> Result<Connection<Self>, Self::Error>;
+
+    /// The optional subsystems offered by the platform. The runtime reads them once, after the connection opens.
+    fn capabilities(&self) -> BTreeSet<Capability>;
 
     /// Reports what the host does through `links` and executes each request from `links`, until every sender of the
     /// requests is gone. The native surfaces of the platform are destroyed when it returns.

@@ -37,13 +37,13 @@ use frames::ViewSurface;
 use lavashell_actor::{Closed, Effect, Merge, Outlet, Sender};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
-    HostFacts, LockRequest, PlatformEvent, PlatformRequest, SurfaceAttachment, SurfaceRequest,
-    TimingEvent,
+    Capability, HostFacts, LockRequest, PlatformEvent, PlatformRequest, SurfaceAttachment,
+    SurfaceRequest, TimingEvent,
 };
 use lavashell_renderer::text::Shaper;
 use lavashell_renderer::{PresentationBackend, SurfaceControl};
 use pacing::FramePacing;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 use transfers::Transfers;
 
@@ -152,6 +152,8 @@ pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
     input: InputRouter,
     outputs: OutputRecords,
     focus_grabs: FocusGrabs,
+    /// Whether the platform offers accessibility. Without it, the views send no accessibility request.
+    accessibility: bool,
     panels_per_output: Option<PanelsPerOutput<LayerSurface>>,
     session_lock: Option<ActiveLock>,
     transfers: Transfers,
@@ -167,13 +169,15 @@ pub(crate) struct ViewActor<C: SurfaceControl + Send + 'static> {
 
 impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Starts the scene pipeline, the renderer for the surfaces of `presentation` and the frame scheduler, which
-    /// report to `inbox`, and asks the platform through `requests` for the surfaces of `setup`.
+    /// report to `inbox`, and asks the platform through `requests` for the surfaces of `setup`. The built-in parts
+    /// that need a capability missing from `offered` stay off.
     ///
     /// # Errors
     ///
     /// Fails when an actor cannot start, or when a surface of `setup` cannot be opened.
     pub(crate) fn start(
         setup: RuntimeSetup,
+        offered: &BTreeSet<Capability>,
         presentation: impl PresentationBackend + Send + 'static,
         host: HostFacts,
         requests: Sender<PlatformRequest>,
@@ -225,10 +229,11 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
             host,
             input: InputRouter::new(input_filter),
             outputs: OutputRecords::default(),
-            focus_grabs: FocusGrabs::default(),
+            focus_grabs: FocusGrabs::new(offered),
+            accessibility: offered.contains(&Capability::Accessibility),
             panels_per_output,
             session_lock: None,
-            transfers: Transfers::new(clipboard, drags, watches, &action_queue),
+            transfers: Transfers::new(clipboard, drags, watches, &action_queue, offered),
             action_queue,
             observers,
             run_end,
