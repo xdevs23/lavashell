@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::destination::Destination;
+use crate::paint::{clip_device, skmatrix, skrect};
 use crate::plan::{Area, Cached, Leaf, Placement};
 use crate::repeated_leaves::RepeatedLeafFilter;
 use crate::resources::{HeldImages, ImageCache};
-use crate::scalar::scalars;
 use crate::vulkan::SceneImage;
 use crate::{Error, Painter, StreamFrames};
 use lavashell_core::frame::RenderStats;
@@ -26,11 +26,12 @@ pub enum PacketCaching {
 #[derive(Clone, Copy)]
 pub struct SurfaceFrame<'a> {
     pub tree: Presented<'a>,
-    pub density: Density,
+    /// Maps dp to output pixels. The whole tree is drawn through it.
+    pub dp_to_output: Affine,
     pub damage: Option<Rect>,
     pub clear: skia_safe::Color,
     pub scene: Option<&'a SceneImage>,
-    /// An outline in physical pixels that clips the drawing, applied after the damaged pixels are cleared.
+    /// An outline in dp that clips the drawing, applied after the damaged pixels are cleared.
     pub shape: Option<&'a skia_safe::Path>,
     /// The frames bound to the streams drawn by `tree`.
     pub streams: &'a StreamFrames,
@@ -249,11 +250,11 @@ impl Painter {
     ///
     /// # Errors
     /// Returns an error before painting when the scene image was imported by another renderer than the one
-    /// that owns `canvas`.
+    /// that owns `canvas`, or when `dp_to_output` lies beyond the range of Skia scalars.
     pub fn paint_surface(&mut self, canvas: &Canvas, frame: SurfaceFrame<'_>) -> Result<(), Error> {
         let SurfaceFrame {
             tree,
-            density,
+            dp_to_output,
             damage,
             clear,
             scene,
@@ -263,13 +264,8 @@ impl Painter {
         let scene = scene.map(|scene| scene.layer_of(canvas)).transpose()?;
         let surface = self.effect_planner.current_surface();
         let target = IRect::from_size(canvas.base_layer_size());
-        let pixels = |length: Dp| density.to_px(length).get();
-        let damage = damage.map(|damage| {
-            let lengths = [damage.x, damage.y, damage.width, damage.height].map(pixels);
-            scalars(lengths).map_or(target, |[x, y, width, height]| {
-                skia_safe::Rect::from_xywh(x, y, width, height).round_out()
-            })
-        });
+        let dp_to_output = skmatrix(&dp_to_output).map_err(Error::OutputTransform)?;
+        let damage = damage.and_then(|damage| damaged_pixels(damage, &dp_to_output, target));
         // After a change of the paint configuration, the packets can be unchanged and report no damage while their
         // pixels change. Each persistent target is therefore repainted in full once.
         let damage = if self.paint_configuration.needs_reconstruction(surface) {
@@ -280,13 +276,15 @@ impl Painter {
         let Some(damage) = damage else {
             return Ok(());
         };
-        let plan = self.plan(canvas, tree, density, shape);
+        let saved = canvas.save();
+        let _chained_canvas = canvas.concat(&dp_to_output);
+        let plan = self.plan(canvas, tree, shape);
         // A reader effect can sample outside the footprint of the packet. A layer around the whole tree has the size
         // of the repainted area. In both cases the whole target is repainted.
         let whole = plan.unknown_sampling || self.compositing_destination() == Destination::Layer;
         let repainted = plan.repaint(if whole { target } else { damage });
-        let saved = canvas.save();
-        let _chained_canvas = canvas.clip_irect(repainted, None).clear(clear);
+        clip_device(canvas, repainted);
+        let _chained_canvas = canvas.clear(clear);
         if let Some(shape) = shape {
             let _chained_canvas = canvas.clip_path(shape, None, true);
         }
@@ -295,7 +293,7 @@ impl Painter {
         }
         self.packet_cache.stats.damaged_pixels +=
             (repainted.width_64() * repainted.height_64()).cast_unsigned();
-        self.paint_tree(canvas, &plan, Area::Pixels(repainted), density, streams);
+        self.paint_tree(canvas, &plan, Area::Pixels(repainted), streams);
         self.paint_configuration.painted(surface);
         let _chained_canvas = canvas.restore_to_count(saved);
         Ok(())
@@ -330,6 +328,16 @@ impl Painter {
             None => self.packet_cache.stats.uncached_leaves += 1,
         }
     }
+}
+
+/// The pixels of `target` that `damage`, in dp, covers through `dp_to_output`. A damage beyond the range of Skia
+/// scalars covers the whole target.
+fn damaged_pixels(damage: Rect, dp_to_output: &Matrix, target: IRect) -> Option<IRect> {
+    let pixels = match skrect(damage) {
+        Ok(damage) => dp_to_output.map_rect(damage).0.round_out(),
+        Err(_) => target,
+    };
+    IRect::intersect(&pixels, &target)
 }
 
 fn composite(canvas: &Canvas, image: &Image, pixels: IRect) {

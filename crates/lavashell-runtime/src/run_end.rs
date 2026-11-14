@@ -2,12 +2,12 @@
 use std::time::Duration;
 
 /// When a run ends: once `end` was called, once nothing is open, once the time set by `exit_after` has passed since
-/// the start, or once the predicate set by `exit_when` returns true.
+/// the start, or once a predicate added by `exit_when` returns true.
 #[derive(Default)]
 pub struct RunEnd {
     ended: bool,
     exit_after: Option<Duration>,
-    exit_when: Option<Box<dyn FnMut() -> bool>>,
+    exit_when: Vec<Box<dyn FnMut() -> bool>>,
 }
 
 impl RunEnd {
@@ -15,8 +15,9 @@ impl RunEnd {
         self.exit_after = Some(duration);
     }
 
+    /// Adds `predicate` to the predicates added before, each of which ends the run once it returns true.
     pub fn exit_when(&mut self, predicate: impl FnMut() -> bool + 'static) {
-        self.exit_when = Some(Box::new(predicate));
+        self.exit_when.push(Box::new(predicate));
     }
 
     /// Ends the run at the next check, whatever is still open.
@@ -24,13 +25,13 @@ impl RunEnd {
         self.ended = true;
     }
 
-    /// Whether the run ends at `elapsed` after its start. The predicate of `exit_when` runs only when nothing else
-    /// ends the run.
+    /// Whether the run ends at `elapsed` after its start. The predicates of `exit_when` run only while nothing else
+    /// ends the run, in the order of their addition, until one returns true.
     pub fn finished(&mut self, elapsed: Duration, anything_open: bool) -> bool {
         self.ended
             || !anything_open
             || self.exit_after.is_some_and(|limit| elapsed >= limit)
-            || self.exit_when.as_mut().is_some_and(|predicate| predicate())
+            || self.exit_when.iter_mut().any(|predicate| predicate())
     }
 
     /// The time left at `elapsed` until the time set by `exit_after`, or `None` without that time.
@@ -80,6 +81,22 @@ mod tests {
         assert!(!end.finished(SECOND, true));
         assert!(end.finished(SECOND, true));
         assert_eq!(calls.get(), 2);
+    }
+
+    #[test]
+    fn each_exit_predicate_ends_the_run() {
+        let flags = [Rc::new(Cell::new(false)), Rc::new(Cell::new(false))];
+        let mut end = RunEnd::default();
+        for flag in &flags {
+            let flag = Rc::clone(flag);
+            end.exit_when(move || flag.get());
+        }
+        assert!(!end.finished(SECOND, true));
+        flags[1].set(true);
+        assert!(end.finished(SECOND, true));
+        flags[1].set(false);
+        flags[0].set(true);
+        assert!(end.finished(SECOND, true));
     }
 
     #[test]

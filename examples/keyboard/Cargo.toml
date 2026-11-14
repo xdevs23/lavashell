@@ -13,10 +13,12 @@ workspace = true
 clap.workspace = true
 lavashell.workspace = true
 lavashell-example-support.workspace = true
+lavashell-test-platform.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 icu_locale_core.workspace = true
+lavashell-example-support = { workspace = true, features = ["testing"] }
 
 [build-dependencies]
 lavashell-example-copy-keys.workspace = true

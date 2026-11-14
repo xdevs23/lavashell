@@ -15,10 +15,9 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::view::View;
 use lavashell_platform::{
-    Appearance, LockRequest, OutputId, PanelRole, PlatformRequest, Role, SurfaceEvent,
+    Appearance, LockRequest, OutputId, PanelRole, Platform, PlatformRequest, Role, SurfaceEvent,
     SurfaceRequest, SurfaceSpec,
 };
-use lavashell_renderer::SurfaceControl;
 use std::mem;
 
 /// The record of a new surface, besides the native spec sent to the platform.
@@ -29,7 +28,7 @@ struct Opening {
     composition_order: i32,
 }
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     /// Opens a window that shows `view`.
     pub(super) fn open_window(&mut self, window: Window, mut view: View) -> Result<(), ViewError> {
         let spec = window.spec(&mut view, &mut self.shaper)?;
@@ -119,8 +118,8 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         view: View,
         opening: Opening,
     ) -> Result<SurfaceId, ViewError> {
-        let start = self.start;
-        view.motion().time_source(move || start.elapsed());
+        let clock = self.clock.clone();
+        view.motion().time_source(move || clock.now());
         let id = self.records.open(
             view,
             spec.size,

@@ -11,7 +11,4 @@ pub enum Error {
     MissingBar,
     #[error("the taskbar has no slot for {}", .0.name())]
     MissingSlot(App),
-    #[cfg(test)]
-    #[error("cannot find the test binary, beside which the captures are written")]
-    TestBinary(#[source] std::io::Error),
 }

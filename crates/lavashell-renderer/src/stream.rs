@@ -177,6 +177,12 @@ pub trait StreamBackend {
     ) -> (T, Result<(), Self::Error>);
 }
 
+/// Streams that a renderer on its own thread can draw. They use `VulkanRenderer`, and their errors can be sent to
+/// another thread.
+pub trait RendererStreams: StreamBackend<Gpu = VulkanRenderer, Error: Send> + 'static {}
+
+impl<S: StreamBackend<Gpu = VulkanRenderer, Error: Send> + 'static> RendererStreams for S {}
+
 /// The streams for a renderer that draws only frames without streams.
 #[derive(Default)]
 pub struct NoStreams {
@@ -223,6 +229,12 @@ impl<S: FrameSource> Stream<S> {
             source,
             latest: None,
         }
+    }
+
+    /// The stream of every image latched from this source.
+    #[must_use]
+    pub fn id(&self) -> StreamId {
+        self.id
     }
 
     #[must_use]

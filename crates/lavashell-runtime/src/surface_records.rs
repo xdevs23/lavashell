@@ -9,7 +9,7 @@ use crate::accessibility::SurfaceAccessibility;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
 use crate::window::DragRegion;
-use lavashell_core::geometry::{Point, Size, Viewport};
+use lavashell_core::geometry::{PixelScale, Point, Size, Viewport};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::SurfaceId;
@@ -25,6 +25,7 @@ struct Record {
     supplied: PlatformFacts,
     size: Size,
     density: Density,
+    scale: PixelScale,
     lifecycle: Lifecycle,
     drag_region: Option<DragRegion>,
     accessibility: SurfaceAccessibility,
@@ -42,6 +43,11 @@ impl Record {
 
     fn change_density(&mut self, density: Density) {
         self.density = density;
+        self.view.invalidate();
+    }
+
+    fn change_scale(&mut self, scale: PixelScale) {
+        self.scale = scale;
         self.view.invalidate();
     }
 }
@@ -67,9 +73,10 @@ impl SurfaceRecords {
         }
     }
 
-    /// Opens a surface that shows `view` at `size` and `density` until the host configures it. The view gets the
-    /// current settings. A press of the primary button in `drag_region` starts a move of the surface by the host.
-    /// Assistive technologies read `accessible_name` as the name of the view when its root node is unnamed.
+    /// Opens a surface that shows `view` at `size` and `density` until the host configures it, with square pixels until
+    /// the platform reports a scale. The view gets the current settings. A press of the primary button in
+    /// `drag_region` starts a move of the surface by the host. Assistive technologies read `accessible_name` as the
+    /// name of the view when its root node is unnamed.
     ///
     /// # Errors
     ///
@@ -95,6 +102,7 @@ impl SurfaceRecords {
             supplied,
             size,
             density,
+            scale: PixelScale::SQUARE,
             lifecycle: Lifecycle::Waiting,
             drag_region,
             accessibility: SurfaceAccessibility::new(accessible_name),
@@ -115,6 +123,7 @@ impl SurfaceRecords {
                 return Some(SurfaceRequest::Destroy(surface));
             }
             SurfaceEvent::DensityChanged(density) => record.change_density(density),
+            SurfaceEvent::ScaleChanged(scale) => record.change_scale(scale),
         }
         None
     }
@@ -153,6 +162,12 @@ impl SurfaceRecords {
     #[must_use]
     pub fn open_viewport(&self, surface: SurfaceId) -> Option<Viewport> {
         (self.open_record(surface)).map(|record| Viewport::new(record.size, record.density))
+    }
+
+    /// The number of output pixels covered by one viewport pixel in the frames of `surface` while it is open.
+    #[must_use]
+    pub fn open_scale(&self, surface: SurfaceId) -> Option<PixelScale> {
+        self.open_record(surface).map(|record| record.scale)
     }
 
     /// The view of `surface` while it is open or closing.

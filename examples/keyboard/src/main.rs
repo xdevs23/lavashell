@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
-mod frames;
 
 use clap::Parser;
-use lavashell::prelude::*;
 use lavashell_example_support::{ExampleArguments, RecordingArguments, SizeArguments};
 use lavashell_on_screen_keyboard::{
-    CopyKey, Error, copy,
+    Error,
     model::{Appearance, Demo},
     scene,
 };
@@ -33,7 +31,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
     if let Some(recording) = arguments.recording.recording() {
-        return frames::record(&recording);
+        return lavashell_on_screen_keyboard::recording::record(&recording);
     }
 
     let appearance = if arguments.day {
@@ -42,15 +40,8 @@ fn run() -> Result<(), Error> {
         Appearance::Night
     };
     let demo = Demo::new(appearance)?;
-    let arrow_keys = demo.clone();
-    let mut app = (arguments.example.app()?).input_filter(move |_, input| arrow_keys.route(input));
-
     let size = arguments.size.size().unwrap_or_else(scene::screen);
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.keyboard")
-            .size(size.width, size.height)
-            .fullscreen(arguments.fullscreen),
-        move |ui| scene::compose(ui, &demo),
-    )?;
+    let app = arguments.example.app()?;
+    let app = lavashell_on_screen_keyboard::app(app, &demo, size, arguments.fullscreen)?;
     Ok(lavashell_example_support::run(app)?)
 }

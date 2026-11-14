@@ -66,6 +66,7 @@ pub enum EventKey {
     TouchPosition(TouchId),
     Configuration(SurfaceId),
     Density(SurfaceId),
+    Scale(SurfaceId),
     Setting(Discriminant<SettingsEvent>),
     OutputGeometry(OutputId),
     OutputRefresh(OutputId),
@@ -76,11 +77,11 @@ pub enum EventKey {
 impl Merge for PlatformEvent {
     type Key = EventKey;
 
-    /// A pointer motion, a touch motion, a configure, a density, a setting, the geometry or the refresh interval of an
-    /// output, a ready watch and the motion of a drag replace the earlier event for the same value. A configure
-    /// replaces the waiting one because only the newest configure is acknowledged. Neighbouring scrolls of one pointer
-    /// add up. A pointer motion and a scroll of one pointer fence each other, so neither passes the other. Every other
-    /// event builds on the events before it, so the order of presses, releases and keys is kept.
+    /// A pointer motion, a touch motion, a configure, a density, a scale, a setting, the geometry or the refresh
+    /// interval of an output, a ready watch and the motion of a drag replace the earlier event for the same value. A
+    /// configure replaces the waiting one because only the newest configure is acknowledged. Neighbouring scrolls of
+    /// one pointer add up. A pointer motion and a scroll of one pointer fence each other, so neither passes the other.
+    /// Every other event builds on the events before it, so the order of presses, releases and keys is kept.
     fn effect(&self) -> Effect<EventKey> {
         let key = match self {
             Self::Device(DeviceEvent::PointerMotion { pointer, .. }) => {
@@ -100,6 +101,7 @@ impl Merge for PlatformEvent {
                 EventKey::Configuration(*surface)
             }
             Self::Surface(surface, SurfaceEvent::DensityChanged(_)) => EventKey::Density(*surface),
+            Self::Surface(surface, SurfaceEvent::ScaleChanged(_)) => EventKey::Scale(*surface),
             Self::Settings(setting) => EventKey::Setting(mem::discriminant(setting)),
             Self::Output(OutputEvent::Updated(output, _)) => EventKey::OutputGeometry(*output),
             Self::Output(OutputEvent::Refresh(output, _)) => EventKey::OutputRefresh(*output),

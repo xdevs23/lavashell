@@ -1,46 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#[cfg(target_os = "android")]
+use crate::motion_jni::MalformedMotion;
 use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
 use crate::surface_stream::BufferSizes;
 use lavashell_core::error::message_chain;
-use lavashell_renderer::{
-    DrawError, Error as RendererError, FenceCopyError, FrameError, FrameOutcome, MultipleFailures,
-    StartError, StateError,
-};
-use std::convert::Infallible;
+use lavashell_core::prelude::StreamId;
+use lavashell_core::units::NumberError;
+use lavashell_renderer::{Error as RendererError, FenceCopyError, MultipleFailures};
 
 /// A failure in the AOSP host integration. Each variant is named after the operation that failed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("cannot start the renderer")]
-    Start(#[source] StateError),
-    #[error("cannot attach the native window")]
-    Attach(#[source] StateError),
-    #[error("cannot request the output of the native window")]
-    RequestOutput(#[source] StateError),
     #[error(
         "the native window reports {width} × {height} pixels, which is a failure status of AOSP"
     )]
     WindowSize { width: i32, height: i32 },
-    #[error("the viewport covers {viewport:?} pixels, but the native window has {window:?} pixels")]
-    ViewportSize {
-        viewport: (u32, u32),
-        window: (u32, u32),
-    },
-    #[error("the renderer state rejected the frame")]
-    State(#[source] StateError),
-    #[error("cannot draw the frame")]
-    Draw(#[source] RendererError),
-    #[error("cannot paint the frame")]
-    Paint(#[source] RendererError),
-    #[error(
-        "the frame was drawn with the outcome {outcome:?}, but the frames of streams it drew failed"
-    )]
-    StreamsOfDrawnFrame {
-        outcome: FrameOutcome,
-        #[source]
-        streams: Box<Error>,
-    },
     #[error("the buffer sizes {0:?} exceed the signed 32-bit lengths of the NDK")]
     SizesBeyondNdk(BufferSizes),
     #[error(
@@ -91,10 +66,10 @@ pub enum Error {
     CompletionStatus(#[source] RendererError),
     #[error("cannot destroy the imports of frames that the GPU has finished with")]
     RetireImports(#[source] RendererError),
+    #[error("no stream with the id {0:?} is attached to the renderer")]
+    FindStream(StreamId),
     #[cfg(target_os = "android")]
-    #[error(
-        "a Java exception is pending, so JNI cannot convert between a Surface and its native window"
-    )]
+    #[error("a Java exception is pending, so JNI cannot convert the Java object")]
     PendingException,
     #[cfg(target_os = "android")]
     #[error("the Surface to convert is null")]
@@ -111,54 +86,36 @@ pub enum Error {
     #[cfg(target_os = "android")]
     #[error("AOSP returned no Surface for the native window")]
     WindowSurface,
+    #[cfg(target_os = "android")]
+    #[error("the MotionEvent to convert is null")]
+    NullMotionEvent,
+    #[cfg(target_os = "android")]
+    #[error("cannot check whether the object to convert is an android.view.MotionEvent")]
+    MotionEventClass(#[source] jni::errors::Error),
+    #[cfg(target_os = "android")]
+    #[error("the object to convert is no android.view.MotionEvent")]
+    NotAMotionEvent,
+    #[cfg(target_os = "android")]
+    #[error("AOSP returned no native copy of the MotionEvent")]
+    MotionEventCopy,
+    #[cfg(target_os = "android")]
+    #[error("cannot read the action button of the MotionEvent")]
+    ActionButton(#[source] jni::errors::Error),
+    #[cfg(target_os = "android")]
+    #[error("the MotionEvent is malformed")]
+    MalformedMotion(#[from] MalformedMotion),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the display or the display metrics of the Context")]
+    ReadDisplay(#[source] jni::errors::Error),
+    #[error("cannot convert the dpi of the display into a density")]
+    ConvertDensity(#[source] NumberError),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the configuration of the Context")]
+    ReadConfiguration(#[source] jni::errors::Error),
     /// Failures of one call, in the order in which they happened. After each failure, the call continued with the work
     /// that did not depend on the failed work.
     #[error("{}", in_order(.0))]
     Several(Vec<Error>),
-}
-
-impl Error {
-    /// Combines this failure and `next`, a later failure in the same call, into `Several` in that order.
-    #[must_use]
-    pub(crate) fn then(self, next: Self) -> Self {
-        let mut failures = self.into_failures();
-        failures.extend(next.into_failures());
-        Self::several(failures)
-    }
-}
-
-impl From<StartError<Error>> for Error {
-    fn from(failure: StartError<Self>) -> Self {
-        match failure {
-            StartError::State(cause) => Self::Start(cause),
-            StartError::Streams(cause) => cause,
-        }
-    }
-}
-
-impl From<FrameError<Infallible>> for Error {
-    fn from(failure: FrameError<Infallible>) -> Self {
-        match failure {
-            FrameError::State(cause) => Self::State(cause),
-            FrameError::Draw(cause) => Self::Draw(cause),
-            FrameError::Paint(cause) => Self::Paint(cause),
-            FrameError::Control(never) => match never {},
-        }
-    }
-}
-
-/// A failure of the frame comes first, followed by the failures of the streams drawn by the frame.
-impl From<DrawError<Infallible, Error>> for Error {
-    fn from(failure: DrawError<Infallible, Self>) -> Self {
-        match failure {
-            DrawError::Frame(failure) => failure.into(),
-            DrawError::StreamsOfShownFrame { drawn, streams } => Self::StreamsOfDrawnFrame {
-                outcome: drawn.outcome,
-                streams: Box::new(streams),
-            },
-            DrawError::FrameAndStreams { frame, streams } => Self::from(frame).then(streams),
-        }
-    }
 }
 
 impl MultipleFailures for Error {
@@ -171,6 +128,16 @@ impl MultipleFailures for Error {
             Self::Several(failures) => failures,
             failure => vec![failure],
         }
+    }
+}
+
+/// Fails when a Java exception is pending, because JNI cannot call into Java while one is.
+#[cfg(target_os = "android")]
+pub(crate) fn ensure_no_exception(env: &jni::Env<'_>) -> Result<(), Error> {
+    if env.exception_check() {
+        Err(Error::PendingException)
+    } else {
+        Ok(())
     }
 }
 

@@ -6,7 +6,7 @@ use super::image::{
     AcquireResult, HardwareBuffer, HardwareBufferFormat, HardwareBufferUsage, Image, ImageFormat,
 };
 use super::ndk::media_error::MediaError;
-use super::{NativeState, NativeWindow, TestError};
+use super::{NativeWindow, TestError};
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::skia;
 use std::{
@@ -15,7 +15,7 @@ use std::{
     io::{ErrorKind, Write},
     os::fd::{AsRawFd, IntoRawFd, OwnedFd, RawFd},
     os::unix::fs::MetadataExt,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,7 +86,8 @@ type RemovedListener = Box<dyn FnMut(&Queue, &HardwareBuffer) + Send>;
 
 /// The buffer queue of one reader, shared with the producer controlled by the tests.
 pub(crate) struct Queue {
-    window: Rc<NativeState>,
+    /// The index of the queue in `QUEUES`, which the native window of the reader contains.
+    pub(super) key: usize,
     /// The width and the height of the default buffers, as the NDK reports them.
     pub(super) lengths: (i32, i32),
     queued: RefCell<Vec<Rc<(Buffer, Log)>>>,
@@ -114,6 +115,8 @@ pub(crate) struct Media {
 
 thread_local! {
     pub(crate) static MEDIA: Media = Media::default();
+    /// The queues of the readers created by the test running on this thread.
+    static QUEUES: RefCell<Vec<Weak<Queue>>> = const { RefCell::new(Vec::new()) };
 }
 
 /// The inode that `fd` refers to.
@@ -144,11 +147,9 @@ pub(crate) struct Producer(Rc<Queue>);
 
 impl Producer {
     pub fn of(window: &NativeWindow) -> Result<Self, TestError> {
-        window
-            .queue()
-            .cloned()
-            .map(Self)
-            .ok_or(TestError::NotAReaderWindow)
+        let key = window.reader().ok_or(TestError::NotAReaderWindow)?;
+        let queue = QUEUES.with_borrow(|queues| queues.get(key).and_then(Weak::upgrade));
+        queue.map(Self).ok_or(TestError::NotAReaderWindow)
     }
 
     pub fn queue(&self, buffer: Buffer) {
@@ -230,8 +231,8 @@ impl ImageReader {
         if width <= 0 || height <= 0 {
             return Err(MediaError::InvalidParameter);
         }
-        Ok(Self(Rc::new(Queue {
-            window: Rc::default(),
+        let queue = Rc::new(Queue {
+            key: QUEUES.with_borrow(Vec::len),
             lengths: (width, height),
             queued: RefCell::default(),
             acquired: Cell::new(0),
@@ -242,7 +243,9 @@ impl ImageReader {
             deleted: Cell::new(false),
             image_listener: RefCell::default(),
             removed_listener: RefCell::default(),
-        })))
+        });
+        QUEUES.with_borrow_mut(|queues| queues.push(Rc::downgrade(&queue)));
+        Ok(Self(queue))
     }
 
     /// Fails when a listener was set before, because a frame may still be calling the earlier listener.
@@ -272,7 +275,7 @@ impl ImageReader {
         if MEDIA.with(|media| media.fails_window.get()) {
             return Err(MediaError::InvalidParameter);
         }
-        Ok(NativeWindow::of_reader(&self.0.window, &self.0))
+        Ok(NativeWindow::of_reader(&self.0))
     }
 
     /// # Safety

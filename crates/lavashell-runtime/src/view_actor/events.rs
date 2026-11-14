@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
-use super::frames::send_frame;
 use super::panels::configured_length;
+use super::scene_frames::send_frame;
 use crate::panels::Panel;
 use crate::scheduler::SchedulerInput;
 use crate::surface_records::AccessibilityFailure;
@@ -12,12 +12,11 @@ use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::View;
 use lavashell_platform::{
-    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, PlatformEvent,
+    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, Platform, PlatformEvent,
     PlatformRequest, SurfaceEvent,
 };
-use lavashell_renderer::SurfaceControl;
 
-impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn platform_event(&mut self, event: PlatformEvent) -> Result<(), ViewError> {
         match event {
             PlatformEvent::Surface(id, event) => self.surface_event(id, event)?,
@@ -71,7 +70,9 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
                     token,
                 }
             }
-            event @ (SurfaceEvent::Closed | SurfaceEvent::DensityChanged(_)) => event,
+            event @ (SurfaceEvent::Closed
+            | SurfaceEvent::DensityChanged(_)
+            | SurfaceEvent::ScaleChanged(_)) => event,
         };
         self.surface_requests.extend(self.records.handle(id, event));
         Ok(())
@@ -161,8 +162,10 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     fn accessibility_event(&mut self, event: AccessibilityEvent) -> Result<(), ViewError> {
         let id = event.surface();
         let (scene, shaper) = (&mut self.actors.scene, &mut self.shaper);
+        let observers = &mut self.observers;
         let show = |view: &mut View, viewport: Viewport| {
-            send_frame(view, scene.sink(id, None), |view, sink| {
+            let failed = |failures| observers.report_failures(id, failures);
+            send_frame(view, scene.sink(id, None), failed, |view, sink| {
                 view.frame_into(viewport, shaper, sink)
             })
         };

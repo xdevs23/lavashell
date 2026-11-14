@@ -9,23 +9,21 @@ pub use lavashell_effect_quality as effect_quality;
 pub use lavashell_keyboard as keyboard;
 pub use lavashell_materials as materials;
 pub use lavashell_renderer as renderer;
-pub use lavashell_runtime::{Capability, SetupError, run};
+pub use lavashell_runtime::{Capability, RunError as PlatformRunError, SetupError, run};
 #[cfg(target_os = "linux")]
 pub use lavashell_wayland as wayland;
 
 #[cfg(target_os = "linux")]
 pub type Platform = lavashell_wayland::Wayland;
+#[cfg(target_os = "android")]
+pub type Platform = lavashell_android::Aosp;
 
-#[cfg(target_os = "linux")]
-pub type RunError = lavashell_runtime::PlatformRunError<Platform>;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub type RunError = lavashell_runtime::RunError<Platform>;
 
 pub mod prelude {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     pub use crate::Platform;
-    #[cfg(target_os = "android")]
-    pub use lavashell_android::{
-        AndroidRenderer, BufferSizes, NativeWindow, StreamFormat, SurfaceStream,
-    };
     pub use lavashell_components::{
         MeasuredRecycler, RecycledItem, Recycler, RecyclerLayout, RecyclerStats, Selection, UiExt,
     };

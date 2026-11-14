@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::scalar::scalar;
 use crate::test_error::TestError;
 use crate::{Fonts, Painter, StreamFrames, SurfaceFrame, UniformRange, input_cells};
 use lavashell_core::geometry::{Point, Size};
-use lavashell_core::prelude::{Brush, Color, Corners, DpExt, DrawCommand, Rect, SceneTree};
+use lavashell_core::prelude::{
+    Brush, Color, Corners, Density, DpExt, DrawCommand, PixelScale, Rect, SceneTree,
+};
 use num_traits::ToPrimitive;
 use skia_safe::{Contains, IPoint, IRect};
 use std::time::Duration;
@@ -27,14 +30,11 @@ fn outline(size: Size) -> Result<SurfaceOutline, TestError> {
     ]))
 }
 
-/// The clip path in physical pixels and the input cells of `outline` on a surface of `size` at `density`.
-fn geometry(
-    outline: &SurfaceOutline,
-    size: Size,
-    density: Density,
-) -> Result<(Path, Vec<IRect>), TestError> {
+/// The clip path in dp and the input cells of `outline` on a surface of `size`.
+fn geometry(outline: &SurfaceOutline, size: Size) -> Result<(Path, Vec<IRect>), TestError> {
     let path = outline_path(outline)?;
-    Ok((clip_path(&path, density)?, input_cells(&path, size)?))
+    let cells = input_cells(&path, size)?;
+    Ok((path, cells))
 }
 
 /// The density with `scale` physical pixels for each dp.
@@ -61,23 +61,20 @@ fn takes_input(input_cells: &[IRect], x: i16, y: i16) -> bool {
     (input_cells.iter()).any(|cells| cells.contains(cell))
 }
 
-/// The physical position of the center of the logical cell `cell` at `scale`.
-fn center(cell: i16, scale: f64) -> Result<f32, TestError> {
-    Ok(scalar((f64::from(cell) + 0.5) * scale)?)
+/// The position in dp of the center of the logical cell `cell`.
+fn center(cell: i16) -> Result<f32, TestError> {
+    Ok(scalar(f64::from(cell) + 0.5)?)
 }
 
 #[test]
-fn input_cells_match_the_painted_even_odd_outline_after_resize_and_scaling() -> Result<(), TestError>
-{
+fn input_cells_match_the_painted_even_odd_outline_after_resize() -> Result<(), TestError> {
     for size in [Size::new(96.dp(), 64.dp()), Size::new(120.dp(), 90.dp())] {
-        for scale in [1.0, 1.5, 2.0] {
-            let (clip, input_cells) = geometry(&outline(size)?, size, density_for(scale)?)?;
-            for y in 0..cells(size.height)? {
-                for x in 0..cells(size.width)? {
-                    let input = takes_input(&input_cells, x, y);
-                    let painted = clip.contains((center(x, scale)?, center(y, scale)?));
-                    assert_eq!(input, painted, "{size:?}, scale {scale}, cell {x},{y}");
-                }
+        let (clip, input_cells) = geometry(&outline(size)?, size)?;
+        for y in 0..cells(size.height)? {
+            for x in 0..cells(size.width)? {
+                let input = takes_input(&input_cells, x, y);
+                let painted = clip.contains((center(x)?, center(y)?));
+                assert_eq!(input, painted, "{size:?}, cell {x},{y}");
             }
         }
     }
@@ -121,7 +118,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
         );
         let mut surface =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-        let clip = clip_path(&outline_path(&outline(size)?)?, density)?;
+        let clip = outline_path(&outline(size)?)?;
         let mut painter = Painter::new(&Fonts::new(), UniformRange::VULKAN_REQUIRED)?;
         let bounds = Rect::new(0.dp(), 0.dp(), size.width, size.height);
         let fill = DrawCommand::Fill {
@@ -134,7 +131,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
             canvas,
             SurfaceFrame {
                 tree: tree.at(Duration::ZERO),
-                density,
+                dp_to_output: PixelScale::SQUARE.dp_to_output(density),
                 damage: Some(bounds),
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -155,7 +152,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
                 surface.canvas(),
                 SurfaceFrame {
                     tree: tree.at(Duration::ZERO),
-                    density,
+                    dp_to_output: PixelScale::SQUARE.dp_to_output(density),
                     damage: Some(Rect::new(0.dp(), 0.dp(), 48.dp(), 64.dp())),
                     clear: skia_safe::Color::TRANSPARENT,
                     scene: None,
@@ -172,25 +169,9 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
 #[test]
 fn an_empty_outline_takes_no_input_and_clips_everything() -> Result<(), TestError> {
     let size = Size::new(96.dp(), 64.dp());
-    let (clip, input_cells) = geometry(&SurfaceOutline::Empty, size, Density::ONE)?;
+    let (clip, input_cells) = geometry(&SurfaceOutline::Empty, size)?;
     assert!(input_cells.is_empty());
     assert!(!clip.contains((12.0, 12.0)));
-    Ok(())
-}
-
-#[test]
-fn an_outline_beyond_the_range_of_skia_scalars_once_scaled_fails() -> Result<(), TestError> {
-    let far = Dp::new(f64::from(f32::MAX));
-    let triangle = Polygon::new([
-        Point::default(),
-        Point::new(far, 0.dp()),
-        Point::new(0.dp(), far),
-    ])?;
-    let path = outline_path(&SurfaceOutline::Contours(vec![triangle]))?;
-    assert!(matches!(
-        clip_path(&path, density_for(2.0)?),
-        Err(OutlineError::Scaled(_))
-    ));
     Ok(())
 }
 
@@ -203,21 +184,18 @@ fn fractional_rounded_regions_exclude_transparent_corners_for_paint_and_input()
 -> Result<(), TestError> {
     for phase in [0.0, 0.25, 0.75] {
         let rect = Rect::new(Dp::new(phase), Dp::new(phase), 320.dp(), 124.dp());
-        let outline = rounded_outline(rect, 14.dp());
-        for scale in [1.0, 1.5, 2.0] {
-            let size = Size::new(321.dp(), 125.dp());
-            let (clip, input_cells) = geometry(&outline, size, density_for(scale)?)?;
-            for (x, y, expected) in [
-                (1, 1, false),
-                (160, 62, true),
-                (318, 1, false),
-                (318, 122, false),
-            ] {
-                let input = takes_input(&input_cells, x, y);
-                let painted = clip.contains((center(x, scale)?, center(y, scale)?));
-                assert_eq!(input, expected, "phase {phase} cell {x},{y}");
-                assert_eq!(painted, input);
-            }
+        let size = Size::new(321.dp(), 125.dp());
+        let (clip, input_cells) = geometry(&rounded_outline(rect, 14.dp()), size)?;
+        for (x, y, expected) in [
+            (1, 1, false),
+            (160, 62, true),
+            (318, 1, false),
+            (318, 122, false),
+        ] {
+            let input = takes_input(&input_cells, x, y);
+            let painted = clip.contains((center(x)?, center(y)?));
+            assert_eq!(input, expected, "phase {phase} cell {x},{y}");
+            assert_eq!(painted, input);
         }
     }
     Ok(())
@@ -227,7 +205,7 @@ fn fractional_rounded_regions_exclude_transparent_corners_for_paint_and_input()
 fn degenerate_rectangles_are_empty_but_nonfinite_rounded_outlines_fail() -> Result<(), TestError> {
     let size = Size::new(10.dp(), 10.dp());
     let degenerate = rounded_outline(Rect::default(), 14.dp());
-    let (_clip, input_cells) = geometry(&degenerate, size, Density::ONE)?;
+    let (_clip, input_cells) = geometry(&degenerate, size)?;
     assert!(input_cells.is_empty());
     let rect = Rect::new(0.dp(), 0.dp(), 10.dp(), 10.dp());
     let nonfinite = rounded_outline(rect, Dp::new(f64::NAN));
