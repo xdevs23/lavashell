@@ -14,12 +14,13 @@ mod programs;
 
 const SIZE: (u16, u16) = (200, 120);
 
-fn dimensions(scale: i32) -> (i32, i32) {
-    (i32::from(SIZE.0) * scale, i32::from(SIZE.1) * scale)
-}
-
 fn pixels(shader: Shader) -> Result<Vec<[f64; 4]>, TestError> {
-    let info = ImageInfo::new(dimensions(1), ColorType::RGBAF32, AlphaType::Premul, None);
+    let info = ImageInfo::new(
+        (i32::from(SIZE.0), i32::from(SIZE.1)),
+        ColorType::RGBAF32,
+        AlphaType::Premul,
+        None,
+    );
     let mut surface = surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
     let _chained_canvas = surface
         .canvas()
@@ -302,10 +303,14 @@ fn analytic_lens(shape: &Shape) -> Result<Vec<[f64; 4]>, TestError> {
     )
 }
 
-fn texture_lens(shape: &Shape) -> Result<Vec<[f64; 4]>, TestError> {
-    let mut surface = surfaces::raster_n32_premul(dimensions(4)).ok_or(TestError::RasterSurface)?;
+fn texture_lens(shape: &Shape, density: Density) -> Result<Vec<[f64; 4]>, TestError> {
+    let compared = Size::new(f64::from(SIZE.0).dp(), f64::from(SIZE.1).dp());
+    let (width, height) = compared.buffer_size(density)?;
+    let mut surface = surfaces::raster_n32_premul((i32::try_from(width)?, i32::try_from(height)?))
+        .ok_or(TestError::RasterSurface)?;
     let canvas = surface.canvas();
-    let _chained_canvas = canvas.scale((4.0, 4.0));
+    let scale = crate::scalar::scalar(density.get())?;
+    let _chained_canvas = canvas.scale((scale, scale));
     let texels = TexelPixels::lens(canvas).ok_or(TestError::Missing("texel size of the lens"))?;
     let lens = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED))?
         .lens(canvas, &Solid::of(shape), texels)?
@@ -331,8 +336,9 @@ fn lens_normals_turn_no_faster_than_their_lens_length() -> Result<(), TestError>
     for shape in crease_cases()? {
         turns.push(steepest_turn(&shape, &analytic_lens(&shape)?));
     }
+    let fine = Density::from_scale(4.0).ok_or(TestError::NoDensity(4.0))?;
     for shape in [star(12, 26.0)?, star(40, 30.0)?, fused] {
-        turns.push(steepest_turn(&shape, &texture_lens(&shape)?));
+        turns.push(steepest_turn(&shape, &texture_lens(&shape, fine)?));
     }
     let steepest = 2.0 * 1.5;
     assert!(
@@ -355,8 +361,8 @@ fn neighbours(index: usize) -> impl Iterator<Item = usize> {
     .flatten()
 }
 
-/// Checks `found` against `expected` at every pixel inside `shape`. A field
-/// texture interpolates between texel centres 1 dp apart. A value may therefore
+/// Checks `found` against `expected` at every pixel inside `shape`. The pixels
+/// lie 1 dp apart, and a field texture interpolates between finer texels. A value may therefore
 /// differ by the change of the lens toward the neighbouring pixels along x and
 /// along y. The half floats of the texture round both the value and the distance
 /// it was built from, each by half a step at their size, or at 1 below 1.
@@ -378,8 +384,13 @@ fn assert_matches(shape: &Shape, expected: &[[f64; 4]], found: &[[f64; 4]]) {
 
 #[test]
 fn lens_textures_match_the_analytic_lens() -> Result<(), TestError> {
+    let fine = Density::from_scale(4.0).ok_or(TestError::NoDensity(4.0))?;
     for shape in crease_cases()? {
-        assert_matches(&shape, &analytic_lens(&shape)?, &texture_lens(&shape)?);
+        assert_matches(
+            &shape,
+            &analytic_lens(&shape)?,
+            &texture_lens(&shape, fine)?,
+        );
     }
     Ok(())
 }
@@ -434,7 +445,8 @@ fn reference_lens(polygon: &Polygon) -> Vec<[f64; 4]> {
 }
 
 /// Deep inside a large circle, the lens sums over all chunks together exceed the range of half floats. The lens drawn
-/// chunk by chunk still matches the lens computed on the CPU.
+/// chunk by chunk still matches the lens computed on the CPU. The chunks and their sums do not depend on the texel
+/// size, so the texture is baked at one pixel per dp.
 #[test]
 fn the_chunked_lens_of_a_large_contour_matches_the_cpu() -> Result<(), TestError> {
     let circle = ellipse(
@@ -444,7 +456,11 @@ fn the_chunked_lens_of_a_large_contour_matches_the_cpu() -> Result<(), TestError
     let Shape::Contour(polygon) = &circle else {
         return Err(TestError::Unexpected("a contour"));
     };
-    assert_matches(&circle, &reference_lens(polygon), &texture_lens(&circle)?);
+    assert_matches(
+        &circle,
+        &reference_lens(polygon),
+        &texture_lens(&circle, Density::ONE)?,
+    );
     Ok(())
 }
 

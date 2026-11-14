@@ -7,7 +7,7 @@ use crate::failure::{DrawFailure, Failures};
 use crate::field::test_shapes::{Distance, ellipse, union};
 use crate::resources::PaintResources;
 use crate::test_error::TestError;
-use crate::{FieldRoom, UniformRange};
+use crate::{FieldRoom, Fonts, Painter, UniformRange};
 use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
 
 /// The identifier of the first glass draw in the only leaf of a scene tree on `surface`.
@@ -386,6 +386,7 @@ fn shapes() -> Result<[Shape; 5], TestError> {
 }
 
 fn glass_pixels(
+    painter: &mut Painter,
     shape: &Shape,
     refraction: Dp,
     destination: Destination,
@@ -397,7 +398,7 @@ fn glass_pixels(
     };
     let effect = Backdrop::glass(Dp::ZERO, glass)?;
     let mut s = crate::effects_tests::surface()?;
-    crate::effects_tests::draw(&mut s, |d| {
+    crate::effects_tests::draw_with(painter, &mut s, |d| {
         stripes(d);
         if destination == Destination::Layer {
             d.commands.push(DrawCommand::Opacity(0.5));
@@ -410,9 +411,8 @@ fn glass_pixels(
             d.restore();
         }
     })?;
-    Ok((0..48)
-        .flat_map(|y| (0..96).map(move |x| (x, y)))
-        .map(|(x, y)| crate::effects_tests::sample(&mut s, x, y)[0])
+    Ok((crate::effects_tests::linear_pixels(&mut s).into_iter())
+        .map(|[red, ..]| red)
         .collect())
 }
 
@@ -433,11 +433,16 @@ fn changed(shape: &Shape, plain: &[f32], glass: &[f32]) -> Result<(usize, usize)
     Ok((inside, outside))
 }
 
-#[test]
-fn glass_refracts_inside_every_shape_and_nowhere_outside() -> Result<(), TestError> {
-    for shape in shapes()? {
-        let plain = glass_pixels(&shape, 0.dp(), Destination::Surface)?;
-        let glass = glass_pixels(&shape, 9.dp(), Destination::Surface)?;
+/// Draws each of `shapes` without and with refraction into `destination`. One painter draws both, back to back, so
+/// the second frame reuses the field textures of the first, which do not depend on the refraction.
+fn assert_refracts_only_inside(
+    shapes: impl IntoIterator<Item = Shape>,
+    destination: Destination,
+) -> Result<(), TestError> {
+    let mut painter = Painter::new(&Fonts::new(), UniformRange::VULKAN_REQUIRED)?;
+    for shape in shapes {
+        let plain = glass_pixels(&mut painter, &shape, 0.dp(), destination)?;
+        let glass = glass_pixels(&mut painter, &shape, 9.dp(), destination)?;
         let (inside, outside) = changed(&shape, &plain, &glass)?;
         assert!(inside > 100, "{shape:?}: {inside} refracted pixels");
         assert_eq!(outside, 0, "{shape:?}");
@@ -446,16 +451,14 @@ fn glass_refracts_inside_every_shape_and_nowhere_outside() -> Result<(), TestErr
 }
 
 #[test]
+fn glass_refracts_inside_every_shape_and_nowhere_outside() -> Result<(), TestError> {
+    assert_refracts_only_inside(shapes()?, Destination::Surface)
+}
+
+#[test]
 fn glass_keeps_its_lens_in_layers() -> Result<(), TestError> {
     let [rounded, union, contour, ..] = shapes()?;
-    for shape in [rounded, union, contour] {
-        let plain = glass_pixels(&shape, 0.dp(), Destination::Layer)?;
-        let glass = glass_pixels(&shape, 9.dp(), Destination::Layer)?;
-        let (inside, outside) = changed(&shape, &plain, &glass)?;
-        assert!(inside > 100, "{shape:?}: {inside} refracted pixels");
-        assert_eq!(outside, 0, "{shape:?}");
-    }
-    Ok(())
+    assert_refracts_only_inside([rounded, union, contour], Destination::Layer)
 }
 
 #[test]
