@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::scheduler::{FrameKind, ViewState};
+use lavashell_actor::{SystemClock, mailbox};
 use lavashell_core::frame::FrameTime;
 use lavashell_platform::TimingEvent;
 use std::sync::mpsc;
@@ -79,7 +80,8 @@ fn the_observer_receives_the_started_frame_and_the_wake_time() -> Result<(), Tes
     let (seen, outputs) = mpsc::channel();
     let observer: SchedulerObserver =
         Box::new(move |output| seen.send(output).map_err(|_unsent| Closed));
-    let mut thread = SchedulerThread::start(Redraw::OnChange, Instant::now(), observer)?;
+    let clock = Arc::new(SystemClock::start());
+    let mut thread = SchedulerThread::start(Redraw::OnChange, clock, observer)?;
     thread.send(SchedulerInput::Opened(WINDOW))?;
     thread.send(wants(ViewState::Changed, Some(Duration::MAX)))?;
     assert!(matches!(
@@ -103,7 +105,8 @@ fn a_stop_follows_the_outputs_of_the_inputs_sent_before() -> Result<(), TestErro
     let (seen, outputs) = mpsc::channel();
     let observer: SchedulerObserver =
         Box::new(move |output| seen.send(output).map_err(|_unsent| Closed));
-    let mut thread = SchedulerThread::start(Redraw::OnChange, Instant::now(), observer)?;
+    let clock = Arc::new(SystemClock::start());
+    let mut thread = SchedulerThread::start(Redraw::OnChange, clock, observer)?;
     thread.send(SchedulerInput::Opened(WINDOW))?;
     let discarded = TimingEvent::Discarded {
         surface: WINDOW,

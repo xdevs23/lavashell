@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::renderer_actor::RendererError;
 use crate::test_error::TestResult;
 use crate::test_host::{
     StandIn, StandInError, closed, empty_view, end_on_marker, host, run_scripted, run_unreachable,

@@ -44,6 +44,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
         &mut painter,
         persistent.canvas(),
         &tree,
+        PixelScale::SQUARE.dp_to_output(Density::ONE),
         Some(Rect::new(0.dp(), 0.dp(), 300.dp(), 150.dp())),
         skia_safe::Color::TRANSPARENT,
     )?;
@@ -82,6 +83,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
             &mut painter,
             persistent.canvas(),
             &tree,
+            PixelScale::SQUARE.dp_to_output(Density::ONE),
             None,
             skia_safe::Color::TRANSPARENT,
         )?;

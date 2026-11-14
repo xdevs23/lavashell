@@ -141,10 +141,7 @@ impl FrameScheduler {
                 let _reopened = self.surfaces.insert(surface, Pacing::default());
                 None
             }
-            SchedulerInput::Timing(event) => {
-                self.handle_timing(now, event, out);
-                None
-            }
+            SchedulerInput::Timing(event) => self.handle_timing(now, event, out),
             SchedulerInput::Wants {
                 surface,
                 view,
@@ -184,9 +181,12 @@ impl FrameScheduler {
                 frame,
                 outcome,
                 cost,
-            } => (self.surfaces.get_mut(&surface))
-                .and_then(|pacing| pacing.rendered(frame, outcome, cost, now))
-                .map(|frame| (surface, frame)),
+            } => {
+                let redraw = self.redraw;
+                (self.surfaces.get_mut(&surface))
+                    .and_then(|pacing| pacing.rendered(frame, outcome, cost, redraw, now))
+                    .map(|frame| (surface, frame))
+            }
             SchedulerInput::OutputRefresh { surface, refresh } => {
                 if let Some(pacing) = self.surfaces.get_mut(&surface) {
                     pacing.output_refresh(refresh);
@@ -223,12 +223,20 @@ impl FrameScheduler {
             .min()
     }
 
-    fn handle_timing(&mut self, now: Duration, event: TimingEvent, out: &mut Vec<SchedulerOutput>) {
+    /// Applies `event` at `now`, appends the reports that follow from it to `out`, and returns the frame started by a
+    /// surface whose display became ready.
+    fn handle_timing(
+        &mut self,
+        now: Duration,
+        event: TimingEvent,
+        out: &mut Vec<SchedulerOutput>,
+    ) -> Option<(SurfaceId, (FrameKind, FrameTime))> {
         match event {
             TimingEvent::DisplayReady(surface) => {
-                if let Some(pacing) = self.surfaces.get_mut(&surface) {
-                    pacing.display_ready();
-                }
+                let redraw = self.redraw;
+                return (self.surfaces.get_mut(&surface))
+                    .and_then(|pacing| pacing.display_ready(redraw, now))
+                    .map(|frame| (surface, frame));
             }
             TimingEvent::Presented {
                 surface,
@@ -263,6 +271,7 @@ impl FrameScheduler {
                 })));
             }
         }
+        None
     }
 }
 

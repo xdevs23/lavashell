@@ -2,7 +2,6 @@
 #![forbid(unsafe_code)]
 mod arguments;
 mod breakpoint;
-#[cfg(target_os = "linux")]
 mod capture;
 mod cover;
 mod error;
@@ -10,23 +9,28 @@ mod error;
 mod frame_log;
 mod platform;
 mod report;
-#[cfg(feature = "testing")]
+#[cfg(target_os = "linux")]
+mod steps;
+#[cfg(all(target_os = "linux", any(test, feature = "testing")))]
 pub mod testing;
 
-pub use arguments::{
-    ExampleArguments, FrameInterval, Recording, RecordingArguments, SizeArguments,
-};
+pub use arguments::{ExampleArguments, Recording, RecordingArguments, SizeArguments};
 pub use breakpoint::Breakpoint;
+pub use capture::write_capture;
 #[cfg(target_os = "linux")]
-pub use capture::{Capture, OffscreenView};
+pub use capture::write_screenshot;
 pub use cover::cover;
 pub use error::Error;
 #[cfg(target_os = "linux")]
 pub use frame_log::{run, run_observed};
 pub use lavashell_lucide as lucide;
+pub use lavashell_test_platform::FrameInterval;
 pub use platform::platform;
-pub use report::{exit_code, report, report_failure, report_failures};
+pub use report::{exit_code, report, report_failure};
+#[cfg(target_os = "linux")]
+pub use steps::{Start, Steps, at_rest};
 
+use lavashell::core::accessibility::AccessibleNode;
 use lavashell::prelude::*;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
@@ -41,6 +45,27 @@ pub const MONO: &str = "mono";
 /// Returns an error when the icon does not decode.
 pub fn icon(encoded: &'static lucide::EncodedIcon) -> Result<&'static Icon, Error> {
     encoded.icon().map_err(Error::Icon)
+}
+
+/// # Errors
+/// Returns [`Error::MissingNode`] when the accessibility tree of `view` does not contain a node with the role `role`
+/// and the name `name`.
+pub fn node<'a>(view: &'a View, role: &Role, name: &str) -> Result<&'a AccessibleNode, Error> {
+    (view.accessibility().nodes.values())
+        .find(|node| node.role == *role && node.name.as_deref() == Some(name))
+        .ok_or_else(|| Error::MissingNode {
+            role: role.clone(),
+            name: name.to_owned(),
+        })
+}
+
+/// An app on the platform of the examples with the example fonts, without the options of the command line.
+///
+/// # Errors
+/// Returns an error when the example fonts do not load.
+#[cfg(target_os = "linux")]
+pub fn default_app() -> Result<App, Error> {
+    Ok(App::new(platform()).fonts(fonts()?))
 }
 
 /// The environment variable that contains the path of the directory with the font packages used by the examples.

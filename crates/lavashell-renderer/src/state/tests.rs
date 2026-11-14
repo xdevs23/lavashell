@@ -3,67 +3,21 @@ use super::*;
 use crate::stream::FrameDevice;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::{Error, PresentationPolicy, StreamFrames};
-use ash::vk;
+use crate::{Error, HeadlessPresentation, PresentationPolicy, StreamFrames};
 use lavashell_core::prelude::{
     Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelSize, Presented, Rect,
     SceneTree, Size, StreamId, StreamImage,
 };
-use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
+use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceChange;
-use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Presentation};
+use lavashell_test_fixtures::show_all;
+use lavashell_vulkan::HeadlessWindow;
 use skia_safe::IPoint;
 use std::cell::RefCell;
 use std::convert::Infallible;
-use std::ffi::CStr;
 use std::rc::Rc;
 
 const SURFACE: SurfaceId = SurfaceId(0);
-
-/// Presents to surfaces without a window system, through `VK_EXT_headless_surface`.
-struct HeadlessBackend;
-
-impl PresentationBackend for HeadlessBackend {
-    fn surface_extension(&self) -> Option<&'static CStr> {
-        Some(ash::ext::headless_surface::NAME)
-    }
-
-    fn features(&self) -> Features {
-        Features::default()
-    }
-
-    fn supports(
-        &self,
-        _: &PhysicalDevice<'_>,
-        _: u32,
-    ) -> Result<Presentation, lavashell_vulkan::Error> {
-        Ok(Presentation::Supported)
-    }
-
-    fn transform(&self) -> Option<vk::SurfaceTransformFlagsKHR> {
-        None
-    }
-}
-
-struct HeadlessWindow;
-
-// SAFETY: A `Surface` destroys the handle that `create_surface` returns and cannot check it, so the trait is unsafe.
-// `create_surface` creates a new headless surface of `instance`, and only the `Surface` that receives it destroys it.
-// A headless surface has no native window that could be destroyed before it.
-unsafe impl Window for HeadlessWindow {
-    fn create_surface(
-        &self,
-        instance: &Instance,
-    ) -> Result<vk::SurfaceKHR, lavashell_vulkan::Error> {
-        instance.require(&[ash::ext::headless_surface::NAME])?;
-        let functions = ash::ext::headless_surface::Instance::new(instance.entry(), instance.ash());
-        let info = vk::HeadlessSurfaceCreateInfoEXT::default();
-        // SAFETY: ash 0.38 has no safe form of vkCreateHeadlessSurfaceEXT. The instance is alive and has the extension
-        // enabled, as `require` checked, and `info` lives through the call.
-        unsafe { functions.create_headless_surface(&info, None) }
-            .map_err(lavashell_vulkan::Error::CreateSurface)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 enum Event {
@@ -176,9 +130,8 @@ fn setup() -> RendererSetup {
 
 fn state() -> Result<RendererState<RecordingControl>, TestError> {
     Ok(RendererState::new(
-        &HeadlessBackend,
+        &HeadlessPresentation::with_surfaces(),
         setup(),
-        Instant::now(),
     )?)
 }
 
@@ -215,6 +168,7 @@ fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
             ..FrameTime::default()
         },
         viewport: Viewport::new(Size::new(40.dp(), 30.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state,
     }
@@ -283,8 +237,8 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
     let streams = FailingStreams {
         events: Rc::clone(&events),
     };
-    let mut state =
-        RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| Ok(streams))?;
+    let presentation = HeadlessPresentation::with_surfaces();
+    let mut state = RendererState::with_streams(&presentation, setup(), |_| Ok(streams))?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let frame = frame(1, &surface_state);
@@ -340,10 +294,10 @@ fn painted_pixel<S>(
 #[test]
 fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), TestError> {
     let events = Rc::default();
-    let mut state = RendererState::with_streams(&HeadlessBackend, setup(), Instant::now(), |_| {
-        Ok(BoundFrames::default())
-    })
-    .map_err(StartError::into_state)?;
+    let presentation = HeadlessPresentation::with_surfaces();
+    let mut state =
+        RendererState::with_streams(&presentation, setup(), |_| Ok(BoundFrames::default()))
+            .map_err(StartError::into_state)?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let stream = StreamId::next();
@@ -357,20 +311,23 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
         brush: Brush::Solid(Color::WHITE),
     };
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate::from_iter([
-        insert(
-            1,
-            None,
-            0,
-            Node::Leaf(Content::Packet(Packet::new([background].into()))),
-        ),
-        insert(
-            2,
-            None,
-            1,
-            Node::Leaf(Content::Packet(stream_packet(image(1)))),
-        ),
-    ]))?;
+    show_all(
+        &mut tree,
+        [
+            insert(
+                1,
+                None,
+                0,
+                Node::Leaf(Content::Packet(Packet::new([background].into()))),
+            ),
+            insert(
+                2,
+                None,
+                1,
+                Node::Leaf(Content::Packet(stream_packet(image(1)))),
+            ),
+        ],
+    )?;
     let mut red = state.gpu.offscreen((16, 12))?;
     let _chained_canvas = red.canvas().clear(skia_safe::Color::RED);
     (state.streams.0).bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));
@@ -381,10 +338,10 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
     let mut blue = state.gpu.offscreen((16, 12))?;
     let _chained_canvas = blue.canvas().clear(skia_safe::Color::BLUE);
     (state.streams.0).bind(&image(2), blue.image_snapshot().into(), IPoint::new(0, 0));
-    tree.show(SceneUpdate::from_iter([Change::SetContent {
+    tree.show_change(Change::SetContent {
         id: SceneNodeId(2),
         content: Content::Packet(stream_packet(image(2))),
-    }]))?;
+    })?;
     let drawn = state.draw(SURFACE, frame(2, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [0, 0, 255, 255]);
@@ -408,5 +365,50 @@ fn a_committed_state_goes_to_the_control_of_its_surface_without_a_draw() -> Resu
         unknown,
         Err(CommitError::State(StateError::UnknownSurface(SurfaceId(1))))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_frame_at_a_non_square_scale_fills_exactly_the_scaled_buffer() -> Result<(), TestError> {
+    let events = Rc::default();
+    let mut state = state()?;
+    attach_recording(&mut state, &events)?;
+    let surface_state = SurfaceState::default();
+    let square = frame(1, &surface_state);
+    let wide = PresentFrame {
+        scale: PixelScale::filling(square.viewport, PixelSize::new(64, 30))?,
+        ..square
+    };
+    let background = DrawCommand::Fill {
+        shape: Rect::from_size(wide.viewport.size).into(),
+        brush: Brush::Solid(Color::WHITE),
+    };
+    let snapshot = SceneTree::with_leaf([background])?.snapshot();
+    assert_eq!(
+        state.draw(SURFACE, wide, &snapshot)?.outcome,
+        FrameOutcome::Shown
+    );
+    let attached = (state.surfaces.get_mut(&SURFACE)).ok_or(TestError::Missing("surface"))?;
+    let pixels = (attached.target.painted_pixels()).ok_or(TestError::Missing("painted image"))?;
+    assert_eq!(pixels.len(), 64 * 30 * 4);
+    assert!(pixels.iter().all(|&channel| channel == 255));
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, wide.scale)?,
+        SurfaceContents::Current
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, PixelScale::SQUARE)?,
+        SurfaceContents::Outdated
+    );
+    let wider = Viewport::new(Size::new(Dp::new(40.1), 30.dp()), Density::ONE);
+    let same_buffer = PixelScale::filling(wider, PixelSize::new(64, 30))?;
+    assert_eq!(
+        same_buffer.buffer_size(wide.viewport)?,
+        PixelSize::new(64, 30)
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, same_buffer)?,
+        SurfaceContents::Outdated
+    );
     Ok(())
 }

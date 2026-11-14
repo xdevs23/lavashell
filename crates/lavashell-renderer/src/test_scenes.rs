@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::plan::Area;
 use crate::test_error::TestError;
 use crate::{Painter, StreamFrames};
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::{
-    Change, Content, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
-};
-use lavashell_test_fixtures::WithoutFailures;
+use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneTree};
+use lavashell_test_fixtures::{WithoutFailures, show_all};
 use skia_safe::Canvas;
 use std::time::Duration;
 
@@ -23,18 +20,16 @@ pub(crate) fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> 
 pub(crate) fn leaves(
     packets: impl IntoIterator<Item = Packet>,
 ) -> Result<SceneSnapshot, TestError> {
-    let changes = (packets.into_iter().enumerate())
-        .map(|(index, packet)| {
-            insert(
-                index as u64 + 1,
-                None,
-                index,
-                Node::Leaf(Content::Packet(packet)),
-            )
-        })
-        .collect();
+    let changes = (packets.into_iter().enumerate()).map(|(index, packet)| {
+        insert(
+            index as u64 + 1,
+            None,
+            index,
+            Node::Leaf(Content::Packet(packet)),
+        )
+    });
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     Ok(tree.snapshot())
 }
 
@@ -68,30 +63,19 @@ impl Painter {
         self.paint_scene_with_streams(canvas, tree.at(Duration::ZERO), density, streams);
         Ok(())
     }
-
-    /// Paints the whole of `tree` as `paint_scene` does, with the frames of `streams`.
-    pub(crate) fn paint_scene_with_streams(
-        &mut self,
-        canvas: &Canvas,
-        tree: Presented<'_>,
-        density: Density,
-        streams: &StreamFrames,
-    ) {
-        let plan = self.plan(canvas, tree, density, None);
-        self.paint_tree(canvas, &plan, Area::Everything, density, streams);
-    }
 }
 
 pub(crate) fn paint_damage(
     painter: &mut Painter,
     canvas: &Canvas,
     scene: &SceneSnapshot,
+    dp_to_output: Affine,
     damage: Option<Rect>,
     clear: skia_safe::Color,
 ) -> Result<(), TestError> {
     let frame = crate::SurfaceFrame {
         tree: scene.at(Duration::ZERO),
-        density: Density::ONE,
+        dp_to_output,
         damage,
         clear,
         scene: None,

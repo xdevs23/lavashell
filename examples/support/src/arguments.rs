@@ -2,6 +2,7 @@
 use crate::Error;
 use clap::{ArgMatches, Args, Command, parser::ValueSource};
 use lavashell::prelude::*;
+use lavashell_test_platform::FrameInterval;
 use std::{
     ffi::{OsStr, OsString},
     path::PathBuf,
@@ -84,9 +85,8 @@ impl ExampleArguments {
     #[cfg(target_os = "linux")]
     pub fn app(&self) -> Result<App, Error> {
         let full_redraw = self.inherited.full_redraw;
-        let mut app = App::new(crate::platform())
+        let mut app = crate::default_app()?
             .text_transfers()
-            .fonts(crate::fonts()?)
             .preference_overrides(self.preference_overrides())
             .incremental(!full_redraw);
         if full_redraw {
@@ -144,22 +144,6 @@ pub struct RecordingArguments {
 pub struct Recording {
     pub directory: PathBuf,
     pub interval: FrameInterval,
-}
-
-/// The time between two frames of a recording, which is longer than zero.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FrameInterval(Duration);
-
-impl FrameInterval {
-    #[must_use]
-    pub fn new(interval: Duration) -> Option<Self> {
-        (!interval.is_zero()).then_some(Self(interval))
-    }
-
-    #[must_use]
-    pub fn get(self) -> Duration {
-        self.0
-    }
 }
 
 impl RecordingArguments {
