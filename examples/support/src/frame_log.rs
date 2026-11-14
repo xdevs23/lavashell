@@ -1,26 +1,82 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::error::reject_failures;
 use lavashell::{core::frame::PresentationFlag, prelude::*};
+use lavashell_test_platform::{HostScript, RecordedFrames, TestPlatform};
 use serde::Serialize;
 use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 
 /// Runs `app` and, when `LAVASHELL_FRAME_LOG` is set to a file path, writes its frame reports there as CSV.
 ///
 /// # Errors
-/// Returns an error when the app fails or the frame log cannot be written.
+/// Returns an error when the app fails, when a component failed in a frame, or when the frame log cannot be written.
 pub fn run(app: App) -> Result<(), Error> {
-    logged(app, None)
+    reject_component_failures(app, |app| logged(app, None, on_platform))
 }
 
 /// Like [`run`], and passes every frame report to `observer` as well.
 ///
 /// # Errors
-/// Returns an error when the app fails or the frame log cannot be written.
+/// Returns an error when the app fails, when a component failed in a frame, or when the frame log cannot be written.
 pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Result<(), Error> {
-    logged(app, Some(Box::new(observer)))
+    reject_component_failures(app, |app| {
+        logged(app, Some(Box::new(observer)), on_platform)
+    })
 }
 
-fn logged(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result<(), Error> {
+/// Like [`run`], on a test platform that plays `script`, and returns the frames recorded by the script.
+///
+/// # Errors
+/// Returns an error when the app fails, when a component failed in a frame, when the frame log cannot be written, or
+/// when no test platform connected.
+pub(crate) fn record(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
+    serve(script, || {
+        reject_component_failures(app, |app| logged(app, None, on_test_platform))
+    })
+}
+
+/// Like [`record`], without the frame log.
+///
+/// # Errors
+/// Returns an error when the app fails, when a component failed in a frame, or when no test platform connected.
+pub(crate) fn record_unlogged(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
+    serve(script, || reject_component_failures(app, on_test_platform))
+}
+
+/// Runs `run` with `script` as the host of a test platform, and returns the frames recorded by the script.
+fn serve(
+    script: HostScript,
+    run: impl FnOnce() -> Result<(), Error>,
+) -> Result<RecordedFrames, Error> {
+    let (ran, frames) = script.serve(run);
+    ran?;
+    frames.map_err(Error::NotServed)
+}
+
+fn on_test_platform(app: App) -> Result<(), Error> {
+    lavashell::run::<TestPlatform>(app).map_err(Error::Record)
+}
+
+/// Runs `app` with `run`, and fails after the run when a component failed in a frame.
+fn reject_component_failures(
+    app: App,
+    run: impl FnOnce(App) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let failures = Rc::new(RefCell::new(Vec::new()));
+    let observed = Rc::clone(&failures);
+    run(app.failure_observer(move |_, failure| observed.borrow_mut().push(failure)))?;
+    reject_failures(failures.take())
+}
+
+fn on_platform(app: App) -> Result<(), Error> {
+    lavashell::run::<Platform>(app).map_err(Error::App)
+}
+
+fn logged(
+    app: App,
+    mut observer: Option<Box<dyn FnMut(FrameReport)>>,
+    run: impl FnOnce(App) -> Result<(), Error>,
+) -> Result<(), Error> {
     let path = std::env::var_os("LAVASHELL_FRAME_LOG");
     let reports = Rc::new(RefCell::new(Vec::new()));
     let log = path.is_some().then(|| reports.clone());
@@ -42,7 +98,7 @@ fn logged(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result
         app
     };
 
-    lavashell::run::<Platform>(app).map_err(Error::App)?;
+    run(app)?;
 
     match path {
         Some(path) => write_frame_reports(&path, &reports.borrow()),

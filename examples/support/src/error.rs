@@ -13,16 +13,8 @@ pub enum Error {
     FontDirectory,
     #[error("cannot load the example fonts")]
     Fonts(#[source] RendererError),
-    #[error("cannot create the headless Vulkan renderer")]
-    Renderer(#[source] RendererError),
-    #[error("cannot create the painter of the capture")]
-    Painter(#[source] RendererError),
-    #[error("no buffer of whole pixels covers the size of the capture")]
-    BufferSize(#[source] NumberError),
-    #[error("cannot create the offscreen surface of the capture")]
-    Offscreen(#[source] RendererError),
-    #[error("cannot encode the capture as PNG")]
-    EncodePng(#[source] RendererError),
+    #[error("cannot create the shaper that measures the text of a view")]
+    Shaper(#[source] RendererError),
     #[error("cannot create the directory {}", path.display())]
     CreateDirectory {
         path: PathBuf,
@@ -39,12 +31,6 @@ pub enum Error {
     Frame(#[source] FrameError),
     #[error("a component of the view failed in a frame")]
     ComponentsFailed(Vec<ComponentFailure>),
-    #[error("cannot measure the content of the view")]
-    Measure(#[source] NumberError),
-    #[error("nothing is left that could move the view on")]
-    NothingMoves,
-    #[error("the view asks for another frame after a frame that changed nothing")]
-    NoRest,
     #[error("the view has no control tagged {0}")]
     MissingControl(String),
     #[error("the view shows no {role} named {name}")]
@@ -54,6 +40,16 @@ pub enum Error {
     #[cfg(target_os = "linux")]
     #[error("the app failed")]
     App(#[source] lavashell::RunError),
+    #[error("the app failed on the test platform")]
+    Record(#[source] lavashell::PlatformRunError<lavashell_test_platform::TestPlatform>),
+    #[error("the test platform returned no recorded frames")]
+    NotServed(#[source] lavashell_test_platform::Error),
+    #[error("the recording came to rest with {0} steps left to play")]
+    UnplayedSteps(usize),
+    #[error("the view gives no delay for the next step")]
+    UnreadDelay,
+    #[error("the window {app_id} did not show a frame")]
+    NothingShown { app_id: String },
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]
@@ -72,4 +68,16 @@ pub enum Error {
     FrameRate,
     #[error("cannot decode an icon of the example")]
     Icon(#[source] lavashell_lucide::Error),
+}
+
+/// Fails with [`Error::ComponentsFailed`] when `failures` contains a failed component.
+pub(crate) fn reject_failures(
+    failures: impl IntoIterator<Item = ComponentFailure>,
+) -> Result<(), Error> {
+    let failures: Vec<_> = failures.into_iter().collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::ComponentsFailed(failures))
+    }
 }

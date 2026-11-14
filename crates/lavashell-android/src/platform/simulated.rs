@@ -1,34 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Simulations of the renderer and of the parts of the ndk crate called by the AOSP code, for the tests. The
-//! simulations define the names of `platform.rs` that this crate uses, and accept the calls that this crate makes.
+//! simulations define the names of `platform.rs` that this crate uses. The simulated renderer draws each frame into
+//! the pixels of a simulated display.
 
 mod image;
 mod importer;
 pub mod ndk;
 mod reader;
-mod state;
 mod test_error;
 
+use ash::khr::android_surface;
+use ash::vk;
 pub(crate) use image::{HardwareBufferFormat, HardwareBufferUsage};
 pub(crate) use importer::{
     Completion, ForeignImport, ForeignImporter, HardwareBufferMemory, PropertiesError,
     ReleaseError, SampledMemory,
 };
-use lavashell_core::prelude::{OutputInfo, OutputRequest, PixelSize};
+use lavashell_actor::lock_ignoring_poison;
+use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::Error as RendererError;
 pub(crate) use lavashell_renderer::Sampling;
-use lavashell_renderer::{
-    Fonts, FrameOutcome, Painter, PresentationPolicy, SurfaceAlpha, SurfaceTiming, UniformRange,
-    skia,
-};
+use lavashell_renderer::{Fonts, FrameOutcome, Painter, UniformRange, skia};
+use lavashell_vulkan::{Instance, Window};
 use reader::Queue;
 pub(crate) use reader::{Buffer, Event as StreamEvent, MEDIA, Producer, Writing};
-pub(crate) use state::{RendererState, attach_window};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-    time::Duration,
-};
+use std::cell::Cell;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 pub(crate) use test_error::TestError;
 
 /// The simulated GPU of the test running on this thread, shared by the renderer and everything it creates.
@@ -43,6 +41,8 @@ pub(crate) struct Gpu {
     pub busy: Cell<bool>,
     /// The device samples formats through a YCbCr conversion.
     pub sampler_ycbcr_conversion: Cell<bool>,
+    /// The next frame finds no image of the display to draw into.
+    pub pending: Cell<bool>,
 }
 
 impl Gpu {
@@ -62,117 +62,60 @@ thread_local! {
 pub(crate) const SIDE: i32 = 16;
 pub(crate) const SURFACE_SIZE: PixelSize = PixelSize::new(SIDE.unsigned_abs(), SIDE.unsigned_abs());
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Event {
-    NativeAcquired,
-    Attached,
-    Acquired,
-    Presented(Option<Duration>),
-    TargetDropped,
-    NativeReleased,
-}
+/// A Surface of the simulated display, whose width and height in pixels the host can change.
+pub(crate) struct DisplaySurface(Arc<Mutex<(i32, i32)>>);
 
-#[derive(Default)]
-pub(crate) struct NativeState {
-    events: RefCell<Vec<Event>>,
-    pending: Cell<bool>,
-    pixels: RefCell<Vec<u8>>,
-    explicit: Cell<bool>,
-}
-
-pub(crate) struct NativeSurface(Rc<NativeState>);
-
-impl NativeSurface {
-    pub fn new() -> Self {
-        Self(Rc::new(NativeState::default()))
+impl DisplaySurface {
+    pub fn new(width: i32, height: i32) -> Self {
+        Self(Arc::new(Mutex::new((width, height))))
     }
 
-    /// A native window of the Surface with a new reference, as AOSP acquires one.
     pub fn window(&self) -> NativeWindow {
-        self.0.events.borrow_mut().push(Event::NativeAcquired);
-        NativeWindow {
-            state: self.0.clone(),
-            queue: None,
-        }
+        NativeWindow(Surface::Display(self.0.clone()))
     }
 
-    pub fn references(&self) -> usize {
-        Rc::strong_count(&self.0)
-    }
-
-    pub fn events(&self) -> Vec<Event> {
-        self.0.events.borrow().clone()
-    }
-
-    pub fn clear_events(&self) {
-        self.0.events.borrow_mut().clear();
-    }
-
-    pub fn last_event(&self) -> Option<Event> {
-        self.0.events.borrow().last().copied()
-    }
-
-    pub fn acquisitions(&self) -> usize {
-        self.0
-            .events
-            .borrow()
-            .iter()
-            .filter(|event| **event == Event::Acquired)
-            .count()
-    }
-
-    pub fn presentations(&self) -> Vec<Option<Duration>> {
-        self.0
-            .events
-            .borrow()
-            .iter()
-            .filter_map(|event| match event {
-                Event::Presented(time) => Some(*time),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn make_next_acquisition_pending(&self) {
-        self.0.pending.set(true);
-    }
-
-    /// The RGBA bytes of the pixel at `x`, `y`.
-    pub fn pixel(&self, x: i32, y: i32) -> Result<[u8; 4], TestError> {
-        let pixels = self.0.pixels.borrow();
-        let (rgba, partial) = pixels.as_chunks::<4>();
-        assert!(partial.is_empty(), "the pixels hold whole RGBA pixels");
-        let index = usize::try_from(y * SIDE + x).ok();
-        (index.and_then(|index| rgba.get(index)))
-            .copied()
-            .ok_or(TestError::PixelOutside { x, y })
+    pub fn resize(&self, width: i32, height: i32) {
+        *lock_ignoring_poison(&self.0) = (width, height);
     }
 }
 
-/// The native window of the ndk crate, simulated for the Surface of a display and for the Surface of a reader.
-pub struct NativeWindow {
-    state: Rc<NativeState>,
-    queue: Option<Rc<Queue>>,
+/// The native window of the ndk crate, simulated for the Surface of a display and for the Surface of a reader. Like
+/// the window of the ndk crate, it can be sent to and shared with other threads. A clone refers to the same Surface.
+#[derive(Clone)]
+pub struct NativeWindow(Surface);
+
+#[derive(Clone)]
+enum Surface {
+    Display(Arc<Mutex<(i32, i32)>>),
+    /// The reader with the key `key` on the thread of the test, and the default size of its buffers.
+    Reader {
+        key: usize,
+        lengths: (i32, i32),
+    },
 }
 
 impl NativeWindow {
-    pub(crate) fn of_reader(state: &Rc<NativeState>, queue: &Rc<Queue>) -> Self {
-        Self {
-            state: state.clone(),
-            queue: Some(queue.clone()),
+    pub(crate) fn of_reader(queue: &Queue) -> Self {
+        Self(Surface::Reader {
+            key: queue.key,
+            lengths: queue.lengths,
+        })
+    }
+
+    /// The key of the reader, or `None` for the window of a display.
+    pub(crate) fn reader(&self) -> Option<usize> {
+        match self.0 {
+            Surface::Reader { key, .. } => Some(key),
+            Surface::Display(_) => None,
         }
     }
 
-    /// The queue of the reader, or `None` for the window of the simulated display.
-    pub(crate) fn queue(&self) -> Option<&Rc<Queue>> {
-        self.queue.as_ref()
-    }
-
-    /// The default size of the buffers of a reader, or the size of the simulated display.
+    /// The default size of the buffers of a reader, or the size of a display.
     fn lengths(&self) -> (i32, i32) {
-        self.queue
-            .as_ref()
-            .map_or((SIDE, SIDE), |queue| queue.lengths)
+        match &self.0 {
+            Surface::Display(lengths) => *lock_ignoring_poison(lengths),
+            Surface::Reader { lengths, .. } => *lengths,
+        }
     }
 
     pub fn width(&self) -> i32 {
@@ -184,120 +127,60 @@ impl NativeWindow {
     }
 }
 
-impl Clone for NativeWindow {
-    fn clone(&self) -> Self {
-        self.state.events.borrow_mut().push(Event::NativeAcquired);
-        Self {
-            state: self.state.clone(),
-            queue: self.queue.clone(),
-        }
-    }
-}
-
-impl Drop for NativeWindow {
-    fn drop(&mut self) {
-        self.state.events.borrow_mut().push(Event::NativeReleased);
-    }
-}
-
 impl PartialEq for NativeWindow {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.state, &other.state)
-    }
-}
-
-pub(crate) struct SurfaceTarget {
-    window: NativeWindow,
-    timing: SurfaceTiming,
-    request: OutputRequest,
-    /// The output of the frame presented last.
-    output: Option<OutputInfo>,
-}
-
-impl SurfaceTarget {
-    pub fn output(&self) -> Option<OutputInfo> {
-        self.output
-    }
-
-    pub fn request_output(&mut self, request: OutputRequest) {
-        self.request = request;
-    }
-
-    /// The output of a frame presented into the simulated window. The window contains sRGB pixels with 8 bits per
-    /// channel.
-    fn presented_output(&self) -> OutputInfo {
-        let shown = OutputRequest::default();
-        OutputInfo {
-            requested: self.request,
-            profile: shown.profile,
-            color_bits: shown.precision.bits(),
-            alpha_bits: shown.precision.bits(),
-            floating_point: false,
-            fallback: self.request != shown,
+        match (&self.0, &other.0) {
+            (Surface::Display(one), Surface::Display(other)) => Arc::ptr_eq(one, other),
+            (Surface::Reader { key: one, .. }, Surface::Reader { key: other, .. }) => one == other,
+            (Surface::Display(_), Surface::Reader { .. })
+            | (Surface::Reader { .. }, Surface::Display(_)) => false,
         }
     }
 }
 
-impl Drop for SurfaceTarget {
-    fn drop(&mut self) {
-        self.window
-            .state
-            .events
-            .borrow_mut()
-            .push(Event::TargetDropped);
+/// The Vulkan window of a native window. The simulated renderer creates no surface from it.
+struct SimulatedWindow;
+
+// SAFETY: The trait is unsafe because a `Surface` destroys the handle that `create_surface` returns. This
+// `create_surface` returns no handle, so no surface can outlive a native window.
+unsafe impl Window for SimulatedWindow {
+    fn create_surface(&self, _: &Instance) -> Result<vk::SurfaceKHR, lavashell_vulkan::Error> {
+        Err(lavashell_vulkan::Error::MissingExtension(
+            android_surface::NAME,
+        ))
     }
 }
 
-/// The presentation backend used by the AOSP renderer. The simulated renderer accepts it and ignores it.
-pub(crate) struct AospPresentation;
-
-fn surface_target(
-    gpu: &VulkanRenderer,
-    window: &crate::NativeWindow,
-    _: SurfaceAlpha,
-) -> Result<SurfaceTarget, RendererError> {
-    gpu.gpu.reachable()?;
-    let native = window.window.clone();
-    native.state.events.borrow_mut().push(Event::Attached);
-    Ok(SurfaceTarget {
-        window: native,
-        timing: window.timing.clone(),
-        request: OutputRequest::default(),
-        output: None,
-    })
+pub(crate) fn vulkan_window(_: &crate::NativeWindow) -> Arc<dyn Window> {
+    Arc::new(SimulatedWindow)
 }
 
-pub(crate) struct VulkanRenderer {
-    pub device_name: String,
+/// Public because it is the GPU of the public `AospStreams`.
+pub struct VulkanRenderer {
     gpu: Rc<Gpu>,
     /// The range of uniforms that a runtime effect may use on the simulated device.
-    uniforms: UniformRange,
-    /// The simulated device has `VK_GOOGLE_display_timing`.
-    display_timing: bool,
-    /// The image that every frame is drawn into before its pixels are copied to the window.
+    uniform_range: UniformRange,
+    /// The image that every frame is drawn into before its pixels are copied to the display.
     frame: skia::Surface,
+    /// The RGBA pixels of the display.
+    pixels: Vec<u8>,
 }
 
 impl VulkanRenderer {
-    pub fn new(_: &AospPresentation) -> Result<Self, RendererError> {
+    pub fn new() -> Result<Self, RendererError> {
         let size = (SURFACE_SIZE.width, SURFACE_SIZE.height);
         let frame = skia::surfaces::raster(&frame_info(), None, None)
             .ok_or(RendererError::OffscreenSurface(size))?;
         Ok(Self {
-            device_name: "simulated Vulkan boundary".into(),
             gpu: GPU.with(Rc::clone),
-            uniforms: UniformRange::VULKAN_REQUIRED,
-            display_timing: true,
+            uniform_range: UniformRange::VULKAN_REQUIRED,
             frame,
+            pixels: Vec::new(),
         })
     }
 
     pub fn painter(&self, fonts: &Fonts) -> Result<Painter, RendererError> {
-        Painter::new(fonts, self.uniforms)
-    }
-
-    pub fn supports_presentation_time(&self) -> bool {
-        self.display_timing
+        Painter::new(fonts, self.uniform_range)
     }
 
     pub fn foreign_importer(&self) -> Result<ForeignImporter, RendererError> {
@@ -305,27 +188,13 @@ impl VulkanRenderer {
         Ok(ForeignImporter::new(&self.gpu))
     }
 
-    /// Applies the timestamp rule of the renderer: once a frame on a window had an explicit timestamp, every later
-    /// frame needs one. The renderer records that state privately, so the simulated window records it in `explicit`.
-    fn present(
+    /// Draws a frame with `draw` onto a cleared image and copies its pixels to the display.
+    pub fn present(
         &mut self,
-        target: &mut SurfaceTarget,
-        size: (u32, u32),
-        time: Option<Duration>,
         draw: impl FnOnce(&skia::Canvas),
     ) -> Result<FrameOutcome, RendererError> {
         self.gpu.reachable()?;
-        if size.0 == 0 || size.1 == 0 {
-            return Ok(FrameOutcome::Pending);
-        }
-        let native = &target.window.state;
-        let explicit =
-            target.timing.policy() == PresentationPolicy::Explicit || native.explicit.get();
-        if explicit && time.is_none() {
-            return Err(RendererError::ExplicitTimestampRequired);
-        }
-        native.events.borrow_mut().push(Event::Acquired);
-        if native.pending.replace(false) {
+        if self.gpu.pending.replace(false) {
             return Ok(FrameOutcome::Pending);
         }
         draw(self.frame.canvas().clear(skia::Color::TRANSPARENT));
@@ -335,13 +204,18 @@ impl VulkanRenderer {
             self.frame
                 .read_pixels(&info, &mut pixels, info.min_row_bytes(), (0, 0))
         );
-        *native.pixels.borrow_mut() = pixels;
-        if time.is_some() {
-            native.explicit.set(true);
-        }
-        native.events.borrow_mut().push(Event::Presented(time));
-        target.output = Some(target.presented_output());
+        self.pixels = pixels;
         Ok(FrameOutcome::Shown)
+    }
+
+    /// The RGBA bytes of the pixel at `x`, `y` of the display.
+    pub(crate) fn pixel(&self, x: i32, y: i32) -> Result<[u8; 4], TestError> {
+        let (rgba, partial) = self.pixels.as_chunks::<4>();
+        assert!(partial.is_empty(), "the pixels contain whole RGBA pixels");
+        let index = usize::try_from(y * SIDE + x).ok();
+        (index.and_then(|index| rgba.get(index)))
+            .copied()
+            .ok_or(TestError::PixelOutside { x, y })
     }
 }
 

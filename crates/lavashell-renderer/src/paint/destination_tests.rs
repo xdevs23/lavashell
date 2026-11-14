@@ -9,10 +9,11 @@ use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::Extent;
 use lavashell_core::scene::tree::{
-    Change, Content, DamageTracker, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate, Slot,
+    Change, Content, DamageTracker, Group, Node, Packet, SceneNodeId, SceneTree, Slot,
 };
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::{EffectId, VariantId};
+use lavashell_test_fixtures::show_all;
 use skia_safe::{AlphaType, Canvas, ColorType, ImageInfo, Paint, RRect, Surface};
 use skia_safe::{canvas::SaveLayerRec, image_filters};
 use std::sync::Arc;
@@ -142,7 +143,7 @@ fn paint_damage(
 ) -> Result<(), TestError> {
     let frame = SurfaceFrame {
         tree: tree.at(Duration::ZERO),
-        density,
+        dp_to_output: PixelScale::SQUARE.dp_to_output(density),
         damage,
         clear: skia_safe::Color::BLACK,
         scene: None,
@@ -249,9 +250,7 @@ fn assert_transformed_damage(in_packet: bool, scale: f64) -> Result<(), TestErro
     let mut retained = surface()?;
     let mut reference = surface()?;
     for (generation, color) in [(1, Color::WHITE), (2, Color::rgb(0))] {
-        tree.show(SceneUpdate::from_iter(translated(
-            generation, color, in_packet,
-        )))?;
+        show_all(&mut tree, translated(generation, color, in_packet))?;
         let dirty = presented.damage(tree.at(Duration::ZERO), viewport);
         let changed = Point::new(34.dp(), 24.dp());
         assert!(
@@ -325,14 +324,14 @@ fn assert_partial_damage(include_known_reader: bool, isolated: bool) -> Result<(
         ];
         (first, set(1, packet(tile(Color::WHITE))))
     };
-    tree.show(SceneUpdate::from_iter(first))?;
+    show_all(&mut tree, first)?;
     let mut partial = new_painter()?;
     let mut full = new_painter()?;
     let mut retained = surface()?;
     let mut reference = surface()?;
     let first = presented.damage(tree.at(Duration::ZERO), viewport);
     paint_damage(&mut partial, &mut retained, &tree, Density::ONE, first)?;
-    tree.show(SceneUpdate::from_iter(vec![changed]))?;
+    tree.show_change(changed)?;
     let dirty = presented.damage(tree.at(Duration::ZERO), viewport);
     assert!(dirty.is_some(), "the change must damage the frame");
     if !isolated {

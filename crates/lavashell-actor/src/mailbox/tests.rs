@@ -109,7 +109,7 @@ fn take_arrived_returns_the_waiting_items_without_waiting_for_one() -> TestResul
 }
 
 #[test]
-fn the_arrival_function_runs_for_an_item_in_the_empty_mailbox_and_when_every_sender_is_gone()
+fn the_arrival_function_runs_when_set_for_an_item_in_the_empty_mailbox_and_once_senders_are_gone()
 -> TestResult {
     let (sender, receiver) = mailbox();
     let wakes = Arc::new(AtomicUsize::new(0));
@@ -117,12 +117,13 @@ fn the_arrival_function_runs_for_an_item_in_the_empty_mailbox_and_when_every_sen
     receiver.on_arrival(move || {
         let _before = counted.fetch_add(1, Ordering::SeqCst);
     });
+    assert_eq!(wakes.load(Ordering::SeqCst), 1);
     sender.push(step(1.0))?;
     sender.push(step(2.0))?;
-    assert_eq!(wakes.load(Ordering::SeqCst), 1);
+    assert_eq!(wakes.load(Ordering::SeqCst), 2);
     assert_eq!(receiver.take()?, [step(1.0), step(2.0)]);
     sender.push(step(3.0))?;
     drop(sender);
-    assert_eq!(wakes.load(Ordering::SeqCst), 3);
+    assert_eq!(wakes.load(Ordering::SeqCst), 4);
     Ok(())
 }

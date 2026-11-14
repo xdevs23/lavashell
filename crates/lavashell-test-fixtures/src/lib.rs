@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Four helpers for the tests of the other crates. The fixed platform facts let the tests run their views without a
 //! real platform. The frame checks turn a frame in which a component failed into a test failure. The recorded scene
-//! receives the frames of a view and contains the changes of the last frame. The text measurer lets the tests frame
-//! views without a font.
+//! receives the frames of a view and contains the changes of the last frame. `show_all` applies a list of changes to
+//! a scene tree. The text measurer lets the tests frame views without a font.
 #![forbid(unsafe_code)]
 
 mod frames;
@@ -10,7 +10,7 @@ mod scene;
 mod text;
 
 pub use frames::{FrameFailure, WithoutFailures, failure_causes};
-pub use scene::RecordedScene;
+pub use scene::{RecordedScene, show_all};
 pub use text::NoText;
 
 use icu_locale_core::langid;

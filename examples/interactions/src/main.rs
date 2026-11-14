@@ -51,7 +51,7 @@ fn run() -> Result<(), Error> {
     let observer = demo.clone();
     let quit = demo.quit.clone();
     let mut app = transfers::install(app, &demo)
-        .view_observer(move |surface, _, view| observer.observe(surface, view))
+        .view_observer(move |surface, _, _, view| observer.observe(surface, view))
         .exit_when(move || quit.get());
 
     let window = if shaped {

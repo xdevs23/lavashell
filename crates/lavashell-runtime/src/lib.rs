@@ -51,4 +51,4 @@ mod window_move;
 
 pub use app::{App, SetupError};
 pub use lavashell_platform::Capability;
-pub use run::{PlatformRunError, RunError, run};
+pub use run::{RunError, run};
