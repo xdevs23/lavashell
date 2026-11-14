@@ -13,7 +13,7 @@ use lavashell_on_screen_keyboard::{
     scene::{self, FIELD},
     stage::{QUERY, finger, key, key_bounds, key_name, panel, tap, tap_field_end, touch},
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // The codes are the Linux evdev codes from include/uapi/linux/input-event-codes.h
 // (https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h).
@@ -43,12 +43,30 @@ fn showing(menu: CopyKey) -> Start {
     })
 }
 
-type Play = Steps<Demo, PathBuf, Error>;
+type Play = Steps<Demo, String, Error>;
 
-/// Writes the frame of the scene, taken once `start` holds, to the capture `name`.
+/// Labels the frame of the scene, taken once `start` is met, as the shot `name`.
 fn shot(play: &mut Play, start: Start, name: &str) {
-    let captures = Path::new(env!("CARGO_TARGET_TMPDIR")).join("keyboard");
-    play.mark(start, capture_path(captures, name));
+    play.mark(start, name.to_owned());
+}
+
+/// Plays `parts` one after another on one app and writes each shot into the subdirectory `group` of the keyboard
+/// captures. Each part starts in the state left by the part before it.
+fn run(group: &str, parts: &[fn(&mut Play)]) -> Result<(), Error> {
+    let demo = Demo::new(Appearance::Night)?;
+    let mut play = Play::new(demo.clone());
+    for part in parts {
+        part(&mut play);
+    }
+    let app = app(default_app()?, &demo, scene::screen(), false)?;
+    let frames = play.play(app, scene::density())?;
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("keyboard")
+        .join(group);
+    let shots = (frames.into_iter())
+        .map(|(name, frame)| (capture_path(&directory, &name), frame))
+        .collect();
+    Ok(write_first_frames(shots)?)
 }
 
 fn pixel() -> Dp {
@@ -98,27 +116,26 @@ fn set<T: 'static>(
 }
 
 #[test]
-fn the_keyboard_docks_types_switches_layouts_and_follows_the_arrow_keys() -> Result<(), Error> {
-    let demo = Demo::new(Appearance::Night)?;
-    let mut play = Play::new(demo.clone());
-    for part in [
-        show,
-        typing,
-        shift,
-        pages,
-        layouts::layouts,
-        layouts::further_letters,
-        actions,
-        arrow_keys,
-        placement::dock,
-        placement::pinch,
-        appearances,
-    ] {
-        part(&mut play);
-    }
-    let app = app(default_app()?, &demo, scene::screen(), false)?;
-    let frames = play.play(app, scene::density())?;
-    Ok(write_first_frames(frames)?)
+fn the_keyboard_shows_types_shifts_and_switches_pages_and_appearances() -> Result<(), Error> {
+    run("basics", &[show, typing, shift, pages, appearances])
+}
+
+#[test]
+fn the_keyboard_switches_layouts_and_offers_further_letters() -> Result<(), Error> {
+    run(
+        "layouts",
+        &[focused, layouts::layouts, layouts::further_letters],
+    )
+}
+
+#[test]
+fn the_keyboard_shows_the_action_of_the_field_and_follows_the_arrow_keys() -> Result<(), Error> {
+    run("actions", &[focused, actions, arrow_keys])
+}
+
+#[test]
+fn the_keyboard_docks_at_either_side_and_follows_a_pinch() -> Result<(), Error> {
+    run("placement", &[focused, placement::dock, placement::pinch])
 }
 
 fn show(play: &mut Play) {
@@ -130,7 +147,7 @@ fn show(play: &mut Play) {
         Ok(())
     });
     shot(play, settled(), "hidden");
-    play.push(settled(), |view, _, _| tap_field_end(view, pixel()));
+    tap_field(play);
     play.check(settled(), |view, _, demo| {
         let panel = panel(view, demo)?.bounds;
         let field = (view.bounds_of(FIELD)).ok_or(Error::MissingField)?;
@@ -151,11 +168,25 @@ fn show(play: &mut Play) {
     });
 }
 
-fn typing(play: &mut Play) {
+/// Shows the keyboard and types the query, without the checks and shots of `show` and `typing`.
+fn focused(play: &mut Play) {
+    tap_field(play);
+    type_query(play);
+}
+
+fn tap_field(play: &mut Play) {
+    play.push(settled(), |view, _, _| tap_field_end(view, pixel()));
+}
+
+fn type_query(play: &mut Play) {
     play.push(settled(), |view, _, demo| {
         (QUERY.chars()).try_for_each(|character| tap(view, &key_name(demo, character)))
     });
     play.check(settled(), query(QUERY.to_owned()));
+}
+
+fn typing(play: &mut Play) {
+    type_query(play);
     shot(play, settled(), "rest");
     play.push(settled(), |view, _, _| {
         platform(view, |facts| facts.keyboard.key_preview = false);
@@ -253,7 +284,7 @@ fn actions(play: &mut Play) {
         assert_eq!(demo.query.get(), QUERY);
         Ok(())
     });
-    play.push(settled(), |view, _, _| tap_field_end(view, pixel()));
+    tap_field(play);
     play.check(settled(), |view, _, demo| {
         assert!(
             panel(view, demo).is_ok(),
@@ -277,7 +308,7 @@ fn arrow_keys(play: &mut Play) {
         );
         Ok(())
     });
-    play.push(settled(), |view, _, _| tap_field_end(view, pixel()));
+    tap_field(play);
     play.push(settled(), |view, _, _| {
         touch_key(view, "q", InputEvent::TouchDown)?;
         view.input(InputEvent::TouchCancel(touch(1)));
