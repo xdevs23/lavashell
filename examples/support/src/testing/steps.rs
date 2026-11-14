@@ -18,13 +18,20 @@ pub struct KeyboardKey {
 }
 
 impl Start {
-    /// In the first frame at least `delay` after the step before started. The view gets a frame at that time.
+    /// In the first frame at least `delay` after the frame in which the step before ran, or after the frame that
+    /// shows its action. The view gets a frame at that time.
     #[must_use]
-    pub const fn after(delay: Duration) -> Self {
+    pub fn after(delay: Duration) -> Self {
+        Self::after_reading(move |_| Some(delay))
+    }
+
+    /// As [`Start::after`] with the delay that `delay` reads from the view of the frame from which the delay counts.
+    /// The steps fail when `delay` returns `None`.
+    #[must_use]
+    pub fn after_reading(delay: impl Fn(&View) -> Option<Duration> + 'static) -> Self {
         Self {
-            delay: Some(delay),
-            every: None,
-            condition: None,
+            delay: Some(Box::new(delay)),
+            ..Self::NEXT
         }
     }
 

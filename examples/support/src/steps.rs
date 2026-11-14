@@ -24,8 +24,7 @@ pub struct Steps<C, L, E> {
 /// In which frame a step runs: the first frame after the step before in which the delay has passed and the condition
 /// holds.
 pub struct Start {
-    /// The time from the start of the step before until the step can run.
-    pub(crate) delay: Option<Duration>,
+    pub(crate) delay: Option<Delay>,
     /// The time between the frames that a test platform makes while the step waits, for a condition that a motion
     /// without deadlines changes.
     pub(crate) every: Option<FrameInterval>,
@@ -33,6 +32,9 @@ pub struct Start {
 }
 
 pub(crate) type Condition = Box<dyn Fn(&View) -> bool>;
+
+/// Reads the time until a step can run from the view of the first frame after the step before ran.
+pub(crate) type Delay = Box<dyn Fn(&View) -> Option<Duration>>;
 
 type Action<C, E> = Box<dyn FnOnce(&mut View, Viewport, &C) -> Result<(), E>>;
 #[cfg(any(test, feature = "testing"))]
@@ -82,8 +84,8 @@ struct Playing<C, L, E> {
     started: Vec<(Marked, L)>,
     /// Whether the newest mark is a sequence mark, which asks the pace to record each frame until the next mark.
     sequence: bool,
-    /// The time at which the step that ran last started.
-    previous: Option<Duration>,
+    /// The time from which the next step can run, read in the first frame after the step before ran.
+    due: Option<Duration>,
     /// Whether an empty action waits to give a view a frame for the next step, whose delay has not passed yet.
     frame_requested: bool,
     pace: Pace,
@@ -93,6 +95,8 @@ struct Playing<C, L, E> {
 enum Phase<E> {
     /// The next step runs once a frame shows a view as its start describes.
     Ready,
+    /// A step has run, and the next frame reads when the next step can run.
+    Ran,
     /// The next step acts on a view and has not run yet.
     Queued,
     /// A step failed, so no later step runs.
@@ -120,7 +124,7 @@ impl<C, L, E> Steps<C, L, E> {
             phase: Phase::Ready,
             started: Vec::new(),
             sequence: false,
-            previous: None,
+            due: None,
             frame_requested: false,
             pace: self.pace,
         }
@@ -173,7 +177,7 @@ impl<C: 'static, L: Clone + 'static, E: From<Error> + 'static> Steps<C, L, E> {
         let frames = record(app, script)?.into_frames();
         let mut played = playing.borrow_mut();
         let unplayed = match mem::replace(&mut played.phase, Phase::Ready) {
-            Phase::Ready => played.waiting.len(),
+            Phase::Ready | Phase::Ran => played.waiting.len(),
             Phase::Queued => played.waiting.len() + 1,
             Phase::Failed(failure) => return Err(failure),
         };
@@ -207,35 +211,63 @@ impl Start {
         }
     }
 
-    /// The time from which the step can run, when the step before started at `previous`.
-    fn due(&self, previous: Option<Duration>) -> Option<Duration> {
-        (previous.zip(self.delay)).map(|(previous, delay)| previous.saturating_add(delay))
+    /// The time from which the step can run, when `view` is the view of the first frame after the step before ran.
+    fn due(&self, view: &View) -> Result<Option<Duration>, Error> {
+        let Some(read) = &self.delay else {
+            return Ok(None);
+        };
+        let delay = read(view).ok_or(Error::UnreadDelay)?;
+        Ok(Some(view.motion().now().saturating_add(delay)))
     }
 
-    /// Whether a frame that shows `view` at `now` starts the step, when the step before started at `previous`.
-    fn starts(&self, view: &View, now: Duration, previous: Option<Duration>) -> bool {
-        self.due(previous).is_none_or(|due| now >= due)
+    /// Whether a frame that shows `view` at `now` starts the step, which can run from `due`.
+    fn starts(&self, view: &View, now: Duration, due: Option<Duration>) -> bool {
+        due.is_none_or(|due| now >= due)
             && (self.condition.as_ref()).is_none_or(|holds| holds(view))
     }
 }
 
-impl<C, L, E> Playing<C, L, E> {
+impl<C, L, E: From<Error>> Playing<C, L, E> {
     /// Takes the work of the next step when a frame that shows `view` at `now` starts it.
     fn take_started(&mut self, view: &View, now: Duration) -> Option<Work<C, L, E>> {
+        if matches!(self.phase, Phase::Ran) {
+            self.schedule(view);
+        }
         let next = self.waiting.front()?;
-        if !(matches!(self.phase, Phase::Ready) && next.start.starts(view, now, self.previous)) {
+        if !(matches!(self.phase, Phase::Ready) && next.start.starts(view, now, self.due)) {
             return None;
         }
         self.waiting.pop_front().map(|step| step.work)
     }
 
+    /// Reads from `view` when the next step can run, in the first frame after the step before ran.
+    fn schedule(&mut self, view: &View) {
+        match (self.waiting.front()).map_or(Ok(None), |next| next.start.due(view)) {
+            Ok(due) => {
+                self.due = due;
+                self.phase = Phase::Ready;
+            }
+            Err(failure) => self.phase = Phase::Failed(failure.into()),
+        }
+    }
+}
+
+impl<C, L, E> Playing<C, L, E> {
+    /// Records that the step taken last has run as `ran` returns. No later step runs once it failed.
+    fn step_ran(&mut self, ran: Result<(), E>) {
+        self.phase = match ran {
+            Ok(()) => Phase::Ran,
+            Err(failure) => Phase::Failed(failure),
+        };
+    }
+
     /// What the steps wait for.
     fn waits_for(&self) -> StepsPace {
         match (&self.phase, self.waiting.front()) {
-            (Phase::Queued, _) => StepsPace::Queued,
+            (Phase::Queued | Phase::Ran, _) => StepsPace::Queued,
             (Phase::Failed(_), _) | (Phase::Ready, None) => StepsPace::Ended,
             (Phase::Ready, Some(next)) => StepsPace::Waiting {
-                due: next.start.due(self.previous),
+                due: self.due,
                 every: next.start.every,
             },
         }
@@ -292,7 +324,7 @@ mod tests;
 /// press of keys, is queued on `view`, and later steps wait until it has run. While the delay of the next step has not
 /// passed, an empty action waits on `view`, so the view gets a frame at the next present, which a test platform makes
 /// at the time the steps wait for.
-fn observe<C: 'static, L: 'static, E: 'static>(
+fn observe<C: 'static, L: 'static, E: From<Error> + 'static>(
     playing: &Rc<RefCell<Playing<C, L, E>>>,
     actions: &ViewActions,
     shown: Marked,
@@ -306,16 +338,14 @@ fn observe<C: 'static, L: 'static, E: 'static>(
         match work {
             Work::Mark(label, recording) => {
                 state.started.push((shown, label));
-                state.previous = Some(now);
+                state.step_ran(Ok(()));
                 state.sequence = recording == MarkRecording::EveryFrame;
                 marked = true;
             }
             #[cfg(any(test, feature = "testing"))]
             Work::Check(check) => {
-                state.previous = Some(now);
-                if let Err(failure) = check(view, viewport, &state.context) {
-                    state.phase = Phase::Failed(failure);
-                }
+                let checked = check(view, viewport, &state.context);
+                state.step_ran(checked);
             }
             Work::Act(action) => queue(playing, &mut state, actions, (shown, viewport), action),
             #[cfg(any(test, feature = "testing"))]
@@ -347,7 +377,7 @@ fn observe<C: 'static, L: 'static, E: 'static>(
 }
 
 /// Queues `action` on the view of the frame `shown` in `viewport`. The next step waits until the action has run.
-fn queue<C: 'static, L: 'static, E: 'static>(
+fn queue<C: 'static, L: 'static, E: From<Error> + 'static>(
     playing: &Rc<RefCell<Playing<C, L, E>>>,
     state: &mut Playing<C, L, E>,
     actions: &ViewActions,
@@ -359,11 +389,7 @@ fn queue<C: 'static, L: 'static, E: 'static>(
     actions.dispatch(shown.surface, move |view| {
         let ran = action(view, viewport, &context);
         let mut state = playing.borrow_mut();
-        state.previous = Some(view.motion().now());
-        state.phase = match ran {
-            Ok(()) => Phase::Ready,
-            Err(failure) => Phase::Failed(failure),
-        };
+        state.step_ran(ran);
         state.pace.publish(state.waits_for());
     });
 }

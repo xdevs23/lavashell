@@ -46,6 +46,8 @@ pub enum Error {
     NotServed(#[source] lavashell_test_platform::Error),
     #[error("the recording came to rest with {0} steps left to play")]
     UnplayedSteps(usize),
+    #[error("the view gives no delay for the next step")]
+    UnreadDelay,
     #[error("the window {app_id} did not show a frame")]
     NothingShown { app_id: String },
     #[error("cannot create the frame log")]

@@ -121,21 +121,38 @@ fn marks_that_start_in_the_same_frame_each_show_that_frame() {
 }
 
 #[test]
-fn next_starts_in_the_frame_of_the_step_before() {
-    let at = milliseconds(5);
-    assert!(Start::NEXT.starts(&view(), at, Some(at)));
+fn next_starts_in_the_frame_of_the_step_before() -> Result<(), Error> {
+    let view = view();
+    let due = Start::NEXT.due(&view)?;
+    assert_eq!(due, None);
+    assert!(Start::NEXT.starts(&view, Duration::ZERO, due));
+    Ok(())
 }
 
 #[test]
-fn after_starts_once_its_delay_passed_since_the_step_before() {
+fn after_starts_once_its_delay_passed_since_the_frame_of_the_step_before() -> Result<(), Error> {
     let (view, after) = (view(), Start::after(milliseconds(10)));
-    let previous = Some(milliseconds(5));
-    assert!(!after.starts(&view, milliseconds(14), previous));
-    assert!(after.starts(&view, milliseconds(15), previous));
+    view.motion().advance(milliseconds(5));
+    let due = after.due(&view)?;
+    assert!(!after.starts(&view, milliseconds(14), due));
+    assert!(after.starts(&view, milliseconds(15), due));
     assert!(
         after.starts(&view, Duration::ZERO, None),
         "a first step starts at once"
     );
+    Ok(())
+}
+
+#[test]
+fn after_reading_reads_its_delay_from_the_view_of_the_frame_of_the_step_before() -> Result<(), Error>
+{
+    let view = view();
+    view.motion().advance(milliseconds(6));
+    let reading = Start::after_reading(|view| Some(view.motion().now() / 2));
+    assert_eq!(reading.due(&view)?, Some(milliseconds(9)));
+    let unread = Start::after_reading(|_| None).due(&view);
+    assert!(matches!(unread, Err(Error::UnreadDelay)));
+    Ok(())
 }
 
 #[test]
@@ -155,11 +172,15 @@ fn the_steps_wait_for_the_due_time_and_the_interval_of_the_next_step() {
     let every = constant!(FrameInterval::per_second(60));
     let mut steps = Steps::<(), &str, Error>::new(());
     steps.mark(Start::after(milliseconds(10)), "late");
-    let mut playing = steps.into_playing();
-    playing.previous = Some(milliseconds(5));
-    let due = Some(milliseconds(15));
+    let (mut playing, view) = (steps.into_playing(), view());
+    playing.step_ran(Ok(()));
+    assert_eq!(playing.waits_for(), StepsPace::Queued);
+    assert!(playing.take_started(&view, Duration::ZERO).is_none());
+    let due = Some(milliseconds(10));
     assert_eq!(playing.waits_for(), StepsPace::Waiting { due, every: None });
     playing.waiting[0].start = Start::sampled(every, |_| false);
+    playing.step_ran(Ok(()));
+    assert!(playing.take_started(&view, Duration::ZERO).is_none());
     let every = Some(every);
     assert_eq!(playing.waits_for(), StepsPace::Waiting { due: None, every });
 }
@@ -269,4 +290,36 @@ fn a_sequence_mark_asks_the_pace_to_record_each_frame_until_the_next_mark() -> R
         expected.map(|(label, at)| (label, milliseconds(at)))
     );
     Ok(())
+}
+
+#[test]
+fn a_delay_counts_from_the_frame_of_the_step_before_or_of_its_action() -> Result<(), Error> {
+    let mut steps = Steps::<(), &str, Error>::new(());
+    steps.mark(Start::NEXT, "first");
+    steps.mark(Start::after(milliseconds(25)), "fixed");
+    steps.mark(
+        Start::after_reading(|view| Some(view.motion().now())),
+        "read",
+    );
+    steps.push(Start::NEXT, |_, _, ()| Ok(()));
+    steps.mark(Start::after(milliseconds(10)), "after the action");
+    let expected = [
+        ("first", 0),
+        ("fixed", 25),
+        ("read", 50),
+        ("after the action", 60),
+    ];
+    assert_eq!(
+        play_labeled_times(steps)?,
+        expected.map(|(label, at)| (label, milliseconds(at)))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_delay_that_the_view_does_not_give_fails_the_steps() {
+    let mut steps = Steps::<(), &str, Error>::new(());
+    steps.mark(Start::NEXT, "first");
+    steps.mark(Start::after_reading(|_| None), "never");
+    assert!(matches!(play_labeled_times(steps), Err(Error::UnreadDelay)));
 }

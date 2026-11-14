@@ -26,8 +26,6 @@ enum TestError {
     Example(#[from] lavashell_example_support::Error),
     #[error("cannot find the test binary, beside which the captures are written")]
     TestBinary(#[source] std::io::Error),
-    #[error("the view does not wait for a deadline")]
-    NoDeadline,
 }
 
 #[derive(Default)]
@@ -60,24 +58,15 @@ impl Play {
     fn capture(&mut self, start: Start, name: &str) {
         self.steps.mark(start, capture_path(&self.captures, name));
     }
+}
 
-    /// Adds a step that reads the next deadline of the view in the frame that shows the step before. Returns the
-    /// start once a frame shows the view halfway to that deadline, while the motions that end at it still run.
-    fn midway(&mut self) -> Start {
-        let halfway = Rc::new(Cell::new(None));
-        let read = Rc::clone(&halfway);
-        self.steps.check(Start::NEXT, move |view, _, _| {
-            let now = view.motion().now();
-            let deadline = view.next_deadline().ok_or(TestError::NoDeadline)?;
-            read.set(Some(now + deadline.saturating_sub(now) / 2));
-            Ok(())
-        });
-        Start::sampled(SAMPLES, move |view| {
-            halfway
-                .get()
-                .is_some_and(|time| view.motion().now() >= time)
-        })
-    }
+/// In the frame halfway to the next deadline that the view waits for in the frame that shows the step before, while
+/// the motions that end at that deadline still run.
+fn midway() -> Start {
+    Start::after_reading(|view| {
+        let now = view.motion().now();
+        (view.next_deadline()).map(|deadline| deadline.saturating_sub(now) / 2)
+    })
 }
 
 fn island(view: &View, island: Island) -> Result<Rect, Error> {
@@ -160,9 +149,8 @@ fn trip_and_dock(play: &mut Play, seen: &Rc<Seen>) {
     play.capture(Start::at_rest(), "rest");
 
     play.cue(Start::at_rest());
-    let midway = play.midway();
     let entering = Rc::clone(seen);
-    play.steps.check(midway, move |view, _, _| {
+    play.steps.check(midway(), move |view, _, _| {
         let status = island(view, Island::Status)?;
         assert!(
             status.width > entering.rest.get()[2].width,
@@ -222,9 +210,8 @@ fn morph(play: &mut Play, seen: &Rc<Seen>) {
         Ok(())
     });
     play.cue(Start::at_rest());
-    let midway = play.midway();
     let opening = Rc::clone(seen);
-    play.steps.check(midway, move |view, _, _| {
+    play.steps.check(midway(), move |view, _, _| {
         assert!(
             island(view, Island::Media)?.height > opening.rest.get()[1].height,
             "the media island opens"
@@ -320,8 +307,7 @@ fn daylight(play: &mut Play, seen: &Rc<Seen>) {
     play.cue(Start::at_rest());
     count_compositions(play, seen);
     play.cue(Start::at_rest());
-    let midway = play.midway();
-    play.capture(midway, "to-day");
+    play.capture(midway(), "to-day");
     let tinted = Rc::clone(seen);
     play.steps.check(Start::at_rest(), move |view, _, taskbar| {
         assert_eq!(taskbar.daylight.get(), Daylight::Day);
@@ -334,8 +320,7 @@ fn daylight(play: &mut Play, seen: &Rc<Seen>) {
     });
     play.capture(Start::at_rest(), "day");
     play.cue(Start::at_rest());
-    let midway = play.midway();
-    play.capture(midway, "to-night");
+    play.capture(midway(), "to-night");
 }
 
 /// The time from the start of each cue of the script until the scene comes to rest after it.
