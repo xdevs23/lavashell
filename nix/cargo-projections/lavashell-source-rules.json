@@ -290,7 +290,7 @@
             "target": "x86_64-unknown-linux-gnu"
           }
         },
-        "seedHash": "f55399e8a2a3d9175da22b8a7818e0a57c2708b00f3a8495058739f5da072688"
+        "seedHash": "694cdb0ab4929c6b1489e0a54c1213bd064d2bff6ecf3fbf33242c08c7aa6c7e"
       }
     }
   },
@@ -403,7 +403,7 @@
         "version": "6.0.0"
       },
       {
-        "checksum": "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d",
+        "checksum": "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa",
         "dependencies": [
           "bitflags",
           "errno",
@@ -413,7 +413,7 @@
         ],
         "name": "rustix",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "version": "1.1.5"
+        "version": "1.1.6"
       },
       {
         "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
