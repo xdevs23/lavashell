@@ -4,7 +4,7 @@
 
 use super::{CompletedScene, Completion, Status, VulkanRenderer};
 use crate::Error;
-use lavashell_core::prelude::Viewport;
+use lavashell_core::prelude::{PixelScale, Viewport};
 use skia_safe::gpu::{DirectContext, DirectContextId, SyncCpu};
 use skia_safe::{Canvas, Surface};
 use std::time::Duration;
@@ -78,11 +78,16 @@ pub(crate) struct SceneLayer<'a> {
 }
 
 impl SceneLayer<'_> {
-    /// Fills the base layer of the canvas with the image.
+    /// Fills the base layer of the canvas with the image at any canvas transform.
     pub(crate) fn draw(&self) {
         let layer = skia_safe::Rect::from_isize(self.canvas.base_layer_size());
         let paint = skia_safe::Paint::default();
-        let _chained_canvas = self.canvas.draw_image_rect(self.image, None, layer, &paint);
+        let saved = self.canvas.save();
+        let _chained_canvas = self
+            .canvas
+            .reset_matrix()
+            .draw_image_rect(self.image, None, layer, &paint)
+            .restore_to_count(saved);
     }
 }
 
@@ -98,7 +103,7 @@ pub trait SceneSource {
 
     /// Submits the scene work that is ready and returns without waiting. The renderer calls this function in sequence
     /// with its own submissions to the queue, so the function must not wait for a CPU simulation or for asset
-    /// preparation. `viewport` is the surface size in dp, with the density that converts the size to pixels.
+    /// preparation. The source produces the image at `scale.buffer_size(viewport)` pixels.
     ///
     /// # Errors
     /// Returns the failure of the renderer to produce the scene.
@@ -107,6 +112,7 @@ pub trait SceneSource {
         gpu: &mut VulkanRenderer,
         now: Duration,
         viewport: Viewport,
+        scale: PixelScale,
     ) -> Result<Option<PendingScene>, Error>;
 }
 

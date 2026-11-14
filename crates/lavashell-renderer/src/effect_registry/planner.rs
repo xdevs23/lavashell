@@ -6,9 +6,8 @@ use crate::{
     destination::Destination,
     vulkan::{GpuSample, SampleKind, SampleTag},
 };
-use lavashell_core::prelude::Density;
-use lavashell_core::scene::DrawCommand;
 use lavashell_core::scene::tree::{NodeKey, Presented};
+use lavashell_core::scene::{Affine, DrawCommand};
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::{
     Choice, DrawId, DrawTimeKey, DrawTimes, EffectDraw, EffectId, FrameBudget, QualityChooser,
@@ -45,7 +44,7 @@ struct SurfaceState {
 struct PlannedFrame {
     budget: FrameBudget,
     scene_generation: u64,
-    density: Density,
+    dp_to_output: Affine,
 }
 
 #[derive(Default)]
@@ -160,17 +159,17 @@ impl Painter {
     }
 
     /// Collects the GPU times of completed draws, then chooses the quality variant of each effect draw for the next
-    /// frame, which is painted at `density` within `budget`. `frame` is the sequence number of that frame and is
-    /// attached to the GPU samples of its draws. `tree` contains everything shown on the surface named by `budget`,
-    /// whose identifier is never reused for another surface. Paint this surface before planning another one. A GPU
-    /// timer that cannot be read is recorded as a failure. The times of the other draws still count.
+    /// frame, which is painted through `dp_to_output` within `budget`. `frame` is the sequence number of that frame
+    /// and is attached to the GPU samples of its draws. `tree` contains everything shown on the surface named by
+    /// `budget`, whose identifier is never reused for another surface. Paint this surface before planning another one.
+    /// A GPU timer that cannot be read is recorded as a failure. The times of the other draws still count.
     pub fn plan_scene_effects(
         &mut self,
         tree: Presented<'_>,
         budget: FrameBudget,
         frame: u64,
         scene_generation: u64,
-        density: Density,
+        dp_to_output: Affine,
     ) -> QualityChange {
         self.frame = frame;
         let collected = self.gpu_timing.collect();
@@ -191,14 +190,14 @@ impl Painter {
         let planned = PlannedFrame {
             budget,
             scene_generation,
-            density,
+            dp_to_output,
         };
         self.choose_effects(tree, Planning::new(planned))
     }
 
     fn choose_effects(&mut self, tree: Presented<'_>, mut planning: Planning) -> QualityChange {
         for leaf in tree.paint_order().leaves() {
-            let pixels_per_dp = planning.frame.density.get() * leaf.world.stretch();
+            let pixels_per_dp = planning.frame.dp_to_output.then(leaf.world).stretch();
             self.collect_effects(
                 leaf.packet.commands(),
                 leaf.key,

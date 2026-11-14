@@ -17,6 +17,7 @@ members = [
     "crates/lavashell-bevy",
     "crates/lavashell-lucide",
     "crates/lavashell-test-fixtures",
+    "crates/lavashell-test-platform",
     "crates/lavashell-build-script",
     "examples/support",
     "examples/copy-keys",
@@ -75,6 +76,7 @@ lavashell-android = { path = "crates/lavashell-android" }
 lavashell = { path = "crates/lavashell" }
 lavashell-lucide = { path = "crates/lavashell-lucide" }
 lavashell-test-fixtures = { path = "crates/lavashell-test-fixtures" }
+lavashell-test-platform = { path = "crates/lavashell-test-platform" }
 lavashell-build-script = { path = "crates/lavashell-build-script" }
 lavashell-example-support = { path = "examples/support" }
 lavashell-example-copy-keys = { path = "examples/copy-keys" }
@@ -102,6 +104,7 @@ icu_locale_core = { version = "=2.3.0", features = ["alloc"] }
 inventory = "=0.3.25"
 jni = "=0.22.4"
 ndk = { version = "=0.9.0", default-features = false, features = ["media", "nativewindow", "api-level-31"] }
+ndk-sys = "=0.6.0"
 log = { version = "=0.4.34", features = ["std"] }
 env_logger = { version = "=0.11.11", default-features = false }
 lru = "=0.19.0"

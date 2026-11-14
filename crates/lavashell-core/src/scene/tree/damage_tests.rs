@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::test_changes::insert;
+use super::test_changes::{insert, show_all};
 use super::*;
 use crate::animation::{Animatable, MotionSpec, Playing, Program, Timing, Tween, Vector};
 use crate::effects::{Backdrop, blur_reach};
@@ -41,7 +41,7 @@ struct Shown {
 
 impl Shown {
     fn apply(&mut self, changes: impl IntoIterator<Item = Change>) -> Result<(), ApplyError> {
-        self.tree.show(SceneUpdate::from_iter(changes))
+        show_all(&mut self.tree, changes)
     }
 
     fn damage(&mut self, now: Duration) -> Option<Rect> {
@@ -188,10 +188,8 @@ fn removing_a_graft_damages_what_the_grafted_namespace_showed() -> TestResult {
     let mut tree = presented([])?;
     let grafted = tree.tree.create_namespace();
     let rect = Rect::new(0.dp(), 0.dp(), 20.dp(), 20.dp());
-    tree.tree.apply(
-        grafted,
-        SceneUpdate::from_iter([insert(1, None, 0, fill(rect))]),
-    )?;
+    let guest = insert(1, None, 0, fill(rect));
+    tree.tree.apply_change(grafted, guest)?;
     tree.apply([insert(1, None, 0, Node::Leaf(Content::Graft(grafted)))])?;
     let shown = Rect::new(0.dp(), 0.dp(), 21.dp(), 21.dp());
     assert_eq!(tree.damage(Duration::ZERO), Some(shown));

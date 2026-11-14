@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Merge;
 use crate::lock::{lock_ignoring_poison, wait_ignoring_poison};
 use crate::pending::{Fence, Pending};
+use crate::{Activity, Merge};
 use std::mem;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
@@ -9,6 +9,13 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 /// with the same key, unless an item that does not overwrite arrived after it. Every other item is appended.
 #[must_use]
 pub fn mailbox<T: Merge>() -> (Sender<T>, Receiver<T>) {
+    mailbox_followed_by(None)
+}
+
+/// Makes a mailbox whose receiver is counted by `activity`, if there is one.
+pub(crate) fn mailbox_followed_by<T: Merge>(
+    activity: Option<Box<dyn Activity>>,
+) -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Shared {
         state: Mutex::new(State {
             waiting: Pending::new(Fence::EveryKey),
@@ -16,6 +23,7 @@ pub fn mailbox<T: Merge>() -> (Sender<T>, Receiver<T>) {
             receiving: true,
             closed_intake: false,
             wake: None,
+            activity,
         }),
         arrived: Condvar::new(),
         opened: Condvar::new(),
@@ -33,6 +41,11 @@ pub struct Sender<T: Merge> {
 
 /// The end of a mailbox that receives the items.
 pub struct Receiver<T: Merge> {
+    shared: Arc<Shared<T>>,
+}
+
+/// Wakes the receiver of a mailbox as an arrival does, without an item. For a receiver that `on_arrival` wakes.
+pub struct Waker<T: Merge> {
     shared: Arc<Shared<T>>,
 }
 
@@ -61,11 +74,30 @@ struct State<T: Merge> {
     closed_intake: bool,
     /// Runs on the pushing thread when an item arrives in the empty mailbox and when the last sender is gone.
     wake: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Counts whether the receiver has work, if anything does.
+    activity: Option<Box<dyn Activity>>,
 }
 
 impl<T: Merge> State<T> {
     fn awaits_items(&self) -> bool {
         self.waiting.is_empty() && self.senders > 0
+    }
+
+    /// Marks the receiver as resting in its activity when no item is waiting for it.
+    fn rest_if_empty(&mut self) {
+        if self.waiting.is_empty()
+            && let Some(activity) = &mut self.activity
+        {
+            activity.rest();
+        }
+    }
+
+    /// Marks the receiver as busy in its activity, and returns the function that wakes it.
+    fn work(&mut self) -> Option<Arc<dyn Fn() + Send + Sync>> {
+        if let Some(activity) = &mut self.activity {
+            activity.work();
+        }
+        self.wake.clone()
     }
 }
 
@@ -86,7 +118,7 @@ impl<T: Merge> Sender<T> {
         }
         let was_empty = state.waiting.is_empty();
         state.waiting.push(item);
-        let wake = was_empty.then(|| state.wake.clone()).flatten();
+        let wake = state.work().filter(|_| was_empty);
         drop(state);
         if was_empty {
             self.shared.arrived.notify_one();
@@ -127,8 +159,10 @@ impl<T: Merge> Receiver<T> {
     ///
     /// Fails once no item waits and every sender is gone.
     pub fn take(&self) -> Result<Vec<T>, Closed> {
+        let mut state = self.shared.lock();
+        state.rest_if_empty();
         let awaits_items = |state: &mut State<T>| state.awaits_items();
-        let state = wait_ignoring_poison(&self.shared.arrived, self.shared.lock(), awaits_items);
+        let state = wait_ignoring_poison(&self.shared.arrived, state, awaits_items);
         take_waiting(state)
     }
 
@@ -142,11 +176,23 @@ impl<T: Merge> Receiver<T> {
         take_waiting(self.shared.lock())
     }
 
-    /// Runs `wake` on the pushing thread each time an item arrives in the empty mailbox, and once every sender is
-    /// gone, so that a receiver that also waits for other sources learns that it can take items. Replaces the function
-    /// set before.
+    /// Runs `wake` right away, then on the pushing thread each time an item arrives in the empty mailbox, and once
+    /// every sender is gone. A receiver that also blocks on other sources takes the items after each run. The first
+    /// run is for the items that arrived before. Replaces the function set before.
     pub fn on_arrival(&self, wake: impl Fn() + Send + Sync + 'static) {
-        self.shared.lock().wake = Some(Arc::new(wake));
+        let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
+        self.shared.lock().wake = Some(Arc::clone(&wake));
+        wake();
+    }
+
+    /// Marks the receiver as resting in its activity when no item is waiting for it, and returns whether no item is
+    /// waiting. A receiver that waits through [`Receiver::take`] rests there. A receiver that waits for other sources
+    /// as well calls this function before it waits.
+    #[must_use]
+    pub fn rest_if_empty(&self) -> bool {
+        let mut state = self.shared.lock();
+        state.rest_if_empty();
+        state.waiting.is_empty()
     }
 
     #[must_use]
@@ -155,12 +201,32 @@ impl<T: Merge> Receiver<T> {
             shared: Arc::clone(&self.shared),
         }
     }
+
+    #[must_use]
+    pub fn waker(&self) -> Waker<T> {
+        Waker {
+            shared: Arc::clone(&self.shared),
+        }
+    }
 }
 
 impl<T: Merge> Drop for Receiver<T> {
     fn drop(&mut self) {
-        self.shared.lock().receiving = false;
+        let mut state = self.shared.lock();
+        state.receiving = false;
+        state.activity = None;
+        drop(state);
         self.shared.opened.notify_all();
+    }
+}
+
+impl<T: Merge> Waker<T> {
+    /// Marks the receiver as busy and runs the function set by [`Receiver::on_arrival`].
+    pub fn wake(&self) {
+        let wake = self.shared.lock().work();
+        if let Some(wake) = wake {
+            wake();
+        }
     }
 }
 

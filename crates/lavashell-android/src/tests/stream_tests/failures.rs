@@ -18,12 +18,12 @@ fn reported(warnings: &[String], rejection: StreamRejection) -> usize {
 
 #[test]
 fn a_rejected_frame_is_returned_and_the_stream_shows_the_frame_before() -> Result<(), TestError> {
-    let (mut renderer, surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Private)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Private)?;
+    let producer = renderer.producer(stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
-    let shown = latched(&mut renderer, &mut stream)?;
-    assert_eq!(render(&mut renderer, shown)?, FrameOutcome::Shown);
+    let shown = renderer.latched(stream)?;
+    assert_eq!(renderer.render(shown)?, FrameOutcome::Shown);
     producer.clear_events();
 
     let too_large = Buffer::new(2, TOO_WIDE, skia::Color::BLUE);
@@ -60,13 +60,13 @@ fn a_rejected_frame_is_returned_and_the_stream_shows_the_frame_before() -> Resul
     let logged = warnings(|| {
         for (buffer, rejection) in rejected {
             producer.queue(buffer);
-            assert_eq!(renderer.latch(&mut stream)?, Latch::Rejected(rejection));
+            assert_eq!(renderer.latch(stream)?, Latch::Rejected(rejection));
         }
         Ok(())
     })?;
-    assert_eq!(render(&mut renderer, shown)?, FrameOutcome::Shown);
-    assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, RED);
-    assert_eq!(stream.drawn_size(), Some(SURFACE_SIZE));
+    assert_eq!(renderer.render(shown)?, FrameOutcome::Shown);
+    assert_eq!(renderer.pixel(MIDDLE, MIDDLE)?, RED);
+    assert_eq!(renderer.stream(stream)?.drawn_size(), Some(SURFACE_SIZE));
     let returned = (2..=9).map(|id| Event::Released { id, fenced: true });
     let events = returned.chain([Event::HandedBack(1)]).collect::<Vec<_>>();
     assert_eq!(producer.events(), events);
@@ -81,16 +81,17 @@ fn a_rejected_frame_is_returned_and_the_stream_shows_the_frame_before() -> Resul
 
 #[test]
 fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestError> {
-    let (mut renderer, surface) = attached()?;
-    let mut failing = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let mut working = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let (failing_producer, working_producer) = (producer(&failing)?, producer(&working)?);
+    let mut renderer = Display::new()?;
+    let failing = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let working = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let failing_producer = renderer.producer(failing)?;
+    let working_producer = renderer.producer(working)?;
     let mut unimportable = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     unimportable.fails_import = true;
     failing_producer.queue(unimportable);
     working_producer.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::BLUE));
-    let failed = latched(&mut renderer, &mut failing)?;
-    let imported = latched(&mut renderer, &mut working)?;
+    let failed = renderer.latched(failing)?;
+    let imported = renderer.latched(working)?;
     let left = Rect::new(0.dp(), 0.dp(), MIDDLE.dp(), SIDE.dp());
     let right = Rect::new(MIDDLE.dp(), 0.dp(), (SIDE - MIDDLE).dp(), SIDE.dp());
     let commands =
@@ -101,14 +102,15 @@ fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestE
         });
     let mut outcome = None;
     let logged = warnings(|| {
-        let tree = scene(&commands[..])?;
-        outcome = Some(renderer.render(&tree.snapshot(), FrameTime::default(), viewport())?);
+        let (frame, streams) = renderer.draw(&scene(&commands[..])?);
+        outcome = Some(frame?);
+        streams?;
         Ok(())
     })?;
     assert_eq!(outcome, Some(FrameOutcome::Shown));
     let (middle_of_left, middle_of_right) = (MIDDLE / 2, MIDDLE + (SIDE - MIDDLE) / 2);
-    assert_eq!(surface.pixel(middle_of_left, MIDDLE)?, [0; 4]);
-    assert_eq!(surface.pixel(middle_of_right, MIDDLE)?, BLUE);
+    assert_eq!(renderer.pixel(middle_of_left, MIDDLE)?, [0; 4]);
+    assert_eq!(renderer.pixel(middle_of_right, MIDDLE)?, BLUE);
     assert_eq!(
         failing_producer.events(),
         [Event::Released {
@@ -122,30 +124,27 @@ fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestE
 
 #[test]
 fn a_frame_drawn_without_a_release_fence_returns_once_the_gpu_finished() -> Result<(), TestError> {
-    let (mut renderer, _surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
-    let image = latched(&mut renderer, &mut stream)?;
-    assert_eq!(render(&mut renderer, image)?, FrameOutcome::Shown);
+    let image = renderer.latched(stream)?;
+    assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
     GPU.with(|gpu| {
         gpu.fails_release.set(true);
         gpu.busy.set(true);
     });
     assert!(matches!(
-        render(&mut renderer, image),
-        Err(TestError::Adapter(Error::StreamsOfDrawnFrame {
-            outcome: FrameOutcome::Shown,
-            ..
-        }))
+        renderer.draw(&scene(whole_surface(image))?),
+        (Ok(FrameOutcome::Shown), Err(_))
     ));
 
     producer.clear_events();
     producer.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::BLUE));
-    assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
     assert_eq!(producer.events(), []);
     GPU.with(|gpu| gpu.busy.set(false));
-    assert_eq!(renderer.latch(&mut stream)?, Latch::Unchanged);
+    assert_eq!(renderer.latch(stream)?, Latch::Unchanged);
     assert_eq!(
         producer.events(),
         [Event::Released {
@@ -158,26 +157,23 @@ fn a_frame_drawn_without_a_release_fence_returns_once_the_gpu_finished() -> Resu
 
 #[test]
 fn a_frame_drawn_when_no_fence_can_be_submitted_returns_at_teardown() -> Result<(), TestError> {
-    let (mut renderer, _surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
-    let image = latched(&mut renderer, &mut stream)?;
+    let image = renderer.latched(stream)?;
     GPU.with(|gpu| {
         gpu.fails_release.set(true);
         gpu.fails_completion.set(true);
     });
-    assert!(matches!(
-        render(&mut renderer, image),
-        Err(TestError::Adapter(_))
-    ));
+    assert!(matches!(renderer.render(image), Err(TestError::Adapter(_))));
     GPU.with(|gpu| gpu.fails_completion.set(false));
 
     producer.clear_events();
     producer.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::BLUE));
-    assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
     producer.queue(Buffer::new(3, SURFACE_SIZE, skia::Color::BLUE));
-    assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
     let released = Event::Released {
         id: 1,
         fenced: false,
@@ -191,39 +187,38 @@ fn a_frame_drawn_when_no_fence_can_be_submitted_returns_at_teardown() -> Result<
 #[test]
 fn a_device_with_a_ycbcr_conversion_samples_a_half_float_frame() -> Result<(), TestError> {
     GPU.with(|gpu| gpu.sampler_ycbcr_conversion.set(true));
-    let (mut renderer, surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Private)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Private)?;
     let mut half_float = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     half_float.format = HardwareBufferFormat::R16G16B16A16_FLOAT;
-    producer(&stream)?.queue(half_float);
-    let image = latched(&mut renderer, &mut stream)?;
-    assert_eq!(render(&mut renderer, image)?, FrameOutcome::Shown);
-    assert_eq!(surface.pixel(MIDDLE, MIDDLE)?, RED);
+    renderer.producer(stream)?.queue(half_float);
+    let image = renderer.latched(stream)?;
+    assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
+    assert_eq!(renderer.pixel(MIDDLE, MIDDLE)?, RED);
     Ok(())
 }
 
 #[test]
 fn a_render_on_a_lost_device_reports_every_step_that_failed() -> Result<(), TestError> {
-    let (mut renderer, _surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
     producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
-    let image = latched(&mut renderer, &mut stream)?;
-    assert_eq!(render(&mut renderer, image)?, FrameOutcome::Shown);
+    let image = renderer.latched(stream)?;
+    assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
     GPU.with(|gpu| gpu.lost.set(true));
-    let failures = match render(&mut renderer, image) {
-        Err(TestError::Adapter(Error::Several(failures))) => failures,
-        Err(other) => return Err(other),
-        Ok(outcome) => return Err(TestError::RenderSucceeded(outcome)),
-    };
+    let (frame, streams) = renderer.draw(&scene(whole_surface(image))?);
+    assert!(matches!(frame, Err(TestError::Renderer(_))));
     assert!(matches!(
-        failures.as_slice(),
-        [
-            Error::Draw(_),
-            Error::HandBack(_),
-            Error::SubmitCompletion(_),
-            Error::RetireImports(_)
-        ]
+        streams,
+        Err(Error::Several(failures)) if matches!(
+            failures.as_slice(),
+            [
+                Error::HandBack(_),
+                Error::SubmitCompletion(_),
+                Error::RetireImports(_)
+            ]
+        )
     ));
     Ok(())
 }
@@ -247,42 +242,39 @@ fn a_reader_that_hands_out_no_window_fails_where_the_stream_is_made() {
 
 #[test]
 fn when_every_image_is_held_for_the_gpu_the_newest_frame_waits() -> Result<(), TestError> {
-    let (mut renderer, _surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
     GPU.with(|gpu| gpu.busy.set(true));
     for id in 1..=3 {
         producer.queue(Buffer::new(id, SURFACE_SIZE, skia::Color::RED));
-        let image = latched(&mut renderer, &mut stream)?;
+        let image = renderer.latched(stream)?;
         GPU.with(|gpu| gpu.fails_release.set(true));
-        assert!(matches!(
-            render(&mut renderer, image),
-            Err(TestError::Adapter(_))
-        ));
+        assert!(matches!(renderer.render(image), Err(TestError::Adapter(_))));
     }
     producer.queue(Buffer::new(4, SURFACE_SIZE, skia::Color::RED));
-    assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
     producer.queue(Buffer::new(5, SURFACE_SIZE, skia::Color::BLUE));
-    assert_eq!(renderer.latch(&mut stream)?, Latch::Unchanged);
+    assert_eq!(renderer.latch(stream)?, Latch::Unchanged);
     GPU.with(|gpu| gpu.busy.set(false));
-    let newest = latched(&mut renderer, &mut stream)?;
-    assert_eq!(stream.drawn_size(), Some(newest.size));
+    let newest = renderer.latched(stream)?;
+    assert_eq!(renderer.stream(stream)?.drawn_size(), Some(newest.size));
     Ok(())
 }
 
 #[test]
 fn a_freed_buffer_whose_id_cannot_be_read_fails_one_latch() -> Result<(), TestError> {
-    let (mut renderer, _surface) = attached()?;
-    let mut stream = create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
-    let producer = producer(&stream)?;
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(SURFACE_SIZES, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
     let mut unidentifiable = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
     unidentifiable.unidentifiable = true;
     producer.remove(unidentifiable);
     producer.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::RED));
     assert!(matches!(
-        renderer.latch(&mut stream),
+        renderer.latch(stream),
         Err(Error::RemovedBufferId(_))
     ));
-    assert!(matches!(renderer.latch(&mut stream)?, Latch::Frame(_)));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
     Ok(())
 }

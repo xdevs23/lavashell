@@ -24,9 +24,9 @@ pub use foreign::{
     FOREIGN_IMPORT_EXTENSIONS, ForeignAlpha, ForeignImport, ForeignImporter, ForeignMemory,
     SampledMemory, Sampling,
 };
-pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status};
+pub use lavashell_vulkan::{ImageDescription, OpaqueFdExport, Status, Window};
 pub use offscreen::OffscreenSurface;
-pub use presentation::PresentationBackend;
+pub use presentation::{HeadlessPresentation, PresentationBackend};
 pub use scene::{PendingScene, SceneCompletion, SceneImage, SceneSource};
 pub use scene_mailbox::{CompletedScene, SceneMailbox};
 pub(crate) use skia_handoff::SkiaFormat;
@@ -42,9 +42,7 @@ use crate::Error;
 use ash::vk;
 use completion::drop_completed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_vulkan::{
-    Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest, Window,
-};
+use lavashell_vulkan::{Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest};
 use skia_handoff::{Glyphs, SkiaContext};
 use skia_safe::gpu::{self, SurfaceOrigin, SyncCpu};
 use skia_safe::{Canvas, ColorType, Surface};
@@ -71,7 +69,7 @@ impl VulkanRenderer {
     /// Fails when no Vulkan device meets the requirements of the renderer, or when Vulkan or Skia cannot create the
     /// renderer.
     pub fn headless() -> Result<Self, Error> {
-        Self::new(&presentation::Headless)
+        Self::new(&HeadlessPresentation::without_surfaces())
     }
 
     /// A renderer whose device presents to surfaces created for `backend`.
@@ -174,18 +172,14 @@ impl VulkanRenderer {
     }
 
     /// # Errors
-    /// Fails when Skia cannot allocate, draw or encode the SDR copy of `surface`.
+    /// Fails when Skia cannot allocate, draw, read or encode the SDR copy of `surface`.
     pub fn png(&mut self, surface: &mut Surface) -> Result<Vec<u8>, Error> {
         let context = &mut *self.context;
         context.flush_and_submit_surface(surface, Some(SyncCpu::Yes));
-        // The PNG export is SDR sRGB.
         let mut export = gpu::surfaces::render_target(
             context,
             gpu::Budgeted::Yes,
-            &skia_safe::ImageInfo::new_n32_premul(
-                surface.image_info().dimensions(),
-                skia_safe::ColorSpace::new_srgb(),
-            ),
+            &crate::image::png_export_info(surface.image_info().dimensions()),
             Some(0),
             Some(SurfaceOrigin::TopLeft),
             None,
@@ -198,11 +192,7 @@ impl VulkanRenderer {
             .canvas()
             .draw_image(surface.image_snapshot(), (0, 0), None);
         context.flush_and_submit_surface(&mut export, Some(SyncCpu::Yes));
-        let image = export.image_snapshot();
-        let data = image
-            .encode(context, skia_safe::EncodedImageFormat::PNG, None)
-            .ok_or(Error::EncodePng)?;
-        Ok(data.as_bytes().to_vec())
+        crate::Pixels::read(export.canvas())?.png()
     }
 
     #[must_use]

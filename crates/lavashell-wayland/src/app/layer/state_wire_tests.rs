@@ -3,7 +3,7 @@ use super::test_error::LayerTestError;
 use super::*;
 use crate::test_error::TestError;
 use focus_wire::{Wire, top_bar};
-use lavashell_core::prelude::{Density, DpExt, FrameTime, Rect, Size, Viewport};
+use lavashell_core::prelude::{Density, DpExt, FrameTime, PixelScale, Rect, Size, Viewport};
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 
 type Messages = Vec<(u32, u16, Vec<u32>)>;
@@ -32,6 +32,7 @@ fn private_wire_sends_the_surface_state_of_a_frame_before_its_frame_request_and_
     let frame = PresentFrame {
         time: FrameTime::default(),
         viewport: Viewport::new(Size::new(4.dp(), 2.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state: &state,
     };
@@ -74,6 +75,7 @@ fn private_wire_acknowledges_a_layer_configure_with_the_frame_that_contains_its_
     let frame = PresentFrame {
         time: FrameTime::default(),
         viewport: Viewport::new(Size::new(4.dp(), 30.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state: &state,
     };

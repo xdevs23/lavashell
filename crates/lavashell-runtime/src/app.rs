@@ -19,10 +19,10 @@ use lavashell_core::reactive::State;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
-use lavashell_core::view::{InputEvent, View};
+use lavashell_core::view::{ComponentFailure, InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{Fonts, Painter, RendererSetup};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod error;
 
@@ -142,17 +142,18 @@ impl App {
     }
 
     /// Sets `callback`, which runs after a view is composed and can inspect the view without changing how the
-    /// platform handles input. The callback receives the ID of the surface, the same ID used by view actions, and the
-    /// viewport of the surface: its size in dp and its density.
+    /// platform handles input. The callback receives the ID of the surface, the same ID used by view actions, the
+    /// timing of the drawn frame and the viewport of the surface: its size in dp and its density.
     #[must_use]
     pub fn view_observer(
         mut self,
-        callback: impl FnMut(SurfaceId, Viewport, &View) + 'static,
+        callback: impl FnMut(SurfaceId, FrameTime, Viewport, &View) + 'static,
     ) -> Self {
         self.setup.observers.view = Some(Box::new(callback));
         self
     }
 
+    /// Ends the run once `predicate` returns true, in addition to each predicate set before.
     #[must_use]
     pub fn exit_when(mut self, predicate: impl FnMut() -> bool + 'static) -> Self {
         self.setup.run_end.exit_when(predicate);
@@ -220,7 +221,6 @@ impl App {
             panels_per_output: None,
             session_lock: None,
             renderer,
-            start: Instant::now(),
             ui_budget: None,
             run_end: RunEnd::default(),
             preference_overrides: PreferenceOverrides::default(),
@@ -287,6 +287,17 @@ impl App {
         observer: impl FnMut(SurfaceId, OutputInfo) + 'static,
     ) -> Self {
         self.setup.observers.output = Some(Box::new(observer));
+        self
+    }
+
+    /// Sets `observer`, which receives each component that failed in a frame, with the ID of the surface that shows
+    /// the frame. Without an observer, the runtime logs each failed component as an error.
+    #[must_use]
+    pub fn failure_observer(
+        mut self,
+        observer: impl FnMut(SurfaceId, ComponentFailure) + 'static,
+    ) -> Self {
+        self.setup.observers.failure = Some(Box::new(observer));
         self
     }
 

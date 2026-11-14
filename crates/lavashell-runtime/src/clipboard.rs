@@ -21,7 +21,7 @@ use std::rc::Rc;
 
 pub use error::Error;
 
-pub(crate) use text::TextClipboard;
+pub(crate) use text::{ShortcutOutcome, TextClipboard};
 
 inventory::submit! { Subsystem {
     capability: Capability::Clipboard,
