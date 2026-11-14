@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
+use crate::clipboard::ShortcutOutcome;
 use crate::input::RoutedInput;
 use crate::observers::{HostKey, KeyboardFocus};
 use crate::view_actor::ViewError;
@@ -8,6 +9,12 @@ use lavashell_platform::{
     DeviceEvent, KeyAction, KeyboardDevice, PlatformRequest, PressState, WindowControlRequest,
 };
 use lavashell_renderer::SurfaceControl;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowMove {
+    Begins,
+    NotBegun,
+}
 
 impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     /// Routes `event` to the views. The key observer of the app sees each key before the views, and the focus
@@ -78,14 +85,16 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
         let press = button_press(&event);
         let drags = &mut self.transfers.drags;
         let dragging = press.is_none() && drags.track_gesture(surface, &event, &mut self.records);
-        let mut moving = false;
+        let mut window_move = WindowMove::NotBegun;
         for routed in self.input.route(event) {
-            if !dragging || matches!(routed, RoutedInput::Cancel { .. }) {
-                moving |= self.deliver(routed)?;
+            if (!dragging || matches!(routed, RoutedInput::Cancel { .. }))
+                && self.deliver(routed)? == WindowMove::Begins
+            {
+                window_move = WindowMove::Begins;
             }
         }
         if let Some(press) = press
-            && !moving
+            && window_move == WindowMove::NotBegun
         {
             let _a_press_starts_no_drag =
                 (self.transfers.drags).track_gesture(surface, &press, &mut self.records);
@@ -98,43 +107,44 @@ impl<C: SurfaceControl + Send + 'static> ViewActor<C> {
     fn key(&mut self, event: DeviceEvent, action: KeyAction) -> Result<(), ViewError> {
         let pressed = action.press_state() == PressState::Pressed;
         for routed in self.input.route(event) {
-            if !(pressed && self.run_clipboard_shortcut(&routed)) {
+            if !pressed || self.run_clipboard_shortcut(&routed) == ShortcutOutcome::Declined {
                 let _keys_start_no_move = self.deliver(routed)?;
             }
         }
         Ok(())
     }
 
-    /// Copies, cuts or pastes text for a clipboard shortcut, and returns whether it did. The view receives the shortcut
-    /// when there is nothing to copy, cut or paste, when the routed surface is not open, and on a platform without a
-    /// clipboard.
-    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput) -> bool {
+    /// Copies, cuts or pastes text for a clipboard shortcut. The shortcut is declined when there is nothing to copy,
+    /// cut or paste, when the routed surface is not open, and on a platform without a clipboard.
+    fn run_clipboard_shortcut(&mut self, routed: &RoutedInput) -> ShortcutOutcome {
         let RoutedInput::Input { surface, input, .. } = routed else {
-            return false;
+            return ShortcutOutcome::Declined;
         };
         let Some(text) = &self.transfers.text else {
-            return false;
+            return ShortcutOutcome::Declined;
         };
-        (self.records.open_view_mut(*surface))
-            .is_some_and(|view| text.apply_shortcut(*surface, input, view))
+        (self.records.open_view_mut(*surface)).map_or(ShortcutOutcome::Declined, |view| {
+            text.apply_shortcut(*surface, input, view)
+        })
     }
 
     /// Delivers `routed` to the view of the routed surface and sends the request that follows from it. A cancel also
-    /// ends the drag gesture of the primary button of the cancelled pointer on the surface. Returns whether the
-    /// request starts a move of the window.
-    fn deliver(&mut self, routed: RoutedInput) -> Result<bool, ViewError> {
+    /// ends the drag gesture of the primary button of the cancelled pointer on the surface.
+    fn deliver(&mut self, routed: RoutedInput) -> Result<WindowMove, ViewError> {
         if let RoutedInput::Cancel { surface, pointer } = routed {
             self.transfers.drags.cancel_gesture(pointer, surface);
         }
-        let Some(request) = routed.deliver(&mut self.records) else {
-            return Ok(false);
+        let request = routed.deliver(&mut self.records);
+        let window_move = match request {
+            Some(PlatformRequest::WindowControl(WindowControlRequest::BeginMove { .. })) => {
+                WindowMove::Begins
+            }
+            Some(_) | None => WindowMove::NotBegun,
         };
-        let moving = matches!(
-            request,
-            PlatformRequest::WindowControl(WindowControlRequest::BeginMove { .. })
-        );
-        self.request(request)?;
-        Ok(moving)
+        if let Some(request) = request {
+            self.request(request)?;
+        }
+        Ok(window_move)
     }
 
     /// Shows the physical key `code` of `keyboard` and its `action` to the key observer of the app, and returns

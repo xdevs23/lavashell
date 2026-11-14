@@ -13,10 +13,14 @@ use crate::window::Window;
 use ash::vk;
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameTime};
+use lavashell_core::geometry::{Point, Size, Viewport};
 use lavashell_core::preferences::PreferenceOverrides;
+use lavashell_core::prelude::{Modifier, TextFieldOptions};
+use lavashell_core::reactive::State;
+use lavashell_core::scene::TextStyle;
 use lavashell_core::surface::{SurfaceId, SurfaceState};
-use lavashell_core::units::DpExt;
-use lavashell_core::view::View;
+use lavashell_core::units::{Density, Dp, DpExt};
+use lavashell_core::view::{InputEvent, TextMeasurer, View};
 use lavashell_platform::{
     Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
     PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
@@ -25,6 +29,7 @@ use lavashell_renderer::vulkan::PresentationBackend;
 use lavashell_renderer::{
     Fonts, FrameOutcome, PainterSetup, PresentFrame, RendererSetup, SurfaceControl,
 };
+use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
 use lavashell_vulkan::{Features, PhysicalDevice, Presentation};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, VecDeque};
@@ -158,6 +163,46 @@ pub(crate) fn empty_view() -> View {
 pub(crate) fn window(title: &str) -> SurfaceSetup {
     let window = Window::new(title, "test.app").size(100.dp(), 100.dp());
     SurfaceSetup::Window(window, empty_view())
+}
+
+struct Metrics;
+
+impl TextMeasurer for Metrics {
+    fn measure(&mut self, value: &str, _: &TextStyle<Dp>, width: Dp) -> Size {
+        let natural: Dp = value.chars().map(|_| 10.dp()).sum();
+        Size::new(natural.min(width), 20.dp())
+    }
+}
+
+pub(crate) const FIELD_VIEWPORT: Viewport =
+    Viewport::new(Size::new(Dp::new(220.0), Dp::new(100.0)), Density::ONE);
+
+/// A view that shows a text field named `field` with the text "abc def", after its first frame, and the state of the
+/// text.
+pub(crate) fn field_view(modifier: Modifier) -> Result<(View, State<String>), FrameFailure> {
+    let value = State::new("abc def".to_string());
+    let shown = value.clone();
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        let shown = shown.clone();
+        ui.text_area(
+            shown.get(),
+            TextFieldOptions::default(),
+            modifier
+                .clone()
+                .accessible_name("field")
+                .size(140.dp(), 60.dp()),
+            move |text| shown.set(text),
+        );
+    });
+    let mut scene = RecordedScene::default();
+    (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    Ok((view, value))
+}
+
+/// Focuses the text field of a view made by [`field_view`] with a press and a release on it.
+pub(crate) fn focus_field(view: &mut View) {
+    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
+    view.input(InputEvent::Release(Point::new(11.dp(), 5.dp())));
 }
 
 /// The event of a host that closed `surface`.

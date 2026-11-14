@@ -89,6 +89,12 @@ enum OpenFrame {
     AwaitingScene,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameStatus {
+    Ended,
+    Open,
+}
+
 impl ScenePipeline {
     /// Starts the choreographer and the scene builder. The builder passes each report to `observer`.
     ///
@@ -217,22 +223,21 @@ impl SceneSink<'_> {
     }
 
     /// Ends the open frame unless it waits for the whole scene. A sink without a sequence ends only a frame that
-    /// contains a change of the surface state. Returns whether the frame ended.
+    /// contains a change of the surface state.
     ///
     /// # Errors
     ///
     /// Fails when the choreographer is gone.
-    pub fn end_state_frame(&mut self) -> Result<bool, Closed> {
-        let ends = match self.state.open {
-            OpenFrame::WithState => true,
-            OpenFrame::WithoutState => self.end.is_some(),
-            OpenFrame::AwaitingScene => false,
+    pub fn end_state_frame(&mut self) -> Result<FrameStatus, Closed> {
+        let status = match (self.state.open, self.end) {
+            (OpenFrame::WithState, _) | (OpenFrame::WithoutState, Some(_)) => FrameStatus::Ended,
+            (OpenFrame::WithoutState, None) | (OpenFrame::AwaitingScene, _) => FrameStatus::Open,
         };
-        if ends {
+        if status == FrameStatus::Ended {
             (self.choreographer).push(ChoreographerInput::End(self.surface, self.end))?;
             self.state.open = OpenFrame::WithoutState;
         }
-        Ok(ends)
+        Ok(status)
     }
 
     fn push(&self, item: SceneItem) -> Result<(), Closed> {
