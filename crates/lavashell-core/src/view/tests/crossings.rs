@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::material_group::inside_clip;
 use super::material_motion::painted_fills;
 use super::*;
 use crate::animation::Animation;
@@ -11,6 +12,7 @@ const HEADER: Rect = Rect::new(Dp::new(0.0), Dp::new(0.0), Dp::new(200.0), Dp::n
 const ROW: Rect = Rect::new(Dp::new(40.0), Dp::new(100.0), Dp::new(100.0), Dp::new(20.0));
 const QUARTER: Rect = Rect::new(Dp::new(10.0), Dp::new(25.0), Dp::new(175.0), Dp::new(35.0));
 const SLIDER: Rect = Rect::new(Dp::new(0.0), Dp::new(60.0), Dp::new(250.0), Dp::new(8.0));
+const CLIP: Rect = Rect::new(Dp::new(0.0), Dp::new(0.0), Dp::new(100.0), Dp::new(40.0));
 
 type Tag = (&'static str, &'static str);
 
@@ -27,6 +29,18 @@ fn shared_with(ui: &mut Ui, tag: Tag, at: Rect, modifier: Modifier, inside: impl
     });
 }
 
+fn cross_views(
+    ui: &mut Ui,
+    progress: &Animation<f64>,
+    [page_at, list_at]: [Modifier; 2],
+    page: impl FnOnce(&mut Ui),
+    list: impl FnOnce(&mut Ui),
+) {
+    let from = ui.view("page", page_at, page);
+    let to = ui.view("list", list_at, list);
+    ui.crossing(from, to, progress);
+}
+
 fn crossing_in(
     progress: &Animation<f64>,
     [page_at, list_at]: [Modifier; 2],
@@ -35,9 +49,8 @@ fn crossing_in(
 ) -> View {
     let progress = progress.clone();
     View::new(crate::platform::fixture::facts(), move |ui| {
-        let from = ui.view("page", page_at.clone(), &page);
-        let to = ui.view("list", list_at.clone(), &list);
-        ui.crossing(from, to, &progress);
+        let offsets = [page_at.clone(), list_at.clone()];
+        cross_views(ui, &progress, offsets, &page, &list);
     })
 }
 
@@ -47,6 +60,16 @@ fn crossing(
     list: impl Fn(&mut Ui) + 'static,
 ) -> View {
     crossing_in(progress, [Modifier::new(), Modifier::new()], page, list)
+}
+
+fn clipped_settings(progress: &Animation<f64>) -> View {
+    let progress = progress.clone();
+    View::new(crate::platform::fixture::facts(), move |ui| {
+        ui.key("clipped", Modifier::new().clip_rect(CLIP, 0.dp()), |ui| {
+            let offsets = [Modifier::new(), Modifier::new()];
+            cross_views(ui, &progress, offsets, settings_page, settings_list);
+        });
+    })
 }
 
 fn settings_page(ui: &mut Ui) {
@@ -119,6 +142,23 @@ fn views_moved_by_their_offsets_blend_the_rects_where_they_are_painted() -> Test
     let slider = SLIDER.translated(Point::new(50.dp(), Dp::ZERO));
     let flown = Rect::new(38.125.dp(), 25.dp(), 175.dp(), 35.dp());
     assert_eq!(painted_at(&mut view, &progress, 0.25)?, [slider, flown]);
+    Ok(())
+}
+
+#[test]
+fn a_flight_is_clipped_by_the_clip_of_the_node_around_both_views() -> TestResult {
+    let progress = Animation::new(0.0)?;
+    let mut view = clipped_settings(&progress);
+    let mut scene = Scene::default();
+    advance_at(&mut view, &progress, 0.25, &mut scene)?;
+    let commands = scene.commands();
+    let clip = (commands.iter())
+        .position(|command| matches!(command, DrawCommand::Clip { rect, .. } if *rect == CLIP))
+        .required("the clip of the node around both views")?;
+    let flown = (painted_fills(&commands)?.into_iter())
+        .find(|fill| fill.rect == QUARTER)
+        .required("the fill of the flight")?;
+    assert!(inside_clip(&commands, clip, flown.command));
     Ok(())
 }
 

@@ -18,6 +18,7 @@ pub(super) fn linear() -> Tween {
 
 #[derive(Debug)]
 pub(super) struct PaintedFill {
+    pub command: usize,
     pub rect: Rect,
     pub scale: (f64, f64),
     pub corners: Corners,
@@ -26,7 +27,7 @@ pub(super) struct PaintedFill {
 
 pub(super) fn painted_fills(commands: &[DrawCommand]) -> Result<Vec<PaintedFill>, TestError> {
     let mut fills = Vec::new();
-    for (affine, command) in replay(commands)? {
+    for (index, (affine, command)) in replay(commands)?.into_iter().enumerate() {
         let DrawCommand::Fill {
             shape: Shape::Rounded(RoundedRect { rect, corners }),
             brush: Brush::Solid(color),
@@ -36,6 +37,7 @@ pub(super) fn painted_fills(commands: &[DrawCommand]) -> Result<Vec<PaintedFill>
         };
         let transform = Transform::try_of(affine).required("a fill without rotation")?;
         fills.push(PaintedFill {
+            command: index,
             rect: transform.rect(*rect),
             scale: (transform.scale.x, transform.scale.y),
             corners: *corners,
