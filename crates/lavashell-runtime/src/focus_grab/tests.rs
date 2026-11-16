@@ -50,6 +50,7 @@ impl Host {
             width: None,
             height: None,
             token: None,
+            window: None,
         };
         assert_eq!(surfaces.handle(surface, configure), None);
         let mut panels = PanelRecords::default();

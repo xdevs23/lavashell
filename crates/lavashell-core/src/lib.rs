@@ -10,6 +10,7 @@ pub mod effects;
 #[cfg(feature = "serde")]
 pub mod encoding;
 pub mod error;
+mod flag_set;
 pub mod focus_grab;
 pub mod frame;
 pub mod geometry;
@@ -39,6 +40,7 @@ pub mod ui;
 pub mod unique_id;
 pub mod units;
 pub mod view;
+pub mod window;
 
 mod text_edit;
 
@@ -120,5 +122,8 @@ pub mod prelude {
         BoundsMotion, Cursor, InputEvent, Presence, PresenceParts, Proposal, ScaleOrigin,
         TextCaret, TextCluster, TextDropTarget, TextGeometry, TextMeasurer, TextPasteTarget,
         TextSelectionSource, TouchSample, Transition, View,
+    };
+    pub use crate::window::{
+        Edge, Edges, WINDOW, WindowCapabilities, WindowControl, WindowHandle, WindowState,
     };
 }

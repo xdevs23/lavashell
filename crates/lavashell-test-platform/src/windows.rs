@@ -4,6 +4,7 @@ use crate::{Error, FrameCapture};
 use lavashell_actor::Sender;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
+use lavashell_core::window::{WindowCapabilities, WindowState};
 use lavashell_platform::{Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec};
 use lavashell_renderer::NoStreams;
 use lavashell_vulkan::HeadlessWindow;
@@ -49,6 +50,7 @@ impl Windows {
                 width: Some(spec.size.width),
                 height: Some(spec.size.height),
                 token: None,
+                window: opened_window_state(&spec.role),
             },
         ));
         self.open.push((surface, spec.role));
@@ -72,3 +74,17 @@ impl Windows {
             })
     }
 }
+
+fn opened_window_state(role: &Role) -> Option<WindowState> {
+    let Role::Window(window) = role else {
+        return None;
+    };
+    Some(WindowState {
+        fullscreen: window.fullscreen,
+        capabilities: WindowCapabilities::all(),
+        ..WindowState::default()
+    })
+}
+
+#[cfg(test)]
+mod tests;

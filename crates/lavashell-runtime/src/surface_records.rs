@@ -15,6 +15,7 @@ use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::{SurfaceId, SurfaceIds};
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::view::{Proposal, TextMeasurer, View};
+use lavashell_core::window::WindowState;
 use lavashell_platform::{SettingsEvent, SurfaceEvent, SurfaceRequest};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -30,11 +31,14 @@ struct Record {
 }
 
 impl Record {
-    fn configure(&mut self, width: Option<Dp>, height: Option<Dp>) {
+    fn configure(&mut self, width: Option<Dp>, height: Option<Dp>, window: Option<WindowState>) {
         self.size = Size::new(
             width.unwrap_or(self.size.width),
             height.unwrap_or(self.size.height),
         );
+        if let Some(state) = window {
+            self.view.provide_window(state);
+        }
         self.lifecycle = Lifecycle::Configured;
         self.view.invalidate();
     }
@@ -88,7 +92,12 @@ impl SurfaceRecords {
     pub fn handle(&mut self, surface: SurfaceId, event: SurfaceEvent) -> Option<SurfaceRequest> {
         let record = self.open_record_mut(surface)?;
         match event {
-            SurfaceEvent::Configured { width, height, .. } => record.configure(width, height),
+            SurfaceEvent::Configured {
+                width,
+                height,
+                window,
+                ..
+            } => record.configure(width, height, window),
             SurfaceEvent::Closed => {
                 record.lifecycle = Lifecycle::Closing;
                 return Some(SurfaceRequest::Destroy(surface));

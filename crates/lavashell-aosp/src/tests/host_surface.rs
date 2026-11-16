@@ -8,9 +8,11 @@ use lavashell_actor::{Merge, MergeEffect, Receiver, SystemClock, mailbox};
 use lavashell_core::output::OutputRequest;
 use lavashell_core::prelude::{DpExt, Size};
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::window::{Edge, Edges, WindowCapabilities, WindowState};
 use lavashell_platform::{
-    PlatformEvent, PlatformLinks, PlatformRequest, Reports, Role, StreamTask, SurfaceAppearance,
-    SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent, WindowRole,
+    OutputId, PlatformEvent, PlatformLinks, PlatformRequest, Reports, Role, StreamTask,
+    SurfaceAppearance, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
+    WindowRole,
 };
 use std::sync::{Arc, mpsc};
 
@@ -108,19 +110,25 @@ impl Host {
 }
 
 fn create(surface: SurfaceId) -> SurfaceRequest {
+    create_as(
+        surface,
+        Role::Window(WindowRole {
+            title: "app".to_owned(),
+            app_id: "test.app".to_owned(),
+            min_size: None,
+            fullscreen: false,
+            draws_decorations: false,
+        }),
+    )
+}
+
+fn create_as(surface: SurfaceId, role: Role) -> SurfaceRequest {
     let appearance = SurfaceAppearance {
         transparent: false,
         output: OutputRequest::default(),
         hdr_metadata: None,
         background_blur: false,
     };
-    let role = Role::Window(WindowRole {
-        title: "app".to_owned(),
-        app_id: "test.app".to_owned(),
-        min_size: None,
-        fullscreen: false,
-        draws_decorations: false,
-    });
     let spec = SurfaceSpec {
         size: Size::new(320.dp(), 240.dp()),
         appearance,
@@ -137,10 +145,18 @@ fn window(display: &DisplaySurface) -> NativeWindow {
 }
 
 fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
+    let display_filling = WindowState {
+        maximized: false,
+        fullscreen: false,
+        tiled: Edges::new([Edge::Top, Edge::Right, Edge::Bottom, Edge::Left]),
+        suspended: false,
+        capabilities: WindowCapabilities::default(),
+    };
     let configured = SurfaceEvent::Configured {
         width: Some(width.dp()),
         height: Some(height.dp()),
         token: None,
+        window: Some(display_filling),
     };
     Sent::Surface(surface, configured)
 }
@@ -177,6 +193,25 @@ fn a_surface_requested_while_the_host_surface_exists_is_shown_at_once() -> Resul
     assert_eq!(host.sent()?, []);
     host.execute(create(SURFACE))?;
     let shown = [Sent::Attach(SURFACE), configured(SURFACE, SIDE, SIDE)];
+    assert_eq!(host.sent()?, shown);
+    Ok(())
+}
+
+#[test]
+fn a_surface_that_is_not_a_window_is_configured_without_a_window_state() -> Result<(), TestError> {
+    let mut host = Host::new();
+    host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
+    let lock = Role::Lock {
+        output: OutputId(0),
+    };
+    host.execute(create_as(SURFACE, lock))?;
+    let configured = SurfaceEvent::Configured {
+        width: Some(SIDE.dp()),
+        height: Some(SIDE.dp()),
+        token: None,
+        window: None,
+    };
+    let shown = [Sent::Attach(SURFACE), Sent::Surface(SURFACE, configured)];
     assert_eq!(host.sent()?, shown);
     Ok(())
 }

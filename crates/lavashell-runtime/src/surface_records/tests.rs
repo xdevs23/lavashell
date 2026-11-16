@@ -8,7 +8,9 @@ use crate::test_host::empty_view;
 use crate::view_actor::ViewError;
 use lavashell_core::prelude::Modifier;
 use lavashell_core::units::DpExt;
+use lavashell_core::window::{WINDOW, WindowHandle};
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -42,6 +44,7 @@ fn configure(width: Option<Dp>) -> SurfaceEvent {
         width,
         height: None,
         token: None,
+        window: None,
     }
 }
 
@@ -93,6 +96,34 @@ fn a_density_change_sets_the_density_and_invalidates_the_view() -> TestResult {
     let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     assert_eq!(viewport.density, density);
     assert!(needs_frame(&records, surface));
+    Ok(())
+}
+
+#[test]
+fn only_a_window_configure_hands_a_window_to_the_view() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let read = Rc::new(Cell::new(None));
+    let reader = read.clone();
+    let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        reader.set(Some(ui.local(&WINDOW).map(WindowHandle::state)));
+    });
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    assert_eq!(records.handle(surface, configure(None)), None);
+    frame(&mut records, surface)?;
+    assert_eq!(read.get(), Some(None));
+    let maximized = WindowState {
+        maximized: true,
+        ..WindowState::default()
+    };
+    let configure = SurfaceEvent::Configured {
+        width: None,
+        height: None,
+        token: None,
+        window: Some(maximized),
+    };
+    assert_eq!(records.handle(surface, configure), None);
+    frame(&mut records, surface)?;
+    assert_eq!(read.get(), Some(Some(maximized)));
     Ok(())
 }
 

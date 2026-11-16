@@ -6,6 +6,7 @@ use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
 use lavashell_core::units::{Density, Dp};
+use lavashell_core::window::WindowState;
 use lavashell_renderer::{Attach, SurfaceAlpha};
 use lavashell_vulkan::Window;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ pub enum SurfaceEvent {
         width: Option<Dp>,
         height: Option<Dp>,
         token: Option<ConfigureToken>,
+        window: Option<WindowState>,
     },
     Closed,
     DensityChanged(Density),

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::{FrameMetrics, FrameTime};
+use crate::flag_set::flag_set;
 use crate::surface::SurfaceId;
 use crate::view::ViewStats;
 use std::time::Duration;
@@ -35,30 +36,14 @@ pub struct Submission {
     pub gpu: Option<GpuFrameTime>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum PresentationFlag {
-    Vsync = 1 << 0,
-    HardwareClock = 1 << 1,
-    HardwareCompletion = 1 << 2,
-    ZeroCopy = 1 << 3,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PresentationFlags(u8);
-
-impl PresentationFlags {
-    #[must_use]
-    pub fn contains(self, flag: PresentationFlag) -> bool {
-        self.0 & flag as u8 != 0
+flag_set!(
+    pub enum PresentationFlag in PresentationFlags {
+        Vsync,
+        HardwareClock,
+        HardwareCompletion,
+        ZeroCopy,
     }
-}
-
-impl FromIterator<PresentationFlag> for PresentationFlags {
-    fn from_iter<T: IntoIterator<Item = PresentationFlag>>(flags: T) -> Self {
-        Self(flags.into_iter().fold(0, |set, flag| set | flag as u8))
-    }
-}
+);
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RenderStats {
@@ -82,15 +67,9 @@ mod tests {
 
     #[test]
     fn a_flag_set_of_one_flag_contains_only_that_flag() {
-        const ALL: [PresentationFlag; 4] = [
-            PresentationFlag::Vsync,
-            PresentationFlag::HardwareClock,
-            PresentationFlag::HardwareCompletion,
-            PresentationFlag::ZeroCopy,
-        ];
-        for flag in ALL {
+        for flag in PresentationFlag::ALL {
             let flags: PresentationFlags = [flag].into_iter().collect();
-            for other in ALL {
+            for other in PresentationFlag::ALL {
                 assert_eq!(flags.contains(other), other == flag);
             }
         }

@@ -151,7 +151,7 @@ pub(crate) fn translate_configure(
     height: u32,
 ) -> (LayerConfigure, SurfaceEvent) {
     let token = ConfigureToken::default();
-    let event = configure_event(NonZero::new(width), NonZero::new(height), Some(token));
+    let event = configure_event(NonZero::new(width), NonZero::new(height), Some(token), None);
     (LayerConfigure { token, serial }, event)
 }
 

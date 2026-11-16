@@ -97,12 +97,14 @@ impl OpenSurfaces {
                     width,
                     height,
                     token,
+                    window,
                 },
                 Some(geometry),
             ) => SurfaceEvent::Configured {
                 width: configured_length(width, geometry.horizontal()),
                 height: configured_length(height, geometry.vertical()),
                 token,
+                window,
             },
             (event, _) => event,
         };

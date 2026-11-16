@@ -60,7 +60,7 @@ impl Dispatch<ExtSessionLockSurfaceV1, SurfaceId> for Translator {
             surface.ack_configure(serial);
             state
                 .links
-                .report((*id, configure_event(Some(width), Some(height), None)));
+                .report((*id, configure_event(Some(width), Some(height), None, None)));
         }
     }
 }

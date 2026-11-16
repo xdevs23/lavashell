@@ -90,6 +90,7 @@ fn acknowledges_a_layer_configure_with_the_frame_that_contains_its_token() -> Re
         width: None,
         height: Some(30.dp()),
         token: Some(message.token),
+        window: None,
     };
     assert_eq!(event, configured);
     let control = client.control.as_mut().ok_or(LayerTestError::NoLayer)?;

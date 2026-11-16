@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod window_state;
+
 use super::Translator;
 use crate::app::{configure_event, translate_configure};
 use crate::protocol_serial::ProtocolSerial;
@@ -18,6 +20,7 @@ use sctk::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_
 };
 use sctk::shell::WaylandSurface;
 use sctk::shell::xdg::window::{Window as NativeWindow, WindowConfigure, WindowHandler};
+use window_state::read_window_state;
 
 // https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/fractional-scale/fractional-scale-v1.xml
 const FRACTIONAL_SCALE_DENOMINATOR: u32 = 120;
@@ -115,8 +118,9 @@ impl WindowHandler for Translator {
     ) {
         if let Some(id) = self.find_surface(window.wl_surface()) {
             let (width, height) = configure.new_size;
+            let state = Some(read_window_state(&configure));
             self.links
-                .report((id, configure_event(width, height, None)));
+                .report((id, configure_event(width, height, None, state)));
         }
     }
 }

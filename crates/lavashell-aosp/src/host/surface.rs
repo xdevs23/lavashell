@@ -6,8 +6,9 @@ use crate::streams::AospStreams;
 use lavashell_core::prelude::PixelSize;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp, Px};
+use lavashell_core::window::{Edges, WindowState};
 use lavashell_platform::{
-    PlatformRequest, Reports, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec,
+    PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec,
     TimingEvent,
 };
 use std::sync::mpsc;
@@ -20,7 +21,10 @@ enum RuntimeSurface {
         surface: SurfaceId,
         spec: Box<SurfaceSpec>,
     },
-    Shown(SurfaceId),
+    Shown {
+        surface: SurfaceId,
+        window: Option<WindowState>,
+    },
     Closing(SurfaceId),
 }
 
@@ -28,9 +32,9 @@ impl RuntimeSurface {
     fn id(&self) -> Option<SurfaceId> {
         match *self {
             Self::Absent => None,
-            Self::Requested { surface, .. } | Self::Shown(surface) | Self::Closing(surface) => {
-                Some(surface)
-            }
+            Self::Requested { surface, .. }
+            | Self::Shown { surface, .. }
+            | Self::Closing(surface) => Some(surface),
         }
     }
 }
@@ -96,8 +100,10 @@ impl HostSurface {
         &self,
         reports: &Reports<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
-        if let (RuntimeSurface::Shown(surface), Some(window)) = (&self.surface, &self.window) {
-            configure(reports, *surface, window_size(window)?);
+        if let (RuntimeSurface::Shown { surface, window }, Some(native)) =
+            (&self.surface, &self.window)
+        {
+            configure(reports, *surface, window_size(native)?, *window);
         }
         Ok(())
     }
@@ -109,7 +115,7 @@ impl HostSurface {
     ) {
         drop(self.window.take());
         match self.surface {
-            RuntimeSurface::Shown(surface) => {
+            RuntimeSurface::Shown { surface, .. } => {
                 reports.report((surface, SurfaceEvent::Closed));
                 self.surface = RuntimeSurface::Closing(surface);
                 self.destroying.push(retired);
@@ -122,7 +128,7 @@ impl HostSurface {
     }
 
     pub(crate) fn frame(&self, reports: &Reports<NativeWindow, AospStreams>) {
-        if let RuntimeSurface::Shown(surface) = self.surface {
+        if let RuntimeSurface::Shown { surface, .. } = self.surface {
             reports.time(TimingEvent::DisplayReady(surface));
         }
     }
@@ -148,8 +154,12 @@ impl HostSurface {
         let size = window_size(window)?;
         let attach = spec.attach(surface, vulkan_window(window), window.clone());
         reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
-        configure(reports, surface, size);
-        self.surface = RuntimeSurface::Shown(surface);
+        let state = display_filling_window(&spec.role);
+        configure(reports, surface, size, state);
+        self.surface = RuntimeSurface::Shown {
+            surface,
+            window: state,
+        };
         Ok(())
     }
 }
@@ -158,15 +168,28 @@ fn window_size(window: &NativeWindow) -> Result<PixelSize, AospError> {
     window.size().map_err(AospError::WindowSize)
 }
 
-fn configure(reports: &Reports<NativeWindow, AospStreams>, surface: SurfaceId, size: PixelSize) {
+fn configure(
+    reports: &Reports<NativeWindow, AospStreams>,
+    surface: SurfaceId,
+    size: PixelSize,
+    window: Option<WindowState>,
+) {
     if size.width > 0 && size.height > 0 {
         let configured = SurfaceEvent::Configured {
             width: Some(at_density_one(size.width)),
             height: Some(at_density_one(size.height)),
             token: None,
+            window,
         };
         reports.report((surface, configured));
     }
+}
+
+fn display_filling_window(role: &Role) -> Option<WindowState> {
+    matches!(role, Role::Window(_)).then(|| WindowState {
+        tiled: Edges::all(),
+        ..WindowState::default()
+    })
 }
 
 fn at_density_one(pixels: u32) -> Dp {

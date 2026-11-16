@@ -24,6 +24,7 @@ fn configured() -> PlatformEvent {
             width: length,
             height: length,
             token: None,
+            window: None,
         },
     )
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::flag_set::flag_set;
 use crate::geometry::Point;
 use crate::surface::SurfaceId;
 use std::cmp::Reverse;
@@ -136,56 +137,16 @@ pub struct ReceivedData {
     pub bytes: Vec<u8>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DragAction {
-    Copy,
-    Move,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct DragActions(u8);
+flag_set!(pub enum DragAction in DragActions { Copy, Move });
 
 impl DragActions {
-    pub fn new(actions: impl IntoIterator<Item = DragAction>) -> Self {
-        Self(
-            actions
-                .into_iter()
-                .fold(0, |bits, action| bits | action.bit()),
-        )
-    }
-
-    #[must_use]
-    pub fn contains(self, action: DragAction) -> bool {
-        self.0 & action.bit() != 0
-    }
-
-    #[must_use]
-    pub fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
     #[must_use]
     pub fn preferred(self) -> Option<DragAction> {
         self.iter().max_by_key(|action| action.preference())
     }
-
-    pub fn iter(self) -> impl Iterator<Item = DragAction> {
-        DragAction::ALL
-            .into_iter()
-            .filter(move |action| self.contains(*action))
-    }
 }
 
 impl DragAction {
-    pub const ALL: [Self; 2] = [Self::Copy, Self::Move];
-
-    fn bit(self) -> u8 {
-        match self {
-            Self::Copy => 1,
-            Self::Move => 2,
-        }
-    }
-
     fn preference(self) -> u8 {
         match self {
             Self::Copy => 0,

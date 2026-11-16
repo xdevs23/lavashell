@@ -3,6 +3,7 @@ use crate::accessibility::Bridge;
 use crate::sctk;
 use lavashell_core::surface::ConfigureToken;
 use lavashell_core::units::Dp;
+use lavashell_core::window::WindowState;
 use lavashell_platform::SurfaceEvent;
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::wl_surface;
@@ -116,11 +117,13 @@ pub(crate) fn configure_event(
     width: Option<NonZero<u32>>,
     height: Option<NonZero<u32>>,
     token: Option<ConfigureToken>,
+    window: Option<WindowState>,
 ) -> SurfaceEvent {
     let length = |pixels: NonZero<u32>| Dp::new(f64::from(pixels.get()));
     SurfaceEvent::Configured {
         width: width.map(length),
         height: height.map(length),
         token,
+        window,
     }
 }

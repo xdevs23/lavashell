@@ -114,6 +114,7 @@ fn configured(surface: SurfaceId, token: ConfigureToken) -> PlatformEvent {
         width: Some(100.dp()),
         height: None,
         token: Some(token),
+        window: None,
     };
     PlatformEvent::Surface(surface, configure)
 }
