@@ -178,6 +178,8 @@ mod arrivals;
 mod bound_scroll;
 #[path = "tests/content_sizes.rs"]
 mod content_sizes;
+#[path = "tests/crossings.rs"]
+mod crossings;
 #[path = "tests/deferred.rs"]
 mod deferred;
 #[path = "tests/editing.rs"]

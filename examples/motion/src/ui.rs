@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod range;
+mod settings;
 mod timeline;
 
 use crate::{
@@ -13,6 +14,7 @@ use lavashell_example_support::{
     Breakpoint, Layout, ThemeSwitchColors, UNDERTOW, report, report_failure,
 };
 use range::slider;
+use settings::settings;
 use std::time::Duration;
 use timeline::timeline;
 
@@ -32,7 +34,7 @@ fn control(ui: &mut Ui, key: CopyKey, modifier: Modifier, action: impl FnMut() +
     );
 }
 
-pub const WINDOW: Size = Size::new(Dp::new(1240.0), Dp::new(900.0));
+pub const WINDOW: Size = Size::new(Dp::new(1240.0), Dp::new(1200.0));
 
 const PADDING: Dp = Dp::new(32.0);
 const GAP: Dp = Dp::new(20.0);
@@ -79,6 +81,9 @@ pub fn compose(ui: &mut Ui, demo: &Demo) {
                             panel(ui, CopyKey::TimelineTitle, width, |ui| {
                                 timeline(ui, demo, width - 48.dp(), layout);
                             });
+                        });
+                        panel(ui, CopyKey::CrossingTitle, width, |ui| {
+                            settings(ui, demo, width - 48.dp(), reduced);
                         });
                         status(ui, demo);
                     },

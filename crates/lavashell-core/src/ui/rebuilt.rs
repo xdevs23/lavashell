@@ -48,6 +48,7 @@ impl Node {
             accessibility_actions: _accessibility_actions_are_handlers,
             component,
             on_exit: _on_exit_is_a_handler,
+            crossings,
         } = self;
         let child_ids = (children.iter()).map(|child| tree[*child].id);
         let earlier_child_ids = (earlier.children.iter()).map(|child| earlier_tree[*child].id);
@@ -80,6 +81,7 @@ impl Node {
             && *semantics == earlier.semantics
             && semantics_provider.is_built_like(&earlier.semantics_provider)
             && component.is_some() == earlier.component.is_some()
+            && crossings.is_built_like(&earlier.crossings)
     }
 }
 

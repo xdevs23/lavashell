@@ -40,6 +40,23 @@ fn two_siblings_with_one_key_fail_their_composition() -> TestResult {
 }
 
 #[test]
+fn a_shared_key_in_two_views_does_not_report_a_duplicate_key() -> TestResult {
+    let mut view = View::new(crate::platform::fixture::facts(), |ui| {
+        for page in ["list", "page"] {
+            let _view_without_a_crossing = ui.view(page, Modifier::new(), |ui| {
+                ui.shared("title", Modifier::new().tag(page), |ui| {
+                    ui.spacer(10.dp(), 10.dp(), Modifier::new());
+                });
+            });
+        }
+    });
+    assert!(next_failures(&mut view)?.is_empty());
+    assert!(view.bounds_of(&"list").is_some());
+    assert!(view.bounds_of(&"page").is_some());
+    Ok(())
+}
+
+#[test]
 fn a_border_width_that_is_not_finite_fails_its_composition() -> TestResult {
     let mut view = View::new(crate::platform::fixture::facts(), |ui| {
         let border = Modifier::new().border(Color::WHITE, Dp::new(f64::NAN), Corners::default());

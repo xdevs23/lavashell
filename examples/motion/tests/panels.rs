@@ -259,3 +259,66 @@ fn the_theme_switch_repaints_the_window() -> Result<(), Error> {
     assert_eq!(harness.page_fill()?, by_system);
     Ok(())
 }
+
+#[test]
+fn the_back_gesture_sets_the_crossing_progress_also_backwards_and_snaps_with_reduced_motion()
+-> Result<(), Error> {
+    let mut harness = Harness::new(Demo::new(false, ThemeChoice::System)?)?;
+    harness.frame()?;
+    let stage = harness.control(Tag::SettingsStage)?;
+    let start = Point::new(stage.x + stage.width * 0.1, stage.y + stage.height * 0.95);
+    let at = |share: f64| start.offset(stage.width * share, Dp::ZERO);
+    let progress = harness.demo.back.progress.clone();
+    harness.view.input(InputEvent::Press(start));
+    harness.view.input(InputEvent::Move(at(0.6)));
+    assert!((progress.get() - 0.6).abs() < 0.01);
+    harness.view.input(InputEvent::Move(at(0.3)));
+    assert!((progress.get() - 0.3).abs() < 0.01);
+    harness.view.input(InputEvent::Release(at(0.3)));
+    harness.wait(Duration::from_millis(100))?;
+    assert!(progress.get() < 0.3 && progress.target() < 0.3);
+
+    harness.demo.set_reduced(true).map_err(Error::Motion)?;
+    harness.frame()?;
+    harness.view.input(InputEvent::Press(start));
+    harness.view.input(InputEvent::Move(at(0.7)));
+    assert_eq!(progress.get().to_bits(), 0.0_f64.to_bits());
+    harness.view.input(InputEvent::Release(at(0.7)));
+    assert_eq!(progress.get().to_bits(), 1.0_f64.to_bits());
+    harness.frame()?;
+    assert!(!harness.demo.back.shows_display());
+    Ok(())
+}
+
+#[test]
+fn a_drag_over_the_covered_display_row_moves_the_display_page() -> Result<(), Error> {
+    let mut harness = Harness::new(Demo::new(false, ThemeChoice::System)?)?;
+    harness.frame()?;
+    let stage = harness.control(Tag::SettingsStage)?;
+    let start = harness.control(Tag::DisplayRow)?.center();
+    let progress = harness.demo.back.progress.clone();
+    harness.view.input(InputEvent::Press(start));
+    harness
+        .view
+        .input(InputEvent::Move(start.offset(stage.width * 0.5, Dp::ZERO)));
+    assert!(progress.get() > 0.0);
+    Ok(())
+}
+
+#[test]
+fn the_back_control_and_the_display_row_animate_the_crossing_both_ways() -> Result<(), Error> {
+    let mut harness = Harness::new(Demo::new(false, ThemeChoice::System)?)?;
+    harness.frame()?;
+    let progress = harness.demo.back.progress.clone();
+    harness.click(Tag::Control(CopyKey::Back))?;
+    harness.wait(Duration::from_millis(100))?;
+    assert!(progress.get() > 0.0 && progress.get() < 1.0);
+    harness.wait(Duration::from_secs(2))?;
+    assert!(!harness.demo.back.shows_display());
+    harness.click(Tag::DisplayRow)?;
+    harness.wait(Duration::from_millis(100))?;
+    assert!(progress.get() > 0.0 && progress.get() < 1.0);
+    harness.wait(Duration::from_secs(2))?;
+    assert_eq!(progress.get().to_bits(), 0.0_f64.to_bits());
+    Ok(())
+}

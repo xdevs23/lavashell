@@ -7,4 +7,6 @@ pub enum Tag {
     Card,
     SpringTarget,
     TimelineSeek,
+    SettingsStage,
+    DisplayRow,
 }

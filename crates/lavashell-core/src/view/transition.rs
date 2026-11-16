@@ -13,7 +13,7 @@ use crate::platform::PlatformFacts;
 use crate::scene::Brush;
 use crate::scene::tree::Presence;
 use crate::shape::Corners;
-use crate::ui::{ModifierElement, Ui};
+use crate::ui::{ModifierElement, Node, Ui};
 use crate::units::{Dp, NonNegativeDp};
 pub(super) use changing::Changing;
 pub(super) use departure::Departure;
@@ -187,6 +187,10 @@ composite_fields! {
 }
 
 impl VisualAppearance {
+    pub(super) fn of(node: &Node) -> Self {
+        FoundElements::of(&node.modifier).appearance(node)
+    }
+
     fn still() -> Self {
         Self {
             background: Color::TRANSPARENT.interpolated(ColorInterpolation::default()),
@@ -273,6 +277,19 @@ pub(super) struct AnimatedVisual {
 }
 
 impl AnimatedVisual {
+    pub fn crossed(node: &Node, rect: Rect, appearance: VisualAppearance) -> Self {
+        Self {
+            visual: Visual {
+                rect,
+                presence: Presence::default(),
+                appearance,
+            },
+            transition: Transition::new(MotionSpec::Instant),
+            steps: FoundElements::of(&node.modifier).steps(MaterialSteps::default()),
+            motion: None,
+        }
+    }
+
     pub fn material(&self) -> Option<&ShapedMaterial> {
         self.visual
             .appearance
@@ -313,13 +330,12 @@ impl View {
         composed_parent: usize,
     ) -> Option<AnimatedVisual> {
         let node = &self.nodes[index];
+        if let Some(appearance) = self.crossings.appearance(index) {
+            return Some(AnimatedVisual::crossed(node, rect, appearance.clone()));
+        }
         let transition = node.transition?;
         let found = FoundElements::of(&node.modifier);
-        let interpolation = transition.appearance.unwrap_or_default();
-        let appearance = VisualAppearance {
-            text: (node.text_style()).map(|style| TextBlend::of(style, interpolation)),
-            ..found.appearance(interpolation)
-        };
+        let appearance = found.appearance(node);
         let target = Visual {
             rect,
             presence: Presence::default(),
@@ -329,10 +345,7 @@ impl View {
                 VisualAppearance::still()
             },
         };
-        let steps = MaterialSteps {
-            material: found.material.map(|(step, _)| step),
-            group: (found.group).map(|(step, (_, spacing))| GroupStep { step, spacing }),
-        };
+        let steps = found.material_steps();
         let id = node.id;
         let parent = (self.parents.node_of(index)).map(|parent| self.nodes[parent].id);
         let refreshed =
@@ -360,13 +373,7 @@ impl View {
             visual,
             transition,
             motion,
-            steps: AnimatedSteps {
-                background: found.background.map(|(step, _)| step),
-                clip: found.clip.map(|(step, _)| step),
-                opacity: found.opacity.map(|(step, _)| step),
-                present: steps,
-                departing,
-            },
+            steps: found.steps(departing),
         })
     }
 }
@@ -405,7 +412,27 @@ impl<'a> FoundElements<'a> {
         }
     }
 
-    fn appearance(&self, interpolation: ColorInterpolation) -> VisualAppearance {
+    fn material_steps(&self) -> MaterialSteps {
+        MaterialSteps {
+            material: self.material.map(|(step, _)| step),
+            group: (self.group).map(|(step, (_, spacing))| GroupStep { step, spacing }),
+        }
+    }
+
+    fn steps(&self, departing: MaterialSteps) -> AnimatedSteps {
+        AnimatedSteps {
+            background: self.background.map(|(step, _)| step),
+            clip: self.clip.map(|(step, _)| step),
+            opacity: self.opacity.map(|(step, _)| step),
+            present: self.material_steps(),
+            departing,
+        }
+    }
+
+    fn appearance(&self, node: &Node) -> VisualAppearance {
+        let interpolation = (node.transition)
+            .and_then(|transition| transition.appearance)
+            .unwrap_or_default();
         VisualAppearance {
             background: (self
                 .background
@@ -417,7 +444,7 @@ impl<'a> FoundElements<'a> {
                 .map(|(_, material)| Interpolated::new(material.clone(), interpolation)),
             group_material: (self.group)
                 .map(|(_, (material, _))| Interpolated::new(material.clone(), interpolation)),
-            text: None,
+            text: (node.text_style()).map(|style| TextBlend::of(style, interpolation)),
         }
     }
 }

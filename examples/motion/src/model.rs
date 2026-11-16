@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod back_gesture;
 mod outlines;
 
 use crate::Error;
+pub use back_gesture::{BackGesture, BackMotion, Page};
 use lavashell::prelude::*;
 use lavashell_example_support::{Theme, ThemeChoice, icon, lucide};
 pub use outlines::Shape;
@@ -47,6 +49,7 @@ pub struct Demo {
     pub paused: State<bool>,
     pub time: State<FrameTime>,
     pub render_cost: State<Duration>,
+    pub back: BackGesture,
     pub icons: HeaderIcons,
     pub theme: Theme,
     morph: Rc<RefCell<Option<Morph>>>,
@@ -88,6 +91,7 @@ impl Demo {
             paused: State::new(false),
             time: State::new(FrameTime::default()),
             render_cost: State::new(Duration::ZERO),
+            back: BackGesture::new().map_err(Error::Motion)?,
             icons: HeaderIcons::decode()?,
             theme: Theme::new(theme)?,
             morph: Rc::default(),
@@ -182,6 +186,7 @@ impl Demo {
 
     fn settle(&self) -> Result<(), AnimationError> {
         self.spring.snap(self.spring.target())?;
+        self.back.settle()?;
         if let Some(shape) = self.sampled() {
             shape.snap(shape.target())?;
         }

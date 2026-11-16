@@ -23,28 +23,21 @@ impl Surfaces {
         live: Rect,
         origin: Point,
     ) -> (Self, Option<Stretch>) {
-        let ratio = |to: Dp, from: Dp| if from > Dp::ZERO { to / from } else { 1.0 };
         let (scale, growth) = match motion {
             BoundsMotion::Instant => return (Self::STILL, None),
-            BoundsMotion::Scale => {
-                let scale = Scale {
-                    x: ratio(live.width, bounds.width),
-                    y: ratio(live.height, bounds.height),
-                };
-                (scale, Size::ZERO)
-            }
+            BoundsMotion::Scale => (Scale::between(bounds.size(), live.size()), Size::ZERO),
             BoundsMotion::Reflow => (
                 Transform::IDENTITY.scale,
                 Size::new(live.width - bounds.width, live.height - bounds.height),
             ),
         };
         let stretch = Stretch {
-            from: Point::new(bounds.x, bounds.y),
+            from: bounds.origin(),
             origin,
             scale,
         };
         let surfaces = Self {
-            stretch: stretch.at(Point::new(live.x, live.y)),
+            stretch: stretch.at(live.origin()),
             growth,
         };
         (surfaces, Some(stretch))

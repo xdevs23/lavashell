@@ -1,32 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Source;
+use super::detached::{Detached, OpenDetached};
 use crate::scene::Transform;
-use crate::scene::tree::GroupValues;
 use crate::ui::NodeId;
 use crate::view::View;
-use crate::view::output::{Canvas, GroupId, Painted};
-use std::sync::Arc;
+use crate::view::output::GroupId;
 
 pub(in crate::view) struct Above {
     id: NodeId,
-    resting_parent: Transform,
-    items: Arc<[Painted]>,
+    painting: Detached,
 }
 
 impl Above {
     pub fn moved_by(&self, moved: Transform) -> Self {
         Self {
             id: self.id,
-            resting_parent: moved.then(self.resting_parent),
-            items: self.items.clone(),
+            painting: self.painting.moved_by(moved),
         }
     }
 }
 
 pub(super) struct OpenAbove {
     id: NodeId,
-    resting_parent: Transform,
-    around: Canvas,
+    painting: OpenDetached,
     earlier: Vec<Above>,
 }
 
@@ -43,35 +39,25 @@ impl View {
         }
         Some(OpenAbove {
             id,
-            resting_parent: self.routing.moving.at_rest(parent),
-            around: self.painting.open_items(),
+            painting: self.open_detached(parent),
             earlier: std::mem::take(&mut self.painting.above),
         })
     }
 
     pub(super) fn close_above(&mut self, open: OpenAbove) {
-        let items = self.painting.close_items(open.around).into();
+        let painting = self.close_detached(open.painting);
         let inside = std::mem::replace(&mut self.painting.above, open.earlier);
         self.painting.above.push(Above {
             id: open.id,
-            resting_parent: open.resting_parent,
-            items,
+            painting,
         });
         self.painting.above.extend(inside);
     }
 
     pub(in crate::view) fn paint_above(&mut self) {
-        let canvas = &mut self.painting.canvas;
-        for above in self.painting.above.drain(..) {
-            let group = GroupValues {
-                transform: above.resting_parent.affine(),
-                ..GroupValues::default()
-            };
-            canvas.nest(Painted::Group {
-                id: GroupId::Above(above.id),
-                group: group.into(),
-                items: above.items,
-            });
+        for above in std::mem::take(&mut self.painting.above) {
+            let placed = (above.painting).placed(GroupId::Above(above.id), Transform::IDENTITY);
+            self.painting.canvas.nest(placed);
         }
     }
 }

@@ -2,6 +2,7 @@
 mod accessibility;
 mod collected;
 mod component;
+mod crossing;
 mod failure;
 mod field;
 mod frame;
@@ -36,6 +37,7 @@ mod transition;
 
 pub use crate::scene::tree::{Presence, PresenceParts, ScaleOrigin};
 pub use crate::text_edit::{TextCaret, TextCluster, TextGeometry};
+pub(crate) use crossing::Crossing;
 use failure::{FrameFailures, LayoutRetry};
 pub use frame_error::{
     ComponentError, ComponentFailure, CompositionError, FrameError, LayoutError, LayoutRead,
@@ -250,6 +252,7 @@ pub struct View {
     accessibility: accessibility::AccessibilityExport,
     failures: FrameFailures,
     painting: paint::PaintOutput,
+    crossings: crossing::Crossings,
     followers: scroll_followers::ScrollFollowers,
     scrolls: BTreeMap<NodeId, Dp>,
     window_focused: bool,
@@ -290,6 +293,7 @@ impl View {
             accessibility: accessibility::AccessibilityExport::default(),
             failures: FrameFailures::default(),
             painting: paint::PaintOutput::default(),
+            crossings: crossing::Crossings::default(),
             followers: scroll_followers::ScrollFollowers::default(),
             scrolls: BTreeMap::new(),
             window_focused: true,

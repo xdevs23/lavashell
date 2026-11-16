@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod above;
+mod detached;
+mod flight;
 mod group;
 mod kind;
 pub(super) mod material;
@@ -25,6 +27,8 @@ use crate::view::component::index_of;
 use crate::view::transition::{AnimatedVisual, TextBlend};
 pub(super) use above::Above;
 use above::OpenAbove;
+pub(super) use detached::Detached;
+use flight::OpenFlight;
 pub(super) use group::{OpenGroup, Playback, Unwind};
 use kind::KindInput;
 use modifiers::{ModifierInput, PaintedModifiers};
@@ -38,6 +42,7 @@ pub(super) use surfaces::Surfaces;
 pub(super) struct PaintOutput {
     pub canvas: Canvas,
     pub above: Vec<Above>,
+    pub flown: BTreeMap<NodeId, Detached>,
     pub shown: Shown,
     pub spare_unwinds: Vec<Unwind>,
     pub sibling_orders: SiblingOrders,
@@ -109,6 +114,7 @@ impl View {
         parent_transform: Transform,
         inherited: Inherited,
     ) -> Opened {
+        let flight = self.open_flight(index, parent_transform);
         let mut unwind = self.painting.unwinding();
         let interaction = self.interaction_visual(index, inherited);
         let plan = self.plan_paint(
@@ -159,6 +165,7 @@ impl View {
             interaction,
             presence,
             above,
+            flight,
             surfaces,
             decorated_surface,
             painted,
@@ -222,6 +229,7 @@ impl View {
         let inner = content.as_ref().map_or(transform, |(_, inner)| *inner);
         let start = Point::new(rect.x, rect.y);
         self.paint_children(index, start, inner, inside.for_children(index, shift), text);
+        self.paint_flights_around(index, inner);
         if let Some((open, _)) = content {
             self.close_group(open);
         }
@@ -243,6 +251,9 @@ impl View {
         }
         if let Some(open) = opened.above {
             self.close_above(open);
+        }
+        if let Some(open) = opened.flight {
+            self.close_flight(open);
         }
     }
 
@@ -341,7 +352,7 @@ impl View {
         let offsets = Playback::in_slot_if(node.transition.is_none() && !decorated && !island);
         let visual_playback = Playback::in_slot_if(!island);
         let space = match node.identity {
-            Identity::InView => {
+            Identity::Shared { .. } => {
                 let resting = self.routing.moving.at_rest(parent_transform);
                 TransitionSpace::in_view(resting, laid_out, self.viewport_origin)
             }
@@ -362,6 +373,7 @@ struct Opened {
     interaction: Option<AnimatedAppearance>,
     presence: Option<OpenGroup>,
     above: Option<OpenAbove>,
+    flight: Option<OpenFlight>,
     surfaces: Surfaces,
     decorated_surface: Rect,
     painted: PaintedModifiers,

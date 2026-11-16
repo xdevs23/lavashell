@@ -109,6 +109,7 @@ impl View {
             self.accessibility.geometry.clear();
             let scope = self.scope.clone();
             scope.track(Phase::Paint, || {
+                self.crossings = self.crossings_in_flight();
                 self.paint(
                     0,
                     Point::default(),

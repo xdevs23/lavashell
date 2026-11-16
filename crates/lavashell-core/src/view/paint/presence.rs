@@ -6,6 +6,7 @@ use crate::scene::Transform;
 use crate::scene::tree::{PresenceMap, PresenceVectors, Slot, TransformMotion};
 use crate::ui::NodeId;
 use crate::view::collected::Collected;
+use crate::view::crossing::Crossings;
 use crate::view::laid_out::LaidOutTree;
 use crate::view::output::GroupId;
 use crate::view::transition::{AnimatedVisual, BoundsMotion, Visual, VisualVectors};
@@ -118,6 +119,7 @@ struct Apart<'a> {
     id: NodeId,
     swapped: LaidOutTree,
     outer: Collected,
+    crossings: Crossings,
 }
 
 impl<'a> Apart<'a> {
@@ -127,11 +129,13 @@ impl<'a> Apart<'a> {
         let mut swapped = departure.take_tree();
         swapped.exchange(view);
         let outer = view.isolate();
+        let crossings = std::mem::take(&mut view.crossings);
         let apart = Self {
             view,
             id,
             swapped,
             outer,
+            crossings,
         };
         Some((apart, position))
     }
@@ -146,6 +150,7 @@ impl Drop for Apart<'_> {
         let view = &mut *self.view;
         self.swapped.exchange(view);
         self.outer.exchange(view);
+        view.crossings = std::mem::take(&mut self.crossings);
         if let Some(departure) = view.transitions.departure(self.id) {
             departure.restore_tree(std::mem::take(&mut self.swapped));
         }

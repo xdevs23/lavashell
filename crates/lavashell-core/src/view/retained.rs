@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::crossing::Crossed;
 use super::moving::MovingGroup;
 use super::output::{GroupId, Painted, placed_at};
-use super::paint::{Above, Inherited};
+use super::paint::{Above, Detached, Inherited};
 use super::{Hit, HitClip, TextMeasurer, TextTarget, View, accessibility, paint, scroll_followers};
 use crate::geometry::{Constraints, Point, Rect, Scale, Size};
 use crate::keyboard::Key;
@@ -44,6 +45,7 @@ struct Painting {
     moving: Vec<MovingGroup>,
     followers: Vec<scroll_followers::ScrollFollower>,
     above: Vec<Above>,
+    flown: BTreeMap<NodeId, Detached>,
     geometry: Vec<(NodeId, Rect)>,
     fields: Vec<(NodeId, Scale)>,
     accessibility_geometry: Vec<(NodeId, accessibility::SemanticGeometry)>,
@@ -71,6 +73,7 @@ struct PaintKey {
     starts: Vec<(NodeId, Point)>,
     scrolls: Vec<(NodeId, Dp)>,
     leaving: Vec<NodeId>,
+    crossed: Vec<(NodeId, Crossed)>,
     content_colors: ContentColors,
     source: paint::Source,
     flattened: bool,
@@ -264,6 +267,7 @@ impl View {
                 .map(|follower| follower.in_component(id))
                 .collect(),
             above: collected.above,
+            flown: collected.flown,
             geometry: (indices.iter())
                 .map(|i| (self.nodes[*i].id, self.layout[*i].rect))
                 .collect(),
@@ -298,7 +302,8 @@ impl View {
             .map(|i| self.nodes[*i].id)
             .collect::<BTreeSet<_>>();
         let local = |id: Option<NodeId>| id.filter(|id| ids.contains(id));
-        let shared = (indices.iter()).any(|i| self.nodes[*i].identity == Identity::InView);
+        let shared =
+            (indices.iter()).any(|i| matches!(self.nodes[*i].identity, Identity::Shared { .. }));
         PaintKey {
             offset: (self.nodes[index].transition)
                 .map(|_| Point::new(position.x - origin.x, position.y - origin.y)),
@@ -349,6 +354,9 @@ impl View {
                 .painting
                 .sibling_orders
                 .leaving_under(ids.iter().copied(), |id| self.transitions.is_leaving(id)),
+            crossed: (indices.iter())
+                .filter_map(|i| Some((self.nodes[*i].id, self.crossings.crossed(*i)?.clone())))
+                .collect(),
             content_colors: inherited.content_colors.clone(),
             source: inherited.source,
             flattened: self.painting.canvas.flattened(),
@@ -401,6 +409,8 @@ impl View {
         self.routing.moving.place(&painting.moving, moved);
         self.followers.extend(painting.followers.iter().cloned());
         (self.painting.above).extend(painting.above.iter().map(|above| above.moved_by(moved)));
+        (self.painting.flown)
+            .extend((painting.flown.iter()).map(|(id, flown)| (*id, flown.moved_by(moved))));
         for hit in &painting.hits {
             let inner = (hit.clips.iter()).map(|clip| {
                 let clip = clip.mapped(moved);

@@ -14,7 +14,7 @@ use crate::reactive::State;
 use crate::scene::{DrawContext, Drawing, Icon, IconStyle, TextStyle};
 use crate::style::{BorderStyle, InteractionStyle};
 use crate::units::{Dp, NumberError, Positive};
-use crate::view::Transition;
+use crate::view::{Crossing, Transition};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -44,8 +44,8 @@ impl NodeId {
         Self(hash_of((IdScope::Keyed, parent, key)))
     }
 
-    pub(crate) fn shared(key: impl Hash) -> Self {
-        Self(hash_of((IdScope::Shared, key)))
+    pub(crate) fn shared(view: ViewId, key: impl Hash) -> Self {
+        Self(hash_of((IdScope::Shared, view, key)))
     }
 }
 
@@ -121,10 +121,26 @@ pub enum Flow {
     Out,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SharedKey(u64);
+
+impl SharedKey {
+    pub(crate) fn of(key: impl Hash) -> Self {
+        Self(hash_of(key))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ViewId(pub(crate) NodeId);
+
+impl ViewId {
+    pub(crate) const ROOT: Self = Self(NodeId::ROOT);
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Identity {
     InParent,
-    InView,
+    Shared { view: ViewId, key: SharedKey },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -267,6 +283,7 @@ pub struct Node {
     pub accessibility_actions: BTreeMap<crate::accessibility::ActionKind, AccessibilityHandler>,
     pub(crate) component: Option<Rc<Component>>,
     pub(crate) on_exit: Vec<Rc<dyn Fn() -> Result<(), AnimationError>>>,
+    pub(crate) crossings: Vec<Crossing>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -320,6 +337,7 @@ impl Node {
             accessibility_actions: BTreeMap::new(),
             component: None,
             on_exit: Vec::new(),
+            crossings: Vec::new(),
         }
     }
 
@@ -362,10 +380,12 @@ impl Node {
     pub(crate) fn take_contents(&mut self, root: &mut Node) {
         self.children = std::mem::take(&mut root.children);
         self.on_exit = std::mem::take(&mut root.on_exit);
+        self.crossings = std::mem::take(&mut root.crossings);
     }
 
     pub(crate) fn clear_contents(&mut self) {
         self.children.clear();
         self.on_exit.clear();
+        self.crossings.clear();
     }
 }

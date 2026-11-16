@@ -5,6 +5,24 @@ spring_title	Spring retargeting
 morph_title	Contour morph
 morph	Change shape
 timeline_title	Keyframe timeline
+crossing_title	Shared element across views
+back	Back
+settings	Settings
+network	Network and internet
+network_detail	Wireless, mobile data, hotspot
+paired_devices	Paired devices
+paired_devices_detail	On · 2 devices connected
+display	Display and brightness
+display_detail	Brightness, night light, timeout
+sound	Sound and vibration
+sound_detail	Volume, ringtone, do not disturb
+notifications	Notifications
+notifications_detail	App alerts, lock screen
+brightness	Brightness
+night_light	Night light
+night_light_detail	Scheduled · 22:00 to 06:30
+screen_timeout	Screen timeout
+screen_timeout_detail	After 2 minutes of inactivity
 pause	Pause
 play	Resume
 replay	Restart

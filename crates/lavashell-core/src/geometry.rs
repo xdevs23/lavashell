@@ -220,6 +220,11 @@ impl Rect {
     }
 
     #[must_use]
+    pub const fn origin(self) -> Point {
+        Point::new(self.x, self.y)
+    }
+
+    #[must_use]
     pub fn center(self) -> Point {
         Point::new(self.x + self.width / 2.0, self.y + self.height / 2.0)
     }
@@ -332,6 +337,16 @@ impl Insets {
 pub(crate) struct Scale {
     pub x: f64,
     pub y: f64,
+}
+
+impl Scale {
+    pub fn between(from: Size, to: Size) -> Self {
+        let ratio = |to: Dp, from: Dp| if from > Dp::ZERO { to / from } else { 1.0 };
+        Self {
+            x: ratio(to.width, from.width),
+            y: ratio(to.height, from.height),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

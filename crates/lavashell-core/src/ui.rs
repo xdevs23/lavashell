@@ -23,7 +23,7 @@ pub use node::{
     AccessibilityHandler, Action, ActivateAction, Activation, Align, Arrangement, ContentSizes,
     ContentSizesAction, FieldContent, Flow, IconOptions, IconSize, Identity, InputModifiers,
     KeyAction, Lines, MeasureAction, Node, NodeId, NodeKind, ScrollAction, SemanticsProvider,
-    TextChange, TextFieldOptions, Tooltip, Weight,
+    SharedKey, TextChange, TextFieldOptions, Tooltip, ViewId, Weight,
 };
 pub use pointer::{
     DragHandler, DragInput, DragPhase, Draggable, PointerAction, PointerId, PointerInput,
@@ -32,7 +32,7 @@ pub use pointer::{
 pub(crate) use scrolling::Scroller;
 pub use view_tag::{NodeTag, ViewTag};
 
-use crate::animation::Motion;
+use crate::animation::{Animation, Motion};
 use crate::geometry::{Size, VIEWPORT, Viewport};
 use crate::input_method::TextSender;
 use crate::keyboard::Shortcut;
@@ -44,10 +44,12 @@ use crate::reactive::State;
 use crate::scene::{DrawContext, Drawing, Icon, TEXT_STYLE, TextStyle};
 use crate::style::{INTERACTION_STYLE, InteractionStyle};
 use crate::units::Dp;
-use crate::view::{ComponentError, ComponentFailure, CompositionError, NodeName};
+use crate::view::{ComponentError, ComponentFailure, CompositionError, Crossing, NodeName};
 use std::cell::RefCell;
 use std::hash::Hash;
 use std::rc::Rc;
+
+static ENCLOSING_VIEW: Local<ViewId> = Local::new(|| ViewId::ROOT);
 
 #[derive(Clone)]
 pub(crate) struct ViewHandles {
@@ -237,10 +239,29 @@ impl Ui {
         self.node(id, kind, modifier)
     }
 
+    pub fn view(
+        &mut self,
+        key: impl Hash,
+        modifier: Modifier,
+        children: impl FnOnce(&mut Self),
+    ) -> ViewId {
+        let node = self.keyed(key, modifier);
+        let view = ViewId(node.id);
+        self.add(node, |ui| ui.provide(&ENCLOSING_VIEW, view, children));
+        view
+    }
+
+    pub fn crossing(&mut self, from: ViewId, to: ViewId, progress: &Animation<f64>) {
+        let progress = progress.clone();
+        let crossing = Crossing { from, to, progress };
+        self.nodes[self.parent].crossings.push(crossing);
+    }
+
     pub fn shared(&mut self, key: impl Hash, modifier: Modifier, children: impl FnOnce(&mut Self)) {
         let kind = NodeKind::Container(Arrangement::Overlay);
-        let mut node = self.node(NodeId::shared(key), kind, modifier);
-        node.identity = Identity::InView;
+        let (view, key) = (self.local(&ENCLOSING_VIEW), SharedKey::of(key));
+        let mut node = self.node(NodeId::shared(view, key), kind, modifier);
+        node.identity = Identity::Shared { view, key };
         self.add(node, children);
     }
 

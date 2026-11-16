@@ -63,6 +63,14 @@ impl Transform {
         .saturated()
     }
 
+    pub fn between(from: Rect, to: Rect) -> Self {
+        Self::moving(
+            from.origin(),
+            to.origin(),
+            Scale::between(from.size(), to.size()),
+        )
+    }
+
     pub fn rect(self, r: Rect) -> Rect {
         let Self { scale, translation } = self;
         Rect::new(
