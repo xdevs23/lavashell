@@ -71,7 +71,7 @@ fn selector_suppresses_unrelated_updates_and_expires_with_its_owner() {
     let scope = Scope::default();
     assert_eq!(scope.track(Phase::Composition, || selected.get()), 1);
     state.update(|s| s.1 = 3);
-    assert!(!scope.dirty().any());
+    assert!(!scope.is_dirty());
     state.update(|s| s.0 = 4);
     assert!(scope.dirty().contains(Phase::Composition));
     assert_eq!(selected.get(), 4);

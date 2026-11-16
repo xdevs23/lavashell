@@ -9,11 +9,10 @@ fn dependencies(scope: &Scope, phase: Phase) -> usize {
 
 #[test]
 fn all_dirty_contains_every_phase_and_the_default_none() {
-    for phase in [Phase::Composition, Phase::Layout, Phase::Paint] {
-        assert!(Dirty::ALL.contains(phase));
+    for phase in Phase::ALL {
+        assert!(Dirty::all().contains(phase));
         assert!(!Dirty::default().contains(phase));
     }
-    assert_eq!(Dirty::ALL.0.count_ones() as usize, Phase::COUNT);
 }
 
 #[test]
@@ -47,7 +46,7 @@ fn peeking_at_a_state_without_cloning_it_follows_nothing() {
     );
     assert_eq!(dependencies(&scope, Phase::Layout), 0);
     value.set(String::from("changed"));
-    assert!(!scope.dirty().any());
+    assert!(!scope.is_dirty());
 }
 
 #[test]
@@ -58,9 +57,9 @@ fn conditional_dependencies_expire() {
     assert_eq!(scope.track(Phase::Composition, || a.get()), 1);
     assert_eq!(scope.track(Phase::Composition, || b.get()), 2);
     a.set(3);
-    assert!(!scope.dirty().any());
+    assert!(!scope.is_dirty());
     b.set(4);
-    assert!(scope.dirty().any());
+    assert!(scope.is_dirty());
 }
 
 #[test]
@@ -74,7 +73,7 @@ fn nested_scopes_restore_tracking() {
     });
     assert_eq!(read, 3);
     a.set(3);
-    assert!(!outer.dirty().any());
+    assert!(!outer.is_dirty());
     assert!(inner.dirty().contains(Phase::Paint));
     b.set(4);
     assert!(outer.dirty().contains(Phase::Layout));
@@ -91,7 +90,7 @@ fn further_tracking_adds_to_the_dependencies_of_the_last_track() {
     assert!(s.dirty().contains(Phase::Layout));
     s.track(Phase::Layout, || {});
     b.set(4);
-    assert!(!s.dirty().any());
+    assert!(!s.is_dirty());
 }
 
 #[test]
@@ -109,16 +108,16 @@ fn a_derived_value_follows_the_states_it_reads_and_notifies_only_when_it_changes
     assert!(!s.track(Phase::Composition, || derived.get()));
     a.set(2);
     b.set(1);
-    assert!(!s.dirty().any());
+    assert!(!s.is_dirty());
     a.set(7);
-    assert!(s.dirty().any());
+    assert!(s.is_dirty());
     assert!(s.track(Phase::Composition, || derived.get()));
     switch.set(true);
     assert!(!derived.get());
-    assert!(s.dirty().any());
+    assert!(s.is_dirty());
     assert!(!s.track(Phase::Composition, || derived.get()));
     b.set(8);
-    assert!(s.dirty().any());
+    assert!(s.is_dirty());
     assert!(a.is_read());
     drop(derived);
     assert!(!a.is_read());
@@ -130,5 +129,5 @@ fn equality_suppresses_work() {
     let a = State::new(1);
     assert_eq!(s.track(Phase::Composition, || a.get()), 1);
     a.set_if_changed(1);
-    assert!(!s.dirty().any());
+    assert!(!s.is_dirty());
 }

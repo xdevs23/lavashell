@@ -123,7 +123,7 @@ impl SurfaceShape {
 
     #[must_use]
     pub fn needs_frame(&self) -> bool {
-        self.scope.dirty().any()
+        self.scope.is_dirty()
     }
 
     #[must_use]

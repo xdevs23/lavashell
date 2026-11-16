@@ -321,12 +321,9 @@ impl View {
     pub fn needs_visual_frame(&self) -> bool {
         self.redraw
             || self.followers.needs_frame()
-            || self.motion_scope.dirty().any()
-            || self.scope.dirty().any()
-            || self
-                .nodes
-                .iter()
-                .any(|n| n.component.as_ref().is_some_and(|c| c.scope.dirty().any()))
+            || self.motion_scope.is_dirty()
+            || self.scope.is_dirty()
+            || self.nodes.iter().any(Node::component_is_dirty)
             || self.failures.layout_retries.iter().any(LayoutRetry::is_due)
             || self.motion.moves_read_values()
             || self.motion.timer_due()

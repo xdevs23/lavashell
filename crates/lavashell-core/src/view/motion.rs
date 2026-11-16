@@ -5,7 +5,7 @@ use crate::reactive::Phase;
 
 impl View {
     pub(super) fn follow_reduced_motion(&mut self) {
-        if self.motion_scope.dirty().any() {
+        if self.motion_scope.is_dirty() {
             let reduced = self.root_values.value(&REDUCED_MOTION);
             let reduced = self
                 .motion_scope

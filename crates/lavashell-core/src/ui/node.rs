@@ -297,6 +297,10 @@ impl Node {
         self.tag.as_ref().is_some_and(|own| own.is(tag))
     }
 
+    pub(crate) fn component_is_dirty(&self) -> bool {
+        (self.component.as_ref()).is_some_and(|component| component.scope.is_dirty())
+    }
+
     pub(crate) fn new(id: NodeId, kind: NodeKind, interaction: InteractionStyle) -> Self {
         Self {
             id,

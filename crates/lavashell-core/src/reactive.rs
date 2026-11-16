@@ -1,24 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::flag_set::flag_set;
 use crate::rebuilt::BuiltLike;
 use crate::unique_id::UniqueId;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 
-macro_rules! phases {
-    ($($phase:ident),+ $(,)?) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-        pub enum Phase {
-            $($phase),+
-        }
-
-        impl Phase {
-            const COUNT: usize = [$(Self::$phase),+].len();
-        }
-    };
-}
-
-phases!(Composition, Layout, Paint);
+flag_set!(pub enum Phase in Dirty { Composition, Layout, Paint });
 
 impl Phase {
     fn index(self) -> usize {
@@ -26,38 +14,9 @@ impl Phase {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Dirty(u8);
-
-impl Dirty {
-    pub const ALL: Self = Self((1 << Phase::COUNT) - 1);
-
-    #[must_use]
-    pub fn contains(self, phase: Phase) -> bool {
-        self.0 & Self::bit(phase) != 0
-    }
-
-    fn with(self, phase: Phase) -> Self {
-        Self(self.0 | Self::bit(phase))
-    }
-
-    fn without(self, phase: Phase) -> Self {
-        Self(self.0 & !Self::bit(phase))
-    }
-
-    fn bit(phase: Phase) -> u8 {
-        1 << phase.index()
-    }
-
-    #[must_use]
-    pub fn any(self) -> bool {
-        self.0 != 0
-    }
-}
-
 #[derive(Default)]
 struct ScopeInner {
-    epochs: Cell<[u64; Phase::COUNT]>,
+    epochs: Cell<[u64; Phase::ALL.len()]>,
     dirty: Cell<Dirty>,
     dependencies: RefCell<BTreeSet<(Phase, UniqueId)>>,
 }
@@ -151,6 +110,11 @@ impl Scope {
     #[must_use]
     pub fn dirty(&self) -> Dirty {
         self.0.dirty.get()
+    }
+
+    #[must_use]
+    pub fn is_dirty(&self) -> bool {
+        !self.dirty().is_empty()
     }
 
     pub(crate) fn has_read(&self, phase: Phase) -> bool {

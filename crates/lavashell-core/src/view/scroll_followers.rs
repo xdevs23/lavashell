@@ -128,7 +128,7 @@ impl ScrollFollowers {
     }
 
     pub fn needs_frame(&self) -> bool {
-        self.unsettled || self.scope.dirty().any()
+        self.unsettled || self.scope.is_dirty()
     }
 
     pub fn slots(&self) -> &BTreeMap<GroupId, Slot<Affine>> {

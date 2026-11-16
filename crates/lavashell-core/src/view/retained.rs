@@ -231,12 +231,7 @@ impl View {
         let key = self.paint_key(index, &indices, position, origin, placed, &inherited);
         let editing =
             (key.interaction.focus).is_some_and(|id| self.editing.edits.contains_key(&id));
-        let subtree_dirty = indices.iter().any(|i| {
-            self.nodes[*i]
-                .component
-                .as_ref()
-                .is_some_and(|c| c.scope.dirty().any())
-        });
+        let subtree_dirty = indices.iter().any(|i| self.nodes[*i].component_is_dirty());
         let current =
             (self.retained.paintings.get(&id)).is_some_and(|painting| painting.key == key);
         if !editing && !subtree_dirty && current {

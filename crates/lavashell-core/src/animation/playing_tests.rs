@@ -69,7 +69,7 @@ fn reading_the_program_follows_its_changes_and_not_the_moving_value() -> TestRes
     let playing = || scope.track(Phase::Paint, || animation.playing().is_some());
     assert!(playing());
     motion.advance(Duration::from_millis(1_050));
-    assert!(!scope.dirty().any());
+    assert!(!scope.is_dirty());
     animation.animate_to(2.0, tween)?;
     assert!(scope.dirty().contains(Phase::Paint));
     assert!(playing());
@@ -114,7 +114,7 @@ fn snapping_to_the_value_at_rest_leaves_readers_of_the_program_alone() -> TestRe
     assert!(!playing());
     animation.snap(3.0)?;
     animation.animate_to(3.0, MotionSpec::Instant)?;
-    assert!(!scope.dirty().any());
+    assert!(!scope.is_dirty());
     animation.snap(4.0)?;
     assert!(scope.dirty().contains(Phase::Paint));
     assert!(!playing());

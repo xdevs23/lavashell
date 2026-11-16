@@ -70,7 +70,7 @@ impl View {
 
     #[must_use]
     pub fn needs_accessibility_update(&self) -> bool {
-        self.accessibility.scope.dirty().any()
+        self.accessibility.scope.is_dirty()
     }
 
     pub fn update_accessibility(&mut self) {

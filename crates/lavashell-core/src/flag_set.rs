@@ -2,7 +2,7 @@
 
 macro_rules! flag_set {
     (pub enum $flag:ident in $set:ident { $($variant:ident),+ $(,)? }) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
         pub enum $flag {
             $($variant),+
         }
@@ -34,6 +34,16 @@ macro_rules! flag_set {
             #[must_use]
             pub const fn contains(self, flag: $flag) -> bool {
                 self.0 & flag.bit() != 0
+            }
+
+            #[must_use]
+            pub const fn with(self, flag: $flag) -> Self {
+                Self(self.0 | flag.bit())
+            }
+
+            #[must_use]
+            pub const fn without(self, flag: $flag) -> Self {
+                Self(self.0 & !flag.bit())
             }
 
             #[must_use]
@@ -75,3 +85,6 @@ macro_rules! flag_set {
 }
 
 pub(crate) use flag_set;
+
+#[cfg(test)]
+mod tests;

@@ -380,10 +380,10 @@ mod tests {
         let s = Scope::default();
         assert_f64_eq(s.track(Phase::Composition, || row.get()), 0.0);
         motion.advance(Duration::from_millis(30));
-        assert!(!s.dirty().any());
+        assert!(!s.is_dirty());
         motion.advance(Duration::from_millis(50));
         assert_f64_eq(row.get(), 1.0);
-        assert!(s.dirty().any());
+        assert!(s.is_dirty());
         motion.advance(Duration::from_millis(100));
         assert_f64_eq(row.get(), 2.0);
         Ok(())
