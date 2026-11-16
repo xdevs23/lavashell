@@ -70,10 +70,8 @@ let
           artifacts.framework directory (lib.optional usesFramework framework ++ [ engine ]) {
             validateEngine = true;
           };
-      selected = [
-        program
-      ]
-      ++ lib.filter (companion: builtins.elem companion dependencies) contract.companions;
+      selected = artifacts.selectedPackages directory;
+      testPackages = lib.subtractLists (artifacts.packagesTestedThrough local) selected;
     in
     pkgs.rustPlatform.buildRustPackage (
       rustPackageDefaults
@@ -92,7 +90,8 @@ let
             program
           ]
           ++ rustPackageDefaults.cargoBuildFlags;
-        cargoTestFlags = artifacts.flags selected ++ [ "--frozen" ];
+        cargoTestFlags = artifacts.flags testPackages ++ [ "--frozen" ];
+        doCheck = testPackages != [ ];
         postInstall =
           rustPackageDefaults.postInstall
           + ''

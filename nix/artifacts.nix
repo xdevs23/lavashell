@@ -16,6 +16,14 @@ let
       name
     ]) names;
   copy = import ./cache-copy.nix { inherit lib; };
+  selectedPackages =
+    directory:
+    [ (sources.packageName directory) ]
+    ++ lib.filter (
+      companion: builtins.elem companion (sources.packageNames directory)
+    ) contract.companions;
+  packagesTestedThrough =
+    layer: layer.testPackages ++ lib.concatMap packagesTestedThrough layer.previous;
   engineDefaults = rustPackageDefaults // {
     nativeBuildInputs = [ pkgs.pkg-config ];
     buildInputs = [ pkgs.wayland ];
@@ -50,15 +58,15 @@ let
       previous ? [ ],
       dummyPackages,
       configuration,
-      withTests,
       validateEngine ? false,
     }:
     let
       names = sources.crateNames projection.crates;
-      root = sources.packageName directory;
-      selected =
-        projection.selectedPackages
-          or ([ root ] ++ lib.filter (companion: builtins.elem companion names) contract.companions);
+      selected = projection.selectedPackages or (selectedPackages directory);
+      testPackages = lib.subtractLists (
+        dummyPackages ++ lib.concatMap packagesTestedThrough previous
+      ) names;
+      checked = testPackages != [ ];
     in
     pkgs.rustPlatform.buildRustPackage (
       configuration
@@ -70,11 +78,11 @@ let
           configuration.buildInputs
           ++ lib.concatMap (requirement: requirement.buildInputs) (requirementsOf names);
         cargoBuildFlags = flags selected ++ [ "--frozen" ] ++ rustPackageDefaults.cargoBuildFlags;
-        cargoTestFlags = flags names ++ [ "--frozen" ];
-        doCheck = withTests;
+        cargoTestFlags = flags testPackages ++ [ "--frozen" ];
+        doCheck = checked;
         preBuild =
           configuration.preBuild
-          + lib.optionalString withTests (import ./vendor-directory-times.nix)
+          + lib.optionalString checked (import ./vendor-directory-times.nix)
           + copy previous
           + lib.optionalString validateEngine (planCheck directory selected);
         installPhase = ''
@@ -90,6 +98,7 @@ let
         '';
         postInstall = "";
         dontFixup = true;
+        passthru = { inherit previous testPackages; };
       }
     );
 in
@@ -103,7 +112,6 @@ in
       source = sources.registrySource directory;
       dummyPackages = sources.crateNames (sources.registryProject directory).crates;
       configuration = rustPackageDefaults;
-      withTests = false;
     };
   engine =
     directory:
@@ -114,7 +122,6 @@ in
       source = sources.engineSource directory;
       dummyPackages = sources.crateNames (sources.engineProject directory).crates;
       configuration = engineDefaults;
-      withTests = false;
     };
   framework =
     directory: previous:
@@ -136,11 +143,12 @@ in
       source = if example then sources.frameworkSource directory else sources.sourceFor directory;
       dummyPackages = lib.optional example root;
       configuration = rustPackageDefaults;
-      withTests = true;
     };
   inherit
     copy
     flags
+    packagesTestedThrough
     planCheck
+    selectedPackages
     ;
 }
