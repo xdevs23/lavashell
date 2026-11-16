@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::AospError;
+use crate::input::ShownSurface;
 use crate::native_window::NativeWindow;
 use crate::platform::vulkan_window;
 use crate::streams::AospStreams;
+use lavashell_core::geometry::Size;
 use lavashell_core::prelude::PixelSize;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp, Px};
 use lavashell_core::window::{Edges, WindowState};
 use lavashell_platform::{
-    PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec,
-    TimingEvent,
+    InputRequest, PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
+    SurfaceSpec, TimingEvent,
 };
 use std::sync::mpsc;
+
+const DENSITY: Density = Density::ONE;
 
 #[derive(Default)]
 enum RuntimeSurface {
@@ -23,6 +27,7 @@ enum RuntimeSurface {
     },
     Shown {
         surface: SurfaceId,
+        size: PixelSize,
         window: Option<WindowState>,
     },
     Closing(SurfaceId),
@@ -54,6 +59,7 @@ impl HostSurface {
     ) -> Result<(), AospError> {
         let request = match request {
             PlatformRequest::Surface(request) => request,
+            PlatformRequest::Input(InputRequest::SetCursor(..)) => return Ok(()),
             unsupported => return Err(AospError::Unsupported(Box::new(unsupported))),
         };
         match request {
@@ -97,13 +103,20 @@ impl HostSurface {
     }
 
     pub(crate) fn changed(
-        &self,
+        &mut self,
         reports: &Reports<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
-        if let (RuntimeSurface::Shown { surface, window }, Some(native)) =
-            (&self.surface, &self.window)
+        if let (
+            RuntimeSurface::Shown {
+                surface,
+                size,
+                window,
+            },
+            Some(native),
+        ) = (&mut self.surface, &self.window)
         {
-            configure(reports, *surface, window_size(native)?, *window);
+            *size = window_size(native)?;
+            configure(reports, *surface, *size, *window);
         }
         Ok(())
     }
@@ -133,6 +146,17 @@ impl HostSurface {
         }
     }
 
+    pub(crate) fn shown(&self) -> Option<ShownSurface> {
+        let RuntimeSurface::Shown { surface, size, .. } = self.surface else {
+            return None;
+        };
+        Some(ShownSurface {
+            id: surface,
+            size: Size::new(to_dp(size.width), to_dp(size.height)),
+            density: DENSITY,
+        })
+    }
+
     pub(crate) fn into_destroying(self) -> Vec<mpsc::SyncSender<()>> {
         self.destroying
     }
@@ -158,6 +182,7 @@ impl HostSurface {
         configure(reports, surface, size, state);
         self.surface = RuntimeSurface::Shown {
             surface,
+            size,
             window: state,
         };
         Ok(())
@@ -176,8 +201,8 @@ fn configure(
 ) {
     if size.width > 0 && size.height > 0 {
         let configured = SurfaceEvent::Configured {
-            width: Some(at_density_one(size.width)),
-            height: Some(at_density_one(size.height)),
+            width: Some(to_dp(size.width)),
+            height: Some(to_dp(size.height)),
             token: None,
             window,
         };
@@ -192,6 +217,6 @@ fn display_filling_window(role: &Role) -> Option<WindowState> {
     })
 }
 
-fn at_density_one(pixels: u32) -> Dp {
-    Density::ONE.to_dp(Px::new(f64::from(pixels)))
+fn to_dp(pixels: u32) -> Dp {
+    DENSITY.to_dp(Px::new(f64::from(pixels)))
 }

@@ -192,7 +192,7 @@ impl SeatSet {
 
 fn touch_id(seat: &wl_seat::WlSeat, point: i32) -> TouchId {
     TouchId {
-        seat: seat.id().protocol_id(),
+        seat: i64::from(seat.id().protocol_id()),
         point,
     }
 }

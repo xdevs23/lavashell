@@ -2,6 +2,7 @@
 package org.lavashell.surfacestream
 
 import android.hardware.HardwareBuffer
+import android.view.MotionEvent
 import android.view.Surface
 
 internal class StreamRoundTrip(sizes: BufferSizes, format: StreamFormat) : AutoCloseable {
@@ -25,6 +26,8 @@ internal class StreamRoundTrip(sizes: BufferSizes, format: StreamFormat) : AutoC
     )
 
     fun encodeYcbcr(buffer: HardwareBuffer, color: Int): YcbcrConversion = encodeYcbcr(handle, buffer, color)
+
+    fun reportMotion(event: MotionEvent): Boolean = reportMotion(handle, event)
 
     fun state() = StreamState(
         drawnSize = readDrawnSize(handle)?.let { (width, height) -> PixelSize(width.toInt(), height.toInt()) },
@@ -60,6 +63,8 @@ internal class StreamRoundTrip(sizes: BufferSizes, format: StreamFormat) : AutoC
     private external fun destroy(handle: Long): Long
 
     private external fun encodeYcbcr(handle: Long, buffer: HardwareBuffer, color: Int): YcbcrConversion
+
+    private external fun reportMotion(handle: Long, event: MotionEvent): Boolean
 
     private companion object {
         init {

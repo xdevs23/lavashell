@@ -67,6 +67,8 @@ pub enum NativeMethodError {
     InspectBuffer(#[source] jni::errors::Error),
     #[error("the hardware buffer to read is closed")]
     ClosedBuffer,
+    #[error("cannot read the MotionEvent to report")]
+    ReadMotionEvent(#[source] lavashell_aosp::Error),
     #[error("the handle of a new round trip exceeds the range of a 64-bit JNI long")]
     TooManyRoundTrips(#[source] TryFromIntError),
     #[error("cannot create the object or array returned to the activity")]

@@ -38,6 +38,7 @@ internal class StreamRoundTripScenarios(
         checkPrivateStream()
         checkSolidColorRenderer()
         checkYuvStream()
+        checkMotion()
     }
 
     private fun recordReaderFormats() = listOf(
@@ -188,6 +189,23 @@ internal class StreamRoundTripScenarios(
                         result.copy(evidence = result.evidence.copy(extra = ColorExtra.Yuv(bufferDescription, ycbcr))),
                     )
                 }
+            }
+        }
+    }
+
+    private fun checkMotion() {
+        StreamRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
+            ColorDisplay.show(activity, main, roundTrip.surface(), Color.RED).use {
+                val received = SyntheticMotion.TOUCH_AND_CLICK.map { motion ->
+                    val event = motion.obtain(metrics.widthPixels / 2f, metrics.heightPixels / 2f)
+                    roundTrip.reportMotion(event).also { event.recycle() }
+                }
+                val latched = latchColorChange(roundTrip, NOTHING_SHOWN, Color.RED)
+                val matches = latched.verdict == Verdict.Matched && received.all { it }
+                report.add(
+                    Step.Motion,
+                    StepResult(verdictOf(matches), latched.evidence.copy(extra = ColorExtra.ReceivedMotions(received))),
+                )
             }
         }
     }

@@ -4,6 +4,7 @@ pub(crate) mod surface;
 
 pub use error::AospError;
 
+use crate::input::{MotionEvent, MotionTranslator};
 use crate::native_window::NativeWindow;
 use crate::streams::AospStreams;
 use lavashell_actor::{Closed, lock_ignoring_poison, lock_unpoisoned};
@@ -17,6 +18,7 @@ enum HostMessage {
     SurfaceChanged,
     SurfaceDestroyed(mpsc::SyncSender<()>),
     Frame,
+    Motion(MotionEvent),
     Requests,
     Streams(StreamTask<AospStreams>),
 }
@@ -43,7 +45,14 @@ impl HostLink {
             let _ended_platform_reads_nothing = wake.send(HostMessage::Requests);
         });
         let mut surface = HostSurface::default();
-        let served = execute_messages(&messages, &requests, &reports, &mut surface);
+        let mut translator = MotionTranslator::default();
+        let served = execute_messages(
+            &messages,
+            &requests,
+            &reports,
+            &mut surface,
+            &mut translator,
+        );
         let awaiting = AwaitingRunEnd {
             messages,
             destroying: surface.into_destroying(),
@@ -59,6 +68,7 @@ fn execute_messages(
     requests: &lavashell_actor::Receiver<PlatformRequest>,
     reports: &Reports<NativeWindow, AospStreams>,
     surface: &mut HostSurface,
+    translator: &mut MotionTranslator,
 ) -> Result<(), AospError> {
     for message in messages {
         match message {
@@ -77,6 +87,7 @@ fn execute_messages(
             HostMessage::SurfaceChanged => surface.changed(reports)?,
             HostMessage::SurfaceDestroyed(retired) => surface.destroyed(retired, reports),
             HostMessage::Frame => surface.frame(reports),
+            HostMessage::Motion(event) => translator.report(event, surface.shown(), reports),
             HostMessage::Streams(task) => reports.run_on_streams(task),
         }
     }
@@ -151,6 +162,10 @@ impl AospHost {
 
     pub fn frame(&self) {
         self.send(HostMessage::Frame);
+    }
+
+    pub fn motion(&self, event: MotionEvent) {
+        self.send(HostMessage::Motion(event));
     }
 
     pub fn run_on_streams<T: Send + 'static>(

@@ -12,6 +12,9 @@ mod fenced_image;
 #[cfg(target_os = "android")]
 mod hardware_buffer;
 mod host;
+mod input;
+#[cfg(target_os = "android")]
+mod motion_jni;
 mod native_window;
 #[cfg_attr(not(target_os = "android"), path = "platform/simulated.rs")]
 mod platform;
@@ -29,6 +32,9 @@ pub use error::Error;
 #[cfg(target_os = "android")]
 pub use hardware_buffer::{HardwareBufferMemory, PropertiesError};
 pub use host::{AospError, AospHost, HostLink, RunEnded};
+pub use input::MotionEvent;
+#[cfg(target_os = "android")]
+pub use motion_jni::{MalformedMotion, motion_event_of};
 pub use native_window::NativeWindow;
 #[cfg(target_os = "android")]
 pub use presentation::AospPresentation;

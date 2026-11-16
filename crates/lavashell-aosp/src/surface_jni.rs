@@ -43,9 +43,9 @@ pub fn window_of_surface(env: &mut Env<'_>, surface: &JObject<'_>) -> Result<Nat
     }
     // SAFETY: Native code can get the native window of a Surface only through `ANativeWindow_fromSurface`, which ndk
     // 0.9.0 and jni 0.22.4 offer only as an unsafe fn. Its conditions are a valid JNIEnv and a live reference to a
-    // Surface. The JNIEnv pointer comes from the `Env` of the calling thread, with no exception pending.
-    // `surface` is a live reference, not null, to an instance of that Surface class. The checks above confirm both
-    // conditions. The returned `NativeWindow` has a new reference, which it releases when it is dropped.
+    // Surface. The JNIEnv pointer comes from the `Env` of the calling thread, and that thread has not left an exception
+    // pending. `surface` is a live reference, not null, to an instance of that Surface class. The checks above confirm
+    // both conditions. The returned `NativeWindow` has a new reference, which it releases when it is dropped.
     unsafe { NativeWindow::from_surface(env.get_raw().cast(), surface.as_raw().cast()) }
         .ok_or(Error::SurfaceWindow)
 }

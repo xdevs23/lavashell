@@ -55,6 +55,10 @@ internal sealed class ColorExtra {
         override fun toFields() = mapOf("reached" to reached)
     }
 
+    data class ReceivedMotions(val received: List<Boolean>) : ColorExtra() {
+        override fun toFields() = mapOf("receivedByHost" to received)
+    }
+
     data class Grouped(val outside: Int, val inside: Int) : ColorExtra() {
         override fun toFields() = mapOf("outside" to outside.toHexColor(), "inside" to inside.toHexColor())
     }

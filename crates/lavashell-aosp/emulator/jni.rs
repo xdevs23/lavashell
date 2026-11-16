@@ -6,9 +6,9 @@ use crate::stream_round_trip::StreamRoundTrip;
 use crate::ycbcr::Conversion;
 use ::jni::errors::ThrowRuntimeExAndDefault;
 use ::jni::objects::{JIntArray, JLongArray, JObject, JPrimitiveArray, TypeArray};
-use ::jni::sys::{jfloat, jint, jlong};
+use ::jni::sys::{jboolean, jfloat, jint, jlong};
 use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
-use lavashell_aosp::{BufferSizes, StreamFormat, surface_of_window};
+use lavashell_aosp::{BufferSizes, StreamFormat, motion_event_of, surface_of_window};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::{ForeignFormat, skia};
@@ -142,6 +142,24 @@ native_methods! {
                 (conversion.encode([red, green, blue])).ok_or(NativeMethodError::EncodeColor)?;
             let tolerance = (conversion.tolerance()).ok_or(NativeMethodError::EncodeColor)?;
             new_conversion_object(env, ycbcr, tolerance, &format)
+        })
+    }
+
+    pub fn report_motion<'local>(
+        env: EnvUnowned<'local>,
+        _: JObject<'local>,
+        handle: jlong,
+        event: JObject<'local>,
+    ) -> jboolean {
+        export(env, |env| {
+            let read = motion_event_of(env, &event).map_err(NativeMethodError::ReadMotionEvent);
+            let Some(motion) = read? else {
+                return Ok(false);
+            };
+            with_round_trip(handle, |round_trip| {
+                round_trip.report_motion(motion);
+                Ok(true)
+            })
         })
     }
 }

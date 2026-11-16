@@ -10,7 +10,7 @@ use lavashell_platform::DeviceEvent;
 const WINDOW: SurfaceId = SurfaceId::numbered(0);
 const PANEL: SurfaceId = SurfaceId::numbered(1);
 
-fn sample(seat: u32, point: i32, x: i32, y: i32) -> TouchSample {
+fn sample(seat: i64, point: i32, x: i32, y: i32) -> TouchSample {
     TouchSample::finger(TouchId { seat, point }, Point::new(x.dp(), y.dp()))
 }
 

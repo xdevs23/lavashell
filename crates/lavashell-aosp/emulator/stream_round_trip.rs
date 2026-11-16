@@ -3,8 +3,8 @@ use crate::error::NativeMethodError;
 use crate::pane::{Pane, run_pane};
 use lavashell_actor::{Receiver, Sender, mailbox};
 use lavashell_aosp::{
-    AospHost, AospStreams, BufferSizes, HardwareBufferMemory, NativeWindow, StreamFormat,
-    SurfaceStream,
+    AospHost, AospStreams, BufferSizes, HardwareBufferMemory, MotionEvent, NativeWindow,
+    StreamFormat, SurfaceStream,
 };
 use lavashell_core::prelude::*;
 use lavashell_renderer::{
@@ -76,6 +76,10 @@ impl StreamRoundTrip {
 
     pub fn drawn_size(&self) -> Result<Option<PixelSize>, NativeMethodError> {
         self.on_stream(|stream| Ok(stream.drawn_size()))
+    }
+
+    pub fn report_motion(&self, event: MotionEvent) {
+        self.run.host.motion(event);
     }
 
     pub fn wakes(&self) -> u32 {

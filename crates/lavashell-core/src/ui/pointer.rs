@@ -33,7 +33,7 @@ impl PointerKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TouchId {
-    pub seat: u32,
+    pub seat: i64,
     pub point: i32,
 }
 

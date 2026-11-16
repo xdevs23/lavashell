@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod host_surface;
+mod input;
+mod motion;
 mod stream_tests;
 
 use crate::platform::TestError;

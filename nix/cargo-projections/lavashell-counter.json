@@ -1058,6 +1058,7 @@
           "lavashell-vulkan",
           "log",
           "ndk",
+          "ndk-sys",
           "num-traits",
           "rustix",
           "thiserror 2.0.21"
@@ -2620,7 +2621,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "c5227e4f4958cce2cb2f7637b6c4c662a89ea47128bc417e5018060ad35063d6",
+        "seedHash": "23a83b82b06e726931f0e9407b1db4438e9a7d2822462817d3a4f2dfd41b0a2f",
         "plan": {
           "schema": 1,
           "selection": {

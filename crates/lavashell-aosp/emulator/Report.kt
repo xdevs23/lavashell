@@ -15,6 +15,7 @@ internal enum class Step(val id: String) {
     PrivateStream("private-stream"),
     UnlatchedGpuFrames("unlatched-gpu-frames"),
     YuvStream("yuv-stream"),
+    Motion("motion"),
 }
 
 internal sealed class Verdict(val matches: Boolean?) {

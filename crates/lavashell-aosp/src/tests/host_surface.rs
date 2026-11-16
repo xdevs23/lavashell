@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::motion::{finger, hovering, mouse, touch};
 use crate::host::surface::HostSurface;
 use crate::host::{AospError, AospHost};
+use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, TouchAction};
 use crate::native_window::NativeWindow;
 use crate::platform::{DisplaySurface, SIDE, TestError};
 use crate::streams::AospStreams;
 use lavashell_actor::{Merge, MergeEffect, Receiver, SystemClock, mailbox};
 use lavashell_core::output::OutputRequest;
-use lavashell_core::prelude::{DpExt, Size};
+use lavashell_core::prelude::{DpExt, Point, Size};
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::view::Cursor;
 use lavashell_core::window::{Edge, Edges, WindowCapabilities, WindowState};
 use lavashell_platform::{
-    OutputId, PlatformEvent, PlatformLinks, PlatformRequest, Reports, Role, StreamTask,
-    SurfaceAppearance, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
-    WindowRole,
+    DeviceEvent, InputRequest, OutputId, PlatformEvent, PlatformLinks, PlatformRequest, Reports,
+    Role, StreamTask, SurfaceAppearance, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
+    SurfaceSpec, TimingEvent, WindowRole,
 };
 use std::sync::{Arc, mpsc};
 
@@ -23,6 +26,7 @@ const SURFACE: SurfaceId = SurfaceId::numbered(1);
 #[derive(Debug, PartialEq)]
 enum Sent {
     Surface(SurfaceId, SurfaceEvent),
+    Device(DeviceEvent),
     DisplayReady(SurfaceId),
     Attach(SurfaceId),
     Detach(SurfaceId),
@@ -42,6 +46,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
     let reports = Reports {
         view: sender.outlet(|event: PlatformEvent| match event {
             PlatformEvent::Surface(surface, event) => Sent::Surface(surface, event),
+            PlatformEvent::Device(event) => Sent::Device(event),
             _ => Sent::Unexpected,
         }),
         scheduler: sender.outlet(|event: TimingEvent| match event {
@@ -63,6 +68,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
 
 struct Host {
     surface: HostSurface,
+    translator: MotionTranslator,
     reports: Reports<NativeWindow, AospStreams>,
     sent: Receiver<Sent>,
 }
@@ -72,6 +78,7 @@ impl Host {
         let (reports, sent) = reports();
         Self {
             surface: HostSurface::default(),
+            translator: MotionTranslator::default(),
             reports,
             sent,
         }
@@ -89,7 +96,7 @@ impl Host {
         self.surface.created(window, &self.reports)
     }
 
-    fn changed(&self) -> Result<(), AospError> {
+    fn changed(&mut self) -> Result<(), AospError> {
         self.surface.changed(&self.reports)
     }
 
@@ -101,6 +108,10 @@ impl Host {
 
     fn frame(&self) {
         self.surface.frame(&self.reports);
+    }
+
+    fn motion(&mut self, event: MotionEvent) {
+        (self.translator).report(event, self.surface.shown(), &self.reports);
     }
 
     fn destroy_returned(self, waiter: &mpsc::Receiver<()>) -> bool {
@@ -295,6 +306,51 @@ fn a_surface_created_again_while_the_host_surface_lives_is_shown_again() -> Resu
         configured(again, SIDE, SIDE),
     ];
     assert_eq!(host.sent()?, shown);
+    Ok(())
+}
+
+#[test]
+fn a_motion_produces_device_events_only_on_a_shown_surface() -> Result<(), TestError> {
+    let corner = || touch(0, TouchAction::Down(finger(0, 0.0, 0.0)));
+    let mut idle = Host::new();
+    idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
+    idle.motion(corner());
+    assert_eq!(idle.sent()?, []);
+
+    let mut requested = Host::new();
+    requested.execute(create(SURFACE))?;
+    requested.motion(corner());
+    assert_eq!(requested.sent()?, []);
+
+    let mut host = shown()?;
+    host.motion(corner());
+    let sent = host.sent()?;
+    assert!(matches!(
+        sent.as_slice(),
+        [Sent::Device(DeviceEvent::TouchDown {
+            surface: SURFACE,
+            ..
+        })]
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_cursor_request_for_a_mouse_over_the_surface_lets_the_run_go_on() -> Result<(), TestError> {
+    let mut host = shown()?;
+    host.motion(mouse(MouseAction::Move(hovering(10.0, 10.0))));
+    let cursor = InputRequest::SetCursor(MOUSE, Cursor::Pointer);
+    (host.surface).execute(PlatformRequest::Input(cursor), &host.reports)?;
+    host.frame();
+    let entered = DeviceEvent::PointerEnter {
+        pointer: MOUSE,
+        surface: SURFACE,
+        at: Point::new(10.dp(), 10.dp()),
+    };
+    assert_eq!(
+        host.sent()?,
+        [Sent::Device(entered), Sent::DisplayReady(SURFACE)]
+    );
     Ok(())
 }
 
