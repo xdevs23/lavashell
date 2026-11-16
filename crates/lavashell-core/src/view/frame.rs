@@ -123,6 +123,7 @@ impl View {
                 break (modal, painted_focus);
             }
         };
+        self.transitions.end_first_frame();
         std::mem::swap(&mut self.routing.hits, &mut self.routing.input_hits);
         self.followers.refresh(&mut self.routing.moving);
         self.routing.moving.present(self.motion.now());

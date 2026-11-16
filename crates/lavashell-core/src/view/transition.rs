@@ -8,10 +8,11 @@ use crate::animation::{Composite, MotionSpec, Playing, composite_fields};
 use crate::color::{ColorIn, ColorInterpolation};
 use crate::effects::{Interpolated, Material, ShapedMaterial};
 use crate::geometry::{Color, Rect};
+use crate::platform::PlatformFacts;
 use crate::scene::Brush;
 use crate::scene::tree::Presence;
 use crate::shape::Corners;
-use crate::ui::ModifierElement;
+use crate::ui::{ModifierElement, Ui};
 use crate::units::{Dp, NonNegativeDp};
 pub(super) use changing::Changing;
 pub(super) use departure::Departure;
@@ -283,6 +284,16 @@ impl AnimatedVisual {
 }
 
 impl View {
+    pub fn new_skipping_first_frame_enters(
+        platform: PlatformFacts,
+        compose: impl FnMut(&mut Ui) + 'static,
+    ) -> Self {
+        Self {
+            transitions: Transitions::skipping_first_frame_enters(),
+            ..Self::new(platform, compose)
+        }
+    }
+
     pub(super) fn visual(
         &mut self,
         index: usize,

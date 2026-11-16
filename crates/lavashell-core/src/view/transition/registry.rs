@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Departure, Exit, MaterialSteps, Transition, Visual};
 use crate::animation::{Animation, AnimationError, Motion};
+use crate::scene::tree::Presence;
 use crate::ui::NodeId;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -131,12 +132,36 @@ impl TransitionState {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+enum Enters {
+    #[default]
+    Play,
+    SkipUntilFirstFrameEnds,
+}
+
+impl Enters {
+    fn presence(self, transition: &Transition) -> Presence {
+        match self {
+            Self::Play => transition.enter.unwrap_or_default(),
+            Self::SkipUntilFirstFrameEnds => Presence::default(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub(in crate::view) struct Transitions {
     states: BTreeMap<NodeId, TransitionState>,
+    enters: Enters,
 }
 
 impl Transitions {
+    pub fn skipping_first_frame_enters() -> Self {
+        Self {
+            enters: Enters::SkipUntilFirstFrameEnds,
+            ..Self::default()
+        }
+    }
+
     pub fn is_leaving(&self, id: NodeId) -> bool {
         self.states
             .get(&id)
@@ -157,6 +182,10 @@ impl Transitions {
             .collect()
     }
 
+    pub fn end_first_frame(&mut self) {
+        self.enters = Enters::Play;
+    }
+
     pub fn refresh(
         &mut self,
         motion: &Motion,
@@ -170,7 +199,7 @@ impl Transitions {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
                 let animation = motion.animation(Visual {
-                    presence: transition.enter.unwrap_or_default(),
+                    presence: self.enters.presence(transition),
                     ..target.clone()
                 })?;
                 entry.insert(TransitionState {

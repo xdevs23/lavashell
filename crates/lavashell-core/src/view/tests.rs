@@ -212,6 +212,8 @@ mod sink;
 
 #[path = "tests/field_lines.rs"]
 mod field_lines;
+#[path = "tests/first_composition.rs"]
+mod first_composition;
 #[path = "tests/icons.rs"]
 mod icons;
 #[path = "tests/invalid_values.rs"]
