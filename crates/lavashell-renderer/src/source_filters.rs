@@ -34,9 +34,11 @@ pub(crate) fn resolve(
 mod tests {
     use super::*;
     use crate::test_error::TestError;
+    use crate::test_surfaces::rgba8_pixel;
     use lavashell_core::prelude::*;
     use lavashell_core::retained::{Extent, Footprint};
     use lavashell_core::scene::tree::Packet;
+    use skia_safe::AlphaType;
 
     const OFFSET: SourceFilterId = SourceFilterId(0x7465_7374_6f66_6673);
 
@@ -79,14 +81,7 @@ mod tests {
             skia_safe::surfaces::raster_n32_premul((1536, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
-        let info = skia_safe::ImageInfo::new(
-            (1, 1),
-            skia_safe::ColorType::RGBA8888,
-            skia_safe::AlphaType::Premul,
-            None,
-        );
-        let mut pixel = [0_u8; 4];
-        assert!(surface.read_pixels(&info, &mut pixel, 4, (1508, 8)));
+        let pixel = rgba8_pixel(&mut surface, (1508, 8), AlphaType::Premul);
         assert_eq!(pixel, [255; 4]);
         Ok(())
     }
@@ -128,14 +123,7 @@ mod tests {
             skia_safe::surfaces::raster_n32_premul((160, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
-        let info = skia_safe::ImageInfo::new(
-            (1, 1),
-            skia_safe::ColorType::RGBA8888,
-            skia_safe::AlphaType::Premul,
-            None,
-        );
-        let mut pixel = [0_u8; 4];
-        assert!(surface.read_pixels(&info, &mut pixel, 4, (136, 8)));
+        let pixel = rgba8_pixel(&mut surface, (136, 8), AlphaType::Premul);
         assert_eq!(pixel, [255; 4]);
         Ok(())
     }
@@ -181,14 +169,7 @@ mod tests {
             let _canvas_returned_for_chaining =
                 surface.canvas().clear(skia_safe::Color::TRANSPARENT);
             painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
-            let info = skia_safe::ImageInfo::new(
-                (1, 1),
-                skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Premul,
-                None,
-            );
-            let mut pixel = [0_u8; 4];
-            assert!(surface.read_pixels(&info, &mut pixel, 4, (72, 8)));
+            let pixel = rgba8_pixel(&mut surface, (72, 8), AlphaType::Premul);
             assert_eq!(pixel, [expected; 4]);
         }
         Ok(())

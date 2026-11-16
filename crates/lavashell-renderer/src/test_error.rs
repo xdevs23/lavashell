@@ -57,6 +57,11 @@ pub(crate) enum TestError {
     NoDensity(f64),
     #[error("a union needs at least one member")]
     NoMembers,
+    #[error("pixel buffers of {counts:?} pixels in rows of {widths:?} cannot be paired")]
+    UnpairedPixels {
+        widths: [usize; 2],
+        counts: [usize; 2],
+    },
     #[error("the result has no {0}")]
     Missing(&'static str),
     #[error("the result is not {0}")]

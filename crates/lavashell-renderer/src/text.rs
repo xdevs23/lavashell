@@ -267,6 +267,10 @@ mod canvas_tests;
 #[cfg(test)]
 mod retention_tests;
 #[cfg(test)]
+pub(crate) mod sample_fixtures;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) mod weight_blend_fixtures;
 #[cfg(test)]
 mod weight_blend_tests;

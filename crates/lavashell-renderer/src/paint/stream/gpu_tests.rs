@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::failure::DrawFailure;
 use crate::test_error::TestError;
-use crate::test_surfaces::pixels;
+use crate::test_surfaces::{TestSurface, pixels};
 use crate::vulkan::OffscreenSurface;
 use crate::{Fonts, Painter, StreamFrames, VulkanRenderer};
 use lavashell_core::prelude::*;
 use skia_safe::{Color as SkColor, IPoint, Surface};
 
-const SIDE: i32 = 32;
+const SURFACE: TestSurface = TestSurface::new(32, 32);
 
 fn filled(gpu: &mut VulkanRenderer, color: SkColor) -> Result<OffscreenSurface, TestError> {
-    let side = u32::try_from(SIDE)?;
-    let mut surface = gpu.offscreen(PixelSize::new(side, side))?;
+    let mut surface = gpu.offscreen(SURFACE.pixel_size())?;
     let _canvas_returned_for_chaining = surface.canvas().clear(color);
     Ok(surface)
 }
@@ -23,7 +22,7 @@ fn paint(
     image: StreamImage,
 ) -> Result<OffscreenSurface, TestError> {
     let mut target = filled(gpu, SkColor::TRANSPARENT)?;
-    let whole = Rect::new(0.dp(), 0.dp(), SIDE.dp(), SIDE.dp());
+    let whole = SURFACE.bounds();
     let commands = [DrawCommand::StreamImage {
         image,
         destination: whole,
@@ -34,9 +33,9 @@ fn paint(
 }
 
 fn middle(target: &mut Surface) -> Result<[u8; 4], TestError> {
-    let bytes = pixels(target);
-    let index = usize::try_from((SIDE / 2 * SIDE + SIDE / 2) * 4)?;
-    Ok(bytes[index..index + 4].try_into()?)
+    let column = u16::try_from(SURFACE.middle_column())?;
+    let row = u16::try_from(SURFACE.middle_row())?;
+    Ok(pixels(target).at(column, row))
 }
 
 #[test]
@@ -46,11 +45,10 @@ fn a_rebind_or_retire_after_a_paint_leaves_the_reads_queued_by_that_paint_intact
     let mut painter = gpu.painter(&Fonts::new())?;
     let mut streams = StreamFrames::default();
     let stream = StreamId::next();
-    let side = u32::try_from(SIDE)?;
     let image = |generation| StreamImage {
         stream,
         generation,
-        size: PixelSize::new(side, side),
+        size: SURFACE.pixel_size(),
     };
     let mut red = filled(&mut gpu, SkColor::RED)?;
     streams.bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));

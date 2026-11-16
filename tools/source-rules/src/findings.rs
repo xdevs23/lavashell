@@ -11,6 +11,8 @@ pub enum Rule {
     IgnoredTest,
     PanickingTest,
     ErasedError,
+    ProbeFamilyLiteral { family: String },
+    PixelSizeInTest,
     Comment,
     Document { allowed: &'static str },
     UnknownFileKind,
@@ -51,6 +53,13 @@ impl fmt::Display for Rule {
             ),
             Self::ErasedError => formatter.write_str(
                 "report a failure as the error enum of the crate, never as a `String` or a boxed `dyn Error`",
+            ),
+            Self::ProbeFamilyLiteral { family } => write!(
+                formatter,
+                "name the probe font family with `PROBE_FAMILY`, never with a `\"{family}\"` literal",
+            ),
+            Self::PixelSizeInTest => formatter.write_str(
+                "size a test surface with a `TestSurface` value and its `pixel_size()`, never with `PixelSize::new`",
             ),
             Self::Comment => formatter.write_str(concat!(
                 "remove the comment or documentation attribute. The only comments allowed are an ",

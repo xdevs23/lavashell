@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::scene_tree_tests::{HEIGHT, WIDTH, leaf, shapes};
+use super::scene_tree_tests::{SURFACE, leaf, shapes};
 use crate::effect_registry::{
     DrawTarget, EffectBackend, EffectRegistry, EffectRequest, QualityChange,
 };
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::test_surfaces::surface;
 use crate::test_variants::only_variant;
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
@@ -72,7 +71,7 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
     };
     let quality = painter.plan_scene_effects(scene.at(Duration::ZERO), budget, 1, 1, Density::ONE);
     assert_eq!(quality, QualityChange::Unchanged);
-    let mut target = surface(WIDTH, HEIGHT)?;
+    let mut target = SURFACE.raster()?;
     painter.paint_scene(
         target.canvas(),
         budget.surface,

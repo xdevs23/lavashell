@@ -34,12 +34,7 @@ pub fn raster_png(
             height: dimensions.1,
         });
     };
-    let info = skia_safe::ImageInfo::new(
-        (width, height),
-        skia_safe::ColorType::RGBAF16,
-        skia_safe::AlphaType::Premul,
-        crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
-    );
+    let info = crate::color::working_image_info((width, height))?;
     let image_surface = SurfaceIds::default()
         .next_id()
         .map_err(Error::NumberImageSurface)?;

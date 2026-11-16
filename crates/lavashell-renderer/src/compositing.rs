@@ -56,12 +56,7 @@ mod tests {
             let mut painter =
                 Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
             painter.set_blend_space(space);
-            let info = skia_safe::ImageInfo::new(
-                (4, 4),
-                skia_safe::ColorType::RGBAF16,
-                skia_safe::AlphaType::Premul,
-                crate::color::working_color_space().ok_or(crate::Error::WorkingColorSpace)?,
-            );
+            let info = crate::color::working_image_info((4, 4))?;
             let mut surface =
                 skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
             let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::BLACK);
@@ -73,14 +68,7 @@ mod tests {
                 }],
                 Density::ONE,
             )?;
-            let info = skia_safe::ImageInfo::new(
-                (1, 1),
-                skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Unpremul,
-                ColorSpace::new_srgb(),
-            );
-            let mut pixel = [0u8; 4];
-            assert!(surface.read_pixels(&info, &mut pixel, 4, (1, 1)));
+            let pixel = crate::test_surfaces::pixels(&mut surface).at(1, 1);
             assert!(pixel[0].abs_diff(expected) <= 1, "{space:?}: {pixel:?}");
             assert_eq!(pixel[3], 255);
         }

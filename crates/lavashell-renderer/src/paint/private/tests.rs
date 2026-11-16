@@ -4,6 +4,13 @@ use crate::Painter;
 use crate::failure::Failures;
 use crate::raster::RasterCache;
 use crate::test_error::TestError;
+use crate::test_font::{probe_modifier, probe_style};
+use crate::test_surfaces::{Pixels, drawn_pixels, has_colored_fringe, lcd_destination};
+use crate::text::sample_fixtures::{LABEL_SURFACE, PLAIN_LABEL_TEXT, mixed_script_label_text};
+use crate::text::weight_blend_fixtures::{
+    BETWEEN_WEIGHT, HEAVIER_WEIGHT, LIGHTER_WEIGHT, ONE_LINE, faces_in_shares, largest_deviation,
+    shares_between,
+};
 use crate::text::{Coverage, RasterInput, Rasterizers, Shaper, TextRasterizer};
 use crate::text_cache::ShapedParagraph;
 use crate::{
@@ -16,10 +23,12 @@ use lavashell_core::scene::tree::{
     Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
 use lavashell_test_fixtures::WithoutFailures;
-use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
+use skia_safe::{AlphaType, ColorType};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
+
+const TEXT_WIDTH: Dp = Dp::new(260.0);
 
 fn new_painter() -> Result<Painter, TestError> {
     new_painter_with(&crate::test_font::test_font()?)
@@ -51,15 +60,11 @@ fn field(
             ui.protected_input(
                 state.clone(),
                 TextFieldOptions::default(),
-                Modifier::new()
-                    .tag("private")
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .size(260.dp(), 40.dp()),
+                probe_modifier().tag("private").size(TEXT_WIDTH, 40.dp()),
             );
         });
     });
-    let size = Size::new(300.dp(), 48.dp());
+    let size = LABEL_SURFACE.size();
     let viewport = Viewport::new(size, Density::ONE);
     let mut builder = SceneBuilder::default();
     (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
@@ -75,11 +80,14 @@ fn field(
     Ok((view, builder, secret, private))
 }
 
-fn pixels(painter: &mut Painter, commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
+fn pixels(painter: &mut Painter, commands: &[DrawCommand]) -> Result<Pixels<[u8; 4]>, TestError> {
     drawn(|canvas| painter.paint_as_leaf(canvas, commands, Density::ONE))
 }
 
-fn scene_pixels(painter: &mut Painter, scene: &SceneSnapshot) -> Result<Vec<u8>, TestError> {
+fn scene_pixels(
+    painter: &mut Painter,
+    scene: &SceneSnapshot,
+) -> Result<Pixels<[u8; 4]>, TestError> {
     drawn(|canvas| {
         crate::test_scenes::paint(painter, canvas, scene, Density::ONE);
         Ok(())
@@ -88,19 +96,15 @@ fn scene_pixels(painter: &mut Painter, scene: &SceneSnapshot) -> Result<Vec<u8>,
 
 fn drawn(
     paint: impl FnOnce(&skia_safe::Canvas) -> Result<(), TestError>,
-) -> Result<Vec<u8>, TestError> {
-    let info = ImageInfo::new(
-        (300, 48),
+) -> Result<Pixels<[u8; 4]>, TestError> {
+    drawn_pixels(
+        LABEL_SURFACE,
         ColorType::RGBA8888,
         AlphaType::Premul,
-        ColorSpace::new_srgb(),
-    );
-    let mut surface =
-        skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    paint(surface.canvas().clear(skia_safe::Color::TRANSPARENT))?;
-    let mut pixels = vec![0; 300 * 48 * 4];
-    assert!(surface.read_pixels(&info, &mut pixels, 300 * 4, (0, 0)));
-    Ok(pixels)
+        None,
+        skia_safe::Color::TRANSPARENT,
+        paint,
+    )
 }
 
 fn carets(geometry: &TextGeometry) -> Vec<(usize, Rect)> {
@@ -126,16 +130,14 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
     let mut painter = new_painter()?;
     let (_view_not_framed_again, _builder_not_framed_again, secret, private) =
         field(&mut painter, "iWé💡e\u{301}אבג")?;
-    let ordinary = painter.shaper.measure(
-        "ordinary",
-        &TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled(),
-        260.dp(),
-    );
+    let ordinary = painter
+        .shaper
+        .measure("ordinary", &probe_style(), TEXT_WIDTH);
     assert!(ordinary.width > Dp::ZERO);
     let before = counts(&mut painter);
     assert!(before.0 > 0 && before.1 > 0);
-    let bounds = Rect::new(0.dp(), 0.dp(), 300.dp(), 48.dp());
-    let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let bounds = LABEL_SURFACE.bounds();
+    let style = probe_style();
     let commands = Arc::from([DrawCommand::PrivateText {
         text: private.clone(),
         rect: bounds,
@@ -159,7 +161,9 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
     tree.show(SceneUpdate { changes })?;
     let scene = tree.snapshot();
     for _ in 0..3 {
-        let geometry = painter.shaper.private_geometry(&private, &style, 260.dp());
+        let geometry = painter
+            .shaper
+            .private_geometry(&private, &style, TEXT_WIDTH);
         assert!(geometry.word_starts.is_none());
         assert!(
             geometry
@@ -178,7 +182,7 @@ fn private_shaping_and_nested_paint_leave_reusable_caches_unchanged() -> Result<
                 .any(|c| c.direction == lavashell_core::accessibility::TextDirection::RightToLeft)
         );
         let image = scene_pixels(&mut painter, &scene)?;
-        assert!(image.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
+        assert!(image.iter().any(|pixel| pixel[3] > 0));
         let after = counts(&mut painter);
         assert!(after.0 <= before.0);
         assert_eq!(
@@ -198,7 +202,7 @@ fn private_pixels_match_ordinary_font_and_coverage_policy_without_storing_tiles(
 -> Result<(), TestError> {
     let mut painter = new_painter()?;
     let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
-        field(&mut painter, "Mon 5 Oct e\u{301} office אבג")?;
+        field(&mut painter, &mixed_script_label_text())?;
     let mut reference = new_painter()?;
     for (antialiasing, geometry) in [
         (TextAntialiasing::Grayscale, PixelGeometry::None),
@@ -224,7 +228,7 @@ fn private_pixels_match_ordinary_font_and_coverage_policy_without_storing_tiles(
                     280.dp(),
                     40.dp(),
                 );
-                let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+                let mut style = probe_style();
                 style.color = Color::rgb(0x008c_b3df).with_alpha(0.55);
                 let command = DrawCommand::PrivateText {
                     text: private.clone(),
@@ -247,7 +251,7 @@ fn private_pixels_match_ordinary_font_and_coverage_policy_without_storing_tiles(
     Ok(())
 }
 
-const ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS: u8 = 1;
+const ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS: f64 = 1.0;
 
 #[test]
 fn a_weight_between_two_static_faces_adds_the_coverage_of_both_for_ordinary_and_private_text()
@@ -256,42 +260,46 @@ fn a_weight_between_two_static_faces_adds_the_coverage_of_both_for_ordinary_and_
     let mut painter = new_painter_with(&fonts)?;
     let mut reference = new_painter_with(&fonts)?;
     let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
-        field(&mut painter, "Mon 5 Oct office")?;
-    let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
+        field(&mut painter, PLAIN_LABEL_TEXT)?;
     let style = |weight, alpha| -> Result<TextStyle<Dp>, TestError> {
-        Ok(
-            TextStyle::new("probe", 13.sp(), Color::WHITE.with_alpha(alpha))
-                .weight(FontWeight::try_new(weight)?)
-                .resolve_unscaled(),
-        )
+        Ok(TextStyle {
+            color: Color::WHITE.with_alpha(alpha),
+            weight: FontWeight::try_new(weight)?,
+            ..probe_style()
+        })
     };
     let ordinary = |style| {
         private.expose(|value| DrawCommand::Text {
             text: value.into(),
-            rect,
+            rect: ONE_LINE,
             style,
         })
     };
-    let alike = |a: &[u8], b: &[u8]| {
-        (a.iter().zip(b)).all(|(a, b)| a.abs_diff(*b) <= ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS)
-    };
-    let lighter_face = pixels(&mut reference, &[ordinary(style(400.0, 0.75)?)])?;
-    let heavier_face = pixels(&mut reference, &[ordinary(style(700.0, 0.25)?)])?;
-    let lighter_and_heavier_face: Vec<u8> = (lighter_face.iter().zip(&heavier_face))
-        .map(|(lighter, heavier)| lighter.saturating_add(*heavier))
-        .collect();
-    let only_lighter_face = pixels(&mut reference, &[ordinary(style(400.0, 1.0)?)])?;
-    assert!((lighter_and_heavier_face.as_chunks::<4>().0.iter()).any(|pixel| pixel[3] > 0));
-    assert!(!alike(&lighter_and_heavier_face, &only_lighter_face));
-    let between = style(475.0, 1.0)?;
+    let [lighter_share, heavier_share] = shares_between();
+    let lighter_face = pixels(
+        &mut reference,
+        &[ordinary(style(LIGHTER_WEIGHT, lighter_share)?)],
+    )?;
+    let heavier_face = pixels(
+        &mut reference,
+        &[ordinary(style(HEAVIER_WEIGHT, heavier_share)?)],
+    )?;
+    let transparent = lighter_face.map(|_| [0; 4]);
+    let both_faces = faces_in_shares(&transparent, [&lighter_face, &heavier_face], [1.0, 1.0])?;
+    let only_lighter_face = pixels(&mut reference, &[ordinary(style(LIGHTER_WEIGHT, 1.0)?)])?;
+    assert!(both_faces.iter().any(|pixel| pixel[3] > 0.0));
+    assert!(
+        largest_deviation(&only_lighter_face, &both_faces)? > ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS
+    );
+    let between = style(BETWEEN_WEIGHT, 1.0)?;
     let protected = DrawCommand::PrivateText {
         text: private.clone(),
-        rect,
+        rect: ONE_LINE,
         style: between.clone(),
     };
     for command in [ordinary(between), protected] {
         let actual = pixels(&mut painter, &[command])?;
-        assert!(alike(&actual, &lighter_and_heavier_face));
+        assert!(largest_deviation(&actual, &both_faces)? <= ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS);
     }
     Ok(())
 }
@@ -307,18 +315,16 @@ fn subpixel_text_stays_subpixel_from_one_static_face_through_the_blend_to_the_ot
             antialiasing: TextAntialiasing::Subpixel,
             ..Default::default()
         },
-        TextDestination {
-            opaque: true,
-            geometry: PixelGeometry::Rgb,
-        },
+        lcd_destination(),
     );
     let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
-        field(&mut painter, "Mon 5 Oct office")?;
-    let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
-    for weight in [400.0, 475.0, 700.0] {
-        let style = TextStyle::new("probe", 13.sp(), Color::WHITE)
-            .weight(FontWeight::try_new(weight)?)
-            .resolve_unscaled();
+        field(&mut painter, PLAIN_LABEL_TEXT)?;
+    let rect = ONE_LINE;
+    for weight in [LIGHTER_WEIGHT, BETWEEN_WEIGHT, HEAVIER_WEIGHT] {
+        let style = TextStyle {
+            weight: FontWeight::try_new(weight)?,
+            ..probe_style()
+        };
         let ordinary = private.expose(|value| DrawCommand::Text {
             text: value.into(),
             rect,
@@ -332,11 +338,7 @@ fn subpixel_text_stays_subpixel_from_one_static_face_through_the_blend_to_the_ot
         for command in [ordinary, protected] {
             let image =
                 drawn_on_black(|canvas| painter.paint_as_leaf(canvas, &[command], Density::ONE))?;
-            let colored_fringe = |pixel: &[u8; 4]| pixel[0] != pixel[1] || pixel[1] != pixel[2];
-            assert!(
-                image.as_chunks::<4>().0.iter().any(colored_fringe),
-                "{weight}"
-            );
+            assert!(has_colored_fringe(&image), "{weight}");
         }
     }
     Ok(())
@@ -344,19 +346,15 @@ fn subpixel_text_stays_subpixel_from_one_static_face_through_the_blend_to_the_ot
 
 fn drawn_on_black(
     paint: impl FnOnce(&skia_safe::Canvas) -> Result<(), TestError>,
-) -> Result<Vec<u8>, TestError> {
-    let info = ImageInfo::new(
-        (300, 48),
+) -> Result<Pixels<[u8; 4]>, TestError> {
+    drawn_pixels(
+        LABEL_SURFACE,
         ColorType::RGBA8888,
         AlphaType::Opaque,
-        ColorSpace::new_srgb(),
-    );
-    let mut surface =
-        skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    paint(surface.canvas().clear(skia_safe::Color::BLACK))?;
-    let mut pixels = vec![0; 300 * 48 * 4];
-    assert!(surface.read_pixels(&info, &mut pixels, 300 * 4, (0, 0)));
-    Ok(pixels)
+        None,
+        skia_safe::Color::BLACK,
+        paint,
+    )
 }
 
 struct FixedOutcomeRasterizer(fn() -> Result<Option<Coverage>, crate::Error>);
@@ -402,13 +400,13 @@ fn private_text_declined_or_failed_by_the_rasterizer_matches_ordinary_text_witho
     for (outcome, recorded_failures) in [(declined, 0), (failed, 1)] {
         let mut painter = new_painter()?;
         let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
-            field(&mut painter, "Mon 5 Oct office")?;
+            field(&mut painter, PLAIN_LABEL_TEXT)?;
         painter.set_text_rendering(grayscale, TextDestination::default());
         painter.text_rasterizers = Rasterizers::only(Rc::new(FixedOutcomeRasterizer(outcome)));
         let mut reference = new_painter()?;
         reference.set_text_rendering(grayscale, TextDestination::default());
-        let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
-        let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+        let rect = ONE_LINE;
+        let style = probe_style();
         let protected = DrawCommand::PrivateText {
             text: private.clone(),
             rect,
@@ -421,7 +419,7 @@ fn private_text_declined_or_failed_by_the_rasterizer_matches_ordinary_text_witho
         });
         let actual = pixels(&mut painter, &[protected])?;
         let expected = pixels(&mut reference, &[ordinary])?;
-        assert!(expected.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
+        assert!(expected.iter().any(|pixel| pixel[3] > 0));
         assert_eq!(actual, expected);
         assert_eq!(painter.resources.tiles.borrow().images().count(), 0);
         assert_eq!(painter.shaper.private_skia_cache_count(), 0);
@@ -445,9 +443,11 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
         TextDestination::default(),
     );
     let (mut view, mut builder, secret, private) = field(&mut painter, "iWé office")?;
-    let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
-    let first = painter.shaper.private_geometry(&private, &style, 260.dp());
-    let size = Size::new(300.dp(), 48.dp());
+    let style = probe_style();
+    let first = painter
+        .shaper
+        .private_geometry(&private, &style, TEXT_WIDTH);
+    let size = LABEL_SURFACE.size();
     let viewport = Viewport::new(size, Density::ONE);
     (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     assert!(!view.needs_frame());
@@ -460,7 +460,9 @@ fn private_policy_changes_refresh_the_same_view_and_clear_reveal_without_a_draw(
     );
     assert!(view.needs_frame());
     (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
-    let second = painter.shaper.private_geometry(&private, &style, 260.dp());
+    let second = painter
+        .shaper
+        .private_geometry(&private, &style, TEXT_WIDTH);
     assert_ne!(carets(&first), carets(&second));
     assert!(!view.needs_frame());
     secret.set_revealed(false);
@@ -483,14 +485,14 @@ fn long_private_runs_clip_transient_tiles_on_the_original_sampling_grid() -> Res
     let mut painter = new_painter()?;
     let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
         field(&mut painter, &"W".repeat(4096))?;
-    let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let style = probe_style();
     let mut paragraph = ShapedParagraph::new(private.expose(|value| {
         painter
             .shaper
             .private_paragraph(painter.text_rendering(), value, &style, 100_000.dp())
     })?);
-    let mut surface =
-        skia_safe::surfaces::raster_n32_premul((300, 48)).ok_or(TestError::RasterSurface)?;
+    let mut surface = skia_safe::surfaces::raster_n32_premul(LABEL_SURFACE.dimensions())
+        .ok_or(TestError::RasterSurface)?;
     let canvas = surface.canvas().clip_rect(
         skia_safe::Rect::from_xywh(10.0, 3.0, 242.0, 35.0),
         None,
@@ -531,9 +533,8 @@ fn the_smallest_private_width_is_shaped_from_the_value_outside_the_shared_caches
     let mut reference = Shaper::new(crate::test_font::test_font()?.load()?, Failures::default());
     let style = TextStyle {
         max_lines: Some(1),
-        ..TextStyle::new("probe", 13.sp(), Color::WHITE)
-    }
-    .resolve_unscaled();
+        ..probe_style()
+    };
     let ellipsis = reference.measure("…", &style, Dp::INFINITY).width;
     for value in ["i", "iWé💡 secret"] {
         let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
@@ -558,18 +559,9 @@ fn field_beside_text(secret: &ProtectedText) -> View {
             ui.protected_input(
                 state.clone(),
                 TextFieldOptions::default(),
-                Modifier::new()
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .tag("field"),
+                probe_modifier().tag("field"),
             );
-            ui.text(
-                "tail",
-                Modifier::new()
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .tag("sibling"),
-            );
+            ui.text("tail", probe_modifier().tag("sibling"));
         });
     })
 }
@@ -581,9 +573,8 @@ fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
     let mut reference = Shaper::new(crate::test_font::test_font()?.load()?, Failures::default());
     let style = TextStyle {
         max_lines: Some(1),
-        ..TextStyle::new("probe", 13.sp(), Color::WHITE)
-    }
-    .resolve_unscaled();
+        ..probe_style()
+    };
     for (value, width) in [
         ("iWi".to_owned(), 600.dp()),
         ("iWé💡e\u{301}אבג".to_owned(), 600.dp()),

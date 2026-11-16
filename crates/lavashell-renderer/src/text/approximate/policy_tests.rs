@@ -3,6 +3,7 @@ use super::super::{Hinting, PixelGeometry};
 use super::tests::{new_painter, target};
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::{probe_style, probe_style_at};
 use skia_safe::textlayout::{Paragraph, ParagraphStyle, TextStyle as SkTextStyle};
 
 #[test]
@@ -65,7 +66,7 @@ fn assert_geometry(actual: &TextGeometry, expected: &TextGeometry) {
 fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Result<(), TestError> {
     let mut painter = new_painter(PixelGeometry::Rgb)?;
     let value = "Headphones p e\u{301} office אבג";
-    let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let style = probe_style();
     let ordinary_input =
         painter
             .shaper
@@ -133,7 +134,7 @@ fn lcd_source_warmup_preserves_default_wrapping_and_shaped_carets() -> Result<()
     let mut painter = new_painter(PixelGeometry::Rgb)?;
     let mut reference = new_painter(PixelGeometry::None)?;
     for size in [11.0, 13.0, 16.0, 100.0] {
-        let mut style = TextStyle::new("probe", Sp::new(size), Color::WHITE).resolve_unscaled();
+        let mut style = probe_style_at(Sp::new(size));
         style.max_lines = None;
         let value = "Headphones p e\u{301} office\nabc אבג";
         for width in [280.dp(), 79.dp(), 280.dp()] {

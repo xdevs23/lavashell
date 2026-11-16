@@ -270,6 +270,7 @@ pub(crate) fn has_weight_axis(face: &Typeface) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_font::PROBE_FAMILY;
 
     #[test]
     fn fallback_aliases_preserve_order_and_invalid_font_data_is_rejected() -> Result<(), Error> {
@@ -300,8 +301,8 @@ mod tests {
     #[test]
     fn an_alias_without_font_files_fails() {
         assert!(matches!(
-            Fonts::new().files("probe", Vec::<&Path>::new()),
-            Err(Error::NoFontFiles { alias }) if alias == "probe"
+            Fonts::new().files(PROBE_FAMILY, Vec::<&Path>::new()),
+            Err(Error::NoFontFiles { alias }) if alias == PROBE_FAMILY
         ));
     }
 
@@ -309,7 +310,7 @@ mod tests {
     fn a_text_file_fails_to_decode_with_its_path() -> Result<(), Error> {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
         assert!(matches!(
-            Fonts::new().file("probe", &manifest)?.load(),
+            Fonts::new().file(PROBE_FAMILY, &manifest)?.load(),
             Err(Error::DecodeFont { font: RegisteredFont { origin: FontOrigin::File(path), .. } })
                 if path == manifest
         ));
@@ -320,6 +321,7 @@ mod tests {
 #[cfg(test)]
 mod variable_font_tests {
     use crate::test_error::TestError;
+    use crate::test_font::PROBE_FAMILY;
 
     #[test]
     fn registered_variable_weights_resolve_to_distinct_matching_faces() -> Result<(), TestError> {
@@ -331,7 +333,7 @@ mod variable_font_tests {
                 skia_safe::font_style::Width::NORMAL,
                 skia_safe::font_style::Slant::Upright,
             );
-            let faces = collection.find_typefaces(&["probe"], style);
+            let faces = collection.find_typefaces(&[PROBE_FAMILY], style);
             assert_eq!(faces.len(), 1);
             let face = &faces[0];
             assert_eq!(
@@ -350,8 +352,12 @@ mod variable_font_tests {
     fn a_family_with_a_weight_axis_has_no_static_faces_and_is_looked_up_once()
     -> Result<(), TestError> {
         let mut fonts = crate::test_font::test_font()?.load()?;
-        assert!(fonts.static_face_weights("probe").is_empty());
-        assert!(fonts.static_face_weights_by_family.contains_key("probe"));
+        assert!(fonts.static_face_weights(PROBE_FAMILY).is_empty());
+        assert!(
+            fonts
+                .static_face_weights_by_family
+                .contains_key(PROBE_FAMILY)
+        );
         Ok(())
     }
 }
@@ -359,20 +365,21 @@ mod variable_font_tests {
 #[cfg(test)]
 mod static_face_tests {
     use crate::test_error::TestError;
+    use crate::test_font::PROBE_FAMILY;
     use skia_safe::FontStyle;
     use skia_safe::font_style::{Slant, Weight, Width};
 
     #[test]
     fn static_faces_registered_under_one_alias_form_one_family() -> Result<(), TestError> {
         let mut fonts = crate::test_font::static_test_faces()?.load()?;
-        let mut weights = fonts.static_face_weights("probe").to_vec();
+        let mut weights = fonts.static_face_weights(PROBE_FAMILY).to_vec();
         weights.sort_unstable();
         assert_eq!(weights, [Weight::NORMAL, Weight::BOLD]);
         let mut collection = fonts.collection();
         let mut identities = std::collections::BTreeSet::new();
         for weight in [Weight::NORMAL, Weight::BOLD] {
             let style = FontStyle::new(weight, Width::NORMAL, Slant::Upright);
-            let faces = collection.find_typefaces(&["probe"], style);
+            let faces = collection.find_typefaces(&[PROBE_FAMILY], style);
             assert_eq!(faces.len(), 1);
             assert_eq!(faces[0].font_style().weight(), weight);
             assert!(

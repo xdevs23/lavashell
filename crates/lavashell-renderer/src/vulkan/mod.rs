@@ -107,7 +107,7 @@ impl VulkanRenderer {
 
     pub fn offscreen(&mut self, size: PixelSize) -> Result<OffscreenSurface, Error> {
         let signed = size.signed().ok_or(Error::OffscreenSize(size))?;
-        let info = skia_handoff::working_image_info(signed)?;
+        let info = crate::color::working_image_info(signed)?;
         let surface = gpu_render_target(&mut self.context, &info, gpu::Budgeted::Yes)
             .ok_or(Error::OffscreenSurface(size))?;
         Ok(OffscreenSurface::new(

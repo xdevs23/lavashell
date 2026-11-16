@@ -5,7 +5,7 @@ use crate::{ContextState, Error};
 use ash::vk::{self, Handle};
 use lavashell_vulkan::Device;
 use skia_safe::gpu::{self, DirectContext, SurfaceOrigin, vk as skvk};
-use skia_safe::{AlphaType, ColorSpace, ColorType, ISize, ImageInfo, Surface};
+use skia_safe::{ColorSpace, ColorType, ImageInfo, Surface};
 use std::ffi::{CStr, c_void};
 use std::sync::Arc;
 
@@ -181,16 +181,6 @@ fn ash_handle<H: Handle, T>(pointer: *mut T) -> Result<H, Error> {
 
 fn skia_count(value: u32) -> Result<usize, Error> {
     usize::try_from(value).map_err(Error::SkiaHandoff)
-}
-
-pub(super) fn working_image_info(size: impl Into<ISize>) -> Result<ImageInfo, Error> {
-    let space = crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?;
-    Ok(ImageInfo::new(
-        size,
-        ColorType::RGBAF16,
-        AlphaType::Premul,
-        space,
-    ))
 }
 
 pub(super) fn gpu_render_target(

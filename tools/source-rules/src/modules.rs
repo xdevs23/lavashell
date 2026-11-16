@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::attributes::configured_attributes;
+use crate::attributes::{CodeKind, code_kind, configured_attributes};
 use crate::error::Error;
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
@@ -18,11 +18,17 @@ struct Pending {
     declared_in: PathBuf,
     path: PathBuf,
     children: PathBuf,
+    test_only: bool,
+}
+
+pub struct Module<'sources> {
+    pub source: &'sources Source,
+    pub test_only: bool,
 }
 
 pub struct Crate<'sources> {
     pub root: &'sources Source,
-    pub modules: Vec<&'sources Source>,
+    pub modules: Vec<Module<'sources>>,
 }
 
 #[derive(Clone, Copy)]
@@ -30,6 +36,7 @@ struct ModuleScope<'path> {
     file: &'path Path,
     children: &'path Path,
     path_base: &'path Path,
+    test_only: bool,
 }
 
 impl<'sources> Crate<'sources> {
@@ -43,6 +50,7 @@ impl<'sources> Crate<'sources> {
             file: root,
             children: directory,
             path_base: directory,
+            test_only: false,
         };
         declared_files(&root_source.syntax.items, scope, sources, &mut pending)?;
         let mut modules = Vec::new();
@@ -55,9 +63,13 @@ impl<'sources> Crate<'sources> {
                 file: &file.path,
                 children: &file.children,
                 path_base: parent(&file.path)?,
+                test_only: file.test_only,
             };
             declared_files(&source.syntax.items, scope, sources, &mut pending)?;
-            modules.push(source);
+            modules.push(Module {
+                source,
+                test_only: file.test_only,
+            });
         }
         Ok(Self {
             root: root_source,
@@ -66,7 +78,7 @@ impl<'sources> Crate<'sources> {
     }
 
     pub fn sources(&self) -> impl Iterator<Item = &Source> {
-        std::iter::once(self.root).chain(self.modules.iter().copied())
+        std::iter::once(self.root).chain(self.modules.iter().map(|module| module.source))
     }
 }
 
@@ -80,11 +92,17 @@ fn declared_files(
         let Item::Mod(module) = item else {
             continue;
         };
-        let name = module.ident.unraw().to_string();
-        let paths = path_attributes(&module.attrs).map_err(|source| Error::ParseSource {
+        let unparsed = |source| Error::ParseSource {
             path: scope.file.to_path_buf(),
             source,
-        })?;
+        };
+        let kind = code_kind(&module.attrs).map_err(unparsed)?;
+        let scope = ModuleScope {
+            test_only: scope.test_only || kind == CodeKind::Test,
+            ..scope
+        };
+        let name = module.ident.unraw().to_string();
+        let paths = path_attributes(&module.attrs).map_err(unparsed)?;
         if let Some((_, inline)) = &module.content {
             let directory = scope
                 .children
@@ -104,6 +122,7 @@ fn declared_files(
                     declared_in: scope.file.to_path_buf(),
                     children: parent(&path)?.to_path_buf(),
                     path,
+                    test_only: scope.test_only,
                 });
             }
         }
@@ -118,6 +137,7 @@ fn named_file(scope: ModuleScope<'_>, name: String, sources: &Sources) -> Result
             declared_in: scope.file.to_path_buf(),
             path: file,
             children: scope.children.join(&name),
+            test_only: scope.test_only,
         });
     }
     let file = scope.children.join(&name).join("mod.rs");
@@ -126,6 +146,7 @@ fn named_file(scope: ModuleScope<'_>, name: String, sources: &Sources) -> Result
             declared_in: scope.file.to_path_buf(),
             children: parent(&file)?.to_path_buf(),
             path: file,
+            test_only: scope.test_only,
         });
     }
     Err(Error::ModuleFile {

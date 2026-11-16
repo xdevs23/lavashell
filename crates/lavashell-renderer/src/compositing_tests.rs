@@ -2,40 +2,30 @@
 use crate::effect_registry::QualityChange;
 use crate::test_error::TestError;
 use crate::test_scenes::{TEST_SURFACE, paint, paint_damage};
-use crate::{BlendSpace, Error, Fonts, Painter};
+use crate::test_surfaces::{
+    EFFECT_STRIPES, EFFECT_SURFACE, Pixels, TestSurface, channel_differences, pixels,
+};
+use crate::{BlendSpace, Fonts, Painter};
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::{BudgetChooser, FrameBudget};
 use std::time::Duration;
 
+const BLEND_SURFACE: TestSurface = TestSurface::new(16, 8);
+
 #[test]
 fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(), TestError> {
-    let size = Rect::new(0.dp(), 0.dp(), 16.dp(), 8.dp());
+    let size = BLEND_SURFACE.bounds();
     let fill = DrawCommand::Fill {
         shape: size.into(),
         brush: Color::WHITE.with_alpha(0.5).into(),
     };
     let tree = SceneTree::with_leaf([fill])?.snapshot();
-    let working = skia_safe::ImageInfo::new(
-        (16, 8),
-        skia_safe::ColorType::RGBAF16,
-        skia_safe::AlphaType::Premul,
-        crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
-    );
-    let output = skia_safe::ImageInfo::new(
-        (16, 8),
-        skia_safe::ColorType::RGBA8888,
-        skia_safe::AlphaType::Unpremul,
-        skia_safe::ColorSpace::new_srgb(),
-    );
-    let raster =
-        || skia_safe::surfaces::raster(&working, None, None).ok_or(TestError::RasterSurface);
-    let mut surfaces = [raster()?, raster()?, raster()?];
-    let pixels = |surface: &mut skia_safe::Surface| {
-        let mut data = vec![0_u8; 16 * 8 * 4];
-        assert!(surface.read_pixels(&output, &mut data, 16 * 4, (0, 0)));
-        data
-    };
+    let mut surfaces = [
+        BLEND_SURFACE.raster()?,
+        BLEND_SURFACE.raster()?,
+        BLEND_SURFACE.raster()?,
+    ];
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     for (index, surface) in (0_u64..).zip(&mut surfaces) {
         paint_damage(
@@ -46,13 +36,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
             Some(size),
             skia_safe::Color::BLACK,
         )?;
-        assert!(
-            pixels(surface)
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[0].abs_diff(188) <= 1)
-        );
+        assert!(pixels(surface).iter().all(|p| p[0].abs_diff(188) <= 1));
     }
     for (space, expected) in [(BlendSpace::Srgb, 128_u8), (BlendSpace::Linear, 188_u8)] {
         painter.set_blend_space(space);
@@ -66,12 +50,13 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
                 damage,
                 skia_safe::Color::BLACK,
             )?;
-            for pixel in pixels(surface).as_chunks::<4>().0 {
+            for pixel in &pixels(surface) {
+                let [color @ .., alpha] = pixel;
                 assert!(
-                    pixel[..3].iter().all(|value| value.abs_diff(expected) <= 1),
+                    channel_differences(color, &[expected; 3]).all(|difference| difference <= 1),
                     "surface {index} retained stale {space:?} coverage: {pixel:?}"
                 );
-                assert_eq!(pixel[3], 255);
+                assert_eq!(*alpha, 255);
             }
         }
         let damaged_before = painter.render_stats().damaged_pixels;
@@ -105,22 +90,17 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
     reference.set_blend_space(BlendSpace::Srgb);
     for frame in 1..=3 {
         let mut commands = Vec::new();
-        let context = DrawContext::new(Viewport::new(Size::new(96.dp(), 48.dp()), Density::ONE));
-        let mut drawing = Drawing::new(
-            &mut commands,
-            Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
-            &context,
+        let context = DrawContext::new(Viewport::new(EFFECT_SURFACE.size(), Density::ONE));
+        let mut drawing = Drawing::new(&mut commands, EFFECT_SURFACE.bounds(), &context);
+        let (white, blue) = (Color::WHITE, Color::rgb(0x0000_00ff));
+        EFFECT_STRIPES.fill_stripes(
+            &mut drawing,
+            if frame % 2 == 0 {
+                [white, blue]
+            } else {
+                [blue, white]
+            },
         );
-        for x in 0..24_u16 {
-            drawing.fill(
-                Rect::new(4.dp() * f64::from(x), 0.dp(), 4.dp(), 48.dp()),
-                if (u64::from(x) + frame) % 2 == 0 {
-                    Color::WHITE
-                } else {
-                    Color::rgb(0x0000_00ff)
-                },
-            );
-        }
         drawing.backdrop(
             Shape::rounded(Rect::new(8.dp(), 4.dp(), 80.dp(), 40.dp()), 4.dp()),
             constant!(Backdrop::blur(Dp::new(4.0))),
@@ -145,27 +125,10 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
         if change_after_plan {
             planned.set_blend_space(BlendSpace::Srgb);
         }
-        let render = |painter: &mut Painter| -> Result<Vec<u8>, TestError> {
-            let info = skia_safe::ImageInfo::new(
-                (96, 48),
-                skia_safe::ColorType::RGBAF16,
-                skia_safe::AlphaType::Premul,
-                crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
-            );
-            let mut surface =
-                skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-            let _canvas_returned_for_chaining =
-                surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let render = |painter: &mut Painter| -> Result<Pixels<[u8; 4]>, TestError> {
+            let mut surface = EFFECT_SURFACE.raster()?;
             paint(painter, surface.canvas(), &tree, Density::ONE);
-            let info = skia_safe::ImageInfo::new(
-                (96, 48),
-                skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Premul,
-                skia_safe::ColorSpace::new_srgb(),
-            );
-            let mut pixels = vec![0; 96 * 48 * 4];
-            assert!(surface.read_pixels(&info, &mut pixels, 96 * 4, (0, 0)));
-            Ok(pixels)
+            Ok(pixels(&mut surface))
         };
         assert_eq!(
             render(&mut planned)?,

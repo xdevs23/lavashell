@@ -66,18 +66,17 @@ mod tests {
 #[cfg(test)]
 mod gpu_tests {
     use crate::test_error::TestError;
+    use crate::test_surfaces::{TestSurface, image_pixels};
     use lavashell_core::prelude::*;
+
+    const SURFACE: TestSurface = TestSurface::new(400, 240);
 
     #[test]
     fn thousands_of_tiny_tiles_render_correctly_across_upload_batches() -> Result<(), TestError> {
         let (columns, rows) = (100_u8, 60_u8);
         let mut commands = Vec::new();
-        let context = DrawContext::new(Viewport::new(Size::new(400.dp(), 240.dp()), Density::ONE));
-        let mut drawing = Drawing::new(
-            &mut commands,
-            Rect::new(0.dp(), 0.dp(), 400.dp(), 240.dp()),
-            &context,
-        );
+        let context = DrawContext::new(Viewport::new(SURFACE.size(), Density::ONE));
+        let mut drawing = Drawing::new(&mut commands, SURFACE.bounds(), &context);
         for y in 0..rows {
             for x in 0..columns {
                 let (left, top) = (4.dp() * f64::from(x), 4.dp() * f64::from(y));
@@ -102,7 +101,7 @@ mod gpu_tests {
         let mut painter = gpu
             .painter(&crate::Fonts::new())?
             .with_raster_mode(crate::raster::RasterMode::Tiles);
-        let mut surface = gpu.offscreen(PixelSize::new(400, 240))?;
+        let mut surface = gpu.offscreen(SURFACE.pixel_size())?;
         let limit = surface.image_info().compute_min_byte_size();
         surface
             .canvas()
@@ -117,24 +116,10 @@ mod gpu_tests {
         assert!(tiles.uploads.images.len() < usize::from(columns) * usize::from(rows));
         let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(&png))
             .ok_or(crate::Error::DecodeImage)?;
-        let info = skia_safe::ImageInfo::new(
-            (400, 240),
-            skia_safe::ColorType::RGBA8888,
-            skia_safe::AlphaType::Unpremul,
-            skia_safe::ColorSpace::new_srgb(),
-        );
-        let mut pixels = vec![0_u8; 400 * 240 * 4];
-        assert!(image.read_pixels(
-            &info,
-            &mut pixels,
-            400 * 4,
-            (0, 0),
-            skia_safe::image::CachingHint::Disallow
-        ));
-        for y in 0..usize::from(rows) {
-            for x in 0..usize::from(columns) {
-                let offset = ((y * 4 + 2) * 400 + x * 4 + 2) * 4;
-                let pixel = &pixels[offset..offset + 4];
+        let pixels = image_pixels(&image, skia_safe::AlphaType::Unpremul);
+        for y in 0..u16::from(rows) {
+            for x in 0..u16::from(columns) {
+                let pixel = pixels.at(x * 4 + 2, y * 4 + 2);
                 let dominant = if (x + y) % 2 == 0 { 0 } else { 2 };
                 assert!(
                     pixel[dominant] == 255 && pixel[2 - dominant] == 0,

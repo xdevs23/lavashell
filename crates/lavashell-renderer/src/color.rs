@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::Error;
 use crate::vulkan::SkiaFormat;
 use ash::vk;
 use lavashell_core::prelude::*;
-use skia_safe::{ColorSpace, ColorType};
+use skia_safe::{AlphaType, ColorSpace, ColorType, ISize, ImageInfo};
 use skia_safe::{named_primaries::CicpId as P, named_transfer_fn::CicpId as T};
 
 // https://github.com/rust-skia/skia/blob/m153-0.101.2/src/opts/SkRasterPipeline_opts.h
 const EXTENDED_RANGE_CODES_PER_UNIT: f64 = 510.0;
 
-#[must_use]
-pub fn working_color_space() -> Option<ColorSpace> {
-    ColorSpace::new_cicp(P::Rec2020, T::Linear)
+pub fn working_color_space() -> Result<ColorSpace, Error> {
+    ColorSpace::new_cicp(P::Rec2020, T::Linear).ok_or(Error::WorkingColorSpace)
+}
+
+pub(crate) fn working_image_info(size: impl Into<ISize>) -> Result<ImageInfo, Error> {
+    Ok(ImageInfo::new(
+        size,
+        ColorType::RGBAF16,
+        AlphaType::Premul,
+        working_color_space()?,
+    ))
 }
 
 #[must_use]
@@ -198,7 +207,6 @@ impl ChannelRange {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Error;
     use crate::test_error::TestError;
 
     fn pair(f: vk::Format, c: vk::ColorSpaceKHR) -> vk::SurfaceFormatKHR {

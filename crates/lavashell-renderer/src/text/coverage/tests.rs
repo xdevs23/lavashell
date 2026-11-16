@@ -3,14 +3,12 @@ use super::super::raster::sampled_mask;
 use super::*;
 use crate::float_asserts::assert_f32_eq;
 use crate::test_error::TestError;
-use crate::test_surfaces::floats;
+use crate::test_surfaces::{float_info, float_pixel};
 use lavashell_core::prelude::*;
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo, Surface};
 
 fn pixel(surface: &mut Surface, info: &ImageInfo) -> [f32; 4] {
-    let mut data = [0_u8; 16];
-    assert!(surface.read_pixels(info, &mut data, 16, (0, 0)));
-    floats(&data)
+    float_pixel(surface, (0, 0), info.alpha_type(), info.color_space())
 }
 
 #[test]
@@ -35,11 +33,13 @@ fn coverage_remains_data_and_foreground_uses_destination_color_management() -> R
         OutputProfile::ScRgb,
         OutputProfile::DisplayP3,
     ] {
-        let info = ImageInfo::new(
+        let info = float_info(
             (1, 1),
-            ColorType::RGBAF32,
             AlphaType::Premul,
-            crate::color::output_color_space(profile).ok_or(Error::OutputColorSpace(profile))?,
+            Some(
+                crate::color::output_color_space(profile)
+                    .ok_or(Error::OutputColorSpace(profile))?,
+            ),
         );
         for gamut in [Gamut::Srgb, Gamut::DisplayP3] {
             for alpha in [0.0_f32, 0.4, 1.0] {

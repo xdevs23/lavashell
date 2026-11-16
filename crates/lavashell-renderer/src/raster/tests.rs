@@ -3,7 +3,7 @@ use super::key::{ParagraphRaster, TileContent};
 use super::tiles::TileSpec;
 use super::*;
 use crate::test_error::TestError;
-use crate::test_surfaces::{ChannelRounding, floats, unpremultiplied_pixel};
+use crate::test_surfaces::{ChannelRounding, alpha_pixels, float_pixel, unpremultiplied_pixel};
 use lavashell_core::scene::IconStyle;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
@@ -145,7 +145,7 @@ fn scrolling_a_small_path_through_a_clip_reuses_its_complete_tile() -> Result<()
         "clip motion must not create new uploads"
     );
     let pixels = crate::test_surfaces::pixels(&mut surface);
-    let pixel = |x: usize, y: usize| &pixels[(y * 40 + x) * 4..(y * 40 + x) * 4 + 4];
+    let pixel = |x, y| pixels.at(x, y);
     assert_eq!(pixel(15, 12), [255, 255, 255, 255]);
     assert_eq!(pixel(15, 8), [0, 0, 0, 0], "the parent clip still applies");
     Ok(())
@@ -209,13 +209,8 @@ fn an_icon_moved_by_whole_pixels_reuses_the_tiles_of_its_paths() -> Result<(), T
 #[test]
 fn floating_point_tiles_keep_hdr_headroom() -> Result<(), TestError> {
     let mut cache = RasterCache::new(RasterMode::Tiles, Failures::default());
-    let space = crate::color::working_color_space().ok_or(crate::Error::WorkingColorSpace)?;
-    let info = skia_safe::ImageInfo::new(
-        (8, 8),
-        skia_safe::ColorType::RGBAF16,
-        skia_safe::AlphaType::Premul,
-        space.clone(),
-    );
+    let space = crate::color::working_color_space()?;
+    let info = crate::color::working_image_info((8, 8))?;
     let mut surface =
         skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
     cache.draw_tile(
@@ -228,12 +223,13 @@ fn floating_point_tiles_keep_hdr_headroom() -> Result<(), TestError> {
             let _canvas_returned_for_chaining = tile.draw_paint(&paint);
         },
     )?;
-    let read = info
-        .with_dimensions((1, 1))
-        .with_color_type(skia_safe::ColorType::RGBAF32);
-    let mut bytes = [0; 16];
-    assert!(surface.read_pixels(&read, &mut bytes, 16, (4, 4)));
-    let red_channel = f64::from(floats::<1>(&bytes)[0]);
+    let [red, ..] = float_pixel(
+        &mut surface,
+        (4, 4),
+        skia_safe::AlphaType::Premul,
+        Some(space),
+    );
+    let red_channel = f64::from(red);
     assert!(
         (red_channel - 2.0).abs() <= ChannelRounding::of(&surface)?.after(2, 2.0),
         "F16 headroom lost: {red_channel}"
@@ -267,7 +263,7 @@ fn a_reused_tile_follows_its_new_position_and_parent_opacity() -> Result<(), Tes
     assert!(!rasterized, "a cache hit is not rasterized again");
     let _canvas_returned_for_chaining = surface.canvas().restore_to_count(saved);
     let pixels = crate::test_surfaces::pixels(&mut surface);
-    let at = |x: usize| &pixels[(5 * 40 + x) * 4..(5 * 40 + x) * 4 + 4];
+    let at = |x| pixels.at(x, 5);
     assert_eq!(at(5), [255, 255, 255, 255]);
     assert_eq!(at(25), [128, 128, 128, 128]);
     assert_eq!(at(35), [0, 0, 0, 0]);
@@ -332,16 +328,10 @@ fn coverage_and_truth(
     let mut paint = Paint::new(skia_safe::Color4f::from(Color::WHITE), None);
     let _paint_returned_for_chaining = paint.set_anti_alias(true);
     let square = |side: u16| (i32::from(side), i32::from(side));
-    let alpha = |surface: &mut skia_safe::Surface, side: u16| {
-        let info = skia_safe::ImageInfo::new_a8(square(side));
-        let mut pixels = vec![0_u8; info.compute_min_byte_size()];
-        assert!(surface.read_pixels(&info, &mut pixels, info.min_row_bytes(), (0, 0)));
-        pixels
-    };
     let mut surface =
         skia_safe::surfaces::raster_n32_premul(square(size)).ok_or(TestError::RasterSurface)?;
     draw(surface.canvas(), &paint)?;
-    let drawn = alpha(&mut surface, size);
+    let drawn = alpha_pixels(&mut surface);
     let _paint_returned_for_chaining = paint.set_anti_alias(false);
     let mut pairs = Vec::new();
     for top in (0..size).step_by(usize::from(WINDOW)) {
@@ -355,19 +345,15 @@ fn coverage_and_truth(
             let _canvas_returned_for_chaining =
                 fine.canvas().translate((-f32::from(left), -f32::from(top)));
             let _canvas_returned_for_chaining = fine.canvas().draw_path(path, &paint);
-            let samples = alpha(&mut fine, fine_side);
+            let samples = alpha_pixels(&mut fine);
             for (y, x) in (0..WINDOW).flat_map(|y| (0..WINDOW).map(move |x| (y, x))) {
                 let inside = (0..SAMPLES * SAMPLES)
-                    .map(|s| {
-                        let (row, column) = (y * SAMPLES + s / SAMPLES, x * SAMPLES + s % SAMPLES);
-                        usize::from(row) * usize::from(fine_side) + usize::from(column)
-                    })
-                    .map(|i| f64::from(samples[i]))
+                    .map(|s| samples.at(x * SAMPLES + s % SAMPLES, y * SAMPLES + s / SAMPLES))
+                    .map(f64::from)
                     .sum::<f64>()
                     / f64::from(SAMPLES * SAMPLES);
                 if inside > 0.0 && inside < 255.0 {
-                    let at = usize::from(top + y) * usize::from(size) + usize::from(left + x);
-                    pairs.push((f64::from(drawn[at]), inside));
+                    pairs.push((f64::from(drawn.at(left + x, top + y)), inside));
                 }
             }
         }

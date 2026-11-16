@@ -4,8 +4,9 @@ use crate::effect_registry::{EffectInput, ShapePainter, SurfaceAccess};
 use crate::failure::Failures;
 use crate::resources::PaintResources;
 use crate::test_error::TestError;
+use crate::test_surfaces::{EFFECT_STRIPES, EFFECT_SURFACE, Pixels, pixels};
 use crate::{FieldRoom, UniformRange};
-use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
+use skia_safe::Surface;
 
 pub(super) fn draw_on(surface: SurfaceId) -> DrawId {
     DrawId {
@@ -16,27 +17,20 @@ pub(super) fn draw_on(surface: SurfaceId) -> DrawId {
     }
 }
 
-pub(super) fn pixels(surface: &mut Surface) -> Vec<u8> {
-    let info = ImageInfo::new((96, 48), ColorType::RGBA8888, AlphaType::Premul, None);
-    let mut bytes = vec![0; 96 * 48 * 4];
-    assert!(surface.read_pixels(&info, &mut bytes, 96 * 4, (0, 0)));
-    bytes
+fn n32_effect_surface() -> Result<Surface, TestError> {
+    skia_safe::surfaces::raster_n32_premul(EFFECT_SURFACE.dimensions())
+        .ok_or(TestError::RasterSurface)
 }
 
-pub(super) fn background(canvas: &Canvas) {
+pub(super) fn background(canvas: &Canvas) -> Result<(), TestError> {
     let _canvas_returned_for_chaining = canvas.clear(skia_safe::Color::BLACK);
     let mut paint = Paint::default();
-    for x in 0..24_u16 {
-        let _paint_returned_for_chaining = paint.set_color(if x % 2 == 0 {
-            skia_safe::Color::WHITE
-        } else {
-            skia_safe::Color::BLUE
-        });
-        let _canvas_returned_for_chaining = canvas.draw_rect(
-            skia_safe::Rect::from_xywh(f32::from(x) * 4.0, 0.0, 4.0, 48.0),
-            &paint,
-        );
+    let colors = [skia_safe::Color::WHITE, skia_safe::Color::BLUE];
+    for (stripe, color) in EFFECT_STRIPES.stripes(colors) {
+        let _paint_returned_for_chaining = paint.set_color(color);
+        let _canvas_returned_for_chaining = canvas.draw_rect(crate::paint::skrect(stripe)?, &paint);
     }
+    Ok(())
 }
 
 fn setup() -> Result<(Backend, DrawCommand, EffectInput), TestError> {
@@ -120,11 +114,7 @@ fn a_stored_image_evicts_the_least_recently_used_images_until_it_fits() -> Resul
 
 #[test]
 fn fractional_offscreen_snapshot_replays_without_stretching() -> Result<(), TestError> {
-    compare(
-        &mut skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?,
-        &mut skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?,
-        true,
-    )
+    compare(&mut n32_effect_surface()?, &mut n32_effect_surface()?, true)
 }
 
 #[test]
@@ -132,16 +122,16 @@ fn vulkan_cached_glass_preserves_optics_and_fractional_geometry() -> Result<(), 
     let mut gpu = crate::VulkanRenderer::headless()?;
     for clip in [false, true] {
         compare(
-            &mut *gpu.offscreen(PixelSize::new(96, 48))?,
-            &mut *gpu.offscreen(PixelSize::new(96, 48))?,
+            &mut *gpu.offscreen(EFFECT_SURFACE.pixel_size())?,
+            &mut *gpu.offscreen(EFFECT_SURFACE.pixel_size())?,
             clip,
         )?;
     }
     Ok(())
 }
 
-fn prepare(canvas: &Canvas, clip: bool) {
-    background(canvas);
+fn prepare(canvas: &Canvas, clip: bool) -> Result<(), TestError> {
+    background(canvas)?;
     let _canvas_returned_for_chaining = canvas.scale((1.25, 1.25));
     if clip {
         let _canvas_returned_for_chaining = canvas.clip_rect(
@@ -150,11 +140,12 @@ fn prepare(canvas: &Canvas, clip: bool) {
             false,
         );
     }
+    Ok(())
 }
 
 struct ChannelMismatch {
-    x: usize,
-    y: usize,
+    x: u16,
+    y: u16,
     channel: usize,
     actual: u8,
     expected: u8,
@@ -185,22 +176,21 @@ impl std::fmt::Display for PixelDifference {
 }
 
 impl PixelDifference {
-    fn between(actual: &[u8], expected: &[u8]) -> Result<Self, TestError> {
-        let channels = || actual.iter().zip(expected);
-        let worst = channels()
-            .map(|(a, b)| a.abs_diff(*b))
-            .max()
-            .ok_or(TestError::Missing("pixels"))?;
-        let first_mismatches = channels()
-            .enumerate()
-            .filter(|(_, (a, b))| a.abs_diff(**b) > 2)
-            .map(|(index, (&actual, &expected))| ChannelMismatch {
-                x: index / 4 % 96,
-                y: index / 4 / 96,
-                channel: index % 4,
-                actual,
-                expected,
+    fn between(actual: &Pixels<[u8; 4]>, expected: &Pixels<[u8; 4]>) -> Result<Self, TestError> {
+        let worst = actual.largest_channel_difference(expected)?;
+        let first_mismatches = (actual.zipped(expected)?.positioned()?)
+            .flat_map(|((x, y), &(actual, expected))| {
+                (actual.iter().zip(expected).enumerate()).map(
+                    move |(channel, (&actual, &expected))| ChannelMismatch {
+                        x,
+                        y,
+                        channel,
+                        actual,
+                        expected,
+                    },
+                )
             })
+            .filter(|mismatch| mismatch.actual.abs_diff(mismatch.expected) > 2)
             .take(12)
             .collect();
         Ok(Self {
@@ -220,7 +210,7 @@ fn compare(surface: &mut Surface, reference: &mut Surface, clip: bool) -> Result
     );
     let (mut backend, command, input) = setup()?;
     let _restored_when_the_surface_drops = surface.canvas().save();
-    prepare(surface.canvas(), clip);
+    prepare(surface.canvas(), clip)?;
     let request = |variant| EffectRequest {
         surface: SurfaceId::numbered(0),
         id: draw_on(SurfaceId::numbered(0)),
@@ -233,7 +223,7 @@ fn compare(surface: &mut Surface, reference: &mut Surface, clip: bool) -> Result
     backend.render(surface.canvas(), &request(FULL_BLUR));
     assert_eq!(backend.shared.borrow().entries.len(), 1);
     let captured = pixels(surface);
-    prepare(reference.canvas(), clip);
+    prepare(reference.canvas(), clip)?;
     let DrawCommand::Backdrop { shape, effect } = &command else {
         return Err(TestError::Missing("backdrop command"));
     };
@@ -255,7 +245,7 @@ fn compare(surface: &mut Surface, reference: &mut Surface, clip: bool) -> Result
     );
     let _canvas_returned_for_chaining = surface.canvas().restore_to_count(1);
     let _canvas_returned_for_chaining = surface.canvas().reset_matrix();
-    prepare(surface.canvas(), clip);
+    prepare(surface.canvas(), clip)?;
     backend.render(surface.canvas(), &request(CACHED));
     let replayed = pixels(surface);
     let replay = PixelDifference::between(&captured, &replayed)?;
@@ -273,9 +263,8 @@ fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(),
         Failures::default(),
     );
     let (mut backend, command, mut input) = setup()?;
-    let mut surface =
-        skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?;
-    background(surface.canvas());
+    let mut surface = n32_effect_surface()?;
+    background(surface.canvas())?;
     backend.render(
         surface.canvas(),
         &EffectRequest {
@@ -288,7 +277,7 @@ fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(),
             painter: ShapePainter::new(&resources, &failures),
         },
     );
-    background(surface.canvas());
+    background(surface.canvas())?;
     let _restored_when_the_surface_drops = surface.canvas().save_layer_alpha_f(None, 0.5);
     let before = pixels(&mut surface);
     backend.render(
@@ -333,9 +322,8 @@ fn cached_pixels_and_retirement_respect_the_window_surface() -> Result<(), TestE
         Failures::default(),
     );
     let (mut backend, command, input) = setup()?;
-    let mut first =
-        skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?;
-    background(first.canvas());
+    let mut first = n32_effect_surface()?;
+    background(first.canvas())?;
     backend.render(
         first.canvas(),
         &EffectRequest {
@@ -348,8 +336,7 @@ fn cached_pixels_and_retirement_respect_the_window_surface() -> Result<(), TestE
             painter: ShapePainter::new(&resources, &failures),
         },
     );
-    let mut second =
-        skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?;
+    let mut second = n32_effect_surface()?;
     let _canvas_returned_for_chaining = second.canvas().clear(skia_safe::Color::RED);
     let before = pixels(&mut second);
     backend.render(

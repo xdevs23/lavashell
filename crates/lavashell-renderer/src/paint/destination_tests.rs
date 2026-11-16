@@ -4,7 +4,7 @@ use crate::failure::DrawFailure;
 use crate::scalar::scalar;
 use crate::test_error::TestError;
 use crate::test_scenes::{TEST_SURFACE, insert};
-use crate::test_surfaces::{self, ChannelRounding};
+use crate::test_surfaces::{ChannelRounding, EFFECT_STRIPES, EFFECT_SURFACE, linear_float_pixel};
 use crate::test_variants::only_variant;
 use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
@@ -15,7 +15,7 @@ use lavashell_core::scene::tree::{
 };
 use lavashell_core::surface::SurfaceId;
 use lavashell_effect_quality::{EffectId, OfferedVariant};
-use skia_safe::{AlphaType, Canvas, ColorType, ImageInfo, Paint, RRect, Surface};
+use skia_safe::{AlphaType, Canvas, Paint, RRect, Surface};
 use skia_safe::{canvas::SaveLayerRec, image_filters};
 use std::sync::Arc;
 use std::time::Duration;
@@ -78,17 +78,13 @@ fn new_painter() -> Result<Painter, TestError> {
     Ok(painter)
 }
 
-fn surface() -> Result<Surface, TestError> {
-    test_surfaces::surface(96, 48)
-}
-
 fn tile(color: Color) -> Vec<DrawCommand> {
     tile_at(color, 32.dp())
 }
 
 fn tile_at(color: Color, x: Dp) -> Vec<DrawCommand> {
     vec![DrawCommand::Fill {
-        shape: Rect::new(x, 0.dp(), 4.dp(), 48.dp()).into(),
+        shape: EFFECT_STRIPES.stripe_at(x).into(),
         brush: color.into(),
     }]
 }
@@ -167,16 +163,7 @@ fn redraw_rounding(surface: &Surface, full: f64) -> Result<f64, TestError> {
 }
 
 fn red(surface: &mut Surface, x: i32, y: i32) -> f64 {
-    let info = ImageInfo::new(
-        (1, 1),
-        ColorType::RGBAF32,
-        AlphaType::Premul,
-        skia_safe::ColorSpace::new_srgb_linear(),
-    );
-    let mut bytes = [0u8; 16];
-    assert!(surface.read_pixels(&info, &mut bytes, 16, (x, y)));
-    let (floats, _no_partial_float) = bytes.as_chunks::<4>();
-    f64::from(f32::from_ne_bytes(floats[0]))
+    f64::from(linear_float_pixel(surface, x, y, AlphaType::Premul)[0])
 }
 
 #[test]
@@ -192,7 +179,7 @@ fn partial_damage_reconstructs_unknown_sampling_inside_isolated_layers() -> Resu
 
 #[test]
 fn isolated_packet_sampling_does_not_require_exterior_parent() -> Result<(), TestError> {
-    let viewport = Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp());
+    let viewport = EFFECT_SURFACE.bounds();
     let mut painter = new_painter()?;
     let packet = Packet::new(isolate(reader(false), viewport).into())?;
     let analysis =
@@ -217,7 +204,7 @@ fn translated(
     color: Color,
     in_packet: bool,
 ) -> Result<Vec<Change>, UnbalancedRestore> {
-    let moved = Affine::translate(Point::new(-96.dp(), 0.dp()));
+    let moved = Affine::translate(Point::new(-EFFECT_SURFACE.size().width, 0.dp()));
     if in_packet {
         let commands = [
             vec![DrawCommand::Save, DrawCommand::Transform(moved)],
@@ -249,12 +236,13 @@ fn translated(
 
 fn assert_transformed_damage(in_packet: bool, scale: f64) -> Result<(), TestError> {
     let density = Density::from_scale(scale).ok_or(TestError::NoDensity(scale))?;
-    let viewport = Viewport::new(Size::new(96.dp() / scale, 48.dp() / scale), density);
+    let Size { width, height } = EFFECT_SURFACE.size();
+    let viewport = Viewport::new(Size::new(width / scale, height / scale), density);
     let (mut tree, mut presented) = (SceneTree::default(), DamageTracker::default());
     let mut partial = new_painter()?;
     let mut full = new_painter()?;
-    let mut retained = surface()?;
-    let mut reference = surface()?;
+    let mut retained = EFFECT_SURFACE.raster()?;
+    let mut reference = EFFECT_SURFACE.raster()?;
     for (generation, color) in [(1, Color::WHITE), (2, Color::rgb(0))] {
         tree.show(SceneUpdate::from_iter(translated(
             generation, color, in_packet,
@@ -309,7 +297,7 @@ fn isolate(mut commands: Vec<DrawCommand>, viewport: Rect) -> Vec<DrawCommand> {
 }
 
 fn assert_partial_damage(include_known_reader: bool, isolated: bool) -> Result<(), TestError> {
-    let viewport = Viewport::new(Size::new(96.dp(), 48.dp()), Density::ONE);
+    let viewport = Viewport::new(EFFECT_SURFACE.size(), Density::ONE);
     let reader = packet(reader(include_known_reader))?;
     if !include_known_reader {
         assert_eq!(
@@ -334,15 +322,16 @@ fn assert_partial_damage(include_known_reader: bool, isolated: bool) -> Result<(
     tree.show(SceneUpdate::from_iter(first))?;
     let mut partial = new_painter()?;
     let mut full = new_painter()?;
-    let mut retained = surface()?;
-    let mut reference = surface()?;
+    let mut retained = EFFECT_SURFACE.raster()?;
+    let mut reference = EFFECT_SURFACE.raster()?;
     let first = presented.damage(tree.at(Duration::ZERO), viewport);
     paint_damage(&mut partial, &mut retained, &tree, Density::ONE, first)?;
     tree.show(SceneUpdate::from_iter(vec![changed]))?;
     let dirty = presented.damage(tree.at(Duration::ZERO), viewport);
     assert!(dirty.is_some(), "the change must damage the frame");
     if !isolated {
-        assert_eq!(dirty, Some(Rect::new(31.dp(), 0.dp(), 6.dp(), 48.dp())));
+        let height = EFFECT_SURFACE.size().height;
+        assert_eq!(dirty, Some(Rect::new(31.dp(), 0.dp(), 6.dp(), height)));
     }
     paint_damage(&mut partial, &mut retained, &tree, Density::ONE, dirty)?;
     paint_full(&mut full, &mut reference, &tree, Density::ONE);

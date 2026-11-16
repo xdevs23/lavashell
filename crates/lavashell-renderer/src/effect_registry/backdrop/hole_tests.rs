@@ -2,17 +2,15 @@
 use super::tests::draw_on;
 use super::*;
 use crate::effect_registry::{EffectInput, ShapePainter, SurfaceAccess};
-use crate::effects_tests::{draw, stripes, surface};
+use crate::effects_tests::{draw, stripes};
 use crate::failure::Failures;
 use crate::field::test_shapes::Distance;
 use crate::test_error::TestError;
-use crate::test_surfaces::pixels;
+use crate::test_surfaces::{EFFECT_SURFACE, Pixels, channel_differences, pixels};
 use crate::{FieldRoom, UniformRange};
 use lavashell_core::effects::Glass;
 use skia_safe::{IRect, Matrix, Surface};
 use std::ops::DerefMut;
-
-const WIDTH: usize = 96;
 
 fn card() -> RoundedRect {
     RoundedRect::new(
@@ -64,21 +62,21 @@ struct Placement {
     clip: IRect,
 }
 
-fn placements() -> [Placement; 3] {
-    [
+fn placements() -> Result<[Placement; 3], TestError> {
+    Ok([
         Placement {
             matrix: Matrix::new_identity(),
-            clip: IRect::from_wh(96, 48),
+            clip: IRect::from_size(EFFECT_SURFACE.dimensions()),
         },
         Placement {
             matrix: Matrix::scale((1.25, 1.25)),
             clip: IRect::from_xywh(12, 4, 60, 36),
         },
         Placement {
-            matrix: Matrix::rotate_deg_pivot(6.0, (48.0, 24.0)),
+            matrix: Matrix::rotate_deg_pivot(6.0, crate::paint::skpoint(EFFECT_SURFACE.center())?),
             clip: IRect::from_xywh(4, 2, 80, 40),
         },
-    ]
+    ])
 }
 
 fn background(s: &mut Surface) -> Result<&mut Surface, TestError> {
@@ -95,7 +93,11 @@ struct Drawn {
     mode: Mode,
 }
 
-fn render(backend: &mut Backend, s: &mut Surface, drawn: Drawn) -> Result<Vec<u8>, TestError> {
+fn render(
+    backend: &mut Backend,
+    s: &mut Surface,
+    drawn: Drawn,
+) -> Result<Pixels<[u8; 4]>, TestError> {
     let Drawn {
         placement,
         lens_x,
@@ -134,8 +136,8 @@ fn render(backend: &mut Backend, s: &mut Surface, drawn: Drawn) -> Result<Vec<u8
 }
 
 fn assert_hole(
-    drawn: &[u8],
-    stripes: &[u8],
+    drawn: &Pixels<[u8; 4]>,
+    stripes: &Pixels<[u8; 4]>,
     placement: Placement,
     lens_x: Dp,
     label: &str,
@@ -145,8 +147,7 @@ fn assert_hole(
         .invert()
         .ok_or(TestError::Missing("inverse of the matrix"))?;
     let clip = placement.clip;
-    for (i, (drawn, stripe)) in drawn.chunks(4).zip(stripes.chunks(4)).enumerate() {
-        let (x, y) = (u16::try_from(i % WIDTH)?, u16::try_from(i / WIDTH)?);
+    for ((x, y), &(drawn, stripe)) in drawn.zipped(stripes)?.positioned()? {
         let p = local.map_point((f32::from(x) + 0.5, f32::from(y) + 0.5));
         let p = Point::new(crate::paint::dp_of(p.x), crate::paint::dp_of(p.y));
         let clipped = !((clip.left..clip.right).contains(&i32::from(x))
@@ -155,7 +156,7 @@ fn assert_hole(
         if clipped || into_lens > 1.0 || into_card < -1.0 {
             assert_eq!(drawn, stripe, "{label}: changed at {x}, {y}");
         } else if into_lens < -1.0 && into_card > 1.0 {
-            let change = drawn.iter().zip(stripe).map(|(a, b)| a.abs_diff(*b)).max();
+            let change = channel_differences(drawn, stripe).max();
             assert!(change > Some(20), "{label}: sharp at {x}, {y}");
         }
     }
@@ -167,7 +168,7 @@ fn every_blurring_variant_leaves_the_lens_sharp_on<S: DerefMut<Target = Surface>
 ) -> Result<(), TestError> {
     let cache = shared()?;
     let stripes = pixels(background(&mut *surface()?)?);
-    for placement in placements() {
+    for placement in placements()? {
         for effect in effects() {
             for level in 0..=2 {
                 for access in [SurfaceAccess::Current, SurfaceAccess::Cacheable] {
@@ -196,7 +197,7 @@ fn the_cached_variant_replays_its_capture_for_a_moving_lens_on<S: DerefMut<Targe
     surface: &mut impl FnMut() -> Result<S, TestError>,
 ) -> Result<(), TestError> {
     let stripes = pixels(background(&mut *surface()?)?);
-    for placement in placements().into_iter().take(2) {
+    for placement in placements()?.into_iter().take(2) {
         for effect in effects() {
             let cache = shared()?;
             let capture_x = 16.dp();
@@ -245,12 +246,8 @@ fn the_cached_variant_replays_its_capture_for_a_moving_lens_on<S: DerefMut<Targe
                         mode: Mode::Blur(0),
                     },
                 )?;
-                let worst = replayed
-                    .iter()
-                    .zip(&direct)
-                    .map(|(a, b)| a.abs_diff(*b))
-                    .max();
-                assert!(worst <= Some(2), "{label}: {worst:?}");
+                let worst = replayed.largest_channel_difference(&direct)?;
+                assert!(worst <= 2, "{label}: {worst}");
                 let entries = &cache.borrow().entries;
                 assert_eq!(entries.len(), 1);
                 let entry = entries
@@ -276,46 +273,48 @@ fn a_frosted_and_dimmed_card_shows_the_lens_sharp_on<S: DerefMut<Target = Surfac
         d.fill(shape.clone(), Color::rgb(0).with_alpha(0.3));
     })?;
     let drawn = pixels(&mut s);
-    assert_hole(&drawn, &plain, placements()[0], 30.dp(), "frost and dim")
+    assert_hole(&drawn, &plain, placements()?[0], 30.dp(), "frost and dim")
 }
 
 #[test]
 fn every_blurring_variant_leaves_the_lens_sharp() -> Result<(), TestError> {
-    every_blurring_variant_leaves_the_lens_sharp_on(&mut || surface().map(Box::new))
+    every_blurring_variant_leaves_the_lens_sharp_on(&mut || EFFECT_SURFACE.raster().map(Box::new))
 }
 
 #[test]
 fn the_tint_variant_leaves_the_backdrop_as_it_is() -> Result<(), TestError> {
     let drawn = render(
         &mut backend(&shared()?),
-        &mut surface()?,
+        &mut EFFECT_SURFACE.raster()?,
         Drawn {
-            placement: placements()[0],
+            placement: placements()?[0],
             lens_x: 30.dp(),
             effect: effects()[0],
             access: SurfaceAccess::Cacheable,
             mode: Mode::Tint,
         },
     )?;
-    assert_eq!(drawn, pixels(background(&mut surface()?)?));
+    assert_eq!(drawn, pixels(background(&mut EFFECT_SURFACE.raster()?)?));
     Ok(())
 }
 
 #[test]
 fn the_cached_variant_replays_its_capture_for_a_moving_lens() -> Result<(), TestError> {
-    the_cached_variant_replays_its_capture_for_a_moving_lens_on(&mut || surface().map(Box::new))
+    the_cached_variant_replays_its_capture_for_a_moving_lens_on(&mut || {
+        EFFECT_SURFACE.raster().map(Box::new)
+    })
 }
 
 #[test]
 fn a_frosted_and_dimmed_card_shows_the_lens_sharp() -> Result<(), TestError> {
-    a_frosted_and_dimmed_card_shows_the_lens_sharp_on(&mut || surface().map(Box::new))
+    a_frosted_and_dimmed_card_shows_the_lens_sharp_on(&mut || EFFECT_SURFACE.raster().map(Box::new))
 }
 
 #[test]
 fn vulkan_backdrops_leave_the_lens_sharp() -> Result<(), TestError> {
     let mut gpu = crate::VulkanRenderer::headless()?;
     let mut surface = || {
-        gpu.offscreen(PixelSize::new(96, 48))
+        gpu.offscreen(EFFECT_SURFACE.pixel_size())
             .map_err(TestError::Renderer)
     };
     every_blurring_variant_leaves_the_lens_sharp_on(&mut surface)?;

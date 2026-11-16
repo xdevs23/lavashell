@@ -1,40 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::float_asserts::assert_f32_eq;
 use crate::test_error::TestError;
-use crate::test_surfaces::{ChannelRounding, floats};
+use crate::test_surfaces::{
+    ChannelRounding, EFFECT_STRIPES, EFFECT_SURFACE, Pixels, float_pixel, linear_float_pixel,
+    linear_float_pixels,
+};
 use crate::{Error, Fonts, Painter};
 use lavashell_core::prelude::*;
-use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
+use skia_safe::{AlphaType, Surface};
 
 mod tangled;
 
 pub(crate) use tangled::tangle;
 
-pub(crate) fn surface() -> Result<Surface, TestError> {
-    crate::test_surfaces::surface(96, 48)
-}
-
-fn linear_floats(width: i32, height: i32) -> ImageInfo {
-    ImageInfo::new(
-        (width, height),
-        ColorType::RGBAF32,
-        AlphaType::Unpremul,
-        skia_safe::ColorSpace::new_srgb_linear(),
-    )
-}
-
 pub(crate) fn sample(surface: &mut Surface, x: i32, y: i32) -> [f32; 4] {
-    let mut bytes = [0u8; 16];
-    assert!(surface.read_pixels(&linear_floats(1, 1), &mut bytes, 16, (x, y)));
-    floats(&bytes)
+    linear_float_pixel(surface, x, y, AlphaType::Unpremul)
 }
 
-pub(crate) fn linear_pixels(surface: &mut Surface) -> Vec<[f32; 4]> {
-    let info = linear_floats(surface.width(), surface.height());
-    let mut bytes = vec![0u8; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    let (pixels, _no_partial_pixel) = bytes.as_chunks::<16>();
-    pixels.iter().map(|pixel| floats(pixel)).collect()
+pub(crate) fn sample_in_middle_row(surface: &mut Surface, x: i32) -> [f32; 4] {
+    sample(surface, x, EFFECT_SURFACE.middle_row())
+}
+
+pub(crate) fn sample_at_center(surface: &mut Surface) -> [f32; 4] {
+    sample_in_middle_row(surface, EFFECT_SURFACE.middle_column())
+}
+
+pub(crate) fn linear_pixels(surface: &mut Surface) -> Pixels<[f32; 4]> {
+    linear_float_pixels(surface, AlphaType::Unpremul)
 }
 
 pub(crate) fn draw(
@@ -54,39 +46,29 @@ pub(crate) fn draw_with(
     paint: impl FnOnce(&mut Drawing<'_>),
 ) -> Result<(), TestError> {
     let mut commands = Vec::new();
-    let context = DrawContext::new(Viewport::new(Size::new(96.dp(), 48.dp()), Density::ONE));
+    let context = DrawContext::new(Viewport::new(EFFECT_SURFACE.size(), Density::ONE));
     paint(&mut Drawing::new(
         &mut commands,
-        Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
+        EFFECT_SURFACE.bounds(),
         &context,
     ));
     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)
 }
 
 pub(crate) fn stripes(d: &mut Drawing<'_>) {
-    for i in 0..24_u8 {
-        let color = if i % 2 == 0 {
-            Color::WHITE
-        } else {
-            Color::rgb(0)
-        };
-        d.fill(
-            Rect::new(4.dp() * f64::from(i), 0.dp(), 4.dp(), 48.dp()),
-            color,
-        );
-    }
+    EFFECT_STRIPES.fill_stripes(d, [Color::WHITE, Color::rgb(0)]);
 }
 
 #[test]
 fn floating_point_paint_preserves_hdr_headroom_and_fractional_channels() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     draw(&mut s, |d| {
         d.fill(
-            Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
+            EFFECT_SURFACE.bounds(),
             Color::linear([2.0, 0.123_456, 0.5], 1.0, Gamut::Srgb),
         );
     })?;
-    let c = sample(&mut s, 40, 24);
+    let c = sample_in_middle_row(&mut s, 40);
     for (channel, expected) in c.into_iter().zip([2.0, 0.123_456, 0.5, 1.0]) {
         let rounding = ChannelRounding::of(&s)?.after(1, expected);
         assert!((f64::from(channel) - expected).abs() <= rounding, "{c:?}");
@@ -96,7 +78,7 @@ fn floating_point_paint_preserves_hdr_headroom_and_fractional_channels() -> Resu
 
 #[test]
 fn backdrop_blurs_content_in_linear_light_and_leaves_foreground_sharp() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     draw(&mut s, |d| {
         stripes(d);
         d.backdrop(
@@ -108,12 +90,12 @@ fn backdrop_blurs_content_in_linear_light_and_leaves_foreground_sharp() -> Resul
             Color::rgb(0x00ff_0000),
         );
     })?;
-    let blur = sample(&mut s, 35, 24);
+    let blur = sample_in_middle_row(&mut s, 35);
     assert!((blur[0] - 0.5).abs() < 0.025, "{blur:?}");
     let foreground = sample(&mut s, 41, 21);
     assert!(foreground[0] > 0.98 && foreground[1] < 0.01 && foreground[2] < 0.01);
-    assert!(sample(&mut s, 2, 24)[0] > 0.98);
-    assert!(sample(&mut s, 6, 24)[0] < 0.01);
+    assert!(sample_in_middle_row(&mut s, 2)[0] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 6)[0] < 0.01);
     Ok(())
 }
 
@@ -128,7 +110,7 @@ fn glass_displaces_only_its_backdrop_and_respects_rounded_bounds() -> Result<(),
                 rim: NonNegative::ZERO,
             },
         )?;
-        let mut s = surface()?;
+        let mut s = EFFECT_SURFACE.raster()?;
         draw(&mut s, |d| {
             stripes(d);
             d.backdrop(
@@ -140,7 +122,8 @@ fn glass_displaces_only_its_backdrop_and_respects_rounded_bounds() -> Result<(),
     };
     let mut plain = render(0.dp())?;
     let mut glass = render(9.dp())?;
-    let change = (sample(&mut plain, 20, 24)[0] - sample(&mut glass, 20, 24)[0]).abs();
+    let change =
+        (sample_in_middle_row(&mut plain, 20)[0] - sample_in_middle_row(&mut glass, 20)[0]).abs();
     assert!(change > 0.25, "displacement changed {change}");
     let outside = f64::from(sample(&mut plain, 17, 5)[0]);
     let rounding = ChannelRounding::of(&plain)?.after(2, outside);
@@ -153,16 +136,17 @@ fn glass_displaces_only_its_backdrop_and_respects_rounded_bounds() -> Result<(),
 
 #[test]
 fn glass_dispersion_preserves_neutral_color_across_transparent_edges() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     assert_neutral_glass(&mut s)
 }
 
 fn assert_neutral_glass(s: &mut Surface) -> Result<(), TestError> {
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(s, |d| {
-        d.fill(Rect::new(0.dp(), 0.dp(), 20.dp(), 48.dp()), Color::WHITE);
+        let Size { width, height } = EFFECT_SURFACE.size();
+        d.fill(Rect::new(0.dp(), 0.dp(), 20.dp(), height), Color::WHITE);
         d.fill(
-            Rect::new(20.dp(), 0.dp(), 76.dp(), 48.dp()),
+            Rect::new(20.dp(), 0.dp(), width - 20.dp(), height),
             Color::WHITE.with_alpha(0.25),
         );
         d.backdrop(
@@ -177,7 +161,7 @@ fn assert_neutral_glass(s: &mut Surface) -> Result<(), TestError> {
             )),
         );
     })?;
-    let c = sample(s, 17, 24);
+    let c = sample_in_middle_row(s, 17);
     for channel in c {
         assert!(
             (channel - 1.0).abs() < 0.02,
@@ -189,13 +173,14 @@ fn assert_neutral_glass(s: &mut Surface) -> Result<(), TestError> {
 
 #[test]
 fn glass_refraction_is_continuous_across_corner_diagonals() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     assert_continuous_glass(&mut s)
 }
 
 fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
     for radius in [0.0, 12.0, 20.0] {
-        for end in [Point::new(96.dp(), 0.dp()), Point::new(0.dp(), 48.dp())] {
+        let Size { width, height } = EFFECT_SURFACE.size();
+        for end in [Point::new(width, 0.dp()), Point::new(0.dp(), height)] {
             let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
             let ramp = Gradient::linear(
                 Point::new(0.dp(), 0.dp()),
@@ -207,7 +192,7 @@ fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
             )?
             .interpolation(ColorInterpolation::LinearRgb);
             draw(s, |d| {
-                d.fill(Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()), ramp);
+                d.fill(EFFECT_SURFACE.bounds(), ramp);
                 d.backdrop(
                     Shape::rounded(
                         Rect::new(16.dp(), 4.dp(), 64.dp(), 40.dp()),
@@ -224,7 +209,7 @@ fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
                 );
             })?;
             let pixels = linear_pixels(s);
-            let red = |x: usize, y: usize| pixels[y * 96 + x][0];
+            let red = |x, y| pixels.at(x, y)[0];
             for y in 18..31 {
                 for x in 26..70 {
                     for (a, c) in [
@@ -246,7 +231,7 @@ fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
 
 #[test]
 fn group_opacity_and_blending_apply_once_to_the_subtree() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(&mut s, |d| {
         d.commands.push(DrawCommand::Opacity(0.5));
@@ -260,6 +245,10 @@ fn group_opacity_and_blending_apply_once_to_the_subtree() -> Result<(), TestErro
     Ok(())
 }
 
+fn fraction_of_width_at_center() -> f64 {
+    (f64::from(EFFECT_SURFACE.middle_column()) + 0.5) / EFFECT_SURFACE.size().width.get()
+}
+
 #[test]
 fn default_gradient_interpolation_matches_color_mix() -> Result<(), TestError> {
     let chromatic = Color::oklch(0.6, 0.1, 260.0);
@@ -268,17 +257,17 @@ fn default_gradient_interpolation_matches_color_mix() -> Result<(), TestError> {
         Color::WHITE,
         Color::oklch(0.6, 0.000_003, 30.0),
     ] {
-        let mut s = surface()?;
+        let mut s = EFFECT_SURFACE.raster()?;
         let gradient = Gradient::linear(
             Point::new(0.dp(), 0.dp()),
-            Point::new(96.dp(), 0.dp()),
+            Point::new(EFFECT_SURFACE.size().width, 0.dp()),
             &[from, chromatic],
         )?;
         draw(&mut s, |d| {
-            d.fill(Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()), gradient);
+            d.fill(EFFECT_SURFACE.bounds(), gradient);
         })?;
-        let middle = sample(&mut s, 47, 24);
-        let expected = from.mix(chromatic, 47.5 / 96.0).to_linear(Gamut::Srgb);
+        let middle = sample_at_center(&mut s);
+        let expected = (from.mix(chromatic, fraction_of_width_at_center())).to_linear(Gamut::Srgb);
         for (channel, expected) in middle.into_iter().zip(expected) {
             let rounding = ChannelRounding::of(&s)?.after(1, expected);
             assert!(
@@ -292,21 +281,21 @@ fn default_gradient_interpolation_matches_color_mix() -> Result<(), TestError> {
 
 #[test]
 fn transparent_gradient_endpoint_does_not_introduce_a_colored_fringe() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let gradient = Gradient::linear(
         Point::new(0.dp(), 0.dp()),
-        Point::new(96.dp(), 0.dp()),
+        Point::new(EFFECT_SURFACE.size().width, 0.dp()),
         &[
             Color::rgb(0x00ff_0000).with_alpha(0.0),
             Color::rgb(0x0000_00ff),
         ],
     )?;
     draw(&mut s, |d| {
-        d.fill(Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()), gradient);
+        d.fill(EFFECT_SURFACE.bounds(), gradient);
     })?;
-    let c = sample(&mut s, 47, 24);
-    let alpha = 47.5 / 96.0;
+    let c = sample_at_center(&mut s);
+    let alpha = fraction_of_width_at_center();
     for (channel, expected) in c.into_iter().zip([0.0, 0.0, 1.0, alpha]) {
         let rounding = ChannelRounding::of(&s)?.after(2, expected);
         assert!((f64::from(channel) - expected).abs() <= rounding, "{c:?}");
@@ -316,7 +305,7 @@ fn transparent_gradient_endpoint_does_not_introduce_a_colored_fringe() -> Result
 
 #[test]
 fn shadows_and_stroke_placement_respect_the_surface_bounds() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(&mut s, |d| {
         let rect = Rect::new(20.dp(), 10.dp(), 30.dp(), 28.dp());
@@ -333,10 +322,10 @@ fn shadows_and_stroke_placement_respect_the_surface_bounds() -> Result<(), TestE
             constant!(Stroke::new(Color::WHITE, Dp::new(4.0))).placement(BorderPlacement::Outside),
         );
     })?;
-    assert!(sample(&mut s, 52, 24)[3] > 0.98);
-    assert!(sample(&mut s, 45, 24)[3] < 0.01);
-    assert!(sample(&mut s, 68, 24)[3] > 0.98);
-    assert!(sample(&mut s, 72, 24)[3] < 0.01);
+    assert!(sample_in_middle_row(&mut s, 52)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 45)[3] < 0.01);
+    assert!(sample_in_middle_row(&mut s, 68)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 72)[3] < 0.01);
     draw(&mut s, |d| {
         d.shadow(
             Rect::new(20.dp(), 10.dp(), 30.dp(), 28.dp()),
@@ -348,8 +337,8 @@ fn shadows_and_stroke_placement_respect_the_surface_bounds() -> Result<(), TestE
             .inset(true),
         );
     })?;
-    assert!(sample(&mut s, 22, 24)[3] > 0.98);
-    assert!(sample(&mut s, 32, 24)[3] < 0.01);
+    assert!(sample_in_middle_row(&mut s, 22)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 32)[3] < 0.01);
     Ok(())
 }
 
@@ -360,25 +349,26 @@ fn pq_encode(nits: f64) -> f64 {
 
 #[test]
 fn pq_conversion_uses_absolute_luminance_at_white_and_highlights() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     draw(&mut s, |d| {
-        d.fill(Rect::new(0.dp(), 0.dp(), 48.dp(), 48.dp()), Color::WHITE);
+        let Size { width, height } = EFFECT_SURFACE.size();
+        let half = width / 2.0;
+        d.fill(Rect::new(0.dp(), 0.dp(), half, height), Color::WHITE);
         d.fill(
-            Rect::new(48.dp(), 0.dp(), 48.dp(), 48.dp()),
+            Rect::new(half, 0.dp(), half, height),
             Color::linear([5.0; 3], 1.0, Gamut::Rec2020),
         );
     })?;
-    let info = ImageInfo::new(
-        (1, 1),
-        ColorType::RGBAF32,
-        AlphaType::Unpremul,
-        crate::color::output_color_space(OutputProfile::Hdr10)
-            .ok_or(Error::OutputColorSpace(OutputProfile::Hdr10))?,
+    let hdr10 = crate::color::output_color_space(OutputProfile::Hdr10)
+        .ok_or(Error::OutputColorSpace(OutputProfile::Hdr10))?;
+    let (left_middle, right_middle) = (
+        EFFECT_SURFACE.middle_column() / 2,
+        EFFECT_SURFACE.middle_column() * 3 / 2,
     );
-    for (x, nits) in [(24, 203.0), (72, 1015.0)] {
-        let mut bytes = [0u8; 16];
-        assert!(s.read_pixels(&info, &mut bytes, 16, (x, 24)));
-        let code = f64::from(floats::<1>(&bytes)[0]);
+    for (x, nits) in [(left_middle, 203.0), (right_middle, 1015.0)] {
+        let position = (x, EFFECT_SURFACE.middle_row());
+        let code =
+            f64::from(float_pixel(&mut s, position, AlphaType::Unpremul, Some(hdr10.clone()))[0]);
         let expected = pq_encode(nits);
         assert!(
             (code - expected).abs() <= ChannelRounding::of(&s)?.after(1, expected),
@@ -391,10 +381,10 @@ fn pq_conversion_uses_absolute_luminance_at_white_and_highlights() -> Result<(),
 #[test]
 fn vulkan_f16_effects_preserve_hdr_headroom_and_sharp_foreground() -> Result<(), TestError> {
     let mut painter = crate::VulkanRenderer::headless()?;
-    let mut s = painter.offscreen(PixelSize::new(96, 48))?;
+    let mut s = painter.offscreen(EFFECT_SURFACE.pixel_size())?;
     draw(&mut s, |d| {
         d.fill(
-            Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
+            EFFECT_SURFACE.bounds(),
             Color::linear([2.0, 0.125, 0.5], 1.0, Gamut::Srgb),
         );
         d.backdrop(
@@ -406,7 +396,7 @@ fn vulkan_f16_effects_preserve_hdr_headroom_and_sharp_foreground() -> Result<(),
             Color::rgb(0x00ff_0000),
         );
     })?;
-    let hdr = sample(&mut s, 24, 24);
+    let hdr = sample_in_middle_row(&mut s, 24);
     for (channel, expected) in hdr.into_iter().zip([2.0, 0.125]) {
         let rounding = ChannelRounding::of(&s)?.after(3, expected);
         assert!((f64::from(channel) - expected).abs() <= rounding, "{hdr:?}");
@@ -419,7 +409,7 @@ fn vulkan_f16_effects_preserve_hdr_headroom_and_sharp_foreground() -> Result<(),
 
 #[test]
 fn gradient_paths_preserve_canvas_origin_and_alpha_ramp() -> Result<(), TestError> {
-    let mut surface = surface()?;
+    let mut surface = EFFECT_SURFACE.raster()?;
     let gradient = Gradient::linear(
         Point::new(0.dp(), 0.dp()),
         Point::new(0.dp(), 40.dp()),

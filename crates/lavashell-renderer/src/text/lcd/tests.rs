@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::probe_style;
+use crate::test_surfaces::{has_colored_fringe, pixels, srgb_info};
 use crate::text::TextRendering;
-use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo, Surface};
+use crate::text::sample_fixtures::{LABEL_SURFACE, mixed_script_label_text};
+use skia_safe::Surface;
 
 fn new_painter() -> Result<crate::Painter, TestError> {
     let fonts = crate::test_font::test_font()?;
@@ -14,16 +17,13 @@ fn new_painter() -> Result<crate::Painter, TestError> {
             antialiasing: TextAntialiasing::Subpixel,
             ..Default::default()
         },
-        super::super::TextDestination {
-            opaque: true,
-            geometry: super::super::PixelGeometry::Rgb,
-        },
+        crate::test_surfaces::lcd_destination(),
     );
     Ok(painter)
 }
 
 fn text(color: Color) -> DrawCommand {
-    let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style();
     style.color = color;
     style.spans.push(lavashell_core::scene::TextSpan {
         range: 0..3,
@@ -32,27 +32,15 @@ fn text(color: Color) -> DrawCommand {
         family: None,
     });
     DrawCommand::Text {
-        text: "Mon 5 Oct e\u{301} office אבג".into(),
+        text: mixed_script_label_text(),
         rect: lavashell_core::geometry::Rect::new(7.25.dp(), 4.5.dp(), 280.dp(), 36.dp()),
         style,
     }
 }
 
 fn surface() -> Result<Surface, TestError> {
-    let info = ImageInfo::new(
-        (300, 48),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        ColorSpace::new_srgb(),
-    );
-    skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)
-}
-
-fn pixels(surface: &mut Surface) -> Vec<u8> {
-    let info = surface.image_info();
-    let mut bytes = vec![0_u8; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    bytes
+    skia_safe::surfaces::raster(&srgb_info(LABEL_SURFACE.dimensions()), None, None)
+        .ok_or(TestError::RasterSurface)
 }
 
 #[test]
@@ -62,12 +50,7 @@ fn actual_coverage_reuses_masks_across_foreground_and_backdrop_changes() -> Resu
     let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     painter.paint_as_leaf(target.canvas(), &[text(Color::WHITE)], Density::ONE)?;
     let mask = pixels(&mut target);
-    assert!(
-        mask.as_chunks::<4>()
-            .0
-            .iter()
-            .any(|p| p[0] != p[1] || p[1] != p[2])
-    );
+    assert!(has_colored_fringe(&mask));
     for alpha in [1.0, 0.4, 0.0, 1.0] {
         for background in [0x0017_3967, 0x0067_421c, 0x0017_3967] {
             let foreground = Color::rgb(0x00a9_dd75).with_alpha(alpha);
@@ -79,12 +62,7 @@ fn actual_coverage_reuses_masks_across_foreground_and_backdrop_changes() -> Resu
                 .clear(skia_safe::Color::from_argb(255, red, green, blue));
             painter.paint_as_leaf(target.canvas(), &[text(foreground)], Density::ONE)?;
             let actual = pixels(&mut target);
-            for (coverage, result) in mask
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .zip(actual.as_chunks::<4>().0.iter())
-            {
+            for (coverage, result) in mask.iter().zip(actual.iter()) {
                 for channel in 0..3 {
                     let amount = f64::from(coverage[channel]) / 255.0 * alpha;
                     let expected =
@@ -168,7 +146,7 @@ fn isolated_opacity_and_fractional_or_rotated_transforms_use_grayscale_tiles()
         ],
         vec![
             DrawCommand::EffectLayer {
-                bounds: lavashell_core::geometry::Rect::new(0.dp(), 0.dp(), 300.dp(), 48.dp()),
+                bounds: LABEL_SURFACE.bounds(),
                 blend: lavashell_core::effects::BlendMode::SourceOver,
                 blur: NonNegativeDp::ZERO,
                 filter: None,
@@ -182,17 +160,8 @@ fn isolated_opacity_and_fractional_or_rotated_transforms_use_grayscale_tiles()
         let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
         painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
         let actual = pixels(&mut target);
-        assert!(
-            actual.as_chunks::<4>().0.iter().any(|p| p[0] > 0),
-            "empty glyph fixture"
-        );
-        assert!(
-            actual
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[0] == p[1] && p[1] == p[2])
-        );
+        assert!(actual.iter().any(|p| p[0] > 0), "empty glyph fixture");
+        assert!(actual.iter().all(|p| p[0] == p[1] && p[1] == p[2]));
     }
     Ok(())
 }

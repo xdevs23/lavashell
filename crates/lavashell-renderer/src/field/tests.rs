@@ -5,9 +5,10 @@ use super::test_shapes::{Distance, ellipse, star, star_polygon, union};
 use super::*;
 use crate::color::HALF_EPSILON;
 use crate::test_error::TestError;
+use crate::test_surfaces::{float_info, float_pixels};
 use lavashell_core::prelude::*;
 use lavashell_core::shape::PointsError;
-use skia_safe::{AlphaType, ColorType, ImageInfo, Paint, Shader, surfaces};
+use skia_safe::{AlphaType, Paint, Shader, surfaces};
 
 mod holes;
 mod programs;
@@ -15,9 +16,8 @@ mod programs;
 const SIZE: (u16, u16) = (200, 120);
 
 fn pixels(shader: Shader) -> Result<Vec<[f64; 4]>, TestError> {
-    let info = ImageInfo::new(
+    let info = float_info(
         (i32::from(SIZE.0), i32::from(SIZE.1)),
-        ColorType::RGBAF32,
         AlphaType::Premul,
         None,
     );
@@ -25,13 +25,8 @@ fn pixels(shader: Shader) -> Result<Vec<[f64; 4]>, TestError> {
     let _canvas_returned_for_chaining = surface
         .canvas()
         .draw_paint(Paint::default().set_shader(shader));
-    let mut bytes = vec![0u8; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    let (floats, _no_partial_float) = bytes.as_chunks::<4>();
-    let (pixels, _no_partial_pixel) = floats.as_chunks::<4>();
-    Ok(pixels
-        .iter()
-        .map(|pixel| pixel.map(|float| f64::from(f32::from_ne_bytes(float))))
+    Ok((float_pixels(&mut surface, AlphaType::Premul, None).iter())
+        .map(|pixel| pixel.map(f64::from))
         .collect())
 }
 

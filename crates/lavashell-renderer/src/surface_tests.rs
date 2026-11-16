@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_error::TestError;
+use crate::test_font::probe_style;
 use crate::test_scenes::{TEST_SURFACE, insert};
-use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
+use crate::test_surfaces::{Pixels, TestSurface, working_pixels};
+use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::*;
-use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
+use skia_safe::Surface;
 use std::{sync::Arc, time::Duration};
 
-const SIZE: i32 = 320;
-const WHOLE: Rect = Rect::new(Dp::ZERO, Dp::ZERO, Dp::new(320.0), Dp::new(320.0));
+const SURFACE: TestSurface = TestSurface::new(320, 320);
 
 const LARGE: Rect = Rect::new(Dp::new(10.0), Dp::new(10.0), Dp::new(300.0), Dp::new(300.0));
 
@@ -158,24 +159,12 @@ fn union() -> Result<DrawCommand, TestError> {
     })
 }
 
-fn pixels(surface: &mut Surface) -> Result<Vec<u8>, TestError> {
-    let info = ImageInfo::new(
-        (SIZE, SIZE),
-        ColorType::RGBAF16,
-        AlphaType::Premul,
-        crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
-    );
-    let mut bytes = vec![0; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    Ok(bytes)
-}
-
 fn paint(
     surface: &mut Surface,
     fonts: &Fonts,
     tree: &SceneTree,
     damages: &[Rect],
-) -> Result<Vec<u8>, TestError> {
+) -> Result<Pixels<[f32; 4]>, TestError> {
     let mut painter = Painter::new(fonts, crate::UniformRange::VULKAN_REQUIRED)?;
     painter.set_packet_caching(crate::PacketCaching::Disabled);
     for damage in damages {
@@ -191,7 +180,7 @@ fn paint(
         };
         painter.paint_surface(surface.canvas(), frame)?;
     }
-    pixels(surface)
+    working_pixels(surface)
 }
 
 #[test]
@@ -313,7 +302,7 @@ fn a_partial_repaint_on_the_gpu_stores_the_edges_of_clipped_fills() -> Result<()
 #[test]
 fn a_partial_repaint_on_the_gpu_stores_the_pixels_of_clipped_text() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style();
     style.color = Color::rgb(0x0000_0000);
     let text = DrawCommand::Text {
         text: "Lavashell".into(),
@@ -332,14 +321,18 @@ fn a_fill_under_a_rounded_clip_on_the_gpu_paints_only_the_clip_pixels() -> Resul
     let cases: [&[RoundedRect]; 2] = [&[clip(DOT, 2.dp())], &uneven()];
     let fonts = Fonts::new();
     let mut gpu = crate::VulkanRenderer::headless()?;
-    let length = u32::try_from(SIZE)?;
-    let size = PixelSize::new(length, length);
-    let clear = paint(&mut *gpu.offscreen(size)?, &fonts, &tree(vec![])?, &[WHOLE])?;
+    let size = SURFACE.pixel_size();
+    let clear = paint(
+        &mut *gpu.offscreen(size)?,
+        &fonts,
+        &tree(vec![])?,
+        &[SURFACE.bounds()],
+    )?;
     let mut outside = Vec::new();
     for clips in cases {
         let scene = filled(clips, Color::rgb(0x0000_0000))?;
         let mut changed = Vec::new();
-        for damages in [&[WHOLE][..], &[WHOLE, INSIDE]] {
+        for damages in [&[SURFACE.bounds()][..], &[SURFACE.bounds(), INSIDE]] {
             let painted = paint(&mut *gpu.offscreen(size)?, &fonts, &scene, damages)?;
             changed.push(pixels_outside(&painted, &clear, clips)?);
         }
@@ -353,17 +346,17 @@ fn a_fill_under_a_rounded_clip_on_the_gpu_paints_only_the_clip_pixels() -> Resul
     Ok(())
 }
 
-fn pixels_outside(painted: &[u8], clear: &[u8], clips: &[RoundedRect]) -> Result<usize, TestError> {
-    let width = usize::try_from(SIZE)?;
-    let mut outside = 0;
-    for (index, (a, b)) in painted.chunks(8).zip(clear.chunks(8)).enumerate() {
-        let (x, y) = (u16::try_from(index % width)?, u16::try_from(index / width)?);
+fn pixels_outside(
+    painted: &Pixels<[f32; 4]>,
+    clear: &Pixels<[f32; 4]>,
+    clips: &[RoundedRect],
+) -> Result<usize, TestError> {
+    let outside_clips = |&(x, y): &(u16, u16)| {
         let at = Point::new(Dp::new(f64::from(x)), Dp::new(f64::from(y)));
-        if a != b && !clips.iter().any(|clip| clip.rect.contains(at)) {
-            outside += 1;
-        }
-    }
-    Ok(outside)
+        !clips.iter().any(|clip| clip.rect.contains(at))
+    };
+    let changed = painted.positions_differing_in_bits(clear)?;
+    Ok(changed.into_iter().filter(outside_clips).count())
 }
 
 fn assert_partial_repaints_match(
@@ -371,15 +364,17 @@ fn assert_partial_repaints_match(
     cases: &[(&str, SceneTree)],
 ) -> Result<(), TestError> {
     let mut gpu = crate::VulkanRenderer::headless()?;
-    let length = u32::try_from(SIZE)?;
-    let size = PixelSize::new(length, length);
+    let size = SURFACE.pixel_size();
     let mut changed = Vec::new();
     for (name, tree) in cases {
-        let full = paint(&mut *gpu.offscreen(size)?, fonts, tree, &[WHOLE])?;
-        let partial = paint(&mut *gpu.offscreen(size)?, fonts, tree, &[WHOLE, INSIDE])?;
-        let pixels = (partial.chunks(8).zip(full.chunks(8)))
-            .filter(|(a, b)| a != b)
-            .count();
+        let full = paint(&mut *gpu.offscreen(size)?, fonts, tree, &[SURFACE.bounds()])?;
+        let partial = paint(
+            &mut *gpu.offscreen(size)?,
+            fonts,
+            tree,
+            &[SURFACE.bounds(), INSIDE],
+        )?;
+        let pixels = partial.positions_differing_in_bits(&full)?.len();
         if pixels > 0 {
             changed.push((*name, pixels));
         }

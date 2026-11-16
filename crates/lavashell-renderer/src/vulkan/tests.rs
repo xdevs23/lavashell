@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_surfaces::{EFFECT_SURFACE, TestSurface, encoded_pixels};
 use ash::vk::Handle;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceId;
@@ -11,7 +12,7 @@ use skia_safe::gpu::{SurfaceOrigin, vk as skvk};
 use std::sync::Arc;
 use std::time::Duration;
 
-const SIDE: u32 = 8;
+const SURFACE: TestSurface = TestSurface::new(8, 8);
 
 const DRAW: DrawTimeKey = DrawTimeKey {
     draw: DrawId {
@@ -31,12 +32,10 @@ const USAGE: vk::ImageUsageFlags = vk::ImageUsageFlags::from_raw(
 );
 
 pub(super) fn description(format: vk::Format) -> ImageDescription {
+    let PixelSize { width, height } = SURFACE.pixel_size();
     ImageDescription {
         format,
-        extent: vk::Extent2D {
-            width: SIDE,
-            height: SIDE,
-        },
+        extent: vk::Extent2D { width, height },
         usage: USAGE,
     }
 }
@@ -72,31 +71,10 @@ fn fill(canvas: &Canvas, color: [u8; 4]) -> Result<(), TestError> {
     Ok(())
 }
 
-fn pixels(png: &[u8]) -> Result<Vec<[u8; 4]>, TestError> {
-    let image =
-        skia_safe::Image::from_encoded(skia_safe::Data::new_copy(png)).ok_or(Error::DecodeImage)?;
-    let info = skia_safe::ImageInfo::new(
-        image.dimensions(),
-        ColorType::RGBA8888,
-        skia_safe::AlphaType::Unpremul,
-        skia_safe::ColorSpace::new_srgb(),
-    );
-    let mut pixels = vec![0; info.compute_min_byte_size()];
-    assert!(image.read_pixels(
-        &info,
-        &mut pixels,
-        info.min_row_bytes(),
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow
-    ));
-    Ok(pixels.as_chunks::<4>().0.to_vec())
-}
-
 pub(super) fn assert_red(png: &[u8]) -> Result<(), TestError> {
-    let pixels = pixels(png)?;
-    assert_eq!(pixels.len(), (SIDE * SIDE) as usize);
-    let stray = pixels.iter().position(|pixel| *pixel != RED);
-    assert_eq!(stray, None, "{:?}", stray.map(|index| pixels[index]));
+    let pixels = encoded_pixels(png, skia_safe::AlphaType::Unpremul)?;
+    assert_eq!(u64::try_from(pixels.iter().len())?, SURFACE.pixel_count());
+    assert_eq!(pixels.iter().find(|pixel| **pixel != RED), None);
     Ok(())
 }
 
@@ -110,7 +88,7 @@ fn timestamps_poll_unfinished_tokens_and_reclaim_only_completed_slots() -> Resul
     })?;
     let pending = profiler.collect();
     assert!(pending.samples.is_empty() && pending.failures.is_empty());
-    let mut surface = gpu.offscreen(PixelSize::new(96, 48))?;
+    let mut surface = gpu.offscreen(EFFECT_SURFACE.pixel_size())?;
     fill(surface.canvas(), GREEN)?;
     gpu.context
         .flush_and_submit_surface(&mut surface, Some(SyncCpu::No));
@@ -131,7 +109,7 @@ fn shutdown_retires_three_unpolled_scene_submissions_inside_context_scope() -> R
     let mut gpu = VulkanRenderer::headless()?;
     let mut mailbox = SceneMailbox::new(3);
     for generation in 1..=3 {
-        let mut surface = gpu.offscreen(PixelSize::new(96, 48))?;
+        let mut surface = gpu.offscreen(EFFECT_SURFACE.pixel_size())?;
         fill(surface.canvas(), GREEN)?;
         let pending = gpu.submit_scene(&mut surface, generation, Duration::ZERO)?;
         assert!(mailbox.publish(pending.scene, pending.completion).is_ok());
@@ -139,7 +117,7 @@ fn shutdown_retires_three_unpolled_scene_submissions_inside_context_scope() -> R
     assert_eq!(mailbox.pending(), 3);
     assert!(mailbox.latest().is_none());
     drop(mailbox);
-    let mut surface = gpu.offscreen(PixelSize::new(SIDE, SIDE))?;
+    let mut surface = gpu.offscreen(SURFACE.pixel_size())?;
     fill(surface.canvas(), RED)?;
     assert_red(&gpu.png(&mut surface)?)
 }
@@ -147,7 +125,7 @@ fn shutdown_retires_three_unpolled_scene_submissions_inside_context_scope() -> R
 #[test]
 fn an_offscreen_surface_outlives_its_renderer() -> Result<(), TestError> {
     let mut gpu = VulkanRenderer::headless()?;
-    let mut surface = gpu.offscreen(PixelSize::new(SIDE, SIDE))?;
+    let mut surface = gpu.offscreen(SURFACE.pixel_size())?;
     fill(surface.canvas(), RED)?;
     drop(gpu);
     drop(surface);
@@ -166,7 +144,7 @@ fn an_embedded_renderer_paints_into_an_image_of_the_host() -> Result<(), TestErr
     let mut embedded = unsafe { EmbeddedVulkanRenderer::new(host.context.device()) }?;
     let image = BorrowedImage {
         image: target.handle(),
-        size: PixelSize::new(SIDE, SIDE),
+        size: SURFACE.pixel_size(),
         format: vk::Format::R8G8B8A8_UNORM,
         usage: USAGE,
         layout: vk::ImageLayout::UNDEFINED,
@@ -190,11 +168,11 @@ fn an_embedded_renderer_paints_into_an_image_of_the_host() -> Result<(), TestErr
         queue_family: vk::QUEUE_FAMILY_IGNORED,
         conversion: None,
     };
-    let side = i32::try_from(SIDE)?;
+    let skia_safe::ISize { width, height } = SURFACE.dimensions();
     // SAFETY: skia-safe has no safe way to wrap a Vulkan image, because Skia keeps the image without a lifetime.
     // `target` outlives the encoding, which reads the texture back before it returns.
     let texture =
-        unsafe { skia_handoff::backend_texture(&painted, (side, side), "embedded target") }?;
+        unsafe { skia_handoff::backend_texture(&painted, (width, height), "embedded target") }?;
     let painted = gpu::images::borrow_texture_from(
         &mut host.context,
         &texture,
@@ -214,7 +192,7 @@ fn an_embedded_renderer_paints_into_an_image_of_the_host() -> Result<(), TestErr
 fn a_borrowed_image_is_checked_for_what_skia_needs_to_draw_into_it() {
     let drawable = BorrowedImage {
         image: vk::Image::from_raw(1),
-        size: PixelSize::new(SIDE, SIDE),
+        size: SURFACE.pixel_size(),
         format: vk::Format::R8G8B8A8_UNORM,
         usage: USAGE,
         layout: vk::ImageLayout::UNDEFINED,
@@ -237,8 +215,15 @@ fn a_borrowed_image_is_checked_for_what_skia_needs_to_draw_into_it() {
         ..drawable
     };
     assert!(matches!(depth.check(), Err(Error::EmbeddedFormat(_))));
-    for (width, height) in [(0, SIDE), (SIDE, 0), (u32::MAX, SIDE)] {
-        let size = PixelSize::new(width, height);
+    let valid = SURFACE.pixel_size();
+    for size in [
+        PixelSize { width: 0, ..valid },
+        PixelSize { height: 0, ..valid },
+        PixelSize {
+            width: u32::MAX,
+            ..valid
+        },
+    ] {
         let image = BorrowedImage { size, ..drawable };
         assert!(matches!(image.check(), Err(Error::EmbeddedImageSize(_))));
     }
@@ -256,7 +241,7 @@ fn an_image_exported_by_another_device_is_drawn_without_a_copy() -> Result<(), T
         ExternalImage::release(cleared_red(source.image())?, &source, Arc::new(TestLease))?;
     let pending = consumer.import_scene(external, 1, Duration::ZERO)?;
     assert_eq!(pending.completion.status()?, Status::Complete);
-    let mut surface = consumer.offscreen(PixelSize::new(SIDE, SIDE))?;
+    let mut surface = consumer.offscreen(SURFACE.pixel_size())?;
     pending.scene.content.layer_of(surface.canvas())?.draw();
     let png = consumer.png(&mut surface)?;
     assert_red(&png)?;

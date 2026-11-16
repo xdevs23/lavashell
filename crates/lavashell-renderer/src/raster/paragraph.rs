@@ -72,6 +72,8 @@ impl RasterCache {
 #[cfg(test)]
 mod tests {
     use crate::test_error::TestError;
+    use crate::test_font::PROBE_FAMILY;
+    use crate::test_surfaces::Pixels;
     use lavashell_core::prelude::*;
 
     #[test]
@@ -79,53 +81,41 @@ mod tests {
         let fonts = crate::test_font::test_font()?;
         for size in [11.0, 13.0, 16.0] {
             for phase in [0.0, 0.25, 0.5, 0.75] {
-                let render = |mode: crate::raster::RasterMode| -> Result<Vec<u8>, TestError> {
-                    let mut painter =
-                        crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
-                            .with_raster_mode(mode);
-                    painter.set_blend_space(crate::BlendSpace::Srgb);
-                    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
-                        ui.text(
-                            "MON 5 Oct Lavashell 18:42",
-                            Modifier::new()
-                                .font_family("probe")
-                                .font_size(Sp::new(size))
-                                .color(Color::WHITE)
-                                .offset(Dp::new(12.0 + phase), Dp::new(8.0 + phase)),
-                        );
-                    });
-                    let viewport = Viewport::new(Size::new(240.dp(), 40.dp()), Density::ONE);
-                    let commands =
-                        crate::test_scenes::framed_commands(&mut view, viewport, &mut painter)?;
-                    let info = skia_safe::ImageInfo::new(
-                        (240, 40),
-                        skia_safe::ColorType::RGBA8888,
-                        skia_safe::AlphaType::Premul,
-                        skia_safe::ColorSpace::new_srgb(),
-                    );
-                    let mut surface = skia_safe::surfaces::raster(&info, None, None)
-                        .ok_or(TestError::RasterSurface)?;
-                    let _canvas_returned_for_chaining =
-                        surface.canvas().clear(skia_safe::Color::BLACK);
-                    painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
-                    Ok(crate::test_surfaces::pixels(&mut surface))
-                };
+                let render =
+                    |mode: crate::raster::RasterMode| -> Result<Pixels<[u8; 4]>, TestError> {
+                        let mut painter =
+                            crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
+                                .with_raster_mode(mode);
+                        painter.set_blend_space(crate::BlendSpace::Srgb);
+                        let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+                            ui.text(
+                                "MON 5 Oct Lavashell 18:42",
+                                Modifier::new()
+                                    .font_family(PROBE_FAMILY)
+                                    .font_size(Sp::new(size))
+                                    .color(Color::WHITE)
+                                    .offset(Dp::new(12.0 + phase), Dp::new(8.0 + phase)),
+                            );
+                        });
+                        let viewport = Viewport::new(Size::new(240.dp(), 40.dp()), Density::ONE);
+                        let commands =
+                            crate::test_scenes::framed_commands(&mut view, viewport, &mut painter)?;
+                        let info = crate::test_surfaces::srgb_info((240, 40));
+                        let mut surface = skia_safe::surfaces::raster(&info, None, None)
+                            .ok_or(TestError::RasterSurface)?;
+                        let _canvas_returned_for_chaining =
+                            surface.canvas().clear(skia_safe::Color::BLACK);
+                        painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
+                        Ok(crate::test_surfaces::pixels(&mut surface))
+                    };
                 let direct = render(crate::raster::RasterMode::Vector)?;
                 let tiled = render(crate::raster::RasterMode::Tiles)?;
-                let differences: Vec<_> = direct
-                    .iter()
-                    .zip(&tiled)
-                    .map(|(a, b)| a.abs_diff(*b))
-                    .collect();
+                let largest = direct.largest_channel_difference(&tiled)?;
+                assert!(direct.iter().any(|p| p[0] > 0), "empty font rendering");
                 assert!(
-                    direct.as_chunks::<4>().0.iter().any(|p| p[0] > 0),
-                    "empty font rendering"
-                );
-                assert!(
-                    differences.iter().all(|d| *d <= 1),
-                    "size={size}, phase={phase}, max={:?}; a tile stores each pixel once more \
-                     than direct drawing, which rounds a channel by at most one step",
-                    differences.iter().max()
+                    largest <= 1,
+                    "size={size}, phase={phase}, max={largest}; a tile stores each pixel once \
+                     more than direct drawing, which rounds a channel by at most one step"
                 );
             }
         }

@@ -413,10 +413,11 @@ fn join(a: Option<IRect>, b: Option<IRect>) -> Option<IRect> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_surfaces::EFFECT_SURFACE;
 
     #[test]
     fn an_extent_beyond_the_range_of_skia_scalars_reaches_all_of_the_bounds() {
-        let bounds = IRect::from_wh(96, 48);
+        let bounds = IRect::from_size(EFFECT_SURFACE.dimensions());
         let beyond = Rect::new(0.dp(), 0.dp(), Dp::new(f64::MAX), 1.dp());
         let pixels = device_pixels(
             Extent::Within(beyond),

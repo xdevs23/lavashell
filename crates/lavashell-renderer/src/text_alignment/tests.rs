@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::probe_style_at;
+use crate::test_surfaces::Pixels;
 use lavashell_core::prelude::*;
 
 fn new_painter() -> Result<crate::Painter, TestError> {
@@ -13,7 +15,7 @@ fn pixels(
     painter: &mut crate::Painter,
     style: &TextStyle<Dp>,
     text: &str,
-) -> Result<Vec<u8>, TestError> {
+) -> Result<Pixels<[u8; 4]>, TestError> {
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((300, 160)).ok_or(TestError::RasterSurface)?;
     let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -26,10 +28,7 @@ fn pixels(
         }],
         Density::ONE,
     )?;
-    let info = surface.image_info();
-    let mut result = vec![0; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut result, info.min_row_bytes(), (0, 0)));
-    Ok(result)
+    Ok(crate::test_surfaces::pixels(&mut surface))
 }
 
 #[test]
@@ -48,7 +47,7 @@ fn neutral_alignment_preserves_the_backend_paragraph_defaults() {
 fn wrapping_alignment_updates_geometry_pixels_and_cached_paragraphs() -> Result<(), TestError> {
     let mut painter = new_painter()?;
     let text = "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau.";
-    let mut style = TextStyle::new("probe", 10.sp(), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style_at(10.sp());
     style.max_lines = None;
     let start_geometry = painter.shaper.geometry(text, &style, 296.dp());
     assert!(start_geometry.lines.len() > 1);
@@ -78,7 +77,7 @@ fn wrapping_alignment_updates_geometry_pixels_and_cached_paragraphs() -> Result<
 #[test]
 fn logical_start_follows_rtl_direction_and_reverses_without_stale_cache() -> Result<(), TestError> {
     let mut painter = new_painter()?;
-    let mut style = TextStyle::new("probe", 16.sp(), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style_at(16.sp());
     let text = "אבג 123";
     let ltr = painter.shaper.geometry(text, &style, 296.dp());
     let before = pixels(&mut painter, &style, text)?;

@@ -4,6 +4,7 @@ use crate::failure::{DrawFailure, FailedDraw};
 use crate::field::test_shapes::{Distance, star, star_polygon, union};
 use crate::field::{FieldRoom, Fields, Solid, UniformRange};
 use crate::test_error::TestError;
+use crate::test_surfaces::image_float_pixels;
 use lavashell_core::surface::SurfaceId;
 use skia_safe::surfaces;
 
@@ -41,32 +42,18 @@ fn field_textures_match_shape_distance_at_texel_centres() -> Result<(), TestErro
         let field = fields
             .exact(surface.canvas(), &shape, 0.0, TexelPixels::DEVICE_PIXEL)?
             .ok_or(TestError::Missing("field texture"))?;
-        let read = ImageInfo::new(field.grid.size, ColorType::RGBAF32, AlphaType::Premul, None);
-        let row_bytes = read.min_row_bytes();
-        let mut bytes = vec![0u8; read.compute_min_byte_size()];
-        assert!(field.image.read_pixels(
-            &read,
-            &mut bytes,
-            row_bytes,
-            (0, 0),
-            skia_safe::image::CachingHint::Allow,
-        ));
+        let pixels = image_float_pixels(&field.image, AlphaType::Premul, None);
         let centers = || std::iter::successors(Some(0.5_f64), |center| Some(center + 1.0));
-        let texels = bytes
-            .chunks(row_bytes)
-            .zip(centers())
-            .flat_map(|(line, row)| {
-                line.chunks(read.bytes_per_pixel())
-                    .zip(centers())
-                    .map(move |(texel, column)| (texel, column, row))
-            });
+        let texels = (pixels.rows()?.zip(centers())).flat_map(|(line, row)| {
+            (line.iter().zip(centers())).map(move |(texel, column)| (texel, column, row))
+        });
         for (texel, column, row) in texels {
             let p = Point::new(
                 field.grid.region.x + Dp::new(column * field.grid.texel),
                 field.grid.region.y + Dp::new(row * field.grid.texel),
             );
             let expected = shape.distance(p);
-            let found = f64::from(f32::from_ne_bytes(texel[..4].try_into()?));
+            let found = f64::from(texel[0]);
             assert!(
                 (found - expected).abs() <= 0.02 + expected.abs() * 2e-3,
                 "{shape:?} at {p:?}: texture {found} and CPU {expected}"

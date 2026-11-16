@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::tests::{background, pixels};
+use super::tests::background;
 use super::*;
 use crate::destination::Destination;
 use crate::effect_registry::SurfaceAccess;
@@ -8,6 +8,7 @@ use crate::failure::{DrawFailure, Failures};
 use crate::field::test_shapes::{Distance, ellipse, union};
 use crate::resources::PaintResources;
 use crate::test_error::TestError;
+use crate::test_surfaces::{EFFECT_SURFACE, Pixels, pixels};
 use crate::{FieldRoom, Fonts, Painter, UniformRange};
 
 const PAST_REQUIRED_COLUMNS: u16 = 16384 / 16 + 1;
@@ -55,14 +56,14 @@ fn glass_pixels(
     shape: &Shape,
     refraction: Dp,
     destination: Destination,
-) -> Result<Vec<f32>, TestError> {
+) -> Result<Pixels<f32>, TestError> {
     let glass = lavashell_core::effects::Glass {
         refraction: NonNegativeDp::try_new(refraction)?,
         dispersion: NonNegativeDp::ZERO,
         rim: NonNegative::ZERO,
     };
     let effect = Backdrop::glass(Dp::ZERO, glass)?;
-    let mut s = crate::effects_tests::surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     crate::effects_tests::draw_with(painter, &mut s, |d| {
         stripes(d);
         if destination == Destination::Layer {
@@ -76,16 +77,17 @@ fn glass_pixels(
             d.restore();
         }
     })?;
-    Ok((crate::effects_tests::linear_pixels(&mut s).into_iter())
-        .map(|[red, ..]| red)
-        .collect())
+    Ok(crate::effects_tests::linear_pixels(&mut s).map(|[red, ..]| *red))
 }
 
-fn changed(shape: &Shape, plain: &[f32], glass: &[f32]) -> Result<(usize, usize), TestError> {
+fn changed(
+    shape: &Shape,
+    plain: &Pixels<f32>,
+    glass: &Pixels<f32>,
+) -> Result<(usize, usize), TestError> {
     let mut inside = 0;
     let mut outside = 0;
-    for (i, (a, b)) in plain.iter().zip(glass).enumerate() {
-        let (x, y) = (u16::try_from(i % 96)?, u16::try_from(i / 96)?);
+    for ((x, y), &(a, b)) in plain.zipped(glass)?.positioned()? {
         let p = Point::new(Dp::new(f64::from(x) + 0.5), Dp::new(f64::from(y) + 0.5));
         if (a - b).abs() > 0.01 {
             if shape.distance(p) < 0.0 {
@@ -133,10 +135,10 @@ fn glass_that_cannot_read_the_surface_for_its_lens_blurs_and_reports_it() -> Res
         Failures::default(),
     )?;
     for shape in [long_contour, many_members] {
-        let mut plain = crate::effects_tests::surface()?;
-        background(plain.canvas());
-        let mut surface = crate::effects_tests::surface()?;
-        background(surface.canvas());
+        let mut plain = EFFECT_SURFACE.raster()?;
+        background(plain.canvas())?;
+        let mut surface = EFFECT_SURFACE.raster()?;
+        background(surface.canvas())?;
         let lens = lavashell_core::effects::Glass {
             refraction: constant!(NonNegativeDp::try_new(Dp::new(9.0))),
             dispersion: NonNegativeDp::ZERO,

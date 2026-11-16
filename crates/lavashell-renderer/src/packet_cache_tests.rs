@@ -2,17 +2,20 @@
 use crate::effect_registry::{DrawTarget, EffectBackend, EffectRequest};
 use crate::test_error::TestError;
 use crate::test_scenes::{TEST_SURFACE, insert};
+use crate::test_surfaces::{
+    Pixels, StripedSurface, TestSurface, drawn_surface, working_info, working_pixels,
+};
 use crate::test_variants::only_variant;
-use crate::{BlendSpace, Error, Fonts, Painter, StreamFrames, SurfaceFrame};
+use crate::{BlendSpace, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::*;
 use lavashell_effect_quality::{EffectId, OfferedVariant};
-use skia_safe::{AlphaType, Canvas, ColorType, ImageInfo};
+use skia_safe::{Canvas, ColorType};
 use std::{sync::Arc, time::Duration};
 
-const WIDTH: i32 = 120;
-const HEIGHT: i32 = 80;
+const SURFACE: TestSurface = TestSurface::new(120, 80);
+const STRIPES: StripedSurface = SURFACE.striped(10);
 
 fn fill(rect: Rect, color: Color) -> DrawCommand {
     DrawCommand::Fill {
@@ -33,15 +36,11 @@ fn text(rect: Rect) -> DrawCommand {
 }
 
 fn stripes() -> Vec<DrawCommand> {
-    (0..12_u8)
-        .map(|x| {
-            let rect = Rect::new(10.dp() * f64::from(x), 0.dp(), 10.dp(), 80.dp());
-            match x % 2 {
-                0 => fill(rect, Color::rgb(0x002a_4d8f)),
-                _ => fill(rect, Color::rgb(0x00f0_c060).with_alpha(0.6)),
-            }
-        })
-        .collect()
+    let colors = [
+        Color::rgb(0x002a_4d8f),
+        Color::rgb(0x00f0_c060).with_alpha(0.6),
+    ];
+    STRIPES.stripe_fills(colors)
 }
 
 const CARD: Rect = Rect::new(Dp::ZERO, Dp::ZERO, Dp::new(64.0), Dp::new(40.0));
@@ -90,20 +89,14 @@ fn at(x: f64, y: f64) -> Point {
 fn painted(
     color: ColorType,
     paint: impl FnOnce(&Canvas) -> Result<(), TestError>,
-) -> Result<Vec<u8>, TestError> {
-    let info = ImageInfo::new(
-        (WIDTH, HEIGHT),
-        color,
-        AlphaType::Premul,
-        crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
-    );
-    let mut surface =
-        skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-    paint(surface.canvas())?;
-    let mut bytes = vec![0; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    Ok(bytes)
+) -> Result<Pixels<[f32; 4]>, TestError> {
+    let info = working_info(SURFACE.dimensions(), color)?;
+    working_pixels(&mut drawn_surface(
+        &info,
+        None,
+        skia_safe::Color::TRANSPARENT,
+        paint,
+    )?)
 }
 
 fn cache_hits(
@@ -122,8 +115,8 @@ fn cache_hits(
     let mut cached = painter()?;
     for frame in 0..3 {
         let actual = painted(color, |canvas| paint(&mut cached, canvas))?;
-        let changed = actual.iter().zip(&expected).filter(|(a, b)| a != b).count();
-        assert_eq!(changed, 0, "bytes changed in frame {frame}");
+        let changed = actual.positions_differing_in_bits(&expected)?.len();
+        assert_eq!(changed, 0, "pixels changed in frame {frame}");
     }
     Ok(cached.render_stats().cache_hits)
 }
@@ -148,14 +141,17 @@ fn the_text_of_the_card_paints_glyphs() -> Result<(), TestError> {
         .into_iter()
         .filter(|command| !matches!(command, DrawCommand::Text { .. }))
         .collect();
-    let paint = |commands| -> Result<Vec<u8>, TestError> {
+    let paint = |commands| -> Result<Pixels<[f32; 4]>, TestError> {
         let tree = scene(at(12.0, 8.0), None, commands)?;
         let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
         painted(ColorType::RGBAF16, |canvas| {
             paint_scene(&tree, Density::ONE)(&mut painter, canvas)
         })
     };
-    assert_ne!(paint(card())?, paint(blank)?);
+    assert_ne!(
+        paint(card())?.positions_differing_in_bits(&paint(blank)?)?,
+        []
+    );
     Ok(())
 }
 

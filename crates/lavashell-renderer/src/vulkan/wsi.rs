@@ -287,6 +287,9 @@ fn mastering_display(metadata: HdrMetadata) -> Result<MasteringDisplay, DrawFail
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_surfaces::TestSurface;
+
+    const REQUESTED_SURFACE: TestSurface = TestSurface::new(800, 200);
 
     fn capabilities(min_image_count: u32, max_image_count: u32) -> vk::SurfaceCapabilitiesKHR {
         vk::SurfaceCapabilitiesKHR {
@@ -347,7 +350,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            extent(&open, PixelSize::new(800, 200)),
+            extent(&open, REQUESTED_SURFACE.pixel_size()),
             vk::Extent2D {
                 width: 640,
                 height: 200
@@ -361,7 +364,7 @@ mod tests {
             ..open
         };
         assert_eq!(
-            extent(&fixed, PixelSize::new(800, 200)),
+            extent(&fixed, REQUESTED_SURFACE.pixel_size()),
             vk::Extent2D {
                 width: 320,
                 height: 240

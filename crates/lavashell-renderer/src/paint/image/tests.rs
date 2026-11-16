@@ -2,7 +2,7 @@
 use super::{source, within_largest_image};
 use crate::failure::DrawFailure;
 use crate::test_error::TestError;
-use crate::test_surfaces::{pattern, pixels, surface};
+use crate::test_surfaces::{Pixels, TestSurface, pattern, pixels, surface};
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Packet;
@@ -72,7 +72,7 @@ fn commands(image: &Image, destination: Rect, fit: ImageFit) -> Vec<DrawCommand>
     commands
 }
 
-fn render(commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
+fn render(commands: &[DrawCommand]) -> Result<Pixels<[u8; 4]>, TestError> {
     let mut surface = surface(SIDE, SIDE)?;
     Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?.paint_as_leaf(
         surface.canvas(),
@@ -82,20 +82,18 @@ fn render(commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
     Ok(pixels(&mut surface))
 }
 
-fn assert_opaque_inside(bytes: &[u8], drawn: SkRect) -> Result<(), TestError> {
-    let width = usize::try_from(SIDE)?;
-    for (index, pixel) in bytes.chunks(4).enumerate() {
-        let (x, y) = (u16::try_from(index % width)?, u16::try_from(index / width)?);
+fn assert_opaque_inside(pixels: &Pixels<[u8; 4]>, drawn: SkRect) -> Result<(), TestError> {
+    for ((x, y), &[.., alpha]) in pixels.positioned()? {
         let center = skia_safe::Point::new(f32::from(x) + 0.5, f32::from(y) + 0.5);
         let inside = drawn.contains(center);
-        assert_eq!(pixel[3], if inside { 255 } else { 0 }, "({x}, {y})");
+        assert_eq!(alpha, if inside { 255 } else { 0 }, "({x}, {y})");
     }
     Ok(())
 }
 
 #[test]
 fn cover_draws_the_pixels_of_a_centered_crop_computed_by_hand() -> Result<(), TestError> {
-    let decoded = pattern(70, 50)?;
+    let decoded = pattern(TestSurface::new(70, 50))?;
     let destination = Rect::new(3.dp(), 5.dp(), 64.dp(), 64.dp());
     let covered = render(&commands(&image(&decoded)?, destination, ImageFit::cover()))?;
     let mut reference = surface(SIDE, SIDE)?;
@@ -116,26 +114,28 @@ fn cover_draws_the_pixels_of_a_centered_crop_computed_by_hand() -> Result<(), Te
 #[test]
 fn contain_leaves_the_rest_of_the_box_empty() -> Result<(), TestError> {
     let destination = Rect::new(4.dp(), 4.dp(), 64.dp(), 64.dp());
-    let image = image(&pattern(64, 32)?)?;
+    let image = image(&pattern(TestSurface::new(64, 32))?)?;
     let contained = render(&commands(&image, destination, ImageFit::contain()))?;
-    assert_opaque_inside(&contained, SkRect::from_xywh(4.0, 20.0, 64.0, 32.0))
+    assert_opaque_inside(&contained, SkRect::from_xywh(4.0, 20.0, 64.0, 32.0))?;
+    Ok(())
 }
 
 #[test]
 fn a_frame_draws_only_inside_the_box() -> Result<(), TestError> {
     let destination = Rect::new(16.dp(), 16.dp(), 32.dp(), 32.dp());
-    let image = image(&pattern(70, 50)?)?;
+    let image = image(&pattern(TestSurface::new(70, 50))?)?;
     let zoomed = ImageFrame::new(-50.pct(), -50.pct(), 200.pct(), 200.pct());
     let drawn = render(&commands(&image, destination, ImageFit::Frame(zoomed)))?;
     assert_opaque_inside(&drawn, SkRect::from_xywh(16.0, 16.0, 32.0, 32.0))?;
     let small = ImageFrame::new(8.dp(), 4.dp(), 16.dp(), 12.dp());
     let drawn = render(&commands(&image, destination, ImageFit::Frame(small)))?;
-    assert_opaque_inside(&drawn, SkRect::from_xywh(24.0, 20.0, 16.0, 12.0))
+    assert_opaque_inside(&drawn, SkRect::from_xywh(24.0, 20.0, 16.0, 12.0))?;
+    Ok(())
 }
 
 #[test]
 fn a_frame_or_an_image_without_area_draws_nothing() -> Result<(), TestError> {
-    let decoded = pattern(70, 50)?;
+    let decoded = pattern(TestSurface::new(70, 50))?;
     let destination = Rect::new(8.dp(), 8.dp(), 48.dp(), 48.dp());
     let flat = ImageFrame::new(0.dp(), 0.dp(), 0.dp(), 48.dp());
     let drawn = render(&commands(
@@ -146,26 +146,28 @@ fn a_frame_or_an_image_without_area_draws_nothing() -> Result<(), TestError> {
     assert_opaque_inside(&drawn, SkRect::new_empty())?;
     let unmeasured = Image::encoded(Vec::new(), 0, 0).with_backend_data(decoded);
     let drawn = render(&commands(&unmeasured, destination, ImageFit::cover()))?;
-    assert_opaque_inside(&drawn, SkRect::new_empty())
+    assert_opaque_inside(&drawn, SkRect::new_empty())?;
+    Ok(())
 }
 
 #[test]
 fn an_image_that_declares_another_size_than_its_pixels_is_left_out() -> Result<(), TestError> {
-    let declared = Image::encoded(Vec::new(), 35, 25).with_backend_data(pattern(70, 50)?);
+    let declared =
+        Image::encoded(Vec::new(), 35, 25).with_backend_data(pattern(TestSurface::new(70, 50))?);
     let destination = Rect::new(3.dp(), 5.dp(), 64.dp(), 64.dp());
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut target = surface(SIDE, SIDE)?;
     let commands = commands(&declared, destination, ImageFit::cover());
     painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
     assert_eq!(painter.failures.count(DrawFailure::ImageSize), 1);
-    assert!(pixels(&mut target).chunks(4).all(|pixel| pixel[3] == 0));
+    assert!(pixels(&mut target).iter().all(|pixel| pixel[3] == 0));
     Ok(())
 }
 
 #[test]
 fn an_image_cropped_between_pixels_on_a_cached_card_is_the_image_drawn_directly()
 -> Result<(), TestError> {
-    let image = image(&pattern(70, 50)?)?;
+    let image = image(&pattern(TestSurface::new(70, 50))?)?;
     let destination = Rect::new(8.dp(), 8.dp(), 48.dp(), 48.dp());
     let fit = ImageFit::Cover(ImagePlacement::at(Anchor::Top).offset(0.vw(), 10.vh()));
     let card = DrawCommand::Fill {

@@ -45,9 +45,10 @@ fn opaque_mask_after_clip(clip: IRect) -> Result<Vec<bool>, TestError> {
     clip_device(canvas, clip);
     let everything = SkRect::from_irect(IRect::from_wh(SIDE, SIDE));
     let _canvas_returned_for_chaining = canvas.draw_rect(everything, &Paint::default());
-    let bytes = pixels(&mut target);
-    let (texels, _no_partial_texel) = bytes.as_chunks::<4>();
-    Ok(texels.iter().map(|texel| texel[3] > 0).collect())
+    Ok(pixels(&mut target)
+        .iter()
+        .map(|texel| texel[3] > 0)
+        .collect())
 }
 
 fn mask_of_pixels_inside(area: IRect) -> Vec<bool> {

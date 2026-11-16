@@ -3,10 +3,11 @@ use super::*;
 use crate::stream::FrameDevice;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
+use crate::test_surfaces::TestSurface;
 use crate::{Error, HeadlessPresentation, StreamFrames};
 use lavashell_core::prelude::{
-    Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelSize, Presented, Rect,
-    SceneTree, Size, StreamId, StreamImage,
+    Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, Presented, Rect, SceneTree, Size,
+    StreamId, StreamImage,
 };
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
@@ -247,6 +248,8 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
     Ok(())
 }
 
+const STREAM_FRAME: TestSurface = TestSurface::new(16, 12);
+
 const STREAM_AREA: Rect = Rect::new(Dp::new(8.0), Dp::new(6.0), Dp::new(16.0), Dp::new(12.0));
 
 fn stream_packet(image: StreamImage) -> Result<Packet, UnbalancedRestore> {
@@ -260,13 +263,12 @@ fn stream_packet(image: StreamImage) -> Result<Packet, UnbalancedRestore> {
 
 fn painted_pixel<S>(
     state: &mut RendererState<RecordingControl, S>,
-    x: usize,
-    y: usize,
+    x: u16,
+    y: u16,
 ) -> Result<[u8; 4], TestError> {
     let attached = (state.surfaces.get_mut(&SURFACE)).ok_or(TestError::Missing("surface"))?;
     let pixels = (attached.target.painted_pixels()).ok_or(TestError::Missing("painted image"))?;
-    let index = (y * usize::try_from(WIDTH)? + x) * 4;
-    Ok(pixels[index..index + 4].try_into()?)
+    Ok(pixels.at(x, y))
 }
 
 #[test]
@@ -279,7 +281,7 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
     let image = |generation| StreamImage {
         stream,
         generation,
-        size: PixelSize::new(16, 12),
+        size: STREAM_FRAME.pixel_size(),
     };
     let background = DrawCommand::Fill {
         shape: Rect::from_size(viewport().size).into(),
@@ -300,14 +302,14 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
             Node::Leaf(Content::Packet(stream_packet(image(1))?)),
         ),
     ]))?;
-    let mut red = state.gpu.offscreen(PixelSize::new(16, 12))?;
+    let mut red = state.gpu.offscreen(STREAM_FRAME.pixel_size())?;
     let _canvas_returned_for_chaining = red.canvas().clear(skia_safe::Color::RED);
     (state.streams.frames_mut()).bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));
     let drawn = state.draw(SURFACE, frame(1, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [255, 0, 0, 255]);
     let outside = painted_pixel(&mut state, 2, 2)?;
-    let mut blue = state.gpu.offscreen(PixelSize::new(16, 12))?;
+    let mut blue = state.gpu.offscreen(STREAM_FRAME.pixel_size())?;
     let _canvas_returned_for_chaining = blue.canvas().clear(skia_safe::Color::BLUE);
     (state.streams.frames_mut()).bind(&image(2), blue.image_snapshot().into(), IPoint::new(0, 0));
     tree.show(SceneUpdate::from_iter([Change::SetContent {

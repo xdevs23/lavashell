@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::probe_style_before_scaling;
+use crate::text::sample_fixtures::ACCENTED_LABEL_TEXT;
 use lavashell_core::prelude::*;
 use lavashell_test_fixtures::WithoutFailures;
 use std::{cell::Cell, rc::Rc};
@@ -20,9 +22,9 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
                 move |drawing| {
                     count.set(count.get() + 1);
                     drawing.text(
-                        "Mon 5 Oct e\u{301} office",
+                        ACCENTED_LABEL_TEXT,
                         Rect::new(5.dp(), 4.dp(), 390.dp(), 40.dp()),
-                        TextStyle::new("probe", 13.sp(), Color::WHITE),
+                        probe_style_before_scaling(),
                     );
                 },
             );
@@ -35,19 +37,16 @@ fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Resul
                     move |drawing| {
                         count.set(count.get() + 1);
                         drawing.text(
-                            "Mon 5 Oct e\u{301} office",
+                            ACCENTED_LABEL_TEXT,
                             Rect::new(5.dp(), 4.dp(), 390.dp(), 40.dp()),
-                            TextStyle::new("probe", 13.sp(), Color::WHITE),
+                            probe_style_before_scaling(),
                         );
                     },
                 );
             });
         });
     });
-    let target = TextDestination {
-        opaque: true,
-        geometry: PixelGeometry::Rgb,
-    };
+    let target = crate::test_surfaces::lcd_destination();
     let size = Size::new(600.dp(), 160.dp());
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);

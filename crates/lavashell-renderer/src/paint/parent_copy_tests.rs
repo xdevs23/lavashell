@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_error::TestError;
-use crate::test_surfaces::{self, pixels};
+use crate::test_surfaces::{EFFECT_STRIPES, EFFECT_SURFACE, Pixels, channel_differences, pixels};
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 use skia_safe::Surface;
-
-const WIDTH: u16 = 96;
-const HEIGHT: u16 = 48;
-const STRIPE: u16 = 4;
 
 const PARENTS: [(Color, Color); 3] = [
     (Color::WHITE, Color::rgb(0)),
@@ -18,24 +14,8 @@ const PARENTS: [(Color, Color); 3] = [
     (Color::WHITE, Color::WHITE.with_alpha(0.0)),
 ];
 
-fn dp(pixels: u16) -> Dp {
-    Dp::new(f64::from(pixels))
-}
-
-fn viewport() -> Rect {
-    Rect::new(0.dp(), 0.dp(), dp(WIDTH), dp(HEIGHT))
-}
-
 fn stripes((even, odd): (Color, Color)) -> Vec<DrawCommand> {
-    (0..WIDTH / STRIPE)
-        .map(|stripe| {
-            let color = if stripe % 2 == 0 { even } else { odd };
-            DrawCommand::Fill {
-                shape: Rect::new(dp(stripe * STRIPE), 0.dp(), dp(STRIPE), dp(HEIGHT)).into(),
-                brush: color.into(),
-            }
-        })
-        .collect()
+    EFFECT_STRIPES.stripe_fills([even, odd])
 }
 
 fn frost() -> DrawCommand {
@@ -54,30 +34,24 @@ fn effect_layer(bounds: Rect, blend: BlendMode, blur: NonNegativeDp) -> DrawComm
     }
 }
 
-fn raster() -> Result<Surface, TestError> {
-    test_surfaces::surface(i32::from(WIDTH), i32::from(HEIGHT))
-}
-
-fn painted(surface: &mut Surface, commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
+fn painted(surface: &mut Surface, commands: &[DrawCommand]) -> Result<Pixels<[u8; 4]>, TestError> {
     let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     painter.paint_as_leaf(surface.canvas(), commands, Density::ONE)?;
     Ok(pixels(surface))
 }
 
-fn assert_same_image(expected: &[u8], actual: &[u8]) {
-    let (expected, _no_partial_expected_pixel) = expected.as_chunks::<4>();
-    let (actual, _no_partial_actual_pixel) = actual.as_chunks::<4>();
-    assert_eq!(expected.len(), actual.len());
-    let width = usize::from(WIDTH);
-    for (index, (wanted, got)) in expected.iter().zip(actual).enumerate() {
+fn assert_same_image(
+    expected: &Pixels<[u8; 4]>,
+    actual: &Pixels<[u8; 4]>,
+) -> Result<(), TestError> {
+    for ((x, y), &(wanted, got)) in expected.zipped(actual)?.positioned()? {
         assert!(
-            wanted.iter().zip(got).all(|(w, g)| w.abs_diff(*g) <= 1),
-            "pixel ({}, {}): expected {wanted:?}, painted {got:?}",
-            index % width,
-            index / width
+            channel_differences(wanted, got).all(|difference| difference <= 1),
+            "pixel ({x}, {y}): expected {wanted:?}, painted {got:?}"
         );
     }
+    Ok(())
 }
 
 fn assert_backdrop_reads_through(surface: &mut Surface) -> Result<(), TestError> {
@@ -86,12 +60,16 @@ fn assert_backdrop_reads_through(surface: &mut Surface) -> Result<(), TestError>
         let layered = [
             stripes(parent),
             vec![
-                effect_layer(viewport(), BlendMode::SourceOver, NonNegativeDp::ZERO),
+                effect_layer(
+                    EFFECT_SURFACE.bounds(),
+                    BlendMode::SourceOver,
+                    NonNegativeDp::ZERO,
+                ),
                 frost(),
                 DrawCommand::Restore,
             ],
         ];
-        assert_same_image(&frosted, &painted(surface, &layered.concat())?);
+        assert_same_image(&frosted, &painted(surface, &layered.concat())?)?;
     }
     Ok(())
 }
@@ -110,12 +88,12 @@ fn assert_backdrop_reads_only_isolating_layers(surface: &mut Surface) -> Result<
             let layered = [
                 stripes(parent),
                 vec![
-                    effect_layer(viewport(), blend, blur),
+                    effect_layer(EFFECT_SURFACE.bounds(), blend, blur),
                     frost(),
                     DrawCommand::Restore,
                 ],
             ];
-            assert_same_image(&plain, &painted(surface, &layered.concat())?);
+            assert_same_image(&plain, &painted(surface, &layered.concat())?)?;
         }
     }
     Ok(())
@@ -147,27 +125,27 @@ fn assert_layer_bounds_cut_the_backdrop(surface: &mut Surface) -> Result<(), Tes
         assert_same_image(
             &painted(surface, &clipped.concat())?,
             &painted(surface, &layered.concat())?,
-        );
+        )?;
     }
     Ok(())
 }
 
 #[test]
 fn a_backdrop_reads_through_only_a_source_over_effect_layer() -> Result<(), TestError> {
-    let mut surface = raster()?;
+    let mut surface = EFFECT_SURFACE.raster()?;
     assert_backdrop_reads_through(&mut surface)?;
     assert_backdrop_reads_only_isolating_layers(&mut surface)
 }
 
 #[test]
 fn the_bounds_of_an_effect_layer_cut_a_backdrop_that_reads_through_it() -> Result<(), TestError> {
-    assert_layer_bounds_cut_the_backdrop(&mut raster()?)
+    assert_layer_bounds_cut_the_backdrop(&mut EFFECT_SURFACE.raster()?)
 }
 
 #[test]
 fn vulkan_backdrop_reads_through_a_source_over_effect_layer() -> Result<(), TestError> {
     let mut gpu = crate::VulkanRenderer::headless()?;
-    let mut surface = gpu.offscreen(PixelSize::new(u32::from(WIDTH), u32::from(HEIGHT)))?;
+    let mut surface = gpu.offscreen(EFFECT_SURFACE.pixel_size())?;
     assert_backdrop_reads_through(&mut surface)?;
     assert_backdrop_reads_only_isolating_layers(&mut surface)?;
     assert_layer_bounds_cut_the_backdrop(&mut surface)

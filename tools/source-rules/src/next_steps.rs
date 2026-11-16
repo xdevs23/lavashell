@@ -44,7 +44,8 @@ pub fn next_step(error: &Error) -> NextStep {
         | Error::ReadManifest { .. }
         | Error::ReadCopy { .. }
         | Error::ListFiles(_)
-        | Error::ModuleFile { .. } => NextStep::FixNamedFile,
+        | Error::ModuleFile { .. }
+        | Error::Definition { .. } => NextStep::FixNamedFile,
         Error::PatchedLanguage { .. } => NextStep::AddLanguage,
         Error::ReadMetadata(_)
         | Error::ParseTree { .. }

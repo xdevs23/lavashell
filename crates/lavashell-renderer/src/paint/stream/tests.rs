@@ -2,7 +2,7 @@
 use crate::failure::DrawFailure;
 use crate::test_error::TestError;
 use crate::test_scenes::leaves;
-use crate::test_surfaces::{pattern, pixels, surface};
+use crate::test_surfaces::{Pixels, TestSurface, pattern, pixels, surface};
 use crate::{Fonts, Painter, StreamFrames};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Packet;
@@ -24,38 +24,32 @@ fn render(
     painter: &mut Painter,
     commands: &[DrawCommand],
     streams: &StreamFrames,
-) -> Result<Vec<u8>, TestError> {
+) -> Result<Pixels<[u8; 4]>, TestError> {
     let mut target = surface(SIDE, SIDE)?;
     painter.paint_streams_as_leaf(target.canvas(), commands, Density::ONE, streams)?;
     Ok(pixels(&mut target))
 }
 
-fn transparent(bytes: &[u8]) -> bool {
-    bytes.chunks(4).all(|pixel| pixel[3] == 0)
+fn transparent(pixels: &Pixels<[u8; 4]>) -> bool {
+    pixels.iter().all(|pixel| pixel[3] == 0)
 }
 
-fn frame_of(
-    stream: StreamId,
-    generation: u64,
-    pixels: &skia_safe::Image,
-) -> Result<StreamImage, TestError> {
-    Ok(StreamImage {
+fn frame_of(stream: StreamId, generation: u64, source: TestSurface) -> StreamImage {
+    StreamImage {
         stream,
         generation,
-        size: PixelSize::new(
-            u32::try_from(pixels.width())?,
-            u32::try_from(pixels.height())?,
-        ),
-    })
+        size: source.pixel_size(),
+    }
 }
 
 type Pane = fn(&mut Drawing<'_>, &dyn Fn(&mut Drawing<'_>));
 
 #[test]
 fn a_bound_frame_draws_the_pixels_of_the_same_image_in_every_pane() -> Result<(), TestError> {
-    let pixels = pattern(64, 32)?;
+    let source = TestSurface::new(64, 32);
+    let pixels = pattern(source)?;
     let image = Image::encoded(Vec::new(), 64, 32).with_backend_data(pixels.clone());
-    let frame = frame_of(StreamId::next(), 1, &pixels)?;
+    let frame = frame_of(StreamId::next(), 1, source);
     let mut streams = StreamFrames::default();
     streams.bind(&frame, pixels.into(), IPoint::new(0, 0));
     let destination = Rect::new(8.dp(), 8.dp(), 48.dp(), 48.dp());
@@ -96,17 +90,14 @@ fn a_bound_frame_draws_the_pixels_of_the_same_image_in_every_pane() -> Result<()
 
 #[test]
 fn a_crop_draws_the_pixels_of_that_part_of_the_buffer_alone() -> Result<(), TestError> {
-    let buffer = pattern(64, 48)?;
-    let crop = IRect::from_xywh(8, 4, 32, 24);
+    let buffer = pattern(TestSurface::new(64, 48))?;
+    let cropped = TestSurface::new(32, 24);
+    let crop = IRect::from_pt_size((8, 4), cropped.dimensions());
     let part = buffer
         .make_subset(None, crop, skia_safe::image::RequiredProperties::default())
         .ok_or(TestError::Missing("cropped image"))?;
+    let frame = frame_of(StreamId::next(), 1, cropped);
     let image = Image::encoded(Vec::new(), 32, 24).with_backend_data(part);
-    let frame = StreamImage {
-        stream: StreamId::next(),
-        generation: 1,
-        size: PixelSize::new(32, 24),
-    };
     let mut streams = StreamFrames::default();
     streams.bind(&frame, buffer.into(), IPoint::new(crop.left, crop.top));
     let destination = Rect::new(8.dp(), 8.dp(), 64.dp(), 64.dp());
@@ -130,8 +121,9 @@ fn a_crop_draws_the_pixels_of_that_part_of_the_buffer_alone() -> Result<(), Test
 
 #[test]
 fn a_frame_under_a_non_uniform_scale_fills_the_scaled_destination() -> Result<(), TestError> {
-    let pixels = pattern(32, 32)?;
-    let frame = frame_of(StreamId::next(), 1, &pixels)?;
+    let source = TestSurface::new(32, 32);
+    let pixels = pattern(source)?;
+    let frame = frame_of(StreamId::next(), 1, source);
     let mut streams = StreamFrames::default();
     streams.bind(&frame, pixels.into(), IPoint::new(0, 0));
     let commands = scene(|drawing| {
@@ -145,21 +137,19 @@ fn a_frame_under_a_non_uniform_scale_fills_the_scaled_destination() -> Result<()
         &commands,
         &streams,
     )?;
-    let alpha = |x: i32, y: i32| -> Result<u8, TestError> {
-        Ok(drawn[usize::try_from((y * SIDE + x) * 4 + 3)?])
-    };
+    let alpha = |x, y| drawn.at(x, y)[3];
     for (x, y) in [(12, 6), (59, 6), (12, 29), (59, 29)] {
-        assert_eq!(alpha(x, y)?, 255, "({x}, {y})");
+        assert_eq!(alpha(x, y), 255, "({x}, {y})");
     }
     for (x, y) in [(11, 6), (12, 5), (60, 29), (59, 30)] {
-        assert_eq!(alpha(x, y)?, 0, "({x}, {y})");
+        assert_eq!(alpha(x, y), 0, "({x}, {y})");
     }
     Ok(())
 }
 
 #[test]
 fn a_stream_without_a_bound_frame_draws_nothing_and_records_a_failure() -> Result<(), TestError> {
-    let frame = frame_of(StreamId::next(), 1, &pattern(32, 32)?)?;
+    let frame = frame_of(StreamId::next(), 1, TestSurface::new(32, 32));
     let commands = scene(|drawing| {
         let destination = Rect::new(0.dp(), 0.dp(), 32.dp(), 32.dp());
         drawing.stream_image(&frame, destination, ImageFit::cover());
@@ -181,15 +171,16 @@ fn a_stream_without_a_bound_frame_draws_nothing_and_records_a_failure() -> Resul
 #[test]
 fn a_frame_of_another_generation_than_the_bound_one_draws_nothing_and_records_a_failure()
 -> Result<(), TestError> {
-    let pixels = pattern(32, 32)?;
+    let source = TestSurface::new(32, 32);
+    let pixels = pattern(source)?;
     let stream = StreamId::next();
     let mut streams = StreamFrames::default();
     streams.bind(
-        &frame_of(stream, 1, &pixels)?,
-        pixels.clone().into(),
+        &frame_of(stream, 1, source),
+        pixels.into(),
         IPoint::new(0, 0),
     );
-    let newer = frame_of(stream, 2, &pixels)?;
+    let newer = frame_of(stream, 2, source);
     let commands = scene(|drawing| {
         let destination = Rect::new(0.dp(), 0.dp(), 32.dp(), 32.dp());
         drawing.stream_image(&newer, destination, ImageFit::cover());
@@ -205,8 +196,9 @@ fn a_frame_of_another_generation_than_the_bound_one_draws_nothing_and_records_a_
 
 #[test]
 fn a_frame_in_a_leaf_is_drawn_on_every_paint_and_never_cached() -> Result<(), TestError> {
-    let pixels = pattern(48, 48)?;
-    let frame = frame_of(StreamId::next(), 1, &pixels)?;
+    let source = TestSurface::new(48, 48);
+    let pixels = pattern(source)?;
+    let frame = frame_of(StreamId::next(), 1, source);
     let mut streams = StreamFrames::default();
     streams.bind(&frame, pixels.into(), IPoint::new(0, 0));
     let destination = Rect::new(8.dp(), 8.dp(), 48.dp(), 48.dp());

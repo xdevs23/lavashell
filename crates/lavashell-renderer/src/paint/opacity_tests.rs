@@ -1,55 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::failure::DrawFailure;
 use crate::test_error::TestError;
-use crate::test_surfaces::{self, ChannelRounding};
+use crate::test_surfaces::{ChannelRounding, EFFECT_STRIPES, EFFECT_SURFACE, linear_float_pixel};
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{
     Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate, Slot,
 };
-use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
+use skia_safe::{AlphaType, Surface};
 use std::ops::DerefMut;
 use std::sync::Arc;
 
-fn surface() -> Result<Surface, TestError> {
-    test_surfaces::surface(96, 48)
-}
-
 fn pixel(surface: &mut Surface, x: i32, y: i32) -> [f64; 4] {
-    let info = ImageInfo::new(
-        (1, 1),
-        ColorType::RGBAF32,
-        AlphaType::Premul,
-        skia_safe::ColorSpace::new_srgb_linear(),
-    );
-    let mut bytes = [0u8; 16];
-    assert!(surface.read_pixels(&info, &mut bytes, 16, (x, y)));
-    let (floats, _no_partial_float) = bytes.as_chunks::<4>();
-    std::array::from_fn(|i| f64::from(f32::from_ne_bytes(floats[i])))
+    linear_float_pixel(surface, x, y, AlphaType::Premul).map(f64::from)
 }
 
 fn commands(opacity: f64, background_alpha: f64) -> Vec<DrawCommand> {
     let mut commands = Vec::new();
-    let context = DrawContext::new(Viewport::new(Size::new(96.dp(), 48.dp()), Density::ONE));
-    let mut drawing = Drawing::new(
-        &mut commands,
-        Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
-        &context,
+    let context = DrawContext::new(Viewport::new(EFFECT_SURFACE.size(), Density::ONE));
+    let mut drawing = Drawing::new(&mut commands, EFFECT_SURFACE.bounds(), &context);
+    EFFECT_STRIPES.fill_stripes(
+        &mut drawing,
+        [Color::WHITE, Color::rgb(0)].map(|color| color.with_alpha(background_alpha)),
     );
-    for stripe in 0..24_u16 {
-        drawing.fill(
-            Rect::new(4.dp() * f64::from(stripe), 0.dp(), 4.dp(), 48.dp()),
-            if stripe % 2 == 0 {
-                Color::WHITE.with_alpha(background_alpha)
-            } else {
-                Color::rgb(0).with_alpha(background_alpha)
-            },
-        );
-    }
     drawing.commands.push(DrawCommand::OpacityLayer {
         alpha: opacity,
-        bounds: Rect::new(12.dp(), 0.dp(), 72.dp(), 48.dp()),
+        bounds: Rect::new(12.dp(), 0.dp(), 72.dp(), EFFECT_SURFACE.size().height),
     });
     drawing.backdrop(
         Shape::rounded(Rect::new(16.dp(), 4.dp(), 64.dp(), 40.dp()), 8.dp()),
@@ -140,20 +117,20 @@ fn assert_first_frame_blur(surface: &mut Surface) -> Result<(), TestError> {
 #[test]
 fn backdrop_blurs_on_the_first_partial_opacity_frame_without_doubling_parent_alpha()
 -> Result<(), TestError> {
-    assert_first_frame_blur(&mut surface()?)
+    assert_first_frame_blur(&mut EFFECT_SURFACE.raster()?)
 }
 
 #[test]
 fn vulkan_backdrop_blurs_on_the_first_partial_opacity_frame() -> Result<(), TestError> {
     let mut gpu = crate::VulkanRenderer::headless()?;
-    assert_first_frame_blur(&mut *gpu.offscreen(PixelSize::new(96, 48))?)?;
-    assert_nested_groups(|| Ok(gpu.offscreen(PixelSize::new(96, 48))?))
+    assert_first_frame_blur(&mut *gpu.offscreen(EFFECT_SURFACE.pixel_size())?)?;
+    assert_nested_groups(|| Ok(gpu.offscreen(EFFECT_SURFACE.pixel_size())?))
 }
 
 #[test]
 fn nested_fading_retained_groups_preserve_hdr_and_blur_sampling_outside_panel_bounds()
 -> Result<(), TestError> {
-    assert_nested_groups(|| Ok(Box::new(surface()?)))
+    assert_nested_groups(|| Ok(Box::new(EFFECT_SURFACE.raster()?)))
 }
 
 fn assert_nested_groups<S: DerefMut<Target = Surface>>(
@@ -274,11 +251,11 @@ fn assert_independent_reader(retained: bool) -> Result<(), TestError> {
     )?;
     let mut commands = commands(0.5, 1.0);
     commands[25] = DrawCommand::Circle {
-        center: Point::new(48.dp(), 24.dp()),
+        center: EFFECT_SURFACE.center(),
         radius: 8.dp(),
         brush: Color::WHITE.into(),
     };
-    let mut surface = surface()?;
+    let mut surface = EFFECT_SURFACE.raster()?;
     for pass in 0..4 {
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         if retained {

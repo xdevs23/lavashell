@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::{probe_style, probe_style_at};
+use crate::test_surfaces::{Pixels, has_colored_fringe, pixels, rgba8_pixel};
+use crate::text::sample_fixtures::{mixed_script_label_text, multiline_label_text};
 use lavashell_core::prelude::*;
 
 fn render(
     painter: &mut crate::Painter,
     size: f64,
     target: TextDestination,
-) -> Result<Vec<u8>, TestError> {
-    let mut style = TextStyle::new("probe", Sp::new(size), Color::WHITE).resolve_unscaled();
-    style.color = Color::WHITE;
+) -> Result<Pixels<[u8; 4]>, TestError> {
+    let style = probe_style_at(Sp::new(size));
     let commands = [DrawCommand::Text {
-        text: "Mon 5 Oct e\u{301} office אבג".into(),
+        text: mixed_script_label_text(),
         rect: Rect::new(5.25.dp(), 4.5.dp(), 1200.dp(), 150.dp()),
         style,
     }];
@@ -29,9 +31,7 @@ fn render(
         skia_safe::Color::TRANSPARENT
     });
     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
-    let mut pixels = vec![0_u8; 1300 * 170 * 4];
-    assert!(surface.read_pixels(&info, &mut pixels, 1300 * 4, (0, 0)));
-    Ok(pixels)
+    Ok(pixels(&mut surface))
 }
 
 #[test]
@@ -102,8 +102,8 @@ fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
         crate::UniformRange::VULKAN_REQUIRED,
     )?;
     let target = TextDestination::default();
-    let value = "Mon 5 Oct e\u{301} office\nabc אבג";
-    let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let value = multiline_label_text();
+    let mut style = probe_style();
     style.max_lines = None;
     painter.set_text_rendering(
         TextRendering {
@@ -112,7 +112,7 @@ fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
         },
         target,
     );
-    let first = painter.shaper.geometry(value, &style, 1200.dp());
+    let first = painter.shaper.geometry(&value, &style, 1200.dp());
     painter.set_text_rendering(
         TextRendering {
             hinting: Hinting::Full,
@@ -120,7 +120,7 @@ fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
         },
         target,
     );
-    let other = painter.shaper.geometry(value, &style, 1200.dp());
+    let other = painter.shaper.geometry(&value, &style, 1200.dp());
     let bounds = |geometry: &TextGeometry| {
         geometry
             .clusters
@@ -167,27 +167,20 @@ fn lcd_requires_an_opaque_target_and_survives_the_tiled_backend() -> Result<(), 
         antialiasing: TextAntialiasing::Subpixel,
         ..Default::default()
     };
-    let colored = |pixels: &[u8]| {
-        pixels
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .any(|p| p[0] != p[1] || p[1] != p[2])
-    };
     for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
         for opaque in [false, true] {
             let target = TextDestination { opaque, geometry };
             let mut direct = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
             direct.set_text_rendering(request, target);
             assert_eq!(
-                colored(&render(&mut direct, 13.0, target)?),
+                has_colored_fringe(&render(&mut direct, 13.0, target)?),
                 opaque && geometry != PixelGeometry::None
             );
             let mut tiled = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
                 .with_raster_mode(crate::raster::RasterMode::Tiles);
             tiled.set_text_rendering(request, target);
             assert_eq!(
-                colored(&render(&mut tiled, 13.0, target)?),
+                has_colored_fringe(&render(&mut tiled, 13.0, target)?),
                 opaque && geometry != PixelGeometry::None
             );
         }
@@ -227,13 +220,8 @@ fn cached_rgba_tiles_preserve_an_opaque_colored_background() -> Result<(), TestE
         None,
     );
     painter.paint_as_leaf(surface.canvas(), &drawing, Density::ONE)?;
-    let read = info
-        .with_dimensions((1, 1))
-        .with_color_type(skia_safe::ColorType::RGBA8888);
-    let mut pixel = [0_u8; 4];
-    assert!(surface.read_pixels(&read, &mut pixel, 4, (12, 12)));
     assert_eq!(
-        pixel,
+        rgba8_pixel(&mut surface, (12, 12), skia_safe::AlphaType::Opaque),
         [0, 0, 255, 255],
         "the tile's empty corner replaced the target background"
     );

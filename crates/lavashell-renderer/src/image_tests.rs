@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_error::TestError;
-use crate::{Error, Fonts, Painter, decode_image, encoded_image, raster_png};
+use crate::test_surfaces::{TestSurface, encoded_pixels};
+use crate::{Fonts, Painter, decode_image, encoded_image, raster_png};
 use lavashell_core::prelude::*;
 use skia_safe::{AlphaType, ColorSpace, ColorType, EncodedImageFormat, ImageInfo};
 use std::time::Duration;
 
+const IMAGE: TestSurface = TestSurface::new(8, 8);
+
 fn encoded(format: EncodedImageFormat) -> Result<Vec<u8>, TestError> {
     let info = ImageInfo::new(
-        (8, 8),
+        IMAGE.dimensions(),
         ColorType::RGBA8888,
         AlphaType::Premul,
         ColorSpace::new_srgb(),
@@ -28,41 +31,17 @@ fn scene(bytes: Vec<u8>) -> Result<Vec<DrawCommand>, TestError> {
     let image = decode_image(bytes)?;
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         let image = image.clone();
-        ui.canvas(Size::new(8.dp(), 8.dp()), Modifier::new(), move |canvas| {
-            canvas.image(
-                &image,
-                Rect::new(0.dp(), 0.dp(), 8.dp(), 8.dp()),
-                ImageFit::Stretch,
-            );
+        ui.canvas(IMAGE.size(), Modifier::new(), move |canvas| {
+            canvas.image(&image, IMAGE.bounds(), ImageFit::Stretch);
         });
     });
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let viewport = Viewport::new(Size::new(8.dp(), 8.dp()), Density::ONE);
+    let viewport = Viewport::new(IMAGE.size(), Density::ONE);
     crate::test_scenes::framed_commands(&mut view, viewport, &mut painter)
 }
 
-fn pixel(bytes: &[u8]) -> Result<[u8; 4], TestError> {
-    let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(bytes))
-        .ok_or(Error::DecodeImage)?;
-    let info = ImageInfo::new(
-        (1, 1),
-        ColorType::RGBA8888,
-        AlphaType::Unpremul,
-        ColorSpace::new_srgb(),
-    );
-    let mut pixel = [0u8; 4];
-    assert!(image.read_pixels(
-        &info,
-        &mut pixel,
-        4,
-        (4, 4),
-        skia_safe::image::CachingHint::Disallow
-    ));
-    Ok(pixel)
-}
-
 fn assert_color(bytes: &[u8], format: EncodedImageFormat) -> Result<(), TestError> {
-    let pixel = pixel(bytes)?;
+    let pixel = encoded_pixels(bytes, AlphaType::Unpremul)?.at(4, 4);
     for (actual, expected) in pixel.into_iter().zip([48u8, 96, 144, 255]) {
         assert!(actual.abs_diff(expected) <= 3, "{format:?}: {pixel:?}");
     }
@@ -71,11 +50,12 @@ fn assert_color(bytes: &[u8], format: EncodedImageFormat) -> Result<(), TestErro
 
 #[test]
 fn jpeg_and_png_pixels_survive_the_canvas_and_raster_export_path() -> Result<(), TestError> {
+    let PixelSize { width, height } = IMAGE.pixel_size();
     for format in [EncodedImageFormat::JPEG, EncodedImageFormat::PNG] {
         let bytes = encoded(format)?;
         assert_color(&bytes, format)?;
         let tree = SceneTree::with_leaf(scene(bytes)?)?;
-        let png = raster_png(tree.at(Duration::ZERO), (8, 8), &Fonts::new())?;
+        let png = raster_png(tree.at(Duration::ZERO), (width, height), &Fonts::new())?;
         assert_color(&png, format)?;
     }
     Ok(())
@@ -87,7 +67,7 @@ fn jpeg_and_png_pixels_survive_vulkan_upload() -> Result<(), TestError> {
     let mut painter = gpu.painter(&Fonts::new())?;
     for format in [EncodedImageFormat::JPEG, EncodedImageFormat::PNG] {
         let commands = scene(encoded(format)?)?;
-        let mut surface = gpu.offscreen(PixelSize::new(8, 8))?;
+        let mut surface = gpu.offscreen(IMAGE.pixel_size())?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
         let png = gpu.png(&mut surface)?;
@@ -105,14 +85,14 @@ fn decoded_cpu_asset_is_shared_with_the_painter_without_a_second_decode() -> Res
     assert!(!decoded.is_texture_backed());
     let identity = decoded.unique_id();
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut surface =
-        skia_safe::surfaces::raster_n32_premul((8, 8)).ok_or(TestError::RasterSurface)?;
+    let mut surface = skia_safe::surfaces::raster_n32_premul(IMAGE.dimensions())
+        .ok_or(TestError::RasterSurface)?;
     painter.paint_as_leaf(
         surface.canvas(),
         &[DrawCommand::Image {
             image: image.clone(),
-            destination: Rect::new(0.dp(), 0.dp(), 8.dp(), 8.dp()),
-            frame: Rect::new(0.dp(), 0.dp(), 8.dp(), 8.dp()),
+            destination: IMAGE.bounds(),
+            frame: IMAGE.bounds(),
         }],
         Density::ONE,
     )?;
@@ -122,8 +102,12 @@ fn decoded_cpu_asset_is_shared_with_the_painter_without_a_second_decode() -> Res
 
 #[test]
 fn an_encoded_image_takes_the_size_that_its_header_states() -> Result<(), TestError> {
+    let PixelSize { width, height } = IMAGE.pixel_size();
     for format in [EncodedImageFormat::JPEG, EncodedImageFormat::PNG] {
-        assert_eq!(encoded_image(encoded(format)?)?.dimensions(), (8, 8));
+        assert_eq!(
+            encoded_image(encoded(format)?)?.dimensions(),
+            (width, height)
+        );
     }
     Ok(())
 }

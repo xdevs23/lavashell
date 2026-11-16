@@ -65,6 +65,7 @@ impl Shaper {
 mod tests {
     use super::*;
     use crate::test_error::TestError;
+    use crate::test_font::probe_style_before_scaling;
 
     fn weight(value: f64) -> Result<FontWeight, TestError> {
         Ok(FontWeight::try_new(value)?)
@@ -112,7 +113,8 @@ mod tests {
     -> Result<(), TestError> {
         let fonts = crate::test_font::test_font()?.load()?;
         let mut shaper = Shaper::new(fonts, crate::failure::Failures::default());
-        let style = TextStyle::new("probe", 16.sp(), Color::WHITE)
+        let style = probe_style_before_scaling()
+            .size(16.sp())
             .weight(weight(550.0)?)
             .resolve_unscaled();
         assert_eq!(

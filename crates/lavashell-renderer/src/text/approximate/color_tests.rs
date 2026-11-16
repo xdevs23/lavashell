@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::super::PixelGeometry;
-use super::tests::{new_painter, pixels, target};
+use super::tests::{new_painter, target};
 use super::*;
 use crate::test_error::TestError;
-use crate::test_surfaces::floats;
+use crate::test_font::probe_style;
+use crate::test_surfaces::{float_info, float_pixel, pixels};
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 
 #[test]
@@ -28,20 +29,18 @@ fn foreground_is_managed_but_rgb_and_center_coverage_remain_data() -> Result<(),
         (ColorSpace::new_srgb(), color.to_encoded(Gamut::Srgb)),
         (ColorSpace::new_srgb_linear(), color.to_linear(Gamut::Srgb)),
         (
-            crate::color::working_color_space().ok_or(Error::WorkingColorSpace)?,
+            crate::color::working_color_space()?,
             color.to_linear(Gamut::Rec2020),
         ),
     ] {
-        let info = ImageInfo::new((4, 4), ColorType::RGBAF32, AlphaType::Premul, space);
+        let info = float_info((4, 4), AlphaType::Premul, Some(space));
         let mut target =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         let skia_color = crate::paint::color4f(color)?;
         let blend = blend::MaskBlend::new()?;
         blend.draw(target.canvas(), &blend.coverage(&masks)?, skia_color)?;
-        let mut bytes = [0; 16];
-        assert!(target.read_pixels(&info.with_dimensions((1, 1)), &mut bytes, 16, (1, 1)));
-        let actual: [f32; 4] = floats(&bytes);
+        let actual = float_pixel(&mut target, (1, 1), AlphaType::Premul, info.color_space());
         let expected = [
             32.0 / 255.0 * foreground[0],
             128.0 / 255.0 * foreground[1],
@@ -67,7 +66,7 @@ fn foreground_is_managed_but_rgb_and_center_coverage_remain_data() -> Result<(),
 #[test]
 fn a_text_color_change_reuses_the_paragraph_and_the_masks() -> Result<(), TestError> {
     let command = |color: Color| {
-        let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+        let style = probe_style();
         DrawCommand::Text {
             text: "Headphones p".into(),
             rect: Rect::new(7.25.dp(), 3.5.dp(), 280.dp(), 142.dp()),

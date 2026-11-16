@@ -16,6 +16,7 @@ mod modules;
 mod next_steps;
 mod patch;
 mod python_place;
+mod renderer_test_fixtures;
 mod repository_files;
 mod rules;
 mod safety_comments;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::BandEdges;
-use crate::effects_tests::{draw, draw_with, linear_pixels, sample, stripes, surface, tangle};
+use crate::effects_tests::{
+    draw, draw_with, linear_pixels, sample, sample_at_center, sample_in_middle_row, stripes, tangle,
+};
 use crate::failure::Failures;
 use crate::field::Band;
 use crate::field::Route;
@@ -9,7 +11,7 @@ use crate::float_asserts::same_at;
 use crate::raster::RasterMode;
 use crate::resources::PaintResources;
 use crate::test_error::TestError;
-use crate::test_surfaces::ChannelRounding;
+use crate::test_surfaces::{ChannelRounding, EFFECT_SURFACE, Pixels};
 use crate::{FieldRoom, UniformRange};
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
@@ -31,7 +33,7 @@ fn red(color: [f32; 4]) -> bool {
 
 #[test]
 fn four_radii_fill_round_only_their_own_corners() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let shape = RoundedRect::new(
         Rect::new(8.dp(), 8.dp(), 80.dp(), 32.dp()),
@@ -61,7 +63,7 @@ fn rounded_boxes_fill_and_clip_along_one_edge() -> Result<(), TestError> {
         })?;
         let worst = f64::from(difference(&filled, &clipped));
         assert!(
-            worst <= ChannelRounding::of(&surface()?)?.after(2, 1.0),
+            worst <= ChannelRounding::of(&EFFECT_SURFACE.raster()?)?.after(2, 1.0),
             "{corners:?}: largest channel difference {worst}"
         );
     }
@@ -75,7 +77,7 @@ fn contour_borders_follow_their_placement() -> Result<(), TestError> {
         (BorderPlacement::Center, true, true),
         (BorderPlacement::Outside, false, true),
     ] {
-        let mut s = surface()?;
+        let mut s = EFFECT_SURFACE.raster()?;
         let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
         let material =
             Material::new(Color::WHITE).border(Stroke::new(RED, 4.dp())?.placement(placement));
@@ -91,7 +93,7 @@ fn contour_borders_follow_their_placement() -> Result<(), TestError> {
 
 #[test]
 fn contour_shadows_spread_and_inset_around_the_outline() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT)
         .shadow(Shadow::new(RED, 0.dp(), Point::new(0.dp(), 0.dp()))?.spread(4.dp())?)
@@ -111,7 +113,7 @@ fn contour_shadows_spread_and_inset_around_the_outline() -> Result<(), TestError
 
 #[test]
 fn unions_fill_every_member() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
@@ -126,15 +128,15 @@ fn unions_fill_every_member() -> Result<(), TestError> {
         0.dp(),
     )?;
     draw(&mut s, |d| d.material(fused, &Material::new(Color::WHITE)))?;
-    assert!(sample(&mut s, 18, 24)[3] > 0.98);
-    assert!(sample(&mut s, 75, 24)[3] > 0.98);
-    assert!(sample(&mut s, 50, 24)[3] < 0.01);
+    assert!(sample_in_middle_row(&mut s, 18)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 75)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 50)[3] < 0.01);
     Ok(())
 }
 
 #[test]
 fn backdrops_on_other_shapes_blur_inside_the_shape() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let glass = Backdrop::glass(
         5.dp(),
         Glass {
@@ -153,7 +155,7 @@ fn backdrops_on_other_shapes_blur_inside_the_shape() -> Result<(), TestError> {
     })?;
     assert!(sample(&mut s, 17, 5)[0] > 0.98);
     for x in [35, 77] {
-        let blurred = sample(&mut s, x, 24)[0];
+        let blurred = sample_in_middle_row(&mut s, x)[0];
         assert!((blurred - 0.5).abs() < 0.025, "{x}: {blurred}");
     }
     assert!((sample(&mut s, 78, 5)[0] - 0.5).abs() < 0.025);
@@ -166,8 +168,9 @@ fn rounded(rect: Rect, radius: Dp) -> UnionMember {
 
 fn pills(gap: f64, spacing: f64) -> Result<Shape, TestError> {
     let pill = |x: f64| rounded(Rect::new(Dp::new(x), 14.dp(), 30.dp(), 20.dp()), 10.dp());
+    let middle = EFFECT_SURFACE.center().x.get();
     union(
-        [pill(48.0 - gap / 2.0 - 30.0), pill(48.0 + gap / 2.0)],
+        [pill(middle - gap / 2.0 - 30.0), pill(middle + gap / 2.0)],
         Dp::new(spacing),
     )
 }
@@ -175,22 +178,22 @@ fn pills(gap: f64, spacing: f64) -> Result<Shape, TestError> {
 #[test]
 fn unions_fuse_once_their_gap_reaches_the_spacing() -> Result<(), TestError> {
     for (gap, fused) in [(16.0, false), (10.0, true), (6.0, true), (0.0, true)] {
-        let mut s = surface()?;
+        let mut s = EFFECT_SURFACE.raster()?;
         let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
         let pair = pills(gap, 12.0)?;
         draw(&mut s, |d| {
             d.material(pair, &Material::new(Color::WHITE));
         })?;
-        let neck = sample(&mut s, 48, 24)[3];
+        let neck = sample_at_center(&mut s)[3];
         assert_eq!(neck > 0.5, fused, "gap {gap}: {neck}");
-        assert!(sample(&mut s, 20, 24)[3] > 0.98);
+        assert!(sample_in_middle_row(&mut s, 20)[3] > 0.98);
     }
     Ok(())
 }
 
 #[test]
 fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
@@ -200,7 +203,7 @@ fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> 
         16.dp(),
     )?;
     draw(&mut s, |d| d.material(fused, &Material::new(Color::WHITE)))?;
-    assert!(sample(&mut s, 46, 24)[3] > 0.98);
+    assert!(sample_in_middle_row(&mut s, 46)[3] > 0.98);
     assert!(sample(&mut s, 46, 12)[3] < 0.01);
     assert!(sample(&mut s, 46, 35)[3] < 0.01);
     Ok(())
@@ -209,18 +212,18 @@ fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> 
 #[test]
 fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError> {
     let fused = pills(4.0, 12.0)?;
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT).border(Stroke::new(RED, 3.dp())?);
     draw(&mut s, |d| d.material(fused.clone(), &material))?;
-    assert!(red(sample(&mut s, 17, 24)));
-    assert!(sample(&mut s, 13, 24)[3] < 0.01);
+    assert!(red(sample_in_middle_row(&mut s, 17)));
+    assert!(sample_in_middle_row(&mut s, 13)[3] < 0.01);
     assert!(
-        sample(&mut s, 48, 24)[3] < 0.01,
+        sample_at_center(&mut s)[3] < 0.01,
         "the neck has no border inside"
     );
 
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT)
         .shadow(Shadow::new(RED, 0.dp(), Point::new(0.dp(), 0.dp()))?.spread(4.dp())?)
@@ -230,11 +233,13 @@ fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError>
                 .inset(true),
         );
     draw(&mut s, |d| d.material(fused, &material))?;
-    assert!(red(sample(&mut s, 14, 24)));
-    assert!(sample(&mut s, 10, 24)[3] < 0.01);
-    assert!(sample(&mut s, 17, 24)[3] > 0.98 && sample(&mut s, 17, 24)[1] > 0.98);
+    assert!(red(sample_in_middle_row(&mut s, 14)));
+    assert!(sample_in_middle_row(&mut s, 10)[3] < 0.01);
     assert!(
-        sample(&mut s, 48, 24)[3] < 0.01,
+        sample_in_middle_row(&mut s, 17)[3] > 0.98 && sample_in_middle_row(&mut s, 17)[1] > 0.98
+    );
+    assert!(
+        sample_at_center(&mut s)[3] < 0.01,
         "the neck is deeper than the inset"
     );
     Ok(())
@@ -242,7 +247,7 @@ fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError>
 
 #[test]
 fn unions_with_contour_members_cover_through_a_field_texture() -> Result<(), TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
@@ -312,8 +317,9 @@ fn blurred_contour_shadows_from_raster_tiles_reach_into_the_clip() -> Result<(),
         Point::new(0.dp(), 0.dp()),
     )?);
     let beside = |d: &mut Drawing<'_>| {
+        let Size { width, height } = EFFECT_SURFACE.size();
         d.clip(
-            Rect::new(0.dp(), 0.dp(), 48.dp(), 48.dp()),
+            Rect::new(0.dp(), 0.dp(), width / 2.0, height),
             Corners::default(),
         );
         d.material(
@@ -328,10 +334,7 @@ fn blurred_contour_shadows_from_raster_tiles_reach_into_the_clip() -> Result<(),
     let cases: [&dyn Fn(&mut Drawing<'_>); 2] = [&beside, &enlarged];
     for paint in cases {
         let skia = render(RasterMode::Vector, paint)?;
-        assert!(
-            skia[25 * 96 + 46][3] > 0.02,
-            "the blur reaches into the clip"
-        );
+        assert!(skia.at(46, 25)[3] > 0.02, "the blur reaches into the clip");
         let worst = difference(&skia, &render(RasterMode::Tiles, paint)?);
         assert!(worst < 0.01, "largest channel difference {worst}");
     }
@@ -341,14 +344,14 @@ fn blurred_contour_shadows_from_raster_tiles_reach_into_the_clip() -> Result<(),
 fn render(
     mode: RasterMode,
     paint: impl FnOnce(&mut Drawing<'_>),
-) -> Result<Vec<[f32; 4]>, TestError> {
-    let mut s = surface()?;
+) -> Result<Pixels<[f32; 4]>, TestError> {
+    let mut s = EFFECT_SURFACE.raster()?;
     let painter = crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     draw_with(&mut painter.with_raster_mode(mode), &mut s, paint)?;
     Ok(linear_pixels(&mut s))
 }
 
-fn difference(a: &[[f32; 4]], b: &[[f32; 4]]) -> f32 {
+fn difference(a: &Pixels<[f32; 4]>, b: &Pixels<[f32; 4]>) -> f32 {
     let premultiplied = |c: &[f32; 4]| [c[0] * c[3], c[1] * c[3], c[2] * c[3], c[3]];
     a.iter()
         .zip(b)
@@ -406,7 +409,7 @@ fn a_border_that_path_operations_give_up_on_draws_from_the_field() -> Result<(),
     let Shape::Contour(polygon) = &shape else {
         return Err(TestError::Unexpected("a contour"));
     };
-    let mut surface = surface()?;
+    let mut surface = EFFECT_SURFACE.raster()?;
     let stroke = Stroke::new(Color::WHITE, 0.125.dp())?.placement(BorderPlacement::Outside);
     let path = crate::paint::skpath(polygon)?;
     let edges = BandEdges::new(surface.canvas(), &path, Band::stroke(stroke))?;
@@ -415,17 +418,15 @@ fn a_border_that_path_operations_give_up_on_draws_from_the_field() -> Result<(),
         "the test needs a band that the path operations give up on"
     );
     let mut commands = vec![DrawCommand::Transform(
-        Affine::scale(16.0, 16.0).translated(Point::new(48.dp(), 24.dp())),
+        Affine::scale(16.0, 16.0).translated(EFFECT_SURFACE.center()),
     )];
     commands.push(DrawCommand::Stroke { shape, stroke });
     let mut painter =
         crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
     let mut rim: u16 = 0;
-    let pixels = linear_pixels(&mut surface);
-    for (x, y) in (0..48_i16).flat_map(|y| (0..96_i16).map(move |x| (x, y))) {
-        let radius = (f64::from(x) + 0.5 - 48.0).hypot(f64::from(y) + 0.5 - 24.0);
-        let alpha = pixels[usize::try_from(y)? * 96 + usize::try_from(x)?][3];
+    for ((x, y), &[.., alpha]) in linear_pixels(&mut surface).positioned()? {
+        let radius = EFFECT_SURFACE.pixel_distance_from_center((x, y));
         if radius > 19.0 {
             assert!(same_at(alpha, 0.0, 0.0), "the border reaches {x}, {y}");
         } else if radius > 16.5 && alpha > 0.5 {

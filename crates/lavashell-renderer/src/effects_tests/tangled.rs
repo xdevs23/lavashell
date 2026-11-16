@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{draw, linear_pixels, stripes, surface};
+use super::{draw, linear_pixels, stripes};
 use crate::test_error::TestError;
+use crate::test_surfaces::EFFECT_SURFACE;
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 
@@ -17,7 +18,7 @@ pub(crate) fn tangle() -> Result<Shape, TestError> {
 
 #[test]
 fn a_tangled_contour_draws_its_fill_and_its_glass() -> Result<(), TestError> {
-    let mut expected = surface()?;
+    let mut expected = EFFECT_SURFACE.raster()?;
     draw(&mut expected, stripes)?;
     let shape = tangle()?;
     let fill = DrawCommand::Fill {
@@ -36,37 +37,35 @@ fn a_tangled_contour_draws_its_fill_and_its_glass() -> Result<(), TestError> {
         )),
     };
     for (label, command) in [("fill", fill), ("glass", glass)] {
-        let mut drawn = surface()?;
+        let mut drawn = EFFECT_SURFACE.raster()?;
         let mut commands = Vec::new();
-        let context = DrawContext::new(Viewport::new(Size::new(96.dp(), 48.dp()), Density::ONE));
+        let context = DrawContext::new(Viewport::new(EFFECT_SURFACE.size(), Density::ONE));
         stripes(&mut Drawing::new(
             &mut commands,
-            Rect::new(0.dp(), 0.dp(), 96.dp(), 48.dp()),
+            EFFECT_SURFACE.bounds(),
             &context,
         ));
         commands.extend([
             DrawCommand::Save,
-            DrawCommand::Transform(
-                Affine::scale(16.0, 16.0).translated(Point::new(48.dp(), 24.dp())),
-            ),
+            DrawCommand::Transform(Affine::scale(16.0, 16.0).translated(EFFECT_SURFACE.center())),
             command,
             DrawCommand::Restore,
         ]);
         let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
         painter.paint_as_leaf(drawn.canvas(), &commands, Density::ONE)?;
-        let (mut inside, mut changed) = (0, 0);
         let (drawn, expected) = (linear_pixels(&mut drawn), linear_pixels(&mut expected));
-        for (x, y) in (0..48_i16).flat_map(|y| (0..96_i16).map(move |x| (x, y))) {
-            let radius = (f64::from(x) + 0.5 - 48.0).hypot(f64::from(y) + 0.5 - 24.0);
-            let index = usize::try_from(y)? * 96 + usize::try_from(x)?;
-            let (pixel, stripe) = (drawn[index], expected[index]);
-            let same = pixel.map(f32::to_bits) == stripe.map(f32::to_bits);
-            if radius > 17.5 {
-                assert!(same, "{label} drew {pixel:?} over {stripe:?} at {x}, {y}");
-            } else if radius < 14.0 {
-                inside += 1;
-                changed += usize::from(!same);
-            }
+        let radius = |position| EFFECT_SURFACE.pixel_distance_from_center(position);
+        let inside = (drawn.positioned()?)
+            .filter(|(position, _)| radius(*position) < 14.0)
+            .count();
+        let mut changed = 0;
+        for (x, y) in drawn.positions_differing_in_bits(&expected)? {
+            let (pixel, stripe) = (drawn.at(x, y), expected.at(x, y));
+            assert!(
+                radius((x, y)) <= 17.5,
+                "{label} drew {pixel:?} over {stripe:?} at {x}, {y}"
+            );
+            changed += usize::from(radius((x, y)) < 14.0);
         }
         assert!(
             changed * 2 >= inside,

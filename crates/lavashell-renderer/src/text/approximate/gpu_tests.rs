@@ -1,33 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::super::{PixelGeometry, TextDestination};
+use super::samples::{
+    SAMPLE_SURFACE, large_text_rows, small_text_rows, transparent_backdrop_columns,
+};
 use super::*;
 use crate::test_error::TestError;
-use skia_safe::{AlphaType, ColorSpace, ColorType, Data, Image, ImageInfo};
+use crate::test_font::probe_style;
+use crate::test_surfaces::{Pixels, encoded_pixels, pixels};
+use crate::text::sample_fixtures::LABEL_SURFACE;
+use skia_safe::AlphaType;
+use std::ops::Range;
 
-fn read(png: &[u8]) -> Result<Vec<u8>, TestError> {
-    let image = Image::from_encoded(Data::new_copy(png)).ok_or(Error::DecodeImage)?;
-    let info = ImageInfo::new(
-        image.dimensions(),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        ColorSpace::new_srgb(),
-    );
-    let mut bytes = vec![0; info.compute_min_byte_size()];
-    assert!(image.read_pixels(
-        &info,
-        &mut bytes,
-        info.min_row_bytes(),
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow
-    ));
-    Ok(bytes)
-}
+const LARGEST_CHANNEL_SPREAD_OF_A_GRAY_PIXEL: u8 = 2;
 
-fn edges(bytes: &[u8], width: usize, left: usize, top: usize, height: usize) -> usize {
-    (top..top + height)
-        .flat_map(|y| (left..left + 280).map(move |x| (y * width + x) * 4))
-        .filter(|i| {
-            bytes[*i].abs_diff(bytes[*i + 1]) > 2 || bytes[*i + 1].abs_diff(bytes[*i + 2]) > 2
+fn count_colored_edge_pixels(
+    pixels: &Pixels<[u8; 4]>,
+    columns: &Range<u16>,
+    rows: &Range<u16>,
+) -> usize {
+    rows.clone()
+        .flat_map(|y| columns.clone().map(move |x| pixels.at(x, y)))
+        .filter(|[red, green, blue, _]| {
+            red.abs_diff(*green) > LARGEST_CHANNEL_SPREAD_OF_A_GRAY_PIXEL
+                || green.abs_diff(*blue) > LARGEST_CHANNEL_SPREAD_OF_A_GRAY_PIXEL
         })
         .count()
 }
@@ -61,13 +56,15 @@ fn translucent_rgb_coverage_survives_actual_vulkan_paint_with_valid_alpha_and_cl
     Ok(())
 }
 
-type GeometryOutput = (&'static str, usize, usize, Vec<u8>);
+type GeometryOutput = (&'static str, usize, usize, Pixels<[u8; 4]>);
 
 fn geometry_outputs(
     gpu: &mut crate::VulkanRenderer,
     painter: &mut crate::Painter,
 ) -> Result<Vec<GeometryOutput>, TestError> {
     let commands = super::samples::commands();
+    let columns = transparent_backdrop_columns()?;
+    let (small_rows, large_rows) = (small_text_rows()?, large_text_rows()?);
     let mut outputs = Vec::new();
     let cases = [
         ("gray", PixelGeometry::None),
@@ -85,18 +82,12 @@ fn geometry_outputs(
                 geometry,
             },
         );
-        let mut native = gpu.offscreen(PixelSize::new(900, 340))?;
+        let mut native = gpu.offscreen(SAMPLE_SURFACE.pixel_size())?;
         let _canvas_returned_for_chaining = native.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(native.canvas(), &commands, Density::ONE)?;
         let png = gpu.png(&mut native)?;
-        let bytes = read(&png)?;
-        assert!(
-            bytes
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .all(|p| p[..3].iter().all(|v| *v <= p[3]))
-        );
+        let actual = encoded_pixels(&png, AlphaType::Premul)?;
+        assert!(actual.iter().all(|p| p[..3].iter().all(|v| *v <= p[3])));
         let info = native.image_info();
         let mut cpu =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
@@ -104,30 +95,17 @@ fn geometry_outputs(
         let mut reference = super::tests::new_painter(geometry)?;
         reference.set_blend_space(crate::BlendSpace::Srgb);
         reference.paint_as_leaf(cpu.canvas(), &commands, Density::ONE)?;
-        let expected = super::tests::pixels_as(
-            &mut cpu,
-            &ImageInfo::new(
-                (900, 340),
-                ColorType::RGBA8888,
-                AlphaType::Premul,
-                ColorSpace::new_srgb(),
-            ),
-        );
-        let error = bytes
-            .iter()
-            .zip(&expected)
-            .map(|(a, b)| a.abs_diff(*b))
-            .max()
-            .ok_or(TestError::Missing("pixels"))?;
+        let expected = pixels(&mut cpu);
+        let error = actual.largest_channel_difference(&expected)?;
         assert!(
             error <= 4,
             "actual Vulkan/CPU {name} coverage differs by {error} bytes"
         );
         outputs.push((
             name,
-            edges(&bytes, 900, 0, 0, 170),
-            edges(&bytes, 900, 0, 176, 150),
-            bytes,
+            count_colored_edge_pixels(&actual, &columns, &small_rows),
+            count_colored_edge_pixels(&actual, &columns, &large_rows),
+            actual,
         ));
     }
     Ok(outputs)
@@ -148,7 +126,7 @@ fn assert_unsafe_scopes_fall_back(
         ("isolated", vec![DrawCommand::Opacity(0.5)]),
     ] {
         let mut commands = prefix;
-        let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+        let mut style = probe_style();
         style.color = Color::WHITE.with_alpha(0.4);
         commands.push(DrawCommand::Text {
             text: "Headphones p".into(),
@@ -156,7 +134,7 @@ fn assert_unsafe_scopes_fall_back(
             style,
         });
         commands.push(DrawCommand::Restore);
-        let mut draw = |geometry| -> Result<Vec<u8>, TestError> {
+        let mut draw = |geometry| -> Result<Pixels<[u8; 4]>, TestError> {
             painter.set_text_rendering(
                 TextRendering {
                     antialiasing: TextAntialiasing::SubpixelApproximate,
@@ -167,11 +145,11 @@ fn assert_unsafe_scopes_fall_back(
                     geometry,
                 },
             );
-            let mut target = gpu.offscreen(PixelSize::new(300, 48))?;
+            let mut target = gpu.offscreen(LABEL_SURFACE.pixel_size())?;
             let _canvas_returned_for_chaining =
                 target.canvas().clear(skia_safe::Color::TRANSPARENT);
             painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
-            read(&gpu.png(&mut target)?)
+            encoded_pixels(&gpu.png(&mut target)?, AlphaType::Premul)
         };
         let reference = draw(PixelGeometry::None)?;
         assert_eq!(

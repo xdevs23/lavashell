@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::effects_tests::{draw, sample, surface};
+use crate::effects_tests::{draw, sample};
 use crate::failure::{DrawFailure, Failures};
 use crate::field::Route;
 use crate::field::test_shapes::{Distance, union};
 use crate::resources::PaintResources;
 use crate::test_error::TestError;
+use crate::test_surfaces::EFFECT_SURFACE;
 use crate::{FieldRoom, UniformRange};
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
@@ -31,7 +32,7 @@ fn pixel_centers() -> impl Iterator<Item = (u16, u16, Point)> {
 }
 
 fn alpha(paint: impl FnOnce(&mut Drawing<'_>)) -> Result<Vec<f32>, TestError> {
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     draw(&mut s, paint)?;
     Ok(pixel_centers()
         .map(|(x, y, _)| sample(&mut s, i32::from(x), i32::from(y))[3])
@@ -141,7 +142,7 @@ fn a_union_keeps_the_hole_of_a_member_open() -> Result<(), TestError> {
         Corners::all(2.5.dp()),
     );
     let fused = union([UnionMember::Hollow(hollow), pill.into()], 4.dp())?;
-    let mut s = surface()?;
+    let mut s = EFFECT_SURFACE.raster()?;
     draw(&mut s, |d| d.fill(fused, Color::WHITE))?;
     assert!(
         sample(&mut s, 48, 24)[3].abs() < f32::EPSILON,

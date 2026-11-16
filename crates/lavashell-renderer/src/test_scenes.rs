@@ -12,6 +12,8 @@ use skia_safe::Canvas;
 use std::time::Duration;
 
 pub(crate) const TEST_SURFACE: SurfaceId = SurfaceId::numbered(0);
+pub(crate) const BACKGROUND_STRIPE_COLORS: [Color; 2] =
+    [Color::rgb(0x0011_2255), Color::rgb(0x00fe_ddaa)];
 
 pub(crate) fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> Change {
     Change::Insert {

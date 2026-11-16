@@ -7,7 +7,6 @@ use crate::Error;
 use crate::scalar::scalar;
 use crate::vulkan::skia_handoff::{
     SkiaFormat, SkiaImage, backend_semaphore, context_state, gpu_render_target, image_info,
-    working_image_info,
 };
 use ash::vk;
 use lavashell_core::prelude::{OutputProfile, PixelSize};
@@ -220,7 +219,7 @@ fn working_surface<'a>(
     extent: (i32, i32),
 ) -> Result<&'a mut Surface, Error> {
     if working.is_none() {
-        let info = working_image_info(extent)?;
+        let info = crate::color::working_image_info(extent)?;
         *working = gpu_render_target(context, &info, gpu::Budgeted::Yes);
     }
     working.as_mut().ok_or(Error::WorkingSurface)

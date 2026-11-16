@@ -4,14 +4,22 @@ use crate::copy_catalogs::copy_report;
 use crate::crate_manifests::crate_report;
 use crate::documents::{ALLOWED_DOCUMENT, document_report};
 use crate::error::Error;
-use crate::findings::Report;
+use crate::findings::{Finding, Report};
 use crate::languages::RUST;
 use crate::modules::{Crate, Source, Sources};
 use crate::python_place::{PYTHON_DIRECTORY, python_place_report};
+use crate::renderer_test_fixtures::RENDERER_TEST_RULES;
 use crate::repository_files::{FileKind, RepositoryFile, unknown_kind_report};
 use crate::rules::{file_findings, missing_forbid};
 use std::fmt;
 use std::path::{Path, PathBuf};
+
+pub struct CrateRule {
+    pub root: &'static str,
+    pub findings: fn(&Crate<'_>) -> Result<Vec<Finding>, Error>,
+}
+
+const CRATE_RULES: [CrateRule; 1] = [RENDERER_TEST_RULES];
 
 #[derive(Clone, Copy, Debug)]
 pub enum RuleSet {
@@ -85,6 +93,9 @@ pub fn rust_report(files: &[RepositoryFile], crate_roots: &[PathBuf]) -> Result<
                 source,
             })?,
         );
+        for rule in CRATE_RULES.iter().filter(|rule| root.ends_with(rule.root)) {
+            findings.extend((rule.findings)(&crate_files)?);
+        }
     }
     findings.sort_by(|first, second| (&first.path, first.line).cmp(&(&second.path, second.line)));
     Ok(Report {

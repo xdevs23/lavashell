@@ -2,26 +2,22 @@
 use super::*;
 use crate::test_error::TestError;
 use crate::test_scenes::TEST_SURFACE;
+use crate::test_surfaces::TestSurface;
 use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
-use lavashell_core::prelude::{Density, Dp, PixelSize, Rect};
+use lavashell_core::prelude::Density;
 use lavashell_core::scene::tree::SceneTree;
 
-const SIDE: u16 = 8;
-
-fn size() -> PixelSize {
-    PixelSize::new(u32::from(SIDE), u32::from(SIDE))
-}
+const SURFACE: TestSurface = TestSurface::new(8, 8);
 
 fn paint(painter: &mut Painter, canvas: &Canvas, scene: &SceneImage) -> Result<(), Error> {
     let tree = SceneTree::default();
-    let side = Dp::new(f64::from(SIDE));
     painter.paint_surface(
         canvas,
         SurfaceFrame {
             surface: TEST_SURFACE,
             tree: tree.at(Duration::ZERO),
             density: Density::ONE,
-            damage: Some(Rect::new(Dp::ZERO, Dp::ZERO, side, side)),
+            damage: Some(SURFACE.bounds()),
             clear: skia_safe::Color::TRANSPARENT,
             scene: Some(scene),
             shape: None,
@@ -36,14 +32,14 @@ fn a_scene_image_is_painted_only_on_a_canvas_of_the_renderer_that_imported_it()
     let mut importer = VulkanRenderer::headless()?;
     let mut other = VulkanRenderer::headless()?;
     let mut painter = importer.painter(&Fonts::new())?;
-    let mut produced = importer.offscreen(size())?;
+    let mut produced = importer.offscreen(SURFACE.pixel_size())?;
     let pending = importer.submit_scene(&mut produced, 1, Duration::ZERO)?;
     let scene = &pending.scene.content;
 
-    let mut target = importer.offscreen(size())?;
+    let mut target = importer.offscreen(SURFACE.pixel_size())?;
     paint(&mut painter, target.canvas(), scene)?;
 
-    let mut target = other.offscreen(size())?;
+    let mut target = other.offscreen(SURFACE.pixel_size())?;
     let foreign = paint(&mut painter, target.canvas(), scene);
     assert!(matches!(
         foreign,
@@ -53,7 +49,7 @@ fn a_scene_image_is_painted_only_on_a_canvas_of_the_renderer_that_imported_it()
         })
     ));
 
-    let mut raster = crate::test_surfaces::surface(i32::from(SIDE), i32::from(SIDE))?;
+    let mut raster = SURFACE.raster()?;
     let without_gpu = paint(&mut painter, raster.canvas(), scene);
     assert!(matches!(
         without_gpu,

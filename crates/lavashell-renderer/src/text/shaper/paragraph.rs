@@ -272,6 +272,7 @@ mod tests {
     use super::*;
     use crate::float_asserts::same_at;
     use crate::test_error::TestError;
+    use crate::test_font::{PROBE_FAMILY, probe_style_before_scaling};
 
     impl ParagraphInput<'_> {
         pub(crate) fn key(&self) -> u64 {
@@ -279,10 +280,9 @@ mod tests {
         }
     }
 
-    const FAMILY: &str = "probe";
-
     fn probe_paragraph(fonts: ParagraphFonts<'_>, weight: f64) -> Result<Paragraph, TestError> {
-        let style = TextStyle::new(FAMILY, 20.sp(), Color::WHITE)
+        let style = probe_style_before_scaling()
+            .size(20.sp())
             .weight(FontWeight::try_new(weight)?)
             .resolve_unscaled();
         let layout = Layout::new(&style, 1000.dp())?;
@@ -374,14 +374,14 @@ mod tests {
         set_weight(
             &mut coordinate,
             &mut shared,
-            &[FAMILY],
+            &[PROBE_FAMILY],
             weight,
             Slant::Upright,
         );
         let arguments = coordinate.font_arguments();
         assert!(arguments.is_some());
         let shared_faces = shared.find_typefaces_with_font_arguments(
-            &[FAMILY],
+            &[PROBE_FAMILY],
             coordinate.font_style(),
             arguments,
         );
@@ -416,7 +416,13 @@ mod tests {
         let mut shared = fonts.collection();
         let mut named = SkTextStyle::new();
         let weight = FontWeight::try_new(500.0)?;
-        set_weight(&mut named, &mut shared, &[FAMILY], weight, Slant::Upright);
+        set_weight(
+            &mut named,
+            &mut shared,
+            &[PROBE_FAMILY],
+            weight,
+            Slant::Upright,
+        );
         assert!(named.font_arguments().is_none());
         let paragraph_fonts = ParagraphFonts {
             loaded_fonts: &fonts,
@@ -424,9 +430,11 @@ mod tests {
             coordinates: &mut CoordinateFonts::default(),
         };
         let painted = painted_face_ids(&probe_paragraph(paragraph_fonts, 500.0)?);
-        let shared_faces: Vec<u32> = (shared.find_typefaces(&[FAMILY], named.font_style()).iter())
-            .map(skia_safe::Typeface::unique_id)
-            .collect();
+        let shared_faces: Vec<u32> = (shared
+            .find_typefaces(&[PROBE_FAMILY], named.font_style())
+            .iter())
+        .map(skia_safe::Typeface::unique_id)
+        .collect();
         assert_eq!(painted, shared_faces);
         Ok(())
     }

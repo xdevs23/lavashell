@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::super::{PixelGeometry, TextDestination};
-use super::tests::{new_painter, pixels, target};
+use super::tests::{new_painter, target};
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::probe_modifier;
 use crate::test_scenes::{paint, paint_damage};
+use crate::test_surfaces::pixels;
 use lavashell_core::surface::SurfaceId;
 use lavashell_test_fixtures::WithoutFailures;
 
@@ -15,11 +17,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
         ui.scoped("retained", Modifier::new(), |ui| {
             ui.text(
                 "Headphones p e\u{301} office",
-                Modifier::new()
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .user_select(true)
-                    .tag("text"),
+                probe_modifier().user_select(true).tag("text"),
             );
         });
     });

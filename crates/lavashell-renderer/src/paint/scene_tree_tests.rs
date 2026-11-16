@@ -2,16 +2,17 @@
 use crate::destination::Destination;
 use crate::plan::Area;
 use crate::test_error::TestError;
-use crate::test_scenes::{TEST_SURFACE, insert};
-use crate::test_surfaces::{pixels, surface};
+use crate::test_font::probe_style;
+use crate::test_scenes::{BACKGROUND_STRIPE_COLORS, TEST_SURFACE, insert};
+use crate::test_surfaces::{Pixels, StripedSurface, TestSurface, pixels};
 use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::*;
 use std::{sync::Arc, time::Duration};
 
-pub(super) const WIDTH: i32 = 160;
-pub(super) const HEIGHT: i32 = 120;
+pub(super) const SURFACE: TestSurface = TestSurface::new(160, 120);
+pub(super) const STRIPES: StripedSurface = SURFACE.striped(10);
 
 pub(super) fn shapes() -> Vec<DrawCommand> {
     vec![
@@ -28,12 +29,7 @@ pub(super) fn shapes() -> Vec<DrawCommand> {
 }
 
 fn stripes() -> Vec<DrawCommand> {
-    (0..16_u8)
-        .map(|x| DrawCommand::Fill {
-            shape: Rect::new(10.dp() * f64::from(x), 0.dp(), 10.dp(), 120.dp()).into(),
-            brush: Color::rgb(if x % 2 == 0 { 0x0011_2255 } else { 0x00fe_ddaa }).into(),
-        })
-        .collect()
+    STRIPES.stripe_fills(BACKGROUND_STRIPE_COLORS)
 }
 
 fn glass() -> Vec<DrawCommand> {
@@ -84,14 +80,10 @@ fn grouped(node: Node, commands: Vec<DrawCommand>) -> Result<SceneTree, TestErro
     ])
 }
 
-fn pixel_dp(position: usize) -> Result<Dp, TestError> {
-    Ok(Dp::new(f64::from(u16::try_from(position)?)))
-}
-
-fn painted(tree: &SceneTree, density: Density) -> Result<Vec<u8>, TestError> {
+fn painted(tree: &SceneTree, density: Density) -> Result<Pixels<[u8; 4]>, TestError> {
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     painter.set_packet_caching(crate::PacketCaching::Disabled);
-    let mut target = surface(WIDTH, HEIGHT)?;
+    let mut target = SURFACE.raster()?;
     painter.paint_scene(
         target.canvas(),
         TEST_SURFACE,
@@ -265,7 +257,7 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let nothing = vec![DrawCommand::Save, DrawCommand::Restore];
     let scene = grouped(group(Affine::IDENTITY, 0.5, None), nothing)?;
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut target = surface(WIDTH, HEIGHT)?;
+    let mut target = SURFACE.raster()?;
     let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::WHITE);
     let before = pixels(&mut target);
     let plan = painter.plan(
@@ -306,7 +298,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
     let at = |x: f64, y: f64| Affine::translate(Point::new(x.dp(), y.dp()));
     let mut scene = grouped(group(at(10.0, 6.0), 1.0, None), card())?;
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut target = surface(WIDTH, HEIGHT)?;
+    let mut target = SURFACE.raster()?;
     let mut paint = |painter: &mut Painter, scene: &SceneTree| {
         let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_scene(
@@ -365,7 +357,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
         insert(3, Some(2), 0, leaf(glass())?),
     ])?;
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut retained = surface(WIDTH, HEIGHT)?;
+    let mut retained = SURFACE.raster()?;
     let mut presented = DamageTracker::default();
     for sequence in 0..8_u8 {
         let moved = Change::SetSlot {
@@ -395,14 +387,14 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
     }
     let stats = painter.render_stats();
     assert!(stats.cache_hits > 0);
-    assert!(stats.damaged_pixels < 8 * u64::try_from(WIDTH * HEIGHT)?);
+    assert!(stats.damaged_pixels < 8 * SURFACE.pixel_count());
     Ok(())
 }
 
 #[test]
 fn a_leaf_without_layers_paints_past_its_footprint() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style();
     style.color = Color::rgb(0);
     let rect = Rect::new(10.dp(), 10.dp(), 100.dp(), 4.dp());
     let text = DrawCommand::Text {
@@ -412,7 +404,7 @@ fn a_leaf_without_layers_paints_past_its_footprint() -> Result<(), TestError> {
     };
     let tree = tree([insert(1, None, 0, leaf(vec![text])?)])?;
     let mut painter = Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut target = surface(WIDTH, HEIGHT)?;
+    let mut target = SURFACE.raster()?;
     painter.paint_scene(
         target.canvas(),
         TEST_SURFACE,
@@ -420,10 +412,9 @@ fn a_leaf_without_layers_paints_past_its_footprint() -> Result<(), TestError> {
         Density::ONE,
     );
     let footprint = rect.outset(4.dp());
-    let width = usize::try_from(WIDTH)?;
     let mut outside = 0;
-    for (index, pixel) in pixels(&mut target).as_chunks::<4>().0.iter().enumerate() {
-        let at = Point::new(pixel_dp(index % width)?, pixel_dp(index / width)?);
+    for ((x, y), pixel) in pixels(&mut target).positioned()? {
+        let at = Point::new(Dp::new(f64::from(x)), Dp::new(f64::from(y)));
         if pixel[3] > 0 && !footprint.contains(at) {
             outside += 1;
         }

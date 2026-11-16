@@ -2,7 +2,9 @@
 use super::super::{PixelGeometry, TextDestination};
 use super::*;
 use crate::test_error::TestError;
-use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo, Surface};
+use crate::test_font::probe_style_at;
+use crate::test_surfaces::{has_colored_fringe, pixels, srgb_info};
+use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
 
 pub(super) fn new_painter(geometry: PixelGeometry) -> Result<crate::Painter, TestError> {
     let fonts = crate::test_font::test_font()?;
@@ -22,7 +24,7 @@ pub(super) fn new_painter(geometry: PixelGeometry) -> Result<crate::Painter, Tes
 }
 
 fn text(value: &str, size: f64, color: Color) -> DrawCommand {
-    let mut style = TextStyle::new("probe", Sp::new(size), Color::WHITE).resolve_unscaled();
+    let mut style = probe_style_at(Sp::new(size));
     style.color = color;
     DrawCommand::Text {
         text: value.into(),
@@ -32,24 +34,7 @@ fn text(value: &str, size: f64, color: Color) -> DrawCommand {
 }
 
 pub(super) fn target() -> Result<Surface, TestError> {
-    let info = ImageInfo::new(
-        (300, 150),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        ColorSpace::new_srgb(),
-    );
-    skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)
-}
-
-pub(super) fn pixels(surface: &mut Surface) -> Vec<u8> {
-    let info = surface.image_info();
-    pixels_as(surface, &info)
-}
-
-pub(super) fn pixels_as(surface: &mut Surface, info: &ImageInfo) -> Vec<u8> {
-    let mut bytes = vec![0; info.compute_min_byte_size()];
-    assert!(surface.read_pixels(info, &mut bytes, info.min_row_bytes(), (0, 0)));
-    bytes
+    skia_safe::surfaces::raster(&srgb_info((300, 150)), None, None).ok_or(TestError::RasterSurface)
 }
 
 #[test]
@@ -76,8 +61,7 @@ fn transparent_blend_raises_only_the_alpha_needed_for_valid_rgb() -> Result<(), 
     let white = crate::paint::color4f(Color::WHITE)?;
     let blend = blend::MaskBlend::new()?;
     blend.draw(target.canvas(), &blend.coverage(&masks)?, white)?;
-    let output = pixels(&mut target);
-    let pixel = &output[..4];
+    let pixel = pixels(&mut target).at(0, 0);
     assert!(
         pixel[0].abs_diff(32) <= 1 && pixel[1].abs_diff(128) <= 1 && pixel[2].abs_diff(223) <= 1
     );
@@ -121,13 +105,7 @@ fn actual_small_and_clock_text_preserve_alpha_and_output_geometry() -> Result<()
                 )?;
                 let actual = pixels(&mut surface);
                 if size < 20.0 {
-                    assert!(
-                        actual
-                            .as_chunks::<4>()
-                            .0
-                            .iter()
-                            .any(|p| p[0] != p[1] || p[1] != p[2])
-                    );
+                    assert!(has_colored_fringe(&actual));
                 } else {
                     let mut gray = target()?;
                     let _canvas_returned_for_chaining =
@@ -138,27 +116,12 @@ fn actual_small_and_clock_text_preserve_alpha_and_output_geometry() -> Result<()
                         Density::ONE,
                     )?;
                     assert!(
-                        actual
-                            .iter()
-                            .zip(pixels(&mut gray))
-                            .all(|(drawn, native)| drawn.abs_diff(native) <= 1),
+                        actual.largest_channel_difference(&pixels(&mut gray))? <= 1,
                         "large raster text must keep native gray coverage"
                     );
                 }
-                assert!(
-                    actual
-                        .as_chunks::<4>()
-                        .0
-                        .iter()
-                        .all(|p| p[..3].iter().all(|v| *v <= p[3]))
-                );
-                assert!(
-                    actual
-                        .as_chunks::<4>()
-                        .0
-                        .iter()
-                        .any(|p| p[3] < 255 && p[3] > 0)
-                );
+                assert!(actual.iter().all(|p| p[..3].iter().all(|v| *v <= p[3])));
+                assert!(actual.iter().any(|p| p[3] < 255 && p[3] > 0));
                 let mut fresh = target()?;
                 let _canvas_returned_for_chaining =
                     fresh.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -193,16 +156,10 @@ fn foreground_alpha_is_applied_before_overlapping_glyph_coverage_is_combined()
     painter.paint_as_leaf(target.canvas(), &[command], Density::ONE)?;
     let output = pixels(&mut target);
     assert!(
-        output.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 125),
+        output.iter().any(|pixel| pixel[3] > 125),
         "missing accumulated ink"
     );
-    assert!(
-        output
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|p| p[..3].iter().all(|v| *v <= p[3]))
-    );
+    assert!(output.iter().all(|p| p[..3].iter().all(|v| *v <= p[3])));
     Ok(())
 }
 

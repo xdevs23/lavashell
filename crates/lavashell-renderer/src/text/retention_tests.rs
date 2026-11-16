@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_error::TestError;
+use crate::test_font::probe_modifier;
 use crate::test_scenes::{commands, paint, paint_damage};
+use crate::test_surfaces::{TestSurface, pixels};
+use crate::text::sample_fixtures::{ACCENTED_LABEL_TEXT, PLAIN_LABEL_TEXT};
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceId;
 use lavashell_test_fixtures::WithoutFailures;
+
+const RETENTION_SURFACE: TestSurface = TestSurface::new(400, 80);
 
 fn bounds_of(view: &View, tag: &'static str) -> Result<Rect, TestError> {
     view.bounds_of(&tag).ok_or(TestError::Missing(tag))
@@ -19,7 +24,7 @@ fn snapshot(view: &View, tag: &'static str) -> Result<(Rect, Vec<Rect>), TestErr
         .find_map(|node| {
             node.text
                 .as_ref()
-                .filter(|text| node.bounds == bounds && text.value == "Mon 5 Oct e\u{301} office")
+                .filter(|text| node.bounds == bounds && text.value == ACCENTED_LABEL_TEXT)
         })
         .ok_or(TestError::Missing("text node"))?;
     let glyphs = text
@@ -37,21 +42,13 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
     let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
             ui.text(
-                "Mon 5 Oct e\u{301} office",
-                Modifier::new()
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .user_select(true)
-                    .tag("root text"),
+                ACCENTED_LABEL_TEXT,
+                probe_modifier().user_select(true).tag("root text"),
             );
             ui.scoped("retained text", Modifier::new(), |ui| {
                 ui.text(
-                    "Mon 5 Oct e\u{301} office",
-                    Modifier::new()
-                        .font_family("probe")
-                        .font_size(13.sp())
-                        .user_select(true)
-                        .tag("component text"),
+                    ACCENTED_LABEL_TEXT,
+                    probe_modifier().user_select(true).tag("component text"),
                 );
             });
         });
@@ -132,19 +129,10 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
     let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
     let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("static label", Modifier::new(), |ui| {
-            ui.text(
-                "Mon 5 Oct office",
-                Modifier::new()
-                    .font_family("probe")
-                    .font_size(13.sp())
-                    .tag("static"),
-            );
+            ui.text(PLAIN_LABEL_TEXT, probe_modifier().tag("static"));
         });
     });
-    let target = TextDestination {
-        opaque: true,
-        geometry: PixelGeometry::Rgb,
-    };
+    let target = crate::test_surfaces::lcd_destination();
     let size = Size::new(600.dp(), 100.dp());
     painter.set_text_rendering(TextRendering::default(), target);
     let viewport = Viewport::new(size, Density::ONE);
@@ -178,29 +166,16 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
 -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
     let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
-    let target = TextDestination {
-        opaque: true,
-        geometry: PixelGeometry::Rgb,
-    };
-    let size = Size::new(400.dp(), 80.dp());
-    let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
-        ui.canvas(
-            Size::new(400.dp(), 80.dp()),
-            Modifier::new(),
-            |drawing: &mut Drawing<'_>| {
-                drawing.fill(
-                    Rect::new(0.dp(), 0.dp(), 400.dp(), 80.dp()),
-                    Color::rgb(0x0018_3e6c),
-                );
-            },
-        );
-        ui.text(
-            "Mon 5 Oct office",
-            Modifier::new().font_family("probe").font_size(13.sp()),
-        );
+    let target = crate::test_surfaces::lcd_destination();
+    let size = RETENTION_SURFACE.size();
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        ui.canvas(size, Modifier::new(), move |drawing: &mut Drawing<'_>| {
+            drawing.fill(Rect::from_size(size), Color::rgb(0x0018_3e6c));
+        });
+        ui.text(PLAIN_LABEL_TEXT, probe_modifier());
     });
     let info = skia_safe::ImageInfo::new(
-        (400, 80),
+        RETENTION_SURFACE.dimensions(),
         skia_safe::ColorType::BGRA8888,
         skia_safe::AlphaType::Opaque,
         None,
@@ -208,11 +183,6 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
     let make = || {
         skia_safe::surfaces::raster(&info, None, Some(&target.surface_props()))
             .ok_or(TestError::RasterSurface)
-    };
-    let pixels = |surface: &mut skia_safe::Surface| {
-        let mut data = vec![0_u8; 400 * 80 * 4];
-        assert!(surface.read_pixels(&info, &mut data, 400 * 4, (0, 0)));
-        data
     };
     let mut surfaces = [make()?, make()?];
     painter.set_text_rendering(TextRendering::default(), target);
@@ -227,7 +197,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
             SurfaceId::numbered(id),
             surface.canvas(),
             &tree,
-            Some(Rect::new(0.dp(), 0.dp(), size.width, size.height)),
+            Some(Rect::from_size(size)),
             skia_safe::Color::TRANSPARENT,
         )?;
     }

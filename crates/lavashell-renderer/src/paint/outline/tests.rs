@@ -2,6 +2,7 @@
 use super::*;
 use crate::test_error::TestError;
 use crate::test_scenes::TEST_SURFACE;
+use crate::test_surfaces::rgba8_pixel;
 use crate::{Fonts, Painter, StreamFrames, SurfaceFrame, UniformRange, input_cells};
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::prelude::{Brush, Color, Corners, DpExt, DrawCommand, Rect, SceneTree};
@@ -85,16 +86,8 @@ fn pixel(
     x: Dp,
     y: Dp,
 ) -> Result<[u8; 4], TestError> {
-    let info = skia_safe::ImageInfo::new(
-        (1, 1),
-        skia_safe::ColorType::RGBA8888,
-        skia_safe::AlphaType::Premul,
-        None,
-    );
-    let mut bytes = [0; 4];
     let origin = (whole_pixels(density, x)?, whole_pixels(density, y)?);
-    assert!(surface.read_pixels(&info, &mut bytes, 4, origin));
-    Ok(bytes)
+    Ok(rgba8_pixel(surface, origin, skia_safe::AlphaType::Premul))
 }
 
 #[test]

@@ -65,6 +65,8 @@ pub enum Error {
     PatchedLanguage { patch: PathBuf, patched: String },
     #[error("the crate root {path} is not one of the Rust files of the repository")]
     CrateRoot { path: PathBuf },
+    #[error("the crate {root} must define {name} in exactly one file")]
+    Definition { root: PathBuf, name: &'static str },
     #[error("{path} has no parent directory")]
     NoParentDirectory { path: PathBuf },
     #[error("{declared_in} declares the module {module}, whose file does not exist")]
