@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
+half4 main(float2 p) {
+    return half4(exactField(p).z, 0.0, 0.0, 1.0);
+}

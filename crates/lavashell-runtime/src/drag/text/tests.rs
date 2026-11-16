@@ -1,0 +1,299 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::*;
+use crate::test_error::TestError;
+use crate::test_host::{FIELD_VIEWPORT, FieldView, Metrics, field_id, field_view};
+use lavashell_core::prelude::*;
+use lavashell_core::surface::SurfaceId;
+use lavashell_core::transfer::ReceivedData;
+use lavashell_test_fixtures::{RecordedScene, WithoutFailures};
+
+#[path = "native_source_tests.rs"]
+mod native_source_tests;
+
+const DEVICE: DragDevice = DragDevice(1);
+
+struct Editor {
+    view: View,
+    scene: RecordedScene,
+    text: State<String>,
+    field: NodeId,
+}
+
+fn editor() -> Result<Editor, TestError> {
+    let FieldView {
+        view,
+        scene,
+        value: text,
+    } = field_view(Modifier::new())?;
+    assert!(!scene.changes().is_empty());
+    let field = field_id(&view)?;
+    Ok(Editor {
+        view,
+        scene,
+        text,
+        field,
+    })
+}
+
+fn offer(id: u64, position: Point, action: DragAction) -> DragOfferInfo {
+    DragOfferInfo {
+        id: TransferId(id),
+        surface: SurfaceId::numbered(0),
+        position,
+        mime_types: vec![
+            "text/plain".to_string(),
+            "text/plain;charset=utf-8".to_string(),
+        ],
+        actions: DragActions::new([action]),
+        selected_action: Some(action),
+    }
+}
+
+fn received(info: &DragOfferInfo, bytes: &[u8]) -> Result<DropEvent, TestError> {
+    Ok(DropEvent {
+        id: info.id,
+        surface: info.surface,
+        position: info.position,
+        action: info
+            .selected_action
+            .ok_or(TestError::Missing("the selected action"))?,
+        data: Ok(ReceivedData {
+            mime_type: TextFormat::Utf8.mime_type().to_string(),
+            bytes: bytes.to_vec(),
+        }),
+    })
+}
+
+#[test]
+fn a_text_drag_is_accepted_in_the_preferred_text_format() -> Result<(), TestError> {
+    let Editor { view, .. } = editor()?;
+    let mut adapter = TextTransfers::default();
+    let info = offer(1, Point::new(21.dp(), 5.dp()), DragAction::Copy);
+    let acceptance = adapter
+        .drag(&DragEvent::Enter(info), DEVICE, &view)
+        .ok_or(TestError::Missing("an acceptance of the drag"))?;
+    assert_eq!(acceptance.mime_type, TextFormat::Utf8.mime_type());
+    Ok(())
+}
+
+#[test]
+fn physical_drop_freezes_destination_and_post_drop_leave_keeps_receiving_target()
+-> Result<(), TestError> {
+    let Editor { mut view, text, .. } = editor()?;
+    let mut adapter = TextTransfers::default();
+    let mut info = offer(1, Point::new(11.dp(), 5.dp()), DragAction::Copy);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    info.position = Point::new(31.dp(), 5.dp());
+    assert!(
+        adapter
+            .drag(&DragEvent::Motion(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    assert!(
+        adapter
+            .drag(
+                &DragEvent::Leave {
+                    id: info.id,
+                    surface: SurfaceId::numbered(0),
+                },
+                DEVICE,
+                &view,
+            )
+            .is_none()
+    );
+    view.input(InputEvent::Press(Point::new(70.dp(), 5.dp())));
+    view.input(InputEvent::Release(Point::new(70.dp(), 5.dp())));
+    assert!(matches!(
+        adapter.receive(received(&info, b"X")?, &mut view),
+        Ok(DropAccepted::Inserted)
+    ));
+    assert_eq!(text.get(), "abcX def");
+    assert!(matches!(
+        adapter.receive(received(&info, b"again")?, &mut view),
+        Err(DropRefusal::NotPending)
+    ));
+    Ok(())
+}
+
+#[test]
+fn invalid_utf8_stale_destination_and_wrong_transfer_are_rejected() -> Result<(), TestError> {
+    for invalid in [true, false] {
+        let Editor { mut view, text, .. } = editor()?;
+        let mut adapter = TextTransfers::default();
+        let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
+        assert!(
+            adapter
+                .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+                .is_some()
+        );
+        assert!(
+            adapter
+                .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+                .is_none()
+        );
+        let unrelated = offer(2, Point::new(31.dp(), 5.dp()), DragAction::Copy);
+        assert!(matches!(
+            adapter.receive(received(&unrelated, b"wrong")?, &mut view),
+            Err(DropRefusal::NotPending)
+        ));
+        assert!(adapter.has_pending(info.id));
+        if invalid {
+            assert!(matches!(
+                adapter.receive(received(&info, &[255])?, &mut view),
+                Err(DropRefusal::NotUtf8(_))
+            ));
+            assert_eq!(text.get(), "abc def");
+        } else {
+            text.set("external text".to_string());
+            assert!(matches!(
+                adapter.receive(received(&info, b"stale")?, &mut view),
+                Err(DropRefusal::InsertRefused)
+            ));
+            assert_eq!(text.get(), "external text");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn cancellation_and_application_acceptance_remove_text_fallback() -> Result<(), TestError> {
+    let Editor { mut view, text, .. } = editor()?;
+    let mut adapter = TextTransfers::default();
+    let info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    adapter.forget(info.id);
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    assert!(!adapter.has_pending(info.id));
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    assert!(
+        adapter
+            .drag(
+                &DragEvent::Cancelled {
+                    id: info.id,
+                    surface: SurfaceId::numbered(0),
+                },
+                DEVICE,
+                &view,
+            )
+            .is_none()
+    );
+    assert!(matches!(
+        adapter.receive(received(&info, b"cancelled")?, &mut view),
+        Err(DropRefusal::NotPending)
+    ));
+    assert_eq!(text.get(), "abc def");
+    Ok(())
+}
+
+#[test]
+fn rejected_physical_drop_retains_negotiated_ownership_until_receipt() -> Result<(), TestError> {
+    let Editor { mut view, text, .. } = editor()?;
+    let mut adapter = TextTransfers::default();
+    let mut info = offer(1, Point::new(31.dp(), 5.dp()), DragAction::Copy);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    info.position = Point::new(180.dp(), 5.dp());
+    assert!(adapter.owns(&DragEvent::Drop(info.clone())));
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    assert!(
+        adapter
+            .drag(
+                &DragEvent::Leave {
+                    id: info.id,
+                    surface: SurfaceId::numbered(0),
+                },
+                DEVICE,
+                &view,
+            )
+            .is_none()
+    );
+    assert!(adapter.has_pending(info.id));
+    assert!(matches!(
+        adapter.receive(received(&info, b"rejected")?, &mut view),
+        Err(DropRefusal::NoTarget)
+    ));
+    assert!(!adapter.has_pending(info.id));
+    assert_eq!(text.get(), "abc def");
+    Ok(())
+}
+
+#[test]
+fn selected_text_native_source_starts_only_after_leaving_local_field() -> Result<(), TestError> {
+    let Editor {
+        mut view,
+        text,
+        field,
+        ..
+    } = editor()?;
+    assert_eq!(
+        view.accessibility_action(ActionRequest {
+            target: field,
+            action: AccessibilityAction::SetTextSelection(TextSelection {
+                anchor: 0,
+                focus: 3
+            })
+        }),
+        Ok(ActionOutcome::Performed)
+    );
+    view.input(InputEvent::Press(Point::new(11.dp(), 5.dp())));
+    let adapter = TextTransfers::default();
+    assert!(
+        adapter
+            .source(
+                &DragGesture {
+                    surface: SurfaceId::numbered(0),
+                    origin: Point::new(11.dp(), 5.dp()),
+                    position: Point::new(31.dp(), 5.dp())
+                },
+                &view
+            )
+            .is_none()
+    );
+    assert!(
+        adapter
+            .source(
+                &DragGesture {
+                    surface: SurfaceId::numbered(0),
+                    origin: Point::new(11.dp(), 5.dp()),
+                    position: Point::new(150.dp(), 5.dp())
+                },
+                &view
+            )
+            .is_some()
+    );
+    assert_eq!(text.get(), "abc def");
+    Ok(())
+}

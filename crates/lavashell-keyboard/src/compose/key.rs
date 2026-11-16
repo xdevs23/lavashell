@@ -1,0 +1,201 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::{Scene, centered};
+use crate::board::{CHARACTER, GAP, Key, KeyAt, Page, at_both_ends};
+use crate::keyboard::Snapshot;
+use crate::look::{
+    self, ACTION_GAP, ACTION_ICON, ACTION_KEY, FACE_MARGIN, KEY_CORNERS, KEY_ICON, LETTER,
+    PAGE_KEY, RING, SPACE_BAR,
+};
+use crate::shift::Shift;
+use lavashell_core::prelude::*;
+
+pub(super) fn compose(ui: &mut Ui, scene: &Scene, at: KeyAt, key: Key) {
+    let snapshot = scene.snapshot;
+    let (grid, rect) = (scene.grid, scene.grid.rect(&snapshot.board, at));
+    let (keyboard, typist) = (scene.keyboard.clone(), scene.keyboard.clone());
+    let mut modifier = Modifier::new().size(rect.width, rect.height);
+    if matches!(key, Key::Typed(_)) {
+        modifier = modifier.island(KEY_CORNERS);
+    }
+    let highlight = snapshot.highlight;
+    if highlight.shown && snapshot.board.nearest(highlight.at) == Some(at) {
+        modifier = modifier.outline(scene.look.accent, RING, KEY_CORNERS, RING);
+    }
+    let modifier = modifier.padding_xy(FACE_MARGIN, Dp::ZERO);
+    let enlarged = match ScaleFactor::try_new(1.0 + GAP / scene.grid.width(CHARACTER)) {
+        Ok(enlarged) => enlarged,
+        Err(error) => {
+            ui.fail(error);
+            return;
+        }
+    };
+    let modifier = modifier
+        .focusable(false)
+        .state_styles(styles(scene, key))
+        .semantics(semantics(scene, key))
+        .on_pointer(move |input| keyboard.pointer(key, at, grid, input))
+        .on_accessibility_action(ActionKind::Activate, move |_| {
+            typist.tap(key);
+            Ok(())
+        })
+        .transition(
+            Transition::new(look::hide_spring())
+                .reflow()
+                .enter(Presence::default().scale(enlarged)),
+        );
+    let room = rect.width - at_both_ends(FACE_MARGIN);
+    centered(ui, modifier, |ui| {
+        face(ui, scene, key, room);
+    });
+}
+
+struct ActionFace<'a> {
+    icon: &'static Icon,
+    word: &'a str,
+    tonal: bool,
+}
+
+fn action(snapshot: &Snapshot) -> ActionFace<'_> {
+    let (text, icons) = (&snapshot.settings.text, &snapshot.settings.icons);
+    let (icon, word, tonal) = match snapshot.session.hints.action {
+        Some(TextAction::Search) => (icons.search, &text.search, false),
+        Some(TextAction::Done) => (icons.done, &text.done, false),
+        Some(TextAction::Next) => (icons.next, &text.next, true),
+        Some(TextAction::Go) => (icons.go, &text.go, false),
+        Some(TextAction::Send) => (icons.send, &text.send, false),
+        None => (icons.enter, &text.enter, snapshot.session.multiline),
+    };
+    ActionFace { icon, word, tonal }
+}
+
+fn styles(scene: &Scene, key: Key) -> StateStyles {
+    let look = scene.look;
+    match key {
+        Key::Typed(_) => look.letter.clone(),
+        Key::Shift => match scene.snapshot.shift {
+            Shift::Off => look.function.clone(),
+            Shift::Once => look.shifted.clone(),
+            Shift::Locked => look.caps.clone(),
+        },
+        Key::Action if action(scene.snapshot).tonal => look.tonal.clone(),
+        Key::Action => look.action.clone(),
+        _ => look.function.clone(),
+    }
+}
+
+fn key_icon(ui: &mut Ui, ink: Color, icon: &'static Icon, style: IconStyle) {
+    ui.icon(
+        icon,
+        IconOptions {
+            size: Some(KEY_ICON),
+            style,
+        },
+        Modifier::new().color(ink),
+    );
+}
+
+fn face(ui: &mut Ui, scene: &Scene, key: Key, room: Dp) {
+    let (snapshot, look) = (scene.snapshot, scene.look);
+    let (text, icons) = (&snapshot.settings.text, &snapshot.settings.icons);
+    match key {
+        Key::Typed(typed) => {
+            let style = scene.text(&LETTER, look.ink);
+            ui.text(snapshot.typed(typed), Modifier::new().text_style(style));
+        }
+        Key::Shift => match snapshot.shift {
+            Shift::Off => key_icon(ui, look.ink, icons.shift, IconStyle::Outlined),
+            Shift::Once => key_icon(ui, look.ink, icons.shift, IconStyle::Filled),
+            Shift::Locked => key_icon(ui, look.ink, icons.caps_lock, IconStyle::Filled),
+        },
+        Key::Delete => key_icon(ui, look.ink, icons.delete, IconStyle::Outlined),
+        Key::Globe => key_icon(ui, look.ink, icons.globe, IconStyle::Outlined),
+        Key::Hide => key_icon(ui, look.ink, icons.hide, IconStyle::Outlined),
+        Key::Page(page) => {
+            let label = match page {
+                Page::Letters => &text.letters_label,
+                Page::Symbols => &text.symbols_label,
+                Page::MoreSymbols => &text.more_symbols_label,
+            };
+            ui.text(
+                label,
+                Modifier::new().text_style(scene.text(&PAGE_KEY, look.ink)),
+            );
+        }
+        Key::Space => {
+            let style = scene.text(&SPACE_BAR, look.muted);
+            ui.text(snapshot.layout.name(), Modifier::new().text_style(style));
+        }
+        Key::Action => action_face(ui, scene, room),
+    }
+}
+
+fn action_face(ui: &mut Ui, scene: &Scene, room: Dp) {
+    let look = scene.look;
+    let face = action(scene.snapshot);
+    let icon = |ui: &mut Ui, modifier: Modifier| {
+        ui.icon(
+            face.icon,
+            IconOptions {
+                size: Some(ACTION_ICON),
+                ..IconOptions::default()
+            },
+            modifier.color(look.ink),
+        );
+    };
+    let wide = NodeRef::new();
+    let fits = wide.natural_width().map(move |natural| natural <= room);
+    ui.layout(
+        Axis::Horizontal,
+        Modifier::new()
+            .node_ref(&wide)
+            .shown_when(fits.clone())
+            .gap(ACTION_GAP)
+            .align_items(Align::Center),
+        |ui| {
+            icon(ui, Modifier::new());
+            ui.text(
+                face.word,
+                Modifier::new().text_style(scene.text(&ACTION_KEY, look.ink)),
+            );
+        },
+    );
+    icon(ui, Modifier::new().shown_when(fits.map(|fits| !fits)));
+}
+
+fn semantics(scene: &Scene, key: Key) -> Semantics {
+    let snapshot = scene.snapshot;
+    let text = &snapshot.settings.text;
+    let name = match key {
+        Key::Typed(typed) => snapshot.typed(typed),
+        Key::Shift => text.shift.clone(),
+        Key::Delete => text.delete.clone(),
+        Key::Globe => text.globe.clone(),
+        Key::Hide => text.hide.clone(),
+        Key::Space => text.space.clone(),
+        Key::Page(Page::Letters) => text.letters.clone(),
+        Key::Page(Page::Symbols) => text.symbols.clone(),
+        Key::Page(Page::MoreSymbols) => text.more_symbols.clone(),
+        Key::Action => action(snapshot).word.to_string(),
+    };
+    let mut semantics = Semantics {
+        role: Some(Role::Button),
+        mode: SemanticsMode::MergeDescendants,
+        name: Some(name),
+        ..Semantics::default()
+    };
+    match key {
+        Key::Shift => {
+            semantics.state.checked = Some(match snapshot.shift {
+                Shift::Off => Checked::False,
+                Shift::Once => Checked::True,
+                Shift::Locked => Checked::Mixed,
+            });
+        }
+        Key::Space => {
+            semantics.value = Some(AccessibleValue::Text(snapshot.layout.name().to_string()));
+            semantics.live = LiveRegion::Polite;
+        }
+        _ => {}
+    }
+    semantics
+}

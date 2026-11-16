@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float4 segments[COLUMNS];
+
+float4 closest(float2 p) {
+    float4 found = float4(0.0, 0.0, FAR, 0.0);
+    for (int i = 0; i < COLUMNS; i++) { found = nearestSegment(found, p, segments[i], float(i)); }
+    return found;
+}
+
+float4 lensSums(float2 p, float2 exact) {
+    float4 sum = float4(0.0);
+    for (int i = 0; i < COLUMNS; i++) { sum = weighSegment(sum, p, segments[i], float(i), exact); }
+    return sum;
+}

@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float4 bounds;
+uniform float4 radii;
+
+float3 exactField(float2 p) {
+    return roundedExact(p, bounds, radii);
+}

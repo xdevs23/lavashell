@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+mod sequence;
+mod shared;
+
+pub(crate) use sequence::optional_sequence;
+pub use sequence::sequence;
+pub(crate) use shared::{shared_slice, shared_str};
+
+macro_rules! checked_serde {
+    ($($name:ident($value:ty)),* $(,)?) => {$(
+        impl serde::Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serde::Serialize::serialize(&self.get(), serializer)
+            }
+        }
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                let value = <$value as serde::Deserialize>::deserialize(deserializer)?;
+                Self::try_new(value).map_err(serde::de::Error::custom)
+            }
+        }
+    )*};
+}
+pub(crate) use checked_serde;
+
+pub(crate) mod process_local {
+    use serde::{Deserializer, Serializer, de, ser};
+
+    const LOCAL: &str = "the value is valid only in the process that made it";
+
+    pub(crate) fn serialize<T, S: Serializer>(_: &T, _: S) -> Result<S::Ok, S::Error> {
+        Err(ser::Error::custom(LOCAL))
+    }
+
+    pub(crate) fn deserialize<'de, T, D: Deserializer<'de>>(_: D) -> Result<T, D::Error> {
+        Err(de::Error::custom(LOCAL))
+    }
+}

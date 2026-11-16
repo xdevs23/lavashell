@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+use super::{FrameMetrics, FrameTime};
+use crate::surface::SurfaceId;
+use crate::view::ViewStats;
+use std::time::Duration;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum FrameStage {
+    Submitted,
+    Presented,
+    Discarded,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FrameReport {
+    pub surface: SurfaceId,
+    pub timing: FrameTime,
+    pub stage: FrameStage,
+    pub observed: Duration,
+    pub presentation_time: Option<Duration>,
+    pub metrics: Option<FrameMetrics>,
+    pub flags: Option<PresentationFlags>,
+    pub submission: Option<Submission>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Submission {
+    pub render_cost: Duration,
+    pub cpu_time: Duration,
+    pub view: ViewStats,
+    pub render: RenderStats,
+    pub scene: Option<u64>,
+    pub gpu: Option<GpuFrameTime>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PresentationFlag {
+    Vsync = 1 << 0,
+    HardwareClock = 1 << 1,
+    HardwareCompletion = 1 << 2,
+    ZeroCopy = 1 << 3,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PresentationFlags(u8);
+
+impl PresentationFlags {
+    #[must_use]
+    pub fn contains(self, flag: PresentationFlag) -> bool {
+        self.0 & flag as u8 != 0
+    }
+}
+
+impl FromIterator<PresentationFlag> for PresentationFlags {
+    fn from_iter<T: IntoIterator<Item = PresentationFlag>>(flags: T) -> Self {
+        Self(flags.into_iter().fold(0, |set, flag| set | flag as u8))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RenderStats {
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub uncached_leaves: u64,
+    pub skipped_leaves: u64,
+    pub cache_bytes: usize,
+    pub damaged_pixels: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GpuFrameTime {
+    pub sequence: u64,
+    pub elapsed: Duration,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_flag_set_of_one_flag_contains_only_that_flag() {
+        const ALL: [PresentationFlag; 4] = [
+            PresentationFlag::Vsync,
+            PresentationFlag::HardwareClock,
+            PresentationFlag::HardwareCompletion,
+            PresentationFlag::ZeroCopy,
+        ];
+        for flag in ALL {
+            let flags: PresentationFlags = [flag].into_iter().collect();
+            for other in ALL {
+                assert_eq!(flags.contains(other), other == flag);
+            }
+        }
+    }
+}

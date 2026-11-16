@@ -1,0 +1,303 @@
+--- a/src/gpu/ganesh/GrClip.h
++++ b/src/gpu/ganesh/GrClip.h
+@@ -14,6 +14,8 @@
+ #include "include/private/gpu/ganesh/GrTypesPriv.h"
+ #include "src/gpu/ganesh/GrAppliedClip.h"
+ 
++#include <optional>
++
+ class GrDrawOp;
+ class GrRecordingContext;
+ namespace skgpu {
+@@ -38,11 +40,18 @@
+         kClippedOut
+     };
+ 
++    struct ScissoredRRect {
++        SkRRect fRRect;
++        GrAA    fAA;
++        SkIRect fScissor;
++    };
++
+     struct PreClipResult {
+         Effect  fEffect;
+         SkRRect fRRect; // Ignore if 'isRRect' is false
+         GrAA    fAA;    // Ignore if 'isRRect' is false
+         bool    fIsRRect;
++        std::optional<ScissoredRRect> fScissoredRRect;
+ 
+         PreClipResult(Effect effect) : fEffect(effect), fIsRRect(false) {}
+         PreClipResult(SkRect rect, GrAA aa) : PreClipResult(SkRRect::MakeRect(rect), aa) {}
+@@ -51,6 +60,10 @@
+                 , fRRect(rrect)
+                 , fAA(aa)
+                 , fIsRRect(true) {}
++        PreClipResult(ScissoredRRect scissored)
++                : fEffect(Effect::kClipped)
++                , fIsRRect(false)
++                , fScissoredRRect(scissored) {}
+     };
+ 
+     virtual ~GrClip() {}
+--- a/src/gpu/ganesh/ClipStack.h
++++ b/src/gpu/ganesh/ClipStack.h
+@@ -149,6 +149,8 @@
+ 
+         ClipState       clipType() const;
+ 
++        bool            isScissor() const;
++
+         // As new elements are pushed on to the stack, they may make older elements redundant.
+         // The old elements are marked invalid so they are skipped during clip application, but may
+         // become active again when a save record is restored.
+@@ -265,7 +267,8 @@
+ 
+         // Return true if the element was added to 'elements', or otherwise affected the save record
+         // (e.g. turned it empty).
+-        bool addElement(RawElement&& toAdd, RawElement::Stack* elements);
++        bool addElement(RawElement&& toAdd, RawElement::Stack* elements,
++                        const SkIRect& deviceBounds);
+ 
+         void addShader(sk_sp<SkShader> shader);
+         void reset(const SkIRect& bounds);
+@@ -285,6 +288,8 @@
+         bool appendElement(RawElement&& toAdd, RawElement::Stack* elements);
+         void replaceWithElement(RawElement&& toAdd, RawElement::Stack* elements);
+ 
++        SkIRect shapeBounds(const RawElement::Stack& elements, const SkIRect& deviceBounds) const;
++
+         // Inner bounds is always contained in outer bounds, or it is empty. All bounds will be
+         // contained in the device bounds.
+         SkIRect   fInnerBounds; // Inside is full coverage (stack op == intersect) or 0 cov (diff)
+@@ -319,6 +324,8 @@
+     // and initializing a first record if it were empty.
+     SaveRecord& writableSaveRecord(bool* wasDeferred);
+ 
++    GrClip::PreClipResult preApplyScissored(const SaveRecord& current) const;
++
+     // Generate or find a cached SW coverage mask and return an FP that samples it.
+     // 'elements' is an array of pointers to elements in the stack.
+     static GrFPResult GetSWMaskFP(GrRecordingContext* context, Mask::Stack* masks,
+--- a/src/gpu/ganesh/ClipStack.cpp
++++ b/src/gpu/ganesh/ClipStack.cpp
+@@ -652,6 +652,9 @@
+     if (other.fOp != SkClipOp::kIntersect || fOp != SkClipOp::kIntersect) {
+         return false;
+     }
++    if (this->isScissor() != other.isScissor()) {
++        return false;
++    }
+ 
+     // At the moment, only rect+rect or rrect+rrect are supported (although rect+rrect is
+     // treated as a degenerate case of rrect+rrect).
+@@ -740,12 +743,16 @@
+ 
+         case ClipGeometry::kAOnly:
+             // This element already clips more than 'added', so mark 'added' is invalid to skip it
+-            added->markInvalid(current);
++            if (!this->isScissor() || added->isScissor()) {
++                added->markInvalid(current);
++            }
+             break;
+ 
+         case ClipGeometry::kBOnly:
+             // 'added' clips more than this element, so mark this as invalid
+-            this->markInvalid(current);
++            if (!added->isScissor() || this->isScissor()) {
++                this->markInvalid(current);
++            }
+             break;
+ 
+         case ClipGeometry::kBoth:
+@@ -786,6 +793,10 @@
+     SkUNREACHABLE;
+ }
+ 
++bool ClipStack::RawElement::isScissor() const {
++    return this->clipType() == ClipState::kDeviceRect && fInnerBounds == fOuterBounds;
++}
++
+ ///////////////////////////////////////////////////////////////////////////////
+ // ClipStack::Mask
+ 
+@@ -942,7 +953,22 @@
+     }
+ }
+ 
+-bool ClipStack::SaveRecord::addElement(RawElement&& toAdd, RawElement::Stack* elements) {
++SkIRect ClipStack::SaveRecord::shapeBounds(const RawElement::Stack& elements,
++                                           const SkIRect& deviceBounds) const {
++    SkIRect bounds = deviceBounds;
++    int i = elements.count();
++    for (const RawElement& e : elements.ritems()) {
++        if (--i < fOldestValidIndex) {
++            break;
++        } else if (!e.isInvalid() && !e.isScissor() && e.op() == SkClipOp::kIntersect) {
++            bounds.intersect(e.outerBounds());
++        }
++    }
++    return bounds;
++}
++
++bool ClipStack::SaveRecord::addElement(RawElement&& toAdd, RawElement::Stack* elements,
++                                       const SkIRect& deviceBounds) {
+     // Validity check the element's state first; if the shape class isn't empty, the outer bounds
+     // shouldn't be empty; if the inner bounds are not empty, they must be contained in outer.
+     SkASSERT((toAdd.shape().isEmpty() || !toAdd.outerBounds().isEmpty()) &&
+@@ -970,13 +996,21 @@
+ 
+         case ClipGeometry::kAOnly:
+             // The combination would not be any different than the existing clip
+-            return false;
++            if (toAdd.isScissor() ||
++                get_clip_geometry(SaveRecord(this->shapeBounds(*elements, deviceBounds)), toAdd) ==
++                        ClipGeometry::kAOnly) {
++                return false;
++            }
++            break;
+ 
+         case ClipGeometry::kBOnly:
+             // The combination would invalidate the entire existing stack and can be replaced with
+             // just the new element.
+-            this->replaceWithElement(std::move(toAdd), elements);
+-            return true;
++            if (!toAdd.isScissor()) {
++                this->replaceWithElement(std::move(toAdd), elements);
++                return true;
++            }
++            break;
+ 
+         case ClipGeometry::kBoth:
+             // The new element combines in a complex manner, so update the stack's bounds based on
+@@ -1290,11 +1324,8 @@
+                 SkASSERT(back.clipType() == ClipState::kDeviceRRect);
+                 return {back.shape().rrect(), back.aa()};
+             } else {
+-                // The clip stack has complex shapes, multiple elements, or a shader; we could
+-                // iterate per element like we would in apply(), but preApply() is meant to be
+-                // conservative and efficient.
+                 SkASSERT(cs.state() == ClipState::kComplex);
+-                return GrClip::Effect::kClipped;
++                return this->preApplyScissored(cs);
+             }
+         }
+     }
+@@ -1302,6 +1333,41 @@
+     SkUNREACHABLE;
+ }
+ 
++GrClip::PreClipResult ClipStack::preApplyScissored(const SaveRecord& current) const {
++    if (current.shader()) {
++        return GrClip::Effect::kClipped;
++    }
++    const RawElement* only = nullptr;
++    SkIRect scissor = fDeviceBounds;
++    int i = fElements.count();
++    for (const RawElement& e : fElements.ritems()) {
++        --i;
++        if (i < current.oldestElementIndex()) {
++            break;
++        } else if (e.isInvalid()) {
++            continue;
++        } else if (e.isScissor()) {
++            if (!scissor.intersect(e.outerBounds())) {
++                return GrClip::Effect::kClippedOut;
++            }
++        } else if (!only) {
++            only = &e;
++        } else {
++            return GrClip::Effect::kClipped;
++        }
++    }
++    if (only && only->clipType() == ClipState::kDeviceRect) {
++        SkRect rect = only->shape().rect();
++        if (!rect.intersect(SkRect::Make(scissor))) {
++            return GrClip::Effect::kClippedOut;
++        }
++        return {rect, only->aa()};
++    } else if (only && only->clipType() == ClipState::kDeviceRRect) {
++        return GrClip::ScissoredRRect{only->shape().rrect(), only->aa(), scissor};
++    }
++    return GrClip::Effect::kClipped;
++}
++
+ GrClip::Effect ClipStack::apply(GrRecordingContext* rContext,
+                                 SurfaceDrawContext* sdc,
+                                 GrDrawOp* op,
+@@ -1441,8 +1507,10 @@
+ 
+                 // First check if the op knows how to apply this clip internally.
+                 SkASSERT(!e.shape().inverted());
+-                auto result = op->clipToShape(sdc, e.op(), e.localToDevice(), e.shape(),
+-                                              GrAA(e.aa() == GrAA::kYes || fForceAA));
++                auto result = e.isScissor()
++                                      ? GrDrawOp::ClipResult::kFail
++                                      : op->clipToShape(sdc, e.op(), e.localToDevice(), e.shape(),
++                                                        GrAA(e.aa() == GrAA::kYes || fForceAA));
+                 if (result != GrDrawOp::ClipResult::kFail) {
+                     if (result == GrDrawOp::ClipResult::kClippedOut) {
+                         return Effect::kClippedOut;
+@@ -1619,7 +1687,7 @@
+     SaveRecord& save = this->writableSaveRecord(&wasDeferred);
+     SkDEBUGCODE(uint32_t oldGenID = save.genID();)
+     SkDEBUGCODE(int elementCount = fElements.count();)
+-    if (!save.addElement(std::move(element), &fElements)) {
++    if (!save.addElement(std::move(element), &fElements, fDeviceBounds)) {
+         if (wasDeferred) {
+             // We made a new save record, but ended up not adding an element to the stack.
+             // So instead of keeping an empty save record around, pop it off and restore the counter
+--- a/src/gpu/ganesh/SurfaceDrawContext.cpp
++++ b/src/gpu/ganesh/SurfaceDrawContext.cpp
+@@ -135,6 +135,24 @@
+     }
+ }
+ 
++class PixelClip final : public GrHardClip {
++public:
++    explicit PixelClip(const SkIRect& pixels) : fPixels(pixels) {}
++
++    SkIRect getConservativeBounds() const override { return fPixels; }
++
++    Effect apply(GrAppliedHardClip* out, SkIRect* bounds) const override {
++        if (!bounds->intersect(fPixels)) {
++            return Effect::kClippedOut;
++        }
++        out->setScissor(fPixels);
++        return Effect::kClipped;
++    }
++
++private:
++    SkIRect fPixels;
++};
++
+ } // anonymous namespace
+ 
+ namespace skgpu::ganesh {
+@@ -465,6 +483,11 @@
+     bool simpleColor = !stencilSettings && constColor;
+     GrClip::PreClipResult result = clip ? clip->preApply(drawBounds, drawUsesAA)
+                                         : GrClip::PreClipResult(GrClip::Effect::kUnclipped);
++    std::optional<SkIRect> scissor;
++    if (result.fScissoredRRect) {
++        scissor = result.fScissoredRRect->fScissor;
++        result = {result.fScissoredRRect->fRRect, result.fScissoredRRect->fAA};
++    }
+     switch(result.fEffect) {
+         case GrClip::Effect::kClippedOut:
+             return QuadOptimization::kDiscarded;
+@@ -544,8 +567,13 @@
+             quad->fDevice.bounds().contains(clippedBounds)) {
+             // Since the cropped quad became a rectangle which covered the bounds of the rrect,
+             // we can draw the rrect directly and ignore the edge flags
+-            this->drawRRect(nullptr, std::move(*paint), result.fAA, SkMatrix::I(), result.fRRect,
+-                            GrStyle::SimpleFill());
++            SkIRect pixels = GrClip::GetPixelIBounds(result.fRRect.getBounds(), result.fAA);
++            if (scissor && !pixels.intersect(*scissor)) {
++                return QuadOptimization::kDiscarded;
++            }
++            PixelClip pixelClip(pixels);
++            this->drawRRect(&pixelClip, std::move(*paint), result.fAA, SkMatrix::I(),
++                            result.fRRect, GrStyle::SimpleFill());
+             return QuadOptimization::kSubmitted;
+         }
+     }

@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader rgb;
+uniform shader center;
+
+half4 main(float2 p) {
+    return half4(rgb.eval(p).rgb, center.eval(p).a);
+}

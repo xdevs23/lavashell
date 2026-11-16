@@ -1,0 +1,385 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::*;
+use crate::float_asserts::assert_f64_eq;
+use crate::geometry::PixelSize;
+use crate::image::{ImagePlacement, StreamId};
+use crate::test_error::{Required, TestError, TestResult};
+use crate::units::{Density, DpExt, EmExt, SpExt, VhExt};
+
+fn screen(text_scaling: TextScaling) -> DrawContext {
+    DrawContext {
+        viewport: Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE),
+        text_scaling,
+    }
+}
+
+fn map(affine: Affine, point: Point) -> Point {
+    let Affine { xx, xy, yx, yy, .. } = affine;
+    Point::new(xx * point.x + xy * point.y, yx * point.x + yy * point.y)
+        .offset(affine.translation.x, affine.translation.y)
+}
+
+#[test]
+fn affines_translate_scale_and_turn_clockwise_on_screen() {
+    let point = Point::new(2.dp(), 3.dp());
+    let moved = map(Affine::translate(Point::new(5.dp(), -1.dp())), point);
+    assert_eq!(moved, Point::new(7.dp(), 2.dp()));
+    assert_eq!(
+        map(Affine::scale(2.0, 0.5), point),
+        Point::new(4.dp(), 1.5.dp())
+    );
+    let scaled_then_moved = Affine::scale(2.0, 0.5).translated(Point::new(5.dp(), -1.dp()));
+    assert_eq!(map(scaled_then_moved, point), Point::new(9.dp(), 0.5.dp()));
+    let turned = map(
+        Affine::rotate(std::f64::consts::FRAC_PI_2),
+        Point::new(1.dp(), 0.dp()),
+    );
+    assert!(turned.x.abs() <= Dp::new(f64::EPSILON / 2.0), "{turned:?}");
+    assert_f64_eq(turned.y.get(), 1.0);
+}
+
+#[test]
+fn a_transformed_drawing_paints_at_its_origin_through_the_affine() {
+    let mut commands = Vec::new();
+    let screen = screen(TextScaling::default());
+    let mut drawing = Drawing::new(
+        &mut commands,
+        Rect::new(10.dp(), 20.dp(), 50.dp(), 50.dp()),
+        &screen,
+    );
+    let square = Rect::new(1.dp(), 1.dp(), 2.dp(), 2.dp());
+    drawing.transformed(Affine::scale(2.0, 2.0), |drawing| {
+        drawing.fill(square, Color::WHITE);
+    });
+    let doubled_at_origin = Affine::scale(2.0, 2.0).translated(Point::new(10.dp(), 20.dp()));
+    assert_eq!(commands[1], DrawCommand::Transform(doubled_at_origin));
+    assert_eq!(
+        commands[2],
+        DrawCommand::Fill {
+            shape: square.into(),
+            brush: Color::WHITE.into(),
+        }
+    );
+}
+
+#[test]
+fn an_image_is_recorded_at_the_drawing_origin_with_its_frame_in_the_viewport() {
+    let image = Image::encoded(Vec::new(), 640, 480);
+    let mut commands = Vec::new();
+    Drawing::new(
+        &mut commands,
+        Rect::new(10.dp(), 20.dp(), 50.dp(), 50.dp()),
+        &screen(TextScaling::default()),
+    )
+    .image(
+        &image,
+        Rect::new(0.dp(), 0.dp(), 32.dp(), 24.dp()),
+        ImageFit::Cover(ImagePlacement::default().offset(0.dp(), 10.vh())),
+    );
+    assert_eq!(
+        commands,
+        [DrawCommand::Image {
+            image,
+            destination: Rect::new(10.dp(), 20.dp(), 32.dp(), 24.dp()),
+            frame: Rect::new(0.dp(), 10.dp(), 32.dp(), 24.dp()),
+        }]
+    );
+}
+
+#[test]
+fn a_stream_image_is_recorded_at_the_drawing_origin_with_its_frame_fitted_to_the_frame_size() {
+    let image = StreamImage {
+        stream: StreamId::next(),
+        generation: 7,
+        size: PixelSize::new(256, 128),
+    };
+    let destination = Rect::new(10.dp(), 20.dp(), 64.dp(), 64.dp());
+    for (fit, frame) in [
+        (
+            ImageFit::contain(),
+            Rect::new(0.dp(), 16.dp(), 64.dp(), 32.dp()),
+        ),
+        (
+            ImageFit::cover(),
+            Rect::new((-32).dp(), 0.dp(), 128.dp(), 64.dp()),
+        ),
+    ] {
+        let mut commands = Vec::new();
+        Drawing::new(
+            &mut commands,
+            Rect::new(10.dp(), 20.dp(), 100.dp(), 100.dp()),
+            &screen(TextScaling::default()),
+        )
+        .stream_image(&image, Rect::new(0.dp(), 0.dp(), 64.dp(), 64.dp()), fit);
+        assert_eq!(
+            commands,
+            [DrawCommand::StreamImage {
+                image,
+                destination,
+                frame
+            }]
+        );
+    }
+}
+
+#[test]
+fn resolving_a_style_scales_its_font_size_and_keeps_the_rest() -> TestResult {
+    let style = TextStyle::new("Inter", 28.sp(), Color::WHITE)
+        .weight(FontWeight::SEMI_BOLD)
+        .letter_spacing(0.01.em());
+    let resolved = style.resolve(&TextScaling::linear(1.5).required("scaling")?);
+    assert_eq!(resolved.size, 42.dp());
+    assert_eq!(
+        (
+            resolved.family.as_str(),
+            resolved.weight,
+            resolved.letter_spacing
+        ),
+        ("Inter", FontWeight::SEMI_BOLD, 0.01.em())
+    );
+    Ok(())
+}
+
+#[test]
+fn canvas_text_follows_the_text_size_setting() -> TestResult {
+    let mut commands = Vec::new();
+    Drawing::new(
+        &mut commands,
+        Rect::new(10.dp(), 20.dp(), 50.dp(), 50.dp()),
+        &screen(TextScaling::linear(1.5).required("scaling")?),
+    )
+    .text(
+        "label",
+        Rect::new(0.dp(), 0.dp(), 40.dp(), 20.dp()),
+        TextStyle::new("Inter", 12.sp(), Color::WHITE),
+    );
+    let [DrawCommand::Text { style, rect, .. }] = commands.as_slice() else {
+        return Err(TestError::Absent("one text command"));
+    };
+    assert_eq!(style.size, 18.dp());
+    assert_eq!(*rect, Rect::new(10.dp(), 20.dp(), 40.dp(), 20.dp()));
+    Ok(())
+}
+
+const fn at(x: f64, y: f64) -> Point {
+    Point::new(Dp::new(x), Dp::new(y))
+}
+
+const fn line(x: f64, y: f64) -> Segment {
+    Segment::Line(at(x, y))
+}
+
+static SHAPES: Icon = Icon {
+    grid: Size::new(Dp::new(10.0), Dp::new(10.0)),
+    paths: &[
+        IconPath {
+            start: at(0.0, 0.0),
+            segments: &[line(10.0, 0.0), line(5.0, 10.0)],
+            closed: true,
+            stroke: Some(1.0),
+        },
+        IconPath {
+            start: at(0.0, 10.0),
+            segments: &[line(10.0, 10.0)],
+            closed: false,
+            stroke: Some(1.0),
+        },
+        IconPath {
+            start: at(4.0, 4.0),
+            segments: &[line(6.0, 4.0), line(6.0, 6.0)],
+            closed: true,
+            stroke: None,
+        },
+    ],
+};
+
+fn shapes(color: Color, style: IconStyle) -> Vec<DrawCommand> {
+    let mut commands = Vec::new();
+    Drawing::new(
+        &mut commands,
+        Rect::new(10.dp(), 20.dp(), 100.dp(), 100.dp()),
+        &screen(TextScaling::default()),
+    )
+    .icon(
+        &SHAPES,
+        Rect::new(10.dp(), 20.dp(), 40.dp(), 20.dp()),
+        color,
+        style,
+    );
+    commands
+}
+
+fn path(
+    start: Point,
+    lines: &[Point],
+    closed: bool,
+    color: Color,
+    stroke: Option<Dp>,
+) -> DrawCommand {
+    DrawCommand::Path {
+        start,
+        segments: lines.iter().map(|point| Segment::Line(*point)).collect(),
+        closed,
+        brush: color.into(),
+        stroke,
+    }
+}
+
+#[test]
+fn an_icon_scales_its_grid_into_the_middle_of_its_box_with_its_strokes() {
+    let white = Color::WHITE;
+    assert_eq!(
+        shapes(white, IconStyle::Outlined),
+        [
+            DrawCommand::Save,
+            DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(at(30.0, 40.0))),
+            path(
+                at(0.0, 0.0),
+                &[at(10.0, 0.0), at(5.0, 10.0)],
+                true,
+                white,
+                Some(1.dp())
+            ),
+            path(at(0.0, 10.0), &[at(10.0, 10.0)], false, white, Some(1.dp())),
+            path(
+                at(4.0, 4.0),
+                &[at(6.0, 4.0), at(6.0, 6.0)],
+                true,
+                white,
+                None
+            ),
+            DrawCommand::Restore,
+        ]
+    );
+}
+
+#[test]
+fn a_filled_icon_fills_its_closed_paths_under_their_strokes() {
+    let kinds: Vec<_> = shapes(Color::WHITE, IconStyle::Filled)
+        .into_iter()
+        .filter_map(|command| match command {
+            DrawCommand::Path { closed, stroke, .. } => Some((closed, stroke.is_some())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [(true, false), (true, true), (false, true), (true, false)]
+    );
+}
+
+#[test]
+fn a_translucent_icon_paints_opaque_paths_inside_one_opacity_layer() {
+    let paths: Vec<_> = shapes(Color::WHITE, IconStyle::Outlined)
+        .into_iter()
+        .filter(|command| matches!(command, DrawCommand::Path { .. }))
+        .collect();
+    let opening = vec![
+        DrawCommand::Save,
+        DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(at(30.0, 40.0))),
+        DrawCommand::OpacityLayer {
+            alpha: 0.5,
+            bounds: Rect::new(-0.5.dp(), -0.5.dp(), 11.dp(), 11.dp()),
+        },
+    ];
+    let closing = vec![DrawCommand::Restore; 2];
+    assert_eq!(
+        shapes(Color::WHITE.with_alpha(0.5), IconStyle::Outlined),
+        [opening, paths, closing].concat()
+    );
+}
+
+#[test]
+fn an_icon_without_an_area_paints_nothing_and_a_path_off_its_grid_is_left_out() {
+    static FLAT: Icon = Icon {
+        grid: Size::new(Dp::ZERO, Dp::new(10.0)),
+        paths: &[IconPath {
+            start: at(0.0, 0.0),
+            segments: &[line(10.0, 10.0)],
+            closed: false,
+            stroke: Some(1.0),
+        }],
+    };
+    static STRAY: Icon = Icon {
+        grid: Size::new(Dp::new(10.0), Dp::new(10.0)),
+        paths: &[IconPath {
+            start: at(0.0, 0.0),
+            segments: &[line(f64::NAN, 10.0)],
+            closed: false,
+            stroke: Some(1.0),
+        }],
+    };
+    let square = Rect::new(10.dp(), 20.dp(), 40.dp(), 20.dp());
+    let sliver = Rect::new(10.dp(), 20.dp(), 0.dp(), 20.dp());
+    let translucent = Color::WHITE.with_alpha(0.5);
+    for (icon, square, color) in [
+        (&FLAT, square, Color::WHITE),
+        (&STRAY, square, Color::WHITE),
+        (&SHAPES, sliver, translucent),
+    ] {
+        let mut commands = Vec::new();
+        icon.paint(square, color, IconStyle::Filled, &mut commands);
+        assert!(commands.is_empty(), "{icon:?}: {commands:?}");
+    }
+}
+
+#[test]
+fn an_icon_paints_the_same_curves_wherever_its_square_lies() {
+    const CURVE: &[Segment] = &[
+        Segment::Quadratic {
+            control: at(5.0, 0.0),
+            to: at(10.0, 5.0),
+        },
+        Segment::Cubic {
+            first_control: at(10.0, 8.0),
+            second_control: at(8.0, 10.0),
+            to: at(5.0, 10.0),
+        },
+    ];
+    static CURVES: Icon = Icon {
+        grid: Size::new(Dp::new(10.0), Dp::new(10.0)),
+        paths: &[IconPath {
+            start: at(0.0, 0.0),
+            segments: CURVE,
+            closed: false,
+            stroke: Some(1.0),
+        }],
+    };
+    let curve = DrawCommand::Path {
+        start: at(0.0, 0.0),
+        segments: CURVE.to_vec(),
+        closed: false,
+        brush: Color::WHITE.into(),
+        stroke: Some(1.dp()),
+    };
+    for corner in [at(10.0, 20.0), at(37.5, 81.25)] {
+        let mut commands = Vec::new();
+        CURVES.paint(
+            Rect::new(corner.x, corner.y, 20.dp(), 20.dp()),
+            Color::WHITE,
+            IconStyle::Outlined,
+            &mut commands,
+        );
+        assert_eq!(
+            commands,
+            [
+                DrawCommand::Save,
+                DrawCommand::Transform(Affine::scale(2.0, 2.0).translated(corner)),
+                curve.clone(),
+                DrawCommand::Restore,
+            ]
+        );
+    }
+}
+
+#[test]
+fn a_path_without_points_draws_nothing() {
+    let mut commands = Vec::new();
+    Drawing::new(
+        &mut commands,
+        Rect::new(10.dp(), 20.dp(), 100.dp(), 100.dp()),
+        &screen(TextScaling::default()),
+    )
+    .path(&[], true, Color::WHITE, None);
+    assert!(commands.is_empty());
+}

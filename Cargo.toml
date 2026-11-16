@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[workspace]
+members = [
+    "crates/lavashell-core",
+    "crates/lavashell-actor",
+    "crates/lavashell-effect-quality",
+    "crates/lavashell-components",
+    "crates/lavashell-materials",
+    "crates/lavashell-keyboard",
+    "crates/lavashell-vulkan",
+    "crates/lavashell-renderer",
+    "crates/lavashell-platform",
+    "crates/lavashell-runtime",
+    "crates/lavashell-wayland",
+    "crates/lavashell-aosp",
+    "crates/lavashell",
+    "crates/lavashell-bevy",
+    "crates/lavashell-lucide",
+    "crates/lavashell-test-fixtures",
+    "crates/lavashell-test-platform",
+    "crates/lavashell-build-script",
+    "examples/support",
+    "examples/copy-keys",
+    "examples/counter",
+    "examples/music-player",
+    "examples/motion",
+    "examples/taskbar",
+    "examples/materials",
+    "examples/interactions",
+    "examples/keyboard",
+    "tools/wayland-input",
+    "tools/output-capture",
+    "tools/source-rules",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+unused_results = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+let_underscore_must_use = "deny"
+let_underscore_untyped = "deny"
+map_err_ignore = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+allow_attributes = "deny"
+disallowed_methods = "deny"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[workspace.dependencies]
+lavashell-materials = { path = "crates/lavashell-materials" }
+lavashell-keyboard = { path = "crates/lavashell-keyboard" }
+lavashell-actor = { path = "crates/lavashell-actor" }
+lavashell-effect-quality = { path = "crates/lavashell-effect-quality" }
+lavashell-core = { path = "crates/lavashell-core" }
+lavashell-components = { path = "crates/lavashell-components" }
+lavashell-vulkan = { path = "crates/lavashell-vulkan" }
+lavashell-renderer = { path = "crates/lavashell-renderer" }
+lavashell-platform = { path = "crates/lavashell-platform" }
+lavashell-runtime = { path = "crates/lavashell-runtime" }
+lavashell-wayland = { path = "crates/lavashell-wayland" }
+lavashell-aosp = { path = "crates/lavashell-aosp" }
+lavashell = { path = "crates/lavashell" }
+lavashell-lucide = { path = "crates/lavashell-lucide" }
+lavashell-test-fixtures = { path = "crates/lavashell-test-fixtures" }
+lavashell-test-platform = { path = "crates/lavashell-test-platform" }
+lavashell-build-script = { path = "crates/lavashell-build-script" }
+lavashell-example-support = { path = "examples/support" }
+lavashell-example-copy-keys = { path = "examples/copy-keys" }
+lavashell-bevy = { path = "crates/lavashell-bevy" }
+lavashell-counter = { path = "examples/counter" }
+lavashell-music-player = { path = "examples/music-player" }
+lavashell-motion = { path = "examples/motion" }
+lavashell-taskbar = { path = "examples/taskbar" }
+lavashell-materials-example = { path = "examples/materials" }
+lavashell-interactions = { path = "examples/interactions" }
+lavashell-on-screen-keyboard = { path = "examples/keyboard" }
+lavashell-wayland-input = { path = "tools/wayland-input" }
+lavashell-output-capture = { path = "tools/output-capture" }
+lavashell-source-rules = { path = "tools/source-rules" }
+accesskit = "=0.25.1"
+accesskit_consumer = "=0.39.1"
+accesskit_unix = "=0.24.0"
+atspi-common = { version = "=0.13.0", default-features = false, features = ["zbus"] }
+bevy = { version = "=0.17.3", default-features = false }
+build-rs = "=0.3.5"
+calloop = "=0.14.4"
+clap = { version = "=4.6.7", features = ["derive"] }
+csv = "=1.4.0"
+ash = { version = "=0.38.0", default-features = false, features = ["linked", "std"] }
+futures-lite = "=2.6.1"
+i_overlay = "=9.1.0"
+icu_locale_core = { version = "=2.3.0", features = ["alloc"] }
+ignore = "=0.4.34"
+inventory = "=0.3.25"
+jni = "=0.22.4"
+ndk = { version = "=0.9.0", default-features = false, features = ["media", "nativewindow", "api-level-31"] }
+log = { version = "=0.4.34", features = ["std"] }
+env_logger = { version = "=0.11.11", default-features = false }
+lru = "=0.19.0"
+smithay-client-toolkit = "=0.21.1"
+syn = { version = "=3.0.6", features = ["full", "visit"] }
+sys-locale = "=0.3.2"
+num-traits = "=0.2.19"
+palette = { version = "=0.7.7", default-features = false, features = ["std"] }
+postcard = { version = "=1.1.3", default-features = false, features = ["use-std"] }
+proc-macro2 = "=1.0.107"
+quote = "=1.0.47"
+rand = "=0.10.3"
+rustix = "=1.1.6"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+spdx = "=0.13.6"
+tempfile = "=3.27.0"
+thiserror = "=2.0.21"
+toml = "=1.1.6"
+tree-sitter = "=0.27.1"
+tree-sitter-bash = "=0.25.1"
+tree-sitter-cpp = "=0.23.4"
+tree-sitter-glsl = "=0.2.0"
+tree-sitter-kotlin-ng = "=1.1.0"
+tree-sitter-language = "=0.1.9"
+tree-sitter-nix = "=0.3.0"
+tree-sitter-python = "=0.25.0"
+tree-sitter-rust = "=0.24.2"
+tree-sitter-toml-ng = "=0.7.0"
+tree-sitter-xml = "=0.7.0"
+unicode-segmentation = "=1.13.3"
+unidiff = { version = "=0.4.1", default-features = false }
+url = "=2.5.8"
+wgpu = { version = "=26.0.1", default-features = false }
+usvg = { version = "=0.48.1", default-features = false }
+wayland-backend = { version = "=0.3.17", features = ["client_system"] }
+wayland-scanner = "=0.31.11"
+xdg = "=3.0.0"
+xkbcommon = { version = "=0.8.0", default-features = false }
+zbus = { version = "=5.19.0", default-features = false }
+zeroize = "=1.9.1"
+
+[workspace.dependencies.skia-safe]
+version = "=0.153.3"
+default-features = false
+features = ["embed-icudtl", "ganesh", "jpeg", "no-compile", "pdf", "textlayout", "vulkan"]
+
+[patch.crates-io.skia-safe]
+git = "https://github.com/xquant23/rust-skia_rust-skia"
+rev = "b4de2889f3a3df03cef44e80f32413a91b36ccd0"
+
+[patch.crates-io.skia-bindings]
+git = "https://github.com/xquant23/rust-skia_rust-skia"
+rev = "b4de2889f3a3df03cef44e80f32413a91b36ccd0"
+
+[profile.dev]
+debug = 1
+
+[profile.packaged]
+inherits = "release"

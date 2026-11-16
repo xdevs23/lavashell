@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: GPL-3.0-only
+nix/cargo-projections/*.json -diff linguist-generated

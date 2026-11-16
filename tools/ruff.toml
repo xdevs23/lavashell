@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+line-length = 120
+
+[lint]
+select = ["E", "F", "W"]

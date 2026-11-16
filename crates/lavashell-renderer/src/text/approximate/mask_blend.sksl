@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader foreground;
+uniform float tolerance;
+
+half4 main(half4 src, half4 dst) {
+    half3 f = foreground.eval(float2(0)).rgb;
+    half t = half(tolerance);
+    half a = src.a + (1 - src.a) * dst.a;
+    if (any(lessThan(dst.rgb, half3(-t))) || any(greaterThan(dst.rgb, half3(dst.a + t))) ||
+        any(lessThan(f, half3(-t))) || any(greaterThan(f, half3(1 + t)))) {
+        return half4(src.a * f + (1 - src.a) * dst.rgb, a);
+    }
+    f = clamp(f, half3(0), half3(1));
+    half3 rgb = src.rgb * f + (1 - src.rgb) * dst.rgb;
+    return half4(rgb, min(1, max(a, max(max(rgb.r, rgb.g), rgb.b))));
+}

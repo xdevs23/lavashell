@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader backdrop;
+uniform float refraction;
+uniform float dispersion;
+uniform float rim;
+
+const float2 LIGHT_DIRECTION = float2(-0.6, -0.8);
+const float HIGHLIGHT_EXPONENT = 3.0;
+const float RIM_FALLOFF_PIXELS = 3.0;
+
+half4 main(float2 p) {
+    float exact;
+    float4 field = lensField(p, exact);
+    float2 direction = field.xy;
+    float lens = exp(min(field.z, 0.0) / field.w);
+    float2 displacement = direction * refraction * lens;
+    half4 c = backdrop.eval(p - displacement);
+    float2 split = direction * dispersion * lens;
+    half4 red = backdrop.eval(p - displacement + split);
+    half4 blue = backdrop.eval(p - displacement - split);
+    c.r = red.a > 0.0 ? red.r * c.a / red.a : 0;
+    c.b = blue.a > 0.0 ? blue.b * c.a / blue.a : 0;
+    float highlight = pow(max(dot(direction, LIGHT_DIRECTION), 0.0), HIGHLIGHT_EXPONENT);
+    c.rgb += half3(highlight * rim * exp(-abs(exact) / RIM_FALLOFF_PIXELS)) * c.a;
+    return c;
+}

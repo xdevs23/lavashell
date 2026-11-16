@@ -1,0 +1,33 @@
+text	Text
+states	Control states
+transfers	Transfers
+shapes	Window shapes
+selectable_label	Read-only text
+singleline_label	Single-line field
+multiline_label	Multiline field
+selectable_sample	You packed the notebook beside the map and left room for a pencil.
+editable_sample	Your bag contains a blue notebook, a folded map and a pencil for today's notes.
+multiline_sample	You sketch a route across the map before leaving. Your notebook holds the stops you want to visit.
+copy	Copy selected text
+cut	Cut selected text
+paste	Paste text
+reset	Reset sample text
+clear	Clear received data
+state_button	Press the sample button
+idle	Idle
+hover	Hovered
+focus	Focused
+pressed	Pressed
+copy_image	Copy image
+copy_document	Copy document
+copy_file_uri	Copy file URI
+receive_preferred	Paste preferred data
+transfer_target	Transfer target
+transfer_empty	You have no received data here, so paste or drop a transfer.
+transfer_success	You received data with the type and size shown below.
+transfer_rejected	The app could not accept this transfer, so choose another item and try again.
+clipboard_offered	The app has offered the selected data to your clipboard.
+clipboard_failed	The app could not offer this data to your clipboard, so try again.
+shape_open	Open shaped window
+shape_close	Close shaped window
+title	Lavashell / Interactions

@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform float inner;
+uniform float outer;
+uniform float inner_open;
+uniform float outer_open;
+uniform float sigma;
+uniform float pixel;
+uniform float2 offset;
+uniform float saturation;
+
+// https://personal.math.ubc.ca/~cbm/aands/page_299.htm
+const float ERF_P = 0.3275911;
+const float ERF_A1 = 0.254829592;
+const float ERF_A2 = -0.284496736;
+const float ERF_A3 = 1.421413741;
+const float ERF_A4 = -1.453152027;
+const float ERF_A5 = 1.061405429;
+
+float edge(float x) {
+    if (sigma <= 0.0) {
+        return clamp(0.5 + x / pixel, 0.0, 1.0);
+    }
+    float z = clamp(x / (sqrt(sigma * sigma + pixel * pixel / 12.0) * sqrt(2.0)), -saturation, saturation);
+    float t = 1.0 / (1.0 + ERF_P * abs(z));
+    float tail = t * (ERF_A1 + t * (ERF_A2 + t * (ERF_A3 + t * (ERF_A4 + t * ERF_A5))))
+        * exp(-z * z);
+    return 0.5 + 0.5 * sign(z) * (1.0 - tail);
+}
+
+half4 main(float2 p) {
+    float3 field = exactField(p - offset);
+    float gradient = length(field.xy);
+    float distance = gradient > 0.0 ? field.z / gradient : field.z;
+    float below = outer_open > 0.5 ? 1.0 : edge(outer - distance);
+    float above = inner_open > 0.5 ? 0.0 : edge(inner - distance);
+    return half4(below - above);
+}

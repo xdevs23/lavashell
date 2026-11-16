@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+accesskit.workspace = true
+env_logger.workspace = true
+icu_locale_core.workspace = true
+inventory.workspace = true
+lavashell-actor.workspace = true
+lavashell-core.workspace = true
+lavashell-platform.workspace = true
+lavashell-renderer.workspace = true
+log.workspace = true
+num-traits.workspace = true
+rustix = { workspace = true, features = ["event", "time"] }
+thiserror.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+accesskit_consumer.workspace = true
+lavashell-test-fixtures.workspace = true

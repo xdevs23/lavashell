@@ -1,0 +1,31 @@
+{
+  "expat": [
+    "COPYING"
+  ],
+  "freetype": [
+    "LICENSE.TXT",
+    "docs/FTL.TXT"
+  ],
+  "harfbuzz": [
+    "COPYING"
+  ],
+  "icu": [
+    "LICENSE"
+  ],
+  "libjpeg-turbo": [
+    "LICENSE.md",
+    "README.ijg"
+  ],
+  "libpng": [
+    "LICENSE"
+  ],
+  "vulkanmemoryallocator": [
+    "LICENSE.txt"
+  ],
+  "wuffs": [
+    "LICENSE"
+  ],
+  "zlib": [
+    "LICENSE"
+  ]
+}

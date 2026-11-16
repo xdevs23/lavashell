@@ -1,0 +1,4 @@
+{
+  "hosts": ["aosp", "checkout", "wayland"],
+  "launchKinds": ["helper", "window"]
+}

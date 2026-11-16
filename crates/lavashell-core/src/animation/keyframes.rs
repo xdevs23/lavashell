@@ -1,0 +1,232 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::motion_scale::MotionScale;
+use super::{Animatable, Easing, Trajectory, VectorSpace};
+use std::time::Duration;
+
+#[derive(Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(
+        serialize = "T: serde::Serialize, T::Vector: serde::Serialize",
+        deserialize = "T: serde::Deserialize<'de>, T::Vector: serde::Deserialize<'de>"
+    ))
+)]
+pub struct Keyframe<T: Animatable> {
+    pub at: Duration,
+    pub value: T,
+    pub easing: Easing,
+    pub tangent: Option<T::Vector>,
+}
+
+impl<T: Animatable> Keyframe<T> {
+    pub fn new(at: Duration, value: T) -> Self {
+        Self {
+            at,
+            value,
+            easing: Easing::Smooth,
+            tangent: None,
+        }
+    }
+
+    #[must_use]
+    pub fn easing(mut self, easing: Easing) -> Self {
+        self.easing = easing;
+        self
+    }
+
+    #[must_use]
+    pub fn tangent(mut self, tangent: T::Vector) -> Self {
+        self.tangent = Some(tangent);
+        self
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum KeyframesError {
+    #[error("keyframes need at least two strictly increasing times, beginning at zero")]
+    Times,
+    #[error("keyframe values and tangents must be finite")]
+    NotFinite,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct Keyframes<T: Animatable> {
+    first: Keyframe<T>,
+    middle: Vec<Keyframe<T>>,
+    last: Keyframe<T>,
+}
+
+impl<T: Animatable> Keyframes<T> {
+    pub fn new(frames: impl IntoIterator<Item = Keyframe<T>>) -> Result<Self, KeyframesError> {
+        let mut frames = frames.into_iter();
+        let first = frames.next().ok_or(KeyframesError::Times)?;
+        let mut middle: Vec<_> = frames.collect();
+        let last = middle.pop().ok_or(KeyframesError::Times)?;
+        let keyframes = Self {
+            first,
+            middle,
+            last,
+        };
+        if !keyframes.first.at.is_zero() || keyframes.segments().any(|(a, b)| a.at >= b.at) {
+            return Err(KeyframesError::Times);
+        }
+        if (keyframes.frames())
+            .any(|f| !f.value.vector().finite() || f.tangent.as_ref().is_some_and(|v| !v.finite()))
+        {
+            return Err(KeyframesError::NotFinite);
+        }
+        Ok(keyframes)
+    }
+
+    fn frames(&self) -> impl Iterator<Item = &Keyframe<T>> {
+        std::iter::once(&self.first)
+            .chain(&self.middle)
+            .chain(std::iter::once(&self.last))
+    }
+
+    fn segments(&self) -> impl Iterator<Item = (&Keyframe<T>, &Keyframe<T>)> {
+        self.frames().zip(self.frames().skip(1))
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.last.at
+    }
+
+    pub fn first(&self) -> &T {
+        &self.first.value
+    }
+
+    pub fn last(&self) -> &T {
+        &self.last.value
+    }
+
+    pub(crate) fn mapped<U: Animatable>(
+        &self,
+        value: impl Fn(&T) -> U,
+        tangent: impl Fn(&T, &T::Vector) -> U::Vector,
+    ) -> Keyframes<U> {
+        let map = |frame: &Keyframe<T>| Keyframe {
+            at: frame.at,
+            value: value(&frame.value),
+            easing: frame.easing,
+            tangent: (frame.tangent.as_ref()).map(|vector| tangent(&frame.value, vector)),
+        };
+        Keyframes {
+            first: map(&self.first),
+            middle: self.middle.iter().map(map).collect(),
+            last: map(&self.last),
+        }
+    }
+
+    pub fn sample(&self, elapsed: Duration) -> (T, Trajectory<T::Vector>) {
+        let Some((before, after)) = self.segments().find(|(_, after)| elapsed < after.at) else {
+            return (
+                self.last().clone(),
+                Trajectory::at_rest(self.last().vector()),
+            );
+        };
+        let seconds = after.at.saturating_sub(before.at).as_secs_f64();
+        let along = elapsed.saturating_sub(before.at).as_secs_f64() / seconds;
+        let start = Trajectory {
+            velocity: before.tangent.clone().unwrap_or_else(T::Vector::zero),
+            ..Trajectory::at_rest(before.value.vector())
+        };
+        let frame = after.value.spanning(&before.value);
+        let Trajectory {
+            position: from,
+            velocity: tangent,
+            end,
+        } = frame.retarget(&before.value, start);
+        let hermite = before.tangent.is_some() || after.tangent.is_some();
+        let end_tangent = after.tangent.clone().unwrap_or_else(T::Vector::zero);
+        let vectors = [&from, &end, &tangent, &end_tangent];
+        let (position, velocity) =
+            MotionScale::sampled(vectors, |[from, end, tangent, end_tangent]| {
+                let delta = end.sub(from);
+                if hermite {
+                    let v0 = tangent.scale(seconds);
+                    let v1 = end_tangent.scale(seconds);
+                    let (smooth, smooth_slope) = Easing::Smooth.sample(along);
+                    let p = from
+                        .add(&delta.scale(smooth))
+                        .add(&v0.scale(along * (1.0 - along).powi(2)))
+                        .add(&v1.scale(along * along * (along - 1.0)));
+                    let v = delta
+                        .scale(smooth_slope)
+                        .add(&v0.scale(1.0 - 4.0 * along + 3.0 * along * along))
+                        .add(&v1.scale(3.0 * along * along - 2.0 * along))
+                        .scale(1.0 / seconds);
+                    (p, v)
+                } else {
+                    let (progress, slope) = before.easing.sample(along);
+                    (
+                        from.add(&delta.scale(progress)),
+                        delta.scale(slope / seconds),
+                    )
+                }
+            });
+        let trajectory = Trajectory {
+            position,
+            velocity,
+            end,
+        };
+        (frame, trajectory)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Repeat {
+    #[default]
+    Once,
+    Count(u32),
+    Forever,
+}
+
+impl Repeat {
+    #[must_use]
+    pub fn cycles(self) -> Option<u32> {
+        match self {
+            Self::Once => Some(1),
+            Self::Count(count) => Some(count.max(1)),
+            Self::Forever => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Direction {
+    #[default]
+    Forward,
+    Alternate,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Playback {
+    pub repeat: Repeat,
+    pub direction: Direction,
+}
+
+#[cfg(feature = "serde")]
+impl<T: Animatable + serde::Serialize> serde::Serialize for Keyframes<T>
+where
+    T::Vector: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.frames())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: Animatable + serde::Deserialize<'de>> serde::Deserialize<'de> for Keyframes<T>
+where
+    T::Vector: serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let frames: Vec<Keyframe<T>> = crate::encoding::sequence(deserializer)?;
+        Self::new(frames).map_err(serde::de::Error::custom)
+    }
+}

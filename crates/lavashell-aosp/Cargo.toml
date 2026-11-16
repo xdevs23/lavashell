@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-aosp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+ash.workspace = true
+jni.workspace = true
+lavashell-actor.workspace = true
+lavashell-core.workspace = true
+lavashell-platform.workspace = true
+lavashell-renderer.workspace = true
+lavashell-vulkan.workspace = true
+ndk.workspace = true
+num-traits.workspace = true
+rustix = { workspace = true, features = ["event"] }
+thiserror.workspace = true
+
+[target.'cfg(target_os = "android")'.dev-dependencies]
+lavashell-runtime.workspace = true
+lavashell-test-fixtures.workspace = true
+
+[target.'cfg(not(target_os = "android"))'.dev-dependencies]
+ash.workspace = true
+lavashell-actor.workspace = true
+lavashell-core = { workspace = true, features = ["test-support"] }
+lavashell-platform.workspace = true
+lavashell-renderer.workspace = true
+lavashell-vulkan.workspace = true
+log.workspace = true
+num-traits.workspace = true
+rustix = { workspace = true, features = ["event", "pipe"] }
+thiserror.workspace = true
+
+[[example]]
+name = "surface-stream-round-trip"
+path = "emulator/lib.rs"
+crate-type = ["cdylib"]
+test = true

@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader foreground;
+
+half4 main(half4 src, half4 dst) {
+    half4 color = foreground.eval(float2(0));
+    return half4(src.rgb * color.rgb + (1 - src.rgb * color.a) * dst.rgb, 1);
+}

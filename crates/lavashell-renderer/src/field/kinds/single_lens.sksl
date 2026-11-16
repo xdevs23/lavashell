@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+float4 lensField(float2 p, out float exact) {
+    exact = exactField(p).z;
+    return roundedLens(p, bounds, radii);
+}

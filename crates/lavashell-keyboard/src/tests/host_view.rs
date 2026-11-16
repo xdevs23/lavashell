@@ -1,0 +1,116 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::*;
+
+pub(super) struct Host {
+    pub(super) view: View,
+    pub(super) scene: Scene,
+    pub(super) session: State<Option<TextSession>>,
+    pub(super) sent: Rc<RefCell<Vec<TextCommand>>>,
+    pub(super) transforms: Rc<RefCell<Vec<TransformInput>>>,
+    pub(super) settings: State<KeyboardSettings>,
+    pub(super) layout: State<&'static Layout>,
+    pub(super) placement: State<Placement>,
+    pub(super) keyboard: Keyboard,
+    pub(super) time: Duration,
+}
+
+impl Host {
+    pub(super) fn new(settings: KeyboardSettings) -> Result<Self, TestError> {
+        Self::composed(settings, None, lavashell_test_fixtures::facts())
+    }
+
+    pub(super) fn on(settings: KeyboardSettings, facts: PlatformFacts) -> Result<Self, TestError> {
+        Self::composed(settings, None, facts)
+    }
+
+    pub(super) fn styled(style: KeyboardStyle) -> Result<Self, TestError> {
+        Self::composed(settings()?, Some(style), lavashell_test_fixtures::facts())
+    }
+
+    fn composed(
+        settings: KeyboardSettings,
+        style: Option<KeyboardStyle>,
+        facts: PlatformFacts,
+    ) -> Result<Self, TestError> {
+        let (session, sent) = (State::new(None), Rc::new(RefCell::new(Vec::new())));
+        let (receiver, transforms) = (sent.clone(), Rc::new(RefCell::new(Vec::new())));
+        let target = Target::Host {
+            session: session.clone(),
+            sink: Rc::new(move |command| receiver.borrow_mut().push(command)),
+        };
+        let (settings, layout) = (State::new(settings), State::new(&shipped()?.english));
+        let placement = State::new(Placement::FullWidth);
+        let keyboard = Keyboard::new(target, &settings, layout.clone(), placement.clone())?;
+        let composed = keyboard.clone();
+        let view = View::new(facts, move |ui| {
+            let compose = |ui: &mut Ui| {
+                above_keyboard(
+                    ui,
+                    |_| {},
+                    |ui| {
+                        ui.keyboard(&composed, Modifier::new().tag("keyboard"));
+                    },
+                );
+            };
+            match &style {
+                Some(style) => ui.provide(&KEYBOARD_STYLE, style.clone(), compose),
+                None => compose(ui),
+            }
+        });
+        let mut host = Self {
+            view,
+            scene: Scene::default(),
+            session,
+            sent,
+            transforms,
+            settings,
+            layout,
+            placement,
+            keyboard,
+            time: Duration::ZERO,
+        };
+        host.frame()?;
+        Ok(host)
+    }
+
+    pub(super) fn platform(&mut self, change: impl FnOnce(&mut PlatformFacts)) {
+        let mut facts = self.view.platform();
+        change(&mut facts);
+        self.view.provide_platform(facts);
+    }
+
+    pub(super) fn start(&mut self, hints: TextHints, text: &str) -> Result<(), TestError> {
+        let id = (self.session.peek()).map_or(SessionId(1), |session| session.id.next());
+        let text = FieldText::BeforeCursor(text.into());
+        self.session.set(Some(session(id, hints, text)));
+        self.settle()
+    }
+
+    pub(super) fn before_cursor(&mut self, text: &str) -> Result<(), TestError> {
+        let session = self.session.peek().ok_or(TestError::NoSession)?;
+        self.session.set(Some(TextSession {
+            text: FieldText::BeforeCursor(text.into()),
+            ..session
+        }));
+        self.frame()
+    }
+
+    pub(super) fn pass_transforms(&self) {
+        let reported = self.transforms.clone();
+        (self.keyboard).set_on_transform(move |input| reported.borrow_mut().push(input));
+    }
+
+    pub(super) fn sent(&self) -> Vec<TextCommand> {
+        self.sent.borrow().clone()
+    }
+
+    pub(super) fn commit(text: &str) -> TextCommand {
+        TextCommand::Commit(text.to_string())
+    }
+}
+
+impl Clocked for Host {
+    fn clock(&mut self) -> (&mut View, &mut Scene, &mut Duration) {
+        (&mut self.view, &mut self.scene, &mut self.time)
+    }
+}

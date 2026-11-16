@@ -1,0 +1,283 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::super::placed_at;
+use super::*;
+use crate::geometry::{Color, Point, Rect};
+use crate::scene::DrawCommand;
+use crate::scene::test_sink::{Received, TestSink, TestSinkError};
+use crate::scene::tree::{ApplyError, GroupValues, NamespaceId, PaintVisitor, PlacedLeaf};
+use crate::test_error::TestResult;
+use crate::ui::NodeId;
+use crate::units::{Dp, DpExt};
+use std::time::Duration;
+
+fn fill(x: f64) -> DrawCommand {
+    DrawCommand::Fill {
+        shape: Rect::new(Dp::new(x), Dp::ZERO, 4.dp(), 4.dp()).into(),
+        brush: Color::WHITE.into(),
+    }
+}
+
+fn leaf(x: f64) -> Painted {
+    Painted::Leaf {
+        commands: Arc::from([fill(x)]),
+    }
+}
+
+fn component(id: u64, x: f64, items: &Arc<[Painted]>) -> Painted {
+    Painted::Group {
+        id: GroupId::Component(NodeId(id)),
+        group: placed_at(Point::new(Dp::new(x), Dp::ZERO)),
+        items: items.clone(),
+    }
+}
+
+fn faded(opacity: f64, items: Vec<Painted>) -> Painted {
+    Painted::Scope {
+        values: GroupValues {
+            opacity,
+            ..GroupValues::default()
+        },
+        items,
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Shape {
+    Group(GroupValues),
+    Graft(NamespaceId),
+    Leaf(Vec<DrawCommand>),
+    Exit,
+}
+
+fn expected(items: &[Painted], shapes: &mut Vec<Shape>) {
+    for item in items {
+        let (values, inner): (_, &[Painted]) = match item {
+            Painted::Leaf { commands, .. } => {
+                shapes.push(Shape::Leaf(commands.to_vec()));
+                continue;
+            }
+            Painted::Scope { values, items } => (*values, items),
+            Painted::Group { group, items, .. } => (group.at(Duration::ZERO), items),
+        };
+        shapes.push(Shape::Group(values));
+        expected(inner, shapes);
+        shapes.push(Shape::Exit);
+    }
+}
+
+#[derive(Default)]
+struct Consumer {
+    shown: Shown,
+    sink: TestSink,
+}
+
+impl Consumer {
+    fn show(&mut self, items: &[Painted]) -> Result<Vec<Received>, FrameError<TestSinkError>> {
+        self.shown.retarget(Some(self.sink.id()));
+        self.shown.update(items, &BTreeMap::new(), &mut self.sink)?;
+        let mut received = std::mem::take(&mut self.sink.received);
+        assert_eq!(received.pop(), Some(Received::End));
+        let mut shown = Shapes(Vec::new());
+        self.sink
+            .tree
+            .at(Duration::ZERO)
+            .paint_order()
+            .walk(&mut shown);
+        let mut shapes = Vec::new();
+        expected(items, &mut shapes);
+        assert_eq!(shown.0, shapes);
+        Ok(received)
+    }
+}
+
+struct Shapes(Vec<Shape>);
+
+impl PaintVisitor<'_> for Shapes {
+    type Saved = ();
+
+    fn group(&mut self, _: NodeKey, values: GroupValues, _: Affine) {
+        self.0.push(Shape::Group(values));
+    }
+
+    fn graft(&mut self, _: NodeKey, namespace: NamespaceId) {
+        self.0.push(Shape::Graft(namespace));
+    }
+
+    fn leaf(&mut self, leaf: PlacedLeaf<'_>) {
+        self.0.push(Shape::Leaf(leaf.packet.commands().to_vec()));
+    }
+
+    fn exit(&mut self, (): ()) {
+        self.0.push(Shape::Exit);
+    }
+}
+
+#[test]
+fn the_first_update_inserts_every_item_and_the_same_items_change_nothing() -> TestResult {
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0), faded(0.5, vec![leaf(2.0)])]);
+    let mut consumer = Consumer::default();
+    let first = consumer.show(&[leaf(0.0), component(7, 10.0, &card)])?;
+    assert!(first.iter().all(|kind| *kind == Received::Insert));
+    assert_eq!(first.len(), 5);
+    assert_eq!(consumer.show(&[leaf(0.0), component(7, 10.0, &card)])?, []);
+    Ok(())
+}
+
+#[test]
+fn a_component_moved_with_the_same_items_changes_only_its_transform() -> TestResult {
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    let mut consumer = Consumer::default();
+    assert!(
+        consumer
+            .show(&[component(7, 10.0, &card)])?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    assert_eq!(
+        consumer.show(&[component(7, 30.0, &card)])?,
+        [Received::SetSlot]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_repainted_leaf_reuses_the_packet_while_the_commands_stay_equal() -> TestResult {
+    let mut consumer = Consumer::default();
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0), leaf(2.0)]);
+    assert!(
+        consumer
+            .show(&[component(7, 0.0, &card)])?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    let repainted: Arc<[Painted]> = Arc::from([leaf(1.0), leaf(3.0)]);
+    assert_eq!(
+        consumer.show(&[component(7, 0.0, &repainted)])?,
+        [Received::SetContent]
+    );
+    Ok(())
+}
+
+#[test]
+fn reordered_and_removed_items_move_and_remove_their_nodes() -> TestResult {
+    let content = |x| Arc::from([leaf(x)]);
+    let (a, b, c) = (content(1.0), content(2.0), content(3.0));
+    let mut consumer = Consumer::default();
+    assert!(
+        consumer
+            .show(&[
+                component(1, 0.0, &a),
+                component(2, 0.0, &b),
+                component(3, 0.0, &c),
+            ])?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    assert_eq!(
+        consumer.show(&[component(3, 0.0, &c), component(1, 0.0, &a)])?,
+        [Received::Move, Received::Remove]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_leaf_moves_into_a_scope_opened_around_it() -> TestResult {
+    let mut consumer = Consumer::default();
+    let plain: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    assert!(
+        consumer
+            .show(&[component(7, 0.0, &plain)])?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    let inside: Arc<[Painted]> = Arc::from([faded(0.5, vec![leaf(1.0)])]);
+    assert_eq!(
+        consumer.show(&[component(7, 0.0, &inside)])?,
+        [Received::Insert, Received::Move]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_new_tree_is_shown_the_whole_scene_with_new_ids_and_generations() -> TestResult {
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    let items = [leaf(0.0), component(7, 0.0, &card)];
+    let leaves = |tree: &SceneTree| {
+        (tree.at(Duration::ZERO).paint_order().leaves())
+            .map(|leaf| (leaf.key.node, leaf.packet.generation()))
+            .collect::<Vec<_>>()
+    };
+    let mut consumer = Consumer::default();
+    assert!(
+        consumer
+            .show(&items)?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    let old = leaves(&consumer.sink.tree);
+    consumer.sink = TestSink::default();
+    assert!(
+        consumer
+            .show(&items)?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    let new = leaves(&consumer.sink.tree);
+    assert_eq!(new.len(), old.len());
+    assert!(new.iter().all(|(id, generation)| {
+        (old.iter()).all(|(old_id, old_generation)| id > old_id && generation > old_generation)
+    }));
+    Ok(())
+}
+
+#[test]
+fn a_failed_change_forgets_the_scene_and_the_next_update_inserts_all_of_it() -> TestResult {
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    let items = [component(7, 0.0, &card)];
+    let mut consumer = Consumer::default();
+    let planted = Change::Insert {
+        id: SceneNodeId(1),
+        parent: None,
+        index: 0,
+        node: Node::Group(Group::default()),
+    };
+    consumer.shown.tree.show_change(planted)?;
+    let failed = consumer
+        .shown
+        .update(&items, &BTreeMap::new(), &mut consumer.sink);
+    assert_eq!(
+        failed.err(),
+        Some(FrameError::Mirror(ApplyError::DuplicateNode(SceneNodeId(
+            1
+        ))))
+    );
+    assert!(consumer.shown.items.is_empty() && consumer.shown.ids.is_empty());
+    consumer.sink.restart()?;
+    consumer.sink.received.clear();
+    assert!(
+        consumer
+            .show(&items)?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    Ok(())
+}
+
+#[test]
+fn items_painted_again_with_the_same_commands_change_nothing() -> TestResult {
+    let card: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    let repainted: Arc<[Painted]> = Arc::from([leaf(1.0)]);
+    let mut consumer = Consumer::default();
+    assert!(
+        consumer
+            .show(&[leaf(0.0), component(7, 0.0, &card)])?
+            .iter()
+            .all(|kind| *kind == Received::Insert)
+    );
+    assert!(
+        consumer
+            .show(&[leaf(0.0), component(7, 0.0, &repainted)])?
+            .is_empty()
+    );
+    Ok(())
+}

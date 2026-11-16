@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+half4 main(half4 src, half4 dst) {
+    float weight = float(src.w) + float(dst.w);
+    float share = weight > 0.0 ? float(src.w) / weight : 0.0;
+    return half4(mix(float3(dst.xyz), float3(src.xyz), share), weight);
+}

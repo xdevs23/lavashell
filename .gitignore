@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
+/result
+/result-*
+*.apk
+/.cache
+/target
+/examples/node_modules
+__pycache__/
+*.py[cod]

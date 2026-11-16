@@ -1,0 +1,262 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::*;
+use lavashell_core::transfer::Cancellation;
+use std::{cell::Cell, rc::Rc};
+
+fn native_source(adapter: &TextTransfers, view: &mut View) -> Result<DragRequest, TestError> {
+    let id = field_id(view)?;
+    assert_eq!(
+        view.accessibility_action(ActionRequest {
+            target: id,
+            action: AccessibilityAction::SetTextSelection(TextSelection {
+                anchor: 4,
+                focus: 7
+            }),
+        }),
+        Ok(ActionOutcome::Performed)
+    );
+    view.input(InputEvent::Press(Point::new(51.dp(), 5.dp())));
+    let gesture = DragGesture {
+        surface: SurfaceId::numbered(0),
+        origin: Point::new(51.dp(), 5.dp()),
+        position: Point::new(150.dp(), 5.dp()),
+    };
+    adapter
+        .source(&gesture, view)
+        .ok_or(TestError::Missing("a drag source"))
+}
+
+fn start_drag(request: &mut DragRequest, view: &mut View) -> Result<(), TestError> {
+    let started = (request.started.take()).ok_or(TestError::Missing("the start callback"))?;
+    started(DEVICE, view);
+    Ok(())
+}
+
+fn link_receipt(request: &mut DragRequest, id: TransferId) -> Result<(), TestError> {
+    let receipt = request
+        .received
+        .as_mut()
+        .ok_or(TestError::Missing("the receipt callback"))?;
+    receipt(id);
+    Ok(())
+}
+
+#[test]
+fn correlated_native_detour_moves_duplicate_range_once_and_finish_does_not_delete_again()
+-> Result<(), TestError> {
+    let text = State::new("abc abc xyz".to_string());
+    let value = text.clone();
+    let changes = Rc::new(Cell::new(0));
+    let count = changes.clone();
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        let value = value.clone();
+        let count = count.clone();
+        ui.text_area(
+            value.get(),
+            TextFieldOptions::default(),
+            Modifier::new()
+                .accessible_name("field")
+                .size(140.dp(), 60.dp()),
+            move |text| {
+                value.set(text);
+                count.set(count.get() + 1);
+            },
+        );
+    });
+    let mut scene = RecordedScene::default();
+    (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let mut adapter = TextTransfers::default();
+    let mut request = native_source(&adapter, &mut view)?;
+    start_drag(&mut request, &mut view)?;
+    let info = offer(3, Point::new(111.dp(), 5.dp()), DragAction::Move);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    link_receipt(&mut request, info.id)?;
+    assert_eq!(changes.get(), 0);
+    assert!(adapter.receive(received(&info, b"abc")?, &mut view).is_ok());
+    assert_eq!(text.get(), "abc  xyzabc");
+    assert_eq!(changes.get(), 1);
+    (request.done)(Ok(DragAction::Move), &mut view);
+    assert!(
+        adapter
+            .receive(received(&info, b"abc")?, &mut view)
+            .is_err()
+    );
+    assert_eq!(text.get(), "abc  xyzabc");
+    assert_eq!(changes.get(), 1);
+    Ok(())
+}
+
+#[test]
+fn equal_foreign_text_without_native_correlation_does_not_move_active_source()
+-> Result<(), TestError> {
+    for device in [DEVICE, DragDevice(2)] {
+        let Editor {
+            mut view,
+            mut scene,
+            text,
+            ..
+        } = editor()?;
+        text.set("abc abc xyz".to_string());
+        (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+        assert!(!scene.changes().is_empty());
+        let mut adapter = TextTransfers::default();
+        let mut request = native_source(&adapter, &mut view)?;
+        start_drag(&mut request, &mut view)?;
+        let info = offer(3, Point::new(111.dp(), 5.dp()), DragAction::Move);
+        assert!(
+            adapter
+                .drag(&DragEvent::Enter(info.clone()), device, &view)
+                .is_some()
+        );
+        assert!(
+            adapter
+                .drag(&DragEvent::Drop(info.clone()), device, &view)
+                .is_none()
+        );
+        assert_eq!(
+            adapter.receive(received(&info, b"abc")?, &mut view).is_ok(),
+            device != DEVICE
+        );
+        assert_eq!(
+            text.get(),
+            if device == DEVICE {
+                "abc abc xyz"
+            } else {
+                "abc abc xyzabc"
+            }
+        );
+        (request.done)(Err(Cancellation::SourceCancelled.into()), &mut view);
+        assert_eq!(
+            text.get(),
+            if device == DEVICE {
+                "abc abc xyz"
+            } else {
+                "abc abc xyzabc"
+            }
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cancelled_correlated_source_rejects_receipt_without_deleting_or_inserting()
+-> Result<(), TestError> {
+    let Editor {
+        mut view,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
+    text.set("abc abc xyz".to_string());
+    (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let mut adapter = TextTransfers::default();
+    let mut request = native_source(&adapter, &mut view)?;
+    start_drag(&mut request, &mut view)?;
+    let info = offer(3, Point::new(111.dp(), 5.dp()), DragAction::Move);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    link_receipt(&mut request, info.id)?;
+    (request.done)(Err(Cancellation::SourceCancelled.into()), &mut view);
+    assert!(
+        adapter
+            .receive(received(&info, b"abc")?, &mut view)
+            .is_err()
+    );
+    assert_eq!(text.get(), "abc abc xyz");
+    Ok(())
+}
+
+#[test]
+fn correlated_native_self_range_receipt_is_a_noop_including_source_finish() -> Result<(), TestError>
+{
+    let Editor {
+        mut view,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
+    text.set("abc abc xyz".to_string());
+    (view.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let mut adapter = TextTransfers::default();
+    let mut request = native_source(&adapter, &mut view)?;
+    start_drag(&mut request, &mut view)?;
+    let info = offer(3, Point::new(61.dp(), 5.dp()), DragAction::Move);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &view)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &view)
+            .is_none()
+    );
+    link_receipt(&mut request, info.id)?;
+    assert!(adapter.receive(received(&info, b"abc")?, &mut view).is_ok());
+    (request.done)(Ok(DragAction::Move), &mut view);
+    assert_eq!(text.get(), "abc abc xyz");
+    Ok(())
+}
+
+#[test]
+fn cancelled_correlated_source_also_rejects_receipt_in_another_window() -> Result<(), TestError> {
+    let Editor {
+        view: mut origin,
+        mut scene,
+        text,
+        ..
+    } = editor()?;
+    text.set("abc abc xyz".to_string());
+    (origin.frame_into(FIELD_VIEWPORT, &mut Metrics, &mut scene)).without_failures()?;
+    assert!(!scene.changes().is_empty());
+    let Editor {
+        view: mut destination,
+        text: target,
+        ..
+    } = editor()?;
+    let mut adapter = TextTransfers::default();
+    let mut request = native_source(&adapter, &mut origin)?;
+    start_drag(&mut request, &mut origin)?;
+    let mut info = offer(3, Point::new(31.dp(), 5.dp()), DragAction::Move);
+    info.surface = SurfaceId::numbered(1);
+    assert!(
+        adapter
+            .drag(&DragEvent::Enter(info.clone()), DEVICE, &destination)
+            .is_some()
+    );
+    assert!(
+        adapter
+            .drag(&DragEvent::Drop(info.clone()), DEVICE, &destination)
+            .is_none()
+    );
+    link_receipt(&mut request, info.id)?;
+    (request.done)(Err(Cancellation::SourceCancelled.into()), &mut origin);
+    assert!(
+        adapter
+            .receive(received(&info, b"abc")?, &mut destination)
+            .is_err()
+    );
+    assert_eq!(text.get(), "abc abc xyz");
+    assert_eq!(target.get(), "abc def");
+    Ok(())
+}

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-example-support"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+testing = []
+
+[dependencies]
+clap.workspace = true
+csv.workspace = true
+lavashell.workspace = true
+lavashell-core = { workspace = true, features = ["serde"] }
+lavashell-lucide.workspace = true
+lavashell-test-platform.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+lavashell-example-copy-keys.workspace = true
+
+[dev-dependencies]
+lavashell-core = { workspace = true, features = ["test-support"] }

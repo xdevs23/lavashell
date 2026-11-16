@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use super::*;
+use crate::platform::{Buffer, StreamEvent as Event};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+const SMALLER_DEFAULT: PixelSize = PixelSize::new(SURFACE_SIZE.width / 2, SURFACE_SIZE.height / 4);
+const SMALLER_MAX: PixelSize = PixelSize::new(SURFACE_SIZE.width / 2, SURFACE_SIZE.height / 2);
+
+fn smaller() -> Result<BufferSizes, BufferSizesError> {
+    BufferSizes::new(SMALLER_DEFAULT, SMALLER_MAX)
+}
+
+fn counting_wake() -> (Arc<AtomicU32>, impl Fn() + Send + Sync + 'static) {
+    let count = Arc::new(AtomicU32::new(0));
+    let counter = count.clone();
+    let wake = move || {
+        let _earlier_count = counter.fetch_add(1, Ordering::SeqCst);
+    };
+    (count, wake)
+}
+
+fn runs(count: &AtomicU32) -> u32 {
+    count.load(Ordering::SeqCst)
+}
+
+#[test]
+fn a_resized_stream_shows_the_old_surface_until_the_new_one_delivers() -> Result<(), TestError> {
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(surface_sizes()?, StreamFormat::Rgba8888)?;
+    let earlier = renderer.producer(stream)?;
+    let earlier_window = renderer.source(stream)?.native_window().clone();
+    earlier.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
+    assert!(matches!(renderer.latch(stream)?, Latch::Frame(_)));
+    renderer.source(stream)?.resize(smaller()?)?;
+    let resized = renderer.producer(stream)?;
+    assert_eq!(
+        (earlier.default_size(), resized.default_size()),
+        (SURFACE_SIZE, SMALLER_DEFAULT)
+    );
+
+    earlier.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::RED));
+    let shown = renderer.latched(stream)?;
+    assert_eq!(
+        (shown.size, renderer.stream(stream)?.drawn_size()),
+        (SURFACE_SIZE, Some(SURFACE_SIZE))
+    );
+    assert_eq!(renderer.render(shown)?, FrameOutcome::Shown);
+    assert_eq!(renderer.pixel(MIDDLE, MIDDLE)?, RED);
+
+    resized.queue(Buffer::new(10, SMALLER_DEFAULT, skia::Color::BLUE));
+    renderer.source(stream)?.release_window(&earlier_window);
+    drop(earlier_window);
+    let delivered = renderer.latched(stream)?;
+    assert_eq!(
+        (delivered.size, renderer.stream(stream)?.drawn_size()),
+        (SMALLER_DEFAULT, Some(SMALLER_DEFAULT))
+    );
+    assert_eq!(renderer.render(delivered)?, FrameOutcome::Shown);
+    assert_eq!(renderer.pixel(MIDDLE, MIDDLE)?, BLUE);
+    assert_eq!(
+        earlier.events(),
+        [
+            Event::Released {
+                id: 1,
+                fenced: true
+            },
+            Event::Imported(2),
+            Event::Acquired(2),
+            Event::HandedBack(2),
+            Event::Released {
+                id: 2,
+                fenced: true
+            },
+            Event::ReaderDeleted,
+            Event::ImportDropped(2),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_removed_buffer_or_a_dropped_stream_drops_its_imports_and_its_frame() -> Result<(), TestError> {
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(surface_sizes()?, StreamFormat::Rgba8888)?;
+    let producer = renderer.producer(stream)?;
+    for id in [1, 2] {
+        producer.queue(Buffer::new(id, SURFACE_SIZE, skia::Color::RED));
+        let image = renderer.latched(stream)?;
+        assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
+    }
+    producer.clear_events();
+    producer.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
+    let image = renderer.latched(stream)?;
+    assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
+    let reused = [
+        Event::Released {
+            id: 2,
+            fenced: true,
+        },
+        Event::Acquired(1),
+        Event::HandedBack(1),
+    ];
+    assert_eq!(producer.events(), reused);
+    producer.clear_events();
+    producer.remove(Buffer::new(2, SURFACE_SIZE, skia::Color::BLUE));
+    assert_eq!(renderer.latch(stream)?, Latch::Unchanged);
+    assert_eq!(producer.events(), [Event::ImportDropped(2)]);
+
+    producer.clear_events();
+    assert!(renderer.streams.detach(stream).is_some());
+    let unbound = StreamImage {
+        stream: StreamId::next(),
+        generation: 1,
+        size: SURFACE_SIZE,
+    };
+    assert_eq!(renderer.render(unbound)?, FrameOutcome::Shown);
+    assert_eq!(renderer.pixel(MIDDLE, MIDDLE)?, [0; 4]);
+    assert_eq!(
+        producer.events(),
+        [
+            Event::ReaderDeleted,
+            Event::Released {
+                id: 1,
+                fenced: false
+            },
+            Event::ImportDropped(1),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn every_surface_of_a_stream_wakes_the_host_and_a_crop_sets_drawn_size() -> Result<(), TestError> {
+    let mut renderer = Display::new()?;
+    let stream = renderer.create_stream(surface_sizes()?, StreamFormat::Rgba8888)?;
+    let (woken, wake) = counting_wake();
+    renderer.source(stream)?.on_frame(wake);
+    let earlier = renderer.producer(stream)?;
+    renderer.source(stream)?.resize(surface_sizes()?)?;
+    let resized = renderer.producer(stream)?;
+    let mut cropped = Buffer::new(1, SURFACE_SIZE, skia::Color::RED);
+    let (left, top, right) = (SIDE / 8, SIDE / 4, SIDE * 3 / 4);
+    cropped.crop = Some((left, top, right, SIDE + top));
+    earlier.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::RED));
+    resized.queue(cropped);
+    assert_eq!(runs(&woken), 2);
+    let image = renderer.latched(stream)?;
+    let drawn = PixelSize::new(u32::try_from(right - left)?, u32::try_from(SIDE - top)?);
+    assert_eq!(
+        (image.size, renderer.stream(stream)?.drawn_size()),
+        (drawn, Some(drawn))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_second_wake_replaces_the_first_on_every_surface_of_a_stream() -> Result<(), TestError> {
+    let mut stream = SurfaceStream::new(surface_sizes()?, StreamFormat::Rgba8888)?;
+    let (first, first_wake) = counting_wake();
+    stream.on_frame(first_wake);
+    let earlier = producer(&stream)?;
+    stream.resize(surface_sizes()?)?;
+    let resized = producer(&stream)?;
+    let (second, second_wake) = counting_wake();
+    stream.on_frame(second_wake);
+    earlier.queue(Buffer::new(1, SURFACE_SIZE, skia::Color::RED));
+    resized.queue(Buffer::new(2, SURFACE_SIZE, skia::Color::RED));
+    assert_eq!((runs(&first), runs(&second)), (0, 2));
+    Ok(())
+}
