@@ -171,6 +171,9 @@ fn stroke_widths(commands: &[DrawCommand]) -> Vec<Dp> {
 #[path = "tests/failures.rs"]
 mod failures;
 
+#[path = "tests/arrivals.rs"]
+mod arrivals;
+
 #[path = "tests/bound_scroll.rs"]
 mod bound_scroll;
 #[path = "tests/content_sizes.rs"]

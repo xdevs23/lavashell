@@ -109,6 +109,10 @@ impl Moving {
         self.around.then(self.rest_of(self.current))
     }
 
+    pub fn at_rest(&self, transform: Transform) -> Transform {
+        self.resting().then(transform)
+    }
+
     fn rest_of(&self, group: Option<GroupId>) -> Transform {
         let mut rest = Transform::IDENTITY;
         let mut wanted = group;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::paint::Above;
 use super::{Hit, View, accessibility, scroll_followers};
 use crate::ui::NodeId;
 use crate::view::moving::Moving;
@@ -10,6 +11,7 @@ pub(super) struct Collected {
     pub moving: Moving,
     pub geometry: BTreeMap<NodeId, accessibility::SemanticGeometry>,
     pub followers: Vec<scroll_followers::ScrollFollower>,
+    pub above: Vec<Above>,
 }
 
 impl View {
@@ -33,5 +35,6 @@ impl Collected {
         std::mem::swap(&mut self.moving, &mut view.routing.moving);
         std::mem::swap(&mut self.geometry, &mut view.accessibility.geometry);
         view.followers.exchange(&mut self.followers);
+        std::mem::swap(&mut self.above, &mut view.painting.above);
     }
 }

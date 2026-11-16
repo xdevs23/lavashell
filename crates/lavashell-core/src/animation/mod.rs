@@ -15,6 +15,8 @@ mod program;
 mod reduced_motion_tests;
 #[cfg(test)]
 mod shape_tests;
+#[cfg(test)]
+mod shift_tests;
 mod spring;
 #[cfg(test)]
 mod spring_tests;

@@ -443,6 +443,8 @@ mod motion;
 use motion::Registry;
 pub use motion::{BindError, Bindable, Motion};
 
+mod shift;
+
 mod timer;
 
 pub use timer::Timer;

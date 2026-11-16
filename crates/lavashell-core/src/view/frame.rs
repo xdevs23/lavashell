@@ -89,6 +89,8 @@ impl View {
             self.redraw = true;
         }
         self.retire_exits();
+        let rested = self.transitions.settle_arrivals();
+        self.retained.forget_paintings_around(&rested);
         self.settle_followers(presentation);
         let incoming_focus = self.routing.focus;
         let previous_modal = self.routing.modal_root;
@@ -116,6 +118,7 @@ impl View {
                     text,
                 );
             });
+            self.paint_above();
             if !self.fail_paint_failures() {
                 break (modal, painted_focus);
             }

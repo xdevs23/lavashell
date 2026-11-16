@@ -6,11 +6,18 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
 enum Lifecycle {
-    InTree,
+    Arriving,
+    Resting,
     Leaving {
         departure: Departure,
         exit: Box<Exit>,
     },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ParentChange {
+    Kept,
+    Changed,
 }
 
 struct TransitionState {
@@ -18,6 +25,7 @@ struct TransitionState {
     transition: Transition,
     lifecycle: Lifecycle,
     material_steps: MaterialSteps,
+    parent: Option<NodeId>,
 }
 
 impl TransitionState {
@@ -28,22 +36,27 @@ impl TransitionState {
     fn departure(&self) -> Option<&Departure> {
         match &self.lifecycle {
             Lifecycle::Leaving { departure, .. } => Some(departure),
-            Lifecycle::InTree => None,
+            Lifecycle::Arriving | Lifecycle::Resting => None,
         }
     }
 
     fn departure_mut(&mut self) -> Option<&mut Departure> {
         match &mut self.lifecycle {
             Lifecycle::Leaving { departure, .. } => Some(departure),
-            Lifecycle::InTree => None,
+            Lifecycle::Arriving | Lifecycle::Resting => None,
         }
     }
 
     fn take_departure(&mut self) -> Option<Departure> {
-        match std::mem::replace(&mut self.lifecycle, Lifecycle::InTree) {
-            Lifecycle::Leaving { departure, .. } => Some(departure),
-            Lifecycle::InTree => None,
+        if !self.is_leaving() {
+            return None;
         }
+        let Lifecycle::Leaving { departure, .. } =
+            std::mem::replace(&mut self.lifecycle, Lifecycle::Arriving)
+        else {
+            return None;
+        };
+        Some(departure)
     }
 
     fn exit_ended(&self) -> bool {
@@ -52,7 +65,9 @@ impl TransitionState {
 
     fn animate_to(&self, target: Visual) -> Result<(), AnimationError> {
         match &self.lifecycle {
-            Lifecycle::InTree => self.animation.animate_to(target, self.transition.spec),
+            Lifecycle::Arriving | Lifecycle::Resting => {
+                self.animation.animate_to(target, self.transition.spec)
+            }
             Lifecycle::Leaving { exit, .. } => self.animation.animate_to(
                 Visual {
                     presence: exit.presence,
@@ -71,6 +86,49 @@ impl TransitionState {
         };
         self.animate_to(self.animation.target())
     }
+
+    fn reparent(&mut self, parent: Option<NodeId>) -> ParentChange {
+        if self.parent == parent {
+            return ParentChange::Kept;
+        }
+        self.parent = parent;
+        if matches!(self.lifecycle, Lifecycle::Resting) {
+            self.lifecycle = Lifecycle::Arriving;
+        }
+        ParentChange::Changed
+    }
+
+    fn follow(&self, target: Visual, parent: ParentChange) -> Result<(), AnimationError> {
+        let instant_at_rest = self.transition.instant_at_rest;
+        match self.lifecycle {
+            Lifecycle::Resting if instant_at_rest => self.animation.snap(target),
+            Lifecycle::Arriving
+                if instant_at_rest && parent == ParentChange::Kept && self.moves_only(&target) =>
+            {
+                (self.animation).shift_or_animate_to(target, self.transition.spec)
+            }
+            _ => self.animate_to(target),
+        }
+    }
+
+    fn moves_only(&self, target: &Visual) -> bool {
+        let end = self.animation.target();
+        end.rect != target.rect
+            && Visual {
+                rect: target.rect,
+                ..end
+            } == *target
+    }
+
+    fn settle(&mut self) {
+        if matches!(self.lifecycle, Lifecycle::Arriving) && !self.animation.is_running() {
+            self.lifecycle = Lifecycle::Resting;
+        }
+    }
+
+    fn paints_above(&self) -> bool {
+        self.transition.instant_at_rest && matches!(self.lifecycle, Lifecycle::Arriving)
+    }
 }
 
 #[derive(Default)]
@@ -85,10 +143,25 @@ impl Transitions {
             .is_some_and(TransitionState::is_leaving)
     }
 
+    pub fn paints_above(&self, id: NodeId) -> bool {
+        (self.states.get(&id)).is_some_and(TransitionState::paints_above)
+    }
+
+    pub fn settle_arrivals(&mut self) -> BTreeSet<NodeId> {
+        (self.states.iter_mut())
+            .filter_map(|(id, state)| {
+                let painted_above = state.paints_above();
+                state.settle();
+                (painted_above && !state.paints_above()).then_some(*id)
+            })
+            .collect()
+    }
+
     pub fn refresh(
         &mut self,
         motion: &Motion,
         id: NodeId,
+        parent: Option<NodeId>,
         transition: &Transition,
         target: Visual,
         steps: MaterialSteps,
@@ -103,14 +176,17 @@ impl Transitions {
                 entry.insert(TransitionState {
                     animation,
                     transition: *transition,
-                    lifecycle: Lifecycle::InTree,
+                    lifecycle: Lifecycle::Arriving,
                     material_steps: MaterialSteps::default(),
+                    parent,
                 })
             }
         };
+        let parent_change = state.reparent(parent);
         state.transition = *transition;
         state.material_steps = steps.or(state.material_steps);
-        state.animate_to(target)?;
+        state.follow(target, parent_change)?;
+        state.settle();
         Ok((&state.animation, state.material_steps))
     }
 

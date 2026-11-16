@@ -34,6 +34,7 @@ pub(super) enum GroupId {
     Presence(NodeId),
     Animated { node: NodeId, step: usize },
     Content(NodeId),
+    Above(NodeId),
 }
 
 impl Painted {

@@ -39,6 +39,7 @@ pub struct Transition {
     pub appearance: Option<ColorInterpolation>,
     pub enter: Option<Presence>,
     pub exit: Option<Exit>,
+    pub instant_at_rest: bool,
 }
 
 impl Transition {
@@ -49,6 +50,7 @@ impl Transition {
             appearance: Some(ColorInterpolation::default()),
             enter: None,
             exit: None,
+            instant_at_rest: false,
         }
     }
 
@@ -74,6 +76,12 @@ impl Transition {
     pub fn exit_with(mut self, presence: Presence, spec: impl Into<MotionSpec>) -> Self {
         let spec = spec.into();
         self.exit = Some(Exit { presence, spec });
+        self
+    }
+
+    #[must_use]
+    pub fn instant_at_rest(mut self) -> Self {
+        self.instant_at_rest = true;
         self
     }
 
@@ -300,7 +308,9 @@ impl View {
             group: (found.group).map(|(step, (_, spacing))| GroupStep { step, spacing }),
         };
         let id = node.id;
-        let refreshed = (self.transitions).refresh(&self.motion, id, &transition, target, steps);
+        let parent = (self.parents.node_of(index)).map(|parent| self.nodes[parent].id);
+        let refreshed =
+            (self.transitions).refresh(&self.motion, id, parent, &transition, target, steps);
         let (animation, last) = match refreshed {
             Ok((animation, last)) => (animation.clone(), last),
             Err(error) => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::moving::MovingGroup;
 use super::output::{GroupId, Painted, placed_at};
-use super::paint::Inherited;
+use super::paint::{Above, Inherited};
 use super::{Hit, HitClip, TextMeasurer, TextTarget, View, accessibility, paint, scroll_followers};
 use crate::geometry::{Constraints, Point, Rect, Scale, Size};
 use crate::keyboard::Key;
@@ -43,6 +43,7 @@ struct Painting {
     hits: Vec<Hit>,
     moving: Vec<MovingGroup>,
     followers: Vec<scroll_followers::ScrollFollower>,
+    above: Vec<Above>,
     geometry: Vec<(NodeId, Rect)>,
     fields: Vec<(NodeId, Scale)>,
     accessibility_geometry: Vec<(NodeId, accessibility::SemanticGeometry)>,
@@ -87,11 +88,15 @@ impl Painting {
 
 impl Retained {
     pub fn remove(&mut self, ids: &BTreeSet<NodeId>) {
-        self.paintings.retain(|key, painting| {
-            !ids.contains(key) && !painting.geometry.iter().any(|(id, _)| ids.contains(id))
-        });
+        self.forget_paintings_around(ids);
         self.layouts.retain(|key, layout| {
             !ids.contains(key) && !layout.nodes.iter().any(|(id, _)| ids.contains(id))
+        });
+    }
+
+    pub fn forget_paintings_around(&mut self, ids: &BTreeSet<NodeId>) {
+        self.paintings.retain(|key, painting| {
+            !ids.contains(key) && !painting.geometry.iter().any(|(id, _)| ids.contains(id))
         });
     }
 
@@ -258,6 +263,7 @@ impl View {
             followers: (collected.followers.into_iter())
                 .map(|follower| follower.in_component(id))
                 .collect(),
+            above: collected.above,
             geometry: (indices.iter())
                 .map(|i| (self.nodes[*i].id, self.layout[*i].rect))
                 .collect(),
@@ -299,10 +305,7 @@ impl View {
             placed: shared.then(|| {
                 let laid_out = (inherited.laid_out.offset(position.x, position.y))
                     .offset(self.viewport_origin.x, self.viewport_origin.y);
-                (
-                    self.routing.moving.resting().then(placed).affine(),
-                    laid_out,
-                )
+                (self.routing.moving.at_rest(placed).affine(), laid_out)
             }),
             sizes: indices
                 .iter()
@@ -397,6 +400,7 @@ impl View {
         let around = self.routing.moving.current;
         self.routing.moving.place(&painting.moving, moved);
         self.followers.extend(painting.followers.iter().cloned());
+        (self.painting.above).extend(painting.above.iter().map(|above| above.moved_by(moved)));
         for hit in &painting.hits {
             let inner = (hit.clips.iter()).map(|clip| {
                 let clip = clip.mapped(moved);

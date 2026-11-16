@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod above;
 mod group;
 mod kind;
 pub(super) mod material;
@@ -22,6 +23,8 @@ use crate::style::{AnimatedAppearance, ContentColors};
 use crate::ui::{Identity, ModifierElement, NodeId};
 use crate::view::component::index_of;
 use crate::view::transition::AnimatedVisual;
+pub(super) use above::Above;
+use above::OpenAbove;
 pub(super) use group::{OpenGroup, Playback, Unwind};
 use modifiers::{ModifierInput, PaintedModifiers};
 use presence::TransitionSpace;
@@ -33,6 +36,7 @@ pub(super) use surfaces::Surfaces;
 #[derive(Default)]
 pub(super) struct PaintOutput {
     pub canvas: Canvas,
+    pub above: Vec<Above>,
     pub shown: Shown,
     pub spare_unwinds: Vec<Unwind>,
     pub sibling_orders: SiblingOrders,
@@ -117,12 +121,13 @@ impl View {
         let OpenVisual {
             visual,
             presence,
+            above,
             mut transform,
             surfaces,
             surface,
             decorated_surface,
             mut radius_scale,
-        } = self.open_visual(index, &plan, parent_transform, inherited.composed_parent);
+        } = self.open_visual(index, &plan, parent_transform, inherited);
         scale::apply(
             &mut self.painting.canvas,
             self.nodes[index].visual_scale.get(),
@@ -151,6 +156,7 @@ impl View {
             unwind,
             interaction,
             presence,
+            above,
             surfaces,
             decorated_surface,
             painted,
@@ -225,6 +231,9 @@ impl View {
         if let Some(open) = opened.presence {
             self.close_group(open);
         }
+        if let Some(open) = opened.above {
+            self.close_above(open);
+        }
     }
 
     fn open_visual(
@@ -232,15 +241,16 @@ impl View {
         index: usize,
         plan: &PaintPlan,
         parent_transform: Transform,
-        composed_parent: usize,
+        inherited: Inherited,
     ) -> OpenVisual {
         let id = self.nodes[index].id;
         let visual = self.visual(
             index,
             plan.space.relative(plan.target_rect),
             plan.visual_playback,
-            composed_parent,
+            inherited.composed_parent,
         );
+        let above = self.open_above(index, inherited.source, parent_transform);
         let (opened, presence) = match &visual {
             Some(animated) => {
                 let (opened, group) = self.open_presence(
@@ -263,6 +273,7 @@ impl View {
         OpenVisual {
             visual,
             presence,
+            above,
             transform,
             surfaces,
             surface: surfaces.rect(plan.target_rect),
@@ -321,7 +332,7 @@ impl View {
         let visual_playback = Playback::in_slot_if(!island);
         let space = match node.identity {
             Identity::InView => {
-                let resting = self.routing.moving.resting().then(parent_transform);
+                let resting = self.routing.moving.at_rest(parent_transform);
                 TransitionSpace::in_view(resting, laid_out, self.viewport_origin)
             }
             Identity::InParent => TransitionSpace::in_parent(origin),
@@ -340,6 +351,7 @@ struct Opened {
     unwind: Unwind,
     interaction: Option<AnimatedAppearance>,
     presence: Option<OpenGroup>,
+    above: Option<OpenAbove>,
     surfaces: Surfaces,
     decorated_surface: Rect,
     painted: PaintedModifiers,
@@ -348,6 +360,7 @@ struct Opened {
 struct OpenVisual {
     visual: Option<AnimatedVisual>,
     presence: Option<OpenGroup>,
+    above: Option<OpenAbove>,
     transform: Transform,
     surfaces: Surfaces,
     surface: Rect,
