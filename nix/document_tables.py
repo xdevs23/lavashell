@@ -17,9 +17,7 @@ class ValueKind(enum.Enum):
     ARRAY = enum.auto()
     STRING = enum.auto()
     INTEGER = enum.auto()
-    BOOLEAN = enum.auto()
     VALUE = enum.auto()
-    DEPENDENCY_TABLE = enum.auto()
 
     @property
     def text(self) -> str:
@@ -32,12 +30,8 @@ class ValueKind(enum.Enum):
                 return "a string"
             case ValueKind.INTEGER:
                 return "an integer"
-            case ValueKind.BOOLEAN:
-                return "a boolean"
             case ValueKind.VALUE:
                 return "a value of a JSON or TOML document"
-            case ValueKind.DEPENDENCY_TABLE:
-                return "a dependency table of a Cargo manifest"
 
 
 @dataclass(frozen=True)
@@ -58,17 +52,6 @@ def frozen_value(value: object, location: str) -> DocumentValue:
             return tuple(frozen_value(item, f"{location}[{index}]") for index, item in enumerate(value))
         case dict():
             return {str(key): frozen_value(item, f"{location}.{key}") for key, item in value.items()}
-    raise VerificationError(MalformedDocument(location=location, expected=ValueKind.VALUE))
-
-
-def toml_value(value: DocumentValue, location: str) -> TomlValue:
-    match value:
-        case str() | bool() | int() | float():
-            return value
-        case tuple():
-            return [toml_value(item, f"{location}[{index}]") for index, item in enumerate(value)]
-        case Mapping():
-            return {key: toml_value(item, f"{location}.{key}") for key, item in value.items()}
     raise VerificationError(MalformedDocument(location=location, expected=ValueKind.VALUE))
 
 
@@ -109,37 +92,13 @@ class DocumentTable:
             raise self.malformed(key, ValueKind.INTEGER)
         return value
 
-    def scalar(self, key: str) -> str | int | None:
-        if key in self.fields:
-            match value := self.fields[key]:
-                case bool():
-                    pass
-                case str() | int() | None:
-                    return value
-        raise self.malformed(key, ValueKind.VALUE)
-
-    def string_unless_false(self, key: str) -> str | None:
-        return None if self.fields.get(key) is False else self.string(key)
-
-    def boolean(self, key: str) -> bool:
-        return self.checked(key, bool, ValueKind.BOOLEAN)
-
-    def flag(self, key: str) -> bool:
-        return self.has(key) and self.boolean(key)
-
     def value(self, key: str) -> DocumentValue:
         if key not in self.fields:
             raise self.malformed(key, ValueKind.VALUE)
         return self.fields[key]
 
-    def toml_table(self) -> TomlTable:
-        return {key: toml_value(value, f"{self.location}.{key}") for key, value in self.fields.items()}
-
     def object(self, key: str) -> "DocumentTable":
         return DocumentTable.of(self.fields.get(key), f"{self.location}.{key}")
-
-    def optional_object(self, key: str) -> "DocumentTable | None":
-        return self.object(key) if self.has(key) else None
 
     def objects(self, key: str) -> tuple["DocumentTable", ...]:
         return tuple(DocumentTable.of(item, f"{self.location}.{key}[{index}]")
@@ -147,13 +106,6 @@ class DocumentTable:
 
     def strings(self, key: str) -> tuple[str, ...]:
         return tuple(self.item(key, index, item, str, ValueKind.STRING) for index, item in enumerate(self.array(key)))
-
-    def string_map(self, key: str) -> dict[str, str]:
-        table = self.object(key)
-        return {name: table.string(name) for name in table.keys()}
-
-    def integers(self, key: str) -> tuple[int, ...]:
-        return tuple(self.item(key, index, item, int, ValueKind.INTEGER) for index, item in enumerate(self.array(key)))
 
     def array(self, key: str) -> tuple[DocumentValue, ...]:
         return self.checked(key, tuple, ValueKind.ARRAY)
@@ -172,28 +124,3 @@ class DocumentTable:
 
     def malformed(self, key: str, expected: ValueKind) -> VerificationError:
         return VerificationError(MalformedDocument(location=f"{self.location}.{key}", expected=expected))
-
-
-def table_at(table: TomlTable, *keys: str) -> TomlTable:
-    for key in keys:
-        value = table[key]
-        if not isinstance(value, dict):
-            raise TypeError(f"{key} is not a table")
-        table = value
-    return table
-
-
-def array_at(table: TomlTable, *keys: str) -> list[TomlValue]:
-    *tables, key = keys
-    value = table_at(table, *tables)[key]
-    if not isinstance(value, list):
-        raise TypeError(f"{key} is not an array")
-    return value
-
-
-def string_at(table: TomlTable, *keys: str) -> str:
-    *tables, key = keys
-    value = table_at(table, *tables)[key]
-    if not isinstance(value, str):
-        raise TypeError(f"{key} is not a string")
-    return value

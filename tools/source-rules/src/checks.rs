@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::comments::comment_report;
+use crate::copy_catalogs::copy_report;
+use crate::crate_manifests::crate_report;
 use crate::documents::{ALLOWED_DOCUMENT, document_report};
 use crate::error::Error;
 use crate::findings::Report;
 use crate::languages::RUST;
 use crate::modules::{Crate, Source, Sources};
+use crate::python_place::{PYTHON_DIRECTORY, python_place_report};
 use crate::repository_files::{FileKind, RepositoryFile, unknown_kind_report};
 use crate::rules::{file_findings, missing_forbid};
 use std::fmt;
@@ -14,8 +17,11 @@ use std::path::{Path, PathBuf};
 pub enum RuleSet {
     Rust,
     FileKind,
+    PythonPlace,
     Comment,
     Document,
+    Crate,
+    Copy,
 }
 
 impl fmt::Display for RuleSet {
@@ -23,8 +29,11 @@ impl fmt::Display for RuleSet {
         formatter.write_str(match self {
             Self::Rust => "Rust source rules",
             Self::FileKind => "file kind rules",
+            Self::PythonPlace => "Python place rules",
             Self::Comment => "comment rules",
             Self::Document => "document rules",
+            Self::Crate => "crate rules",
+            Self::Copy => "copy rules",
         })
     }
 }
@@ -37,11 +46,25 @@ pub fn repository_reports(
     Ok(vec![
         (RuleSet::Rust, rust_report(files, crate_roots)?),
         (RuleSet::FileKind, unknown_kind_report(files)),
+        (
+            RuleSet::PythonPlace,
+            python_place_report(files, &root.join(PYTHON_DIRECTORY)),
+        ),
         (RuleSet::Comment, comment_report(files)?),
         (
             RuleSet::Document,
             document_report(files, &root.join(ALLOWED_DOCUMENT)),
         ),
+    ])
+}
+
+pub fn workspace_reports(
+    files: &[RepositoryFile],
+    root: &Path,
+) -> Result<Vec<(RuleSet, Report)>, Error> {
+    Ok(vec![
+        (RuleSet::Crate, crate_report(root)?),
+        (RuleSet::Copy, copy_report(files, root)?),
     ])
 }
 

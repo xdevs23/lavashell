@@ -2,4 +2,3 @@
 
 [tool.mypy]
 strict = true
-mypy_path = "tools/stubs"

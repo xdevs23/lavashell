@@ -48,6 +48,8 @@ pub enum SessionError {
     ReadyBeforeCopy,
     #[error("the compositor could not copy the frame")]
     CopyFailed,
-    #[error("the pixels of the frame cannot be written to their file")]
-    WritePixels(#[source] std::io::Error),
+    #[error("the image file of the frame cannot be created")]
+    CreateImage(#[source] std::io::Error),
+    #[error("the frame cannot be written as a PNG image")]
+    EncodeImage(#[source] png::EncodingError),
 }

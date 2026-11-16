@@ -14,6 +14,18 @@ pub enum Rule {
     Comment,
     Document { allowed: &'static str },
     UnknownFileKind,
+    PythonOutsidePlace { directory: &'static str },
+    InexactWorkspaceDependency { name: String },
+    UnlistedMember { member: String },
+    OwnDependency { name: String },
+    OwnVersion,
+    OwnEdition,
+    OwnLints,
+    NoCopyCatalogs,
+    CopyColumns,
+    DuplicateCopyKey { key: String },
+    EmptyCopy { key: String },
+    CopyPunctuation { key: String },
 }
 
 impl fmt::Display for Rule {
@@ -51,6 +63,42 @@ impl fmt::Display for Rule {
             ),
             Self::UnknownFileKind => formatter.write_str(
                 "add the kind of this file to the file kinds of the source rules, or remove the file",
+            ),
+            Self::PythonOutsidePlace { directory } => write!(
+                formatter,
+                "the source rules allow Python files only directly in {directory}. Move the file there or rewrite it in Rust",
+            ),
+            Self::InexactWorkspaceDependency { name } => write!(
+                formatter,
+                "lock the workspace dependency {name} to an exact version `=x.y.z` or give it a path",
+            ),
+            Self::UnlistedMember { member } => write!(
+                formatter,
+                "add the member {member} to the workspace dependencies as a path entry",
+            ),
+            Self::OwnDependency { name } => write!(
+                formatter,
+                "take the dependency {name} from the workspace with `{name}.workspace = true`",
+            ),
+            Self::OwnVersion => formatter
+                .write_str("take package.version from the workspace with `version.workspace = true`"),
+            Self::OwnEdition => formatter
+                .write_str("take package.edition from the workspace with `edition.workspace = true`"),
+            Self::OwnLints => formatter
+                .write_str("take the lints from the workspace with `[lints]` and `workspace = true`"),
+            Self::NoCopyCatalogs => formatter.write_str(
+                "the copy rules found no catalog at examples/<example>/copy/<area>.en.tsv",
+            ),
+            Self::CopyColumns => {
+                formatter.write_str("give the copy row a key and a value, separated by one tab")
+            }
+            Self::DuplicateCopyKey { key } => {
+                write!(formatter, "give the copy key {key} to one row only")
+            }
+            Self::EmptyCopy { key } => write!(formatter, "write the copy of the key {key}"),
+            Self::CopyPunctuation { key } => write!(
+                formatter,
+                "remove the semicolon, em dash or en dash from the copy of the key {key}",
             ),
         }
     }

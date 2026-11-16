@@ -3,6 +3,8 @@
   toolchain,
   skia,
   root,
+  buildLayers,
+  aospRoundTrip,
 }:
 let
   inherit (toolchain)
@@ -15,7 +17,6 @@ let
     llvmRoot
     platform
     targetSdk
-    emulatorApi
     nativeApi
     pageSize
     pageSizeKiB
@@ -68,7 +69,6 @@ let
   packageTools = [
     pkgs.clang
     pkgs.pkg-config
-    pkgs.python3
     pkgs.zip
     pkgs.jdk17
     pkgs.kotlin
@@ -168,8 +168,8 @@ let
       ${buildTools}/zipalign -P ${toString pageSizeKiB} -f ${toString zipAlignment} apk/unaligned.apk "$apk"
       ${buildTools}/zipalign -c -P ${toString pageSizeKiB} ${toString zipAlignment} "$apk"
       report="$out/share/aosp/library-check.json"
-      if ! python3 ${libraryCheckTools}/check-aosp-library.py apk/lib/${abi}/libsurface_stream_round_trip.so \
-        --llvm ${llvmRoot}/bin --system-libraries ${llvmRoot}/sysroot/usr/lib/${emulatorTarget} \
+      if ! ${lib.getExe' buildLayers "lavashell-aosp-library-check"} apk/lib/${abi}/libsurface_stream_round_trip.so \
+        --system-libraries ${llvmRoot}/sysroot/usr/lib/${emulatorTarget} \
         --arch ${architecture} --api-level ${toString nativeApi} \
         --page-size ${toString pageSize} > "$report"; then
         cat "$report" >&2
@@ -188,43 +188,16 @@ let
       runHook postInstall
     '';
   };
-  emulatorTools = lib.fileset.toSource {
-    root = root + "/tools";
-    fileset = lib.fileset.unions (
-      map (name: root + "/tools/${name}") [
-        "aosp-apk.py"
-        "aosp-surface-stream-test.py"
-        "next_steps.py"
-        "process_scope.py"
-      ]
-    );
-  };
-  libraryCheckTools = lib.fileset.toSource {
-    root = root + "/tools";
-    fileset = lib.fileset.unions (
-      map (name: root + "/tools/${name}") [
-        "check-aosp-library.py"
-        "next_steps.py"
-      ]
-    );
-  };
   roundTripRunner = pkgs.writeShellApplication {
     name = "surface-stream-round-trip";
-    runtimeInputs = [
-      (pkgs.python3.withPackages (python: [
-        python.cryptography
-        python.psutil
-      ]))
-      pkgs.jdk17
-    ];
+    runtimeInputs = [ pkgs.jdk17 ];
     text = ''
-      exec python3 ${emulatorTools}/aosp-surface-stream-test.py \
+      exec ${lib.getExe aospRoundTrip} \
         --apk ${roundTrip}/share/aosp/surface-stream-round-trip-unsigned.apk \
-        --signer ${emulatorTools}/aosp-apk.py \
         --sdk ${lib.escapeShellArg sdkRoot} \
         --build-tools ${lib.escapeShellArg buildToolsVersion} \
         --emulator-sdk ${emulatorSdk}/libexec/android-sdk \
-        --api ${emulatorApi} --abi ${abi} --page-size ${toString pageSize} \
+        --abi ${abi} --page-size ${toString pageSize} \
         --alignment ${toString zipAlignment} \
         --runner ${instrumentation.package}/.${instrumentation.runner} "$@"
     '';

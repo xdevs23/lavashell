@@ -8,6 +8,7 @@
   "layers": ["engine", "registry"],
   "companions": ["lavashell-renderer"],
   "packagedCrates": {
+    "aosp-round-trip": "tools/aosp-round-trip",
     "wayland-input": "tools/wayland-input",
     "source-rules": "tools/source-rules",
     "bevy": "crates/lavashell-bevy"

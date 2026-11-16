@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Reply, Request};
-use crate::error::SessionError;
 use crate::frame::{CapturedFrame, FrameLayout, PixelFormat};
 use serde_json::error::Category;
 use std::path::PathBuf;
 
 #[test]
-fn a_capture_line_names_the_file_of_the_pixels() -> Result<(), SessionError> {
+fn a_capture_line_names_the_image_file() -> Result<(), serde_json::Error> {
     assert_eq!(
-        Request::parse(r#"{"command":"capture_change","pixels":"/run/frame.raw"}"#)?,
+        r#"{"command":"capture_change","image":"/run/frame.png"}"#.parse::<Request>()?,
         Request::CaptureChange {
-            pixels: PathBuf::from("/run/frame.raw")
+            image: PathBuf::from("/run/frame.png")
         }
     );
     Ok(())
@@ -24,15 +23,15 @@ fn a_line_that_is_no_request_is_rejected_with_the_category_of_its_flaw() {
         (r#"{"command":"record"}"#, Category::Data),
         (r#"{"command":"capture_change"}"#, Category::Data),
         (
-            r#"{"command":"capture_change","pixels":"/a","cursor":true}"#,
+            r#"{"command":"capture_change","image":"/a","cursor":true}"#,
             Category::Data,
         ),
     ];
     for (line, category) in flaws {
         assert!(
             matches!(
-                Request::parse(line),
-                Err(SessionError::ParseRequest(ref error)) if error.classify() == category
+                line.parse::<Request>(),
+                Err(ref error) if error.classify() == category
             ),
             "{line:?} was not rejected as {category:?}"
         );
@@ -64,6 +63,7 @@ fn every_reply_is_one_json_object_tagged_by_its_kind() -> Result<(), serde_json:
     ];
     for (reply, line) in replies {
         assert_eq!(serde_json::to_string(&reply)?, line);
+        assert_eq!(line.parse::<Reply>()?, reply);
     }
     Ok(())
 }

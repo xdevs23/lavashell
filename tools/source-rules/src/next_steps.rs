@@ -41,6 +41,8 @@ pub fn next_step(error: &Error) -> NextStep {
         Error::ReadSource { .. }
         | Error::ParseSource { .. }
         | Error::ParsePatch { .. }
+        | Error::ReadManifest { .. }
+        | Error::ReadCopy { .. }
         | Error::ListFiles(_)
         | Error::ModuleFile { .. } => NextStep::FixNamedFile,
         Error::PatchedLanguage { .. } => NextStep::AddLanguage,
@@ -49,6 +51,7 @@ pub fn next_step(error: &Error) -> NextStep {
         | Error::LoadGrammar { .. }
         | Error::CommentQuery { .. }
         | Error::CrateRoot { .. }
+        | Error::CopyPosition { .. }
         | Error::NoParentDirectory { .. } => NextStep::ReportDefect,
     }
 }

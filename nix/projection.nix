@@ -223,7 +223,7 @@ let
       crates = map (engineStub metadata rootName) (engineCrates directory);
     in
     if metadata == null then
-      throw "Run nix/refresh_cargo_projections.py for ${rootName}"
+      throw "Run nix run .#refresh-cargo-projections for ${rootName}"
     else
       projectCrates crates (
         lock.engine (

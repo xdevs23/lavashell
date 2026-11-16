@@ -35,12 +35,18 @@ let
     inherit (sources) version;
   };
   requirementsOf = import ./crate-requirements.nix { inherit pkgs skia assets; };
+  layerTools = import ./build-layers.nix {
+    inherit pkgs root;
+    inherit (sources) vendor;
+  };
+  buildLayers = layerTools.tools;
   artifacts = import ./artifacts.nix {
     inherit
       pkgs
       sources
       rustPackageDefaults
       requirementsOf
+      buildLayers
       ;
   };
   inherit (sources) nativeDirectory;
@@ -109,6 +115,7 @@ let
     );
   packages = lib.mapAttrs package directories;
   sourceRules = package "source-rules" (packagedDirectory "source-rules");
+  aospRoundTrip = package "aosp-round-trip" (packagedDirectory "aosp-round-trip");
   bevy = package "bevy" (packagedDirectory "bevy");
   examples = pkgs.symlinkJoin {
     name = "lavashell-examples-${sources.version}";
@@ -118,6 +125,7 @@ let
 in
 {
   reference = bevy;
+  inherit buildLayers aospRoundTrip;
   packages = packages // {
     inherit examples;
   };
@@ -135,9 +143,7 @@ in
   checks =
     let
       toolPython = pkgs.python3.withPackages (python: [
-        python.cryptography
         python.mypy
-        python.pillow
         python.psutil
         python.tomli-w
         python.types-psutil
@@ -145,6 +151,7 @@ in
     in
     {
       inherit registry framework examples;
+      nix-tests = layerTools.nixTests;
       inherit bevy;
       effect-removal = import ./effect-removal.nix {
         inherit
@@ -167,11 +174,9 @@ in
           }
           ''
             cd ${root}
-            python3 tools/crate_rules.py
             lavashell-source-rules
-            python3 tools/check-copy.py
-            ruff check --no-cache --config tools/ruff.toml tools nix
-            mypy --config-file tools/mypy.toml --cache-dir=/dev/null tools/*.py nix/*.py
+            ruff check --no-cache --config tools/ruff.toml nix
+            mypy --config-file tools/mypy.toml --cache-dir=/dev/null nix/*.py
             touch "$out"
           '';
       python-tests =
@@ -190,7 +195,6 @@ in
             export HOME="$TMPDIR" NIX_STORE_DIR="$TMPDIR/store" NIX_STATE_DIR="$TMPDIR/state" NIX_LOG_DIR="$TMPDIR/log"
             cd ${root}
             python3 -m unittest discover -s nix -p 'test_*.py'
-            python3 -m unittest discover -s tools -p 'test_*.py'
             touch "$out"
           '';
     };

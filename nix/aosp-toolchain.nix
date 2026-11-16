@@ -67,7 +67,6 @@ in
     pkgs
     platform
     targetSdk
-    emulatorApi
     nativeApi
     pageSize
     pageSizeKiB

@@ -4,6 +4,7 @@
   sources,
   rustPackageDefaults,
   requirementsOf,
+  buildLayers,
 }:
 let
   inherit (pkgs) lib;
@@ -27,18 +28,6 @@ let
     preCheck = "";
     postInstall = "";
   };
-  planVerifier = lib.fileset.toSource {
-    root = ./.;
-    fileset = lib.fileset.unions [
-      ./verify_cargo_plan.py
-      ./cargo_plan.py
-      ./cargo_models.py
-      ./document_tables.py
-      ./projection_contract.py
-      ./projection-contract.json
-      ./verification_errors.py
-    ];
-  };
   planCheck =
     directory: selected:
     let
@@ -49,7 +38,7 @@ let
       RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options --offline --frozen \
         --profile ${contract.profile} --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} \
         ${lib.escapeShellArgs (flags selected)} > consumer-cargo-plan.json
-      ${pkgs.python3}/bin/python3 ${planVerifier}/verify_cargo_plan.py \
+      ${lib.getExe' buildLayers "lavashell-plan-check"} --contract ${./projection-contract.json} \
         --engine ${file} --consumer consumer-cargo-plan.json
     '';
   artifacts =

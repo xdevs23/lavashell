@@ -35,6 +35,10 @@
           ;
       };
       inherit (import ./nix/examples-tree.nix { inherit pkgs root; }) skia examples;
+      projectionRefresh = import ./nix/projection-refresh.nix {
+        inherit pkgs;
+        inherit (examples) buildLayers;
+      };
       aospSkia =
         (self.lib.skia {
           inherit (toolchain) pkgs;
@@ -50,7 +54,6 @@
       assets = import ./nix/assets.nix { inherit pkgs; };
       nativeTestTools = with pkgs; [
         sway
-        grim
         dbus
       ];
       shell =
@@ -78,8 +81,6 @@
                 nix-prefetch-git
                 ruff
                 (python3.withPackages (python: [
-                  python.inotify-simple
-                  python.pillow
                   python.psutil
                   python.tomli-w
                 ]))
@@ -93,6 +94,7 @@
         );
       aosp = import ./nix/aosp.nix {
         inherit toolchain root;
+        inherit (examples) buildLayers aospRoundTrip;
         skia = aospSkia;
       };
       dependencies = import ./nix/dependency-check.nix {
@@ -123,6 +125,12 @@
             type = "app";
             program = lib.getExe dependencies.yankedCrates;
             meta.description = dependencies.yankedCrates.meta.description;
+            meta.lavashellHost = types.hosts.checkout;
+          };
+          refresh-cargo-projections = {
+            type = "app";
+            program = lib.getExe projectionRefresh;
+            meta.description = projectionRefresh.meta.description;
             meta.lavashellHost = types.hosts.checkout;
           };
         };

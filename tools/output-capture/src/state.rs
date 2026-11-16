@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::error::SessionError;
-use crate::frame::{FrameLayout, PendingFrame};
+use crate::frame::{CapturedFrame, FrameLayout, PendingFrame};
+use crate::png_file::write_png;
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::client::{
     Connection, Dispatch, QueueHandle, WEnum, delegate_noop,
@@ -33,10 +34,10 @@ impl ProtocolState {
         }
     }
 
-    pub fn write_pixels(&mut self, layout: FrameLayout, path: &Path) -> Result<(), SessionError> {
-        let length = layout.byte_length()?;
+    pub fn write_image(&mut self, frame: CapturedFrame, path: &Path) -> Result<(), SessionError> {
+        let length = frame.layout.byte_length()?;
         let pool = (self.pool.as_mut()).ok_or(SessionError::ReadyBeforeCopy)?;
-        std::fs::write(path, &pool.mmap()[..length]).map_err(SessionError::WritePixels)
+        write_png(&pool.mmap()[..length], frame, path)
     }
 
     fn copy(

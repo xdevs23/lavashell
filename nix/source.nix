@@ -41,7 +41,7 @@ let
         if toString directory == toString nativeDirectory then nativeMetadata else metadataFor directory;
     in
     if metadata == null then
-      throw "Run nix/refresh_cargo_projections.py for ${workspaceCrates.packageName directory}"
+      throw "Run nix run .#refresh-cargo-projections for ${workspaceCrates.packageName directory}"
     else
       dependencyWorkspace {
         inherit layer metadata;

@@ -16,6 +16,20 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    #[error("{path} is not the expected Cargo manifest")]
+    ReadManifest {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+    #[error("the copy catalog {path} cannot be read")]
+    ReadCopy {
+        path: PathBuf,
+        #[source]
+        source: csv::Error,
+    },
+    #[error("the reader of the copy catalog {path} reported no usable line number")]
+    CopyPosition { path: PathBuf },
     #[error("{path} is not valid Rust")]
     ParseSource {
         path: PathBuf,

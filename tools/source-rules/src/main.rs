@@ -4,6 +4,8 @@
 mod attributes;
 mod checks;
 mod comments;
+mod copy_catalogs;
+mod crate_manifests;
 mod documents;
 mod error;
 mod findings;
@@ -13,13 +15,14 @@ mod metadata;
 mod modules;
 mod next_steps;
 mod patch;
+mod python_place;
 mod repository_files;
 mod rules;
 mod safety_comments;
 #[cfg(test)]
 mod tests;
 
-use checks::repository_reports;
+use checks::{repository_reports, workspace_reports};
 use error::Error;
 use lavashell_core::error::message_chain;
 use metadata::Workspace;
@@ -41,7 +44,8 @@ fn run() -> Result<ExitCode, Error> {
     let workspace = Workspace::read()?;
     let root = &workspace.workspace_root;
     let files = read_repository_files(root)?;
-    let reports = repository_reports(&files, root, &workspace.crate_roots())?;
+    let mut reports = repository_reports(&files, root, &workspace.crate_roots())?;
+    reports.extend(workspace_reports(&files, root)?);
     let findings: Vec<_> = reports
         .iter()
         .flat_map(|(_, report)| &report.findings)

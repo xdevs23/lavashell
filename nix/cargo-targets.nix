@@ -16,6 +16,13 @@ let
       main = true;
     }
   ];
+  # https://doc.rust-lang.org/cargo/reference/cargo-targets.html#target-auto-discovery
+  defaultDirectories = {
+    bin = "src/bin";
+    test = "tests";
+    bench = "benches";
+    example = "examples";
+  };
   explicit =
     lib.optional (builtins.isString (crate.manifest.package.build or false)) {
       path = crate.manifest.package.build;
@@ -25,20 +32,14 @@ let
       path = crate.manifest.lib.path or "src/lib.rs";
       main = false;
     }
-    ++
-      lib.concatMap
-        (
-          kind:
-          map (target: {
-            path = target.path or "src/${kind}/${target.name}.rs";
-            main = true;
-          }) (crate.manifest.${kind} or [ ])
-        )
-        [
-          "bin"
-          "test"
-          "bench"
-          "example"
-        ];
+    ++ lib.concatLists (
+      lib.mapAttrsToList (
+        kind: directory:
+        map (target: {
+          path = target.path or "${directory}/${target.name}.rs";
+          main = true;
+        }) (crate.manifest.${kind} or [ ])
+      ) defaultDirectories
+    );
 in
 crate.stubTargets or (lib.unique (auto ++ explicit))

@@ -5,6 +5,8 @@ use crate::findings::{Report, Rule};
 use crate::repository_files::read_repository_files;
 use std::path::{Path, PathBuf, StripPrefixError};
 
+mod copy_catalogs;
+mod crate_manifests;
 mod repository_files;
 
 #[derive(Debug, thiserror::Error)]

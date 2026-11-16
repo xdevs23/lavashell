@@ -325,6 +325,27 @@ fn documents_besides_agents_at_the_root_are_reported_in_any_case() -> Result<(),
 }
 
 #[test]
+fn the_source_rules_report_python_files_outside_the_top_level_of_nix() -> Result<(), Failure> {
+    let header = "# SPDX-License-Identifier: GPL-3.0-only\n";
+    let files = [
+        ("nix/refresh.py", header),
+        ("nix/refresh/helpers.py", header),
+        ("tools/check.py", header),
+        (
+            "tools/check.rs",
+            "// SPDX-License-Identifier: GPL-3.0-only\n",
+        ),
+    ];
+    let misplaced: Vec<_> = repository_findings(&files)?
+        .into_iter()
+        .filter(|(_, _, rule)| matches!(rule, Rule::PythonOutsidePlace { .. }))
+        .map(|(path, _, _)| path)
+        .collect();
+    assert_eq!(misplaced, ["nix/refresh/helpers.py", "tools/check.py"]);
+    Ok(())
+}
+
+#[test]
 fn hidden_files_are_checked_ignored_files_are_not_and_unknown_kinds_are_reported()
 -> Result<(), Failure> {
     let files = [

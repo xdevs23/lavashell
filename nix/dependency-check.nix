@@ -34,8 +34,34 @@ let
         git -C "$out" add --all
         git -C "$out" commit --quiet --message=${advisoryDatabase.rev}
       '';
+  zbusAdvisories =
+    map
+      (id: {
+        inherit id;
+        reason = "zbus 6 replaces the crate, but atspi 0.30.0 and accesskit_unix 0.24.1, their newest releases, require zbus 5";
+      })
+      [
+        # https://rustsec.org/advisories/RUSTSEC-2026-0370.html
+        "RUSTSEC-2026-0370"
+        # https://rustsec.org/advisories/RUSTSEC-2026-0371.html
+        "RUSTSEC-2026-0371"
+        # https://rustsec.org/advisories/RUSTSEC-2026-0372.html
+        "RUSTSEC-2026-0372"
+      ];
+  workspaces = [
+    {
+      manifest = "Cargo.toml";
+      ignoredAdvisories = zbusAdvisories;
+      licenses = { };
+    }
+    {
+      manifest = "tools/build-layers/Cargo.toml";
+      ignoredAdvisories = [ ];
+      licenses.unused-allowed-license = "allow";
+    }
+  ];
   rules =
-    yankSettings:
+    yankSettings: workspace:
     (pkgs.formats.toml { }).generate "deny.toml" {
       graph = {
         targets = linuxTargets ++ lib.attrNames (import ./aosp-targets.nix);
@@ -43,33 +69,31 @@ let
       };
       advisories = yankSettings // {
         db-urls = [ advisoryUrl ];
-        ignore =
-          map
-            (id: {
-              inherit id;
-              reason = "zbus 6 replaces the crate, but atspi 0.30.0 and accesskit_unix 0.24.1, their newest releases, require zbus 5";
-            })
-            [
-              # https://rustsec.org/advisories/RUSTSEC-2026-0370.html
-              "RUSTSEC-2026-0370"
-              # https://rustsec.org/advisories/RUSTSEC-2026-0371.html
-              "RUSTSEC-2026-0371"
-              # https://rustsec.org/advisories/RUSTSEC-2026-0372.html
-              "RUSTSEC-2026-0372"
-            ];
+        ignore = workspace.ignoredAdvisories;
       };
-      licenses = {
+      licenses = workspace.licenses // {
         allow = (lib.importTOML (root + "/about.toml")).accepted;
         include-dev = true;
         private.ignore = true;
       };
     };
+  denyCommands =
+    yankSettings: checks:
+    lib.concatMapStrings (workspace: ''
+      cargo deny --locked --manifest-path ${workspace.manifest} --config ${rules yankSettings workspace} \
+        check --deny warnings ${checks}
+    '') workspaces;
 in
 {
   check = pkgs.stdenv.mkDerivation {
     name = "lavashell-dependencies";
     src = root;
-    cargoDeps = sources.vendor (root + "/Cargo.lock");
+    cargoDeps = pkgs.symlinkJoin {
+      name = "cargo-vendor-dir";
+      paths = map (
+        workspace: sources.vendor (root + "/${dirOf workspace.manifest}/Cargo.lock")
+      ) workspaces;
+    };
     nativeBuildInputs = with pkgs; [
       rustPlatform.cargoSetupHook
       cargo
@@ -83,10 +107,8 @@ in
       export CARGO_HOME="$TMPDIR/cargo"
       export GIT_CONFIG_COUNT=1
       export GIT_CONFIG_KEY_0="url.file://${advisoryRepository}.insteadOf" GIT_CONFIG_VALUE_0="${advisoryUrl}"
-      cargo deny --locked --config ${
-        rules { disable-yank-checking = true; }
-      } check --deny warnings advisories licenses
-    '';
+    ''
+    + denyCommands { disable-yank-checking = true; } "advisories licenses";
     installPhase = ''
       touch "$out"
     '';
@@ -99,11 +121,7 @@ in
       git
       rustc
     ];
-    text = ''
-      cargo deny --locked --config ${
-        rules { disable-yank-checking = false; }
-      } check --deny warnings advisories
-    '';
+    text = denyCommands { disable-yank-checking = false; } "advisories";
     meta.description = "Check the locked crates of the checkout in the working directory for yanked releases";
   };
 }

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-aosp-round-trip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+clap.workspace = true
+lavashell-core.workspace = true
+lavashell-process-scope.workspace = true
+rustix = { workspace = true, features = ["rand"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+tempfile.workspace = true
+thiserror.workspace = true
+x509-cert.workspace = true
+xdg.workspace = true

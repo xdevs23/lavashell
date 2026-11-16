@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::error::SessionError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use smithay_client_toolkit::reexports::client::{
     WEnum,
     protocol::{wl_buffer::WlBuffer, wl_shm},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PixelFormat {
     Xrgb8888,
@@ -22,10 +22,25 @@ impl PixelFormat {
         }
     }
 
-    pub fn to_wire(self) -> wl_shm::Format {
+    pub(crate) fn to_wire(self) -> wl_shm::Format {
         match self {
             Self::Xrgb8888 => wl_shm::Format::Xrgb8888,
             Self::Argb8888 => wl_shm::Format::Argb8888,
+        }
+    }
+
+    pub(crate) fn png_color(self) -> png::ColorType {
+        match self {
+            Self::Xrgb8888 => png::ColorType::Rgb,
+            Self::Argb8888 => png::ColorType::Rgba,
+        }
+    }
+
+    // https://gitlab.freedesktop.org/wayland/wayland/-/blob/1.24.0/protocol/wayland.xml#L314
+    pub(crate) fn append_png_channels(self, [blue, green, red, alpha]: [u8; 4], row: &mut Vec<u8>) {
+        match self {
+            Self::Xrgb8888 => row.extend([red, green, blue]),
+            Self::Argb8888 => row.extend([red, green, blue, alpha]),
         }
     }
 }

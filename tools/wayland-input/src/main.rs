@@ -5,15 +5,14 @@ mod error;
 mod keymap;
 mod layout;
 mod next_steps;
-mod protocol;
 
 use clap::Parser;
 use error::SessionError;
 use keymap::Keymap;
 use lavashell_core::error::message_chain;
+use lavashell_wayland_input::protocol::{Reply, Request};
 use layout::{Extent, LogicalRectangle};
 use next_steps::next_step;
-use protocol::{Reply, Request};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::client::{
     Connection, EventQueue, QueueHandle, delegate_noop,
@@ -31,7 +30,7 @@ use smithay_client_toolkit::reexports::protocols_wlr::virtual_pointer::v1::clien
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::{delegate_registry, registry_handlers};
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::ops::RangeInclusive;
 use std::os::fd::AsFd;
 use std::process::ExitCode;
@@ -166,12 +165,19 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), SessionError> {
     let mut session = Session::open(&Arguments::parse())?;
-    Reply::Ready {
+    send_reply(&Reply::Ready {
         pid: std::process::id(),
-    }
-    .send()?;
+    })?;
     session.run(std::io::stdin().lock())?;
     session.close()
+}
+
+fn send_reply(reply: &Reply) -> Result<(), SessionError> {
+    let line = serde_json::to_string(reply).map_err(SessionError::EncodeReply)?;
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "{line}")
+        .and_then(|()| stdout.flush())
+        .map_err(SessionError::SendReply)
 }
 
 fn synchronize(
@@ -236,19 +242,22 @@ impl Session {
         for line in requests.lines() {
             let line = line.map_err(SessionError::ReadRequest)?;
             if let Err(failure) = self.serve(&line) {
-                Reply::Failed {
+                send_reply(&Reply::Failed {
                     message: message_chain(&failure),
-                }
-                .send()?;
+                })?;
                 return Err(failure);
             }
-            Reply::Done.send()?;
+            send_reply(&Reply::Done)?;
         }
         Ok(())
     }
 
     fn serve(&mut self, line: &str) -> Result<(), SessionError> {
-        self.apply(&Request::parse(line)?)?;
+        self.apply(
+            &line
+                .parse::<Request>()
+                .map_err(SessionError::ParseRequest)?,
+        )?;
         self.pointer.frame();
         synchronize(&mut self.queue, &mut self.state)
     }
