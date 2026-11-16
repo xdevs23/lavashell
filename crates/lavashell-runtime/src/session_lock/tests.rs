@@ -15,7 +15,8 @@ fn configuration(handle: &SessionLock) -> LockConfiguration {
 }
 
 fn open(lock: &mut ActiveLock, output: OutputId, surface: SurfaceId) -> TestResult {
-    let _view = (lock.view_for(output)).ok_or(TestError::Missing(LOCK_VIEW))?;
+    let _view_is_only_checked_to_exist =
+        (lock.view_for(output)).ok_or(TestError::Missing(LOCK_VIEW))?;
     lock.opened(output, surface);
     Ok(())
 }

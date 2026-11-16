@@ -97,7 +97,7 @@ impl OverlayFrame {
             density: viewport.density,
             presentation: timing.presentation,
         };
-        let _replaced = self.sent.insert(end, sent);
+        let _earlier_frame_with_the_same_end_is_superseded = self.sent.insert(end, sent);
         Ok(())
     }
 

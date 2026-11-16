@@ -86,7 +86,7 @@ fn a_planned_variant_that_the_canvas_cannot_draw_falls_back_to_the_best_one_it_c
     );
     let mut halved =
         skia_safe::surfaces::raster_n32_premul((10, 10)).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = halved.canvas().scale((0.5, 0.5));
+    let _canvas_returned_for_chaining = halved.canvas().scale((0.5, 0.5));
     painter.render_effect(
         halved.canvas(),
         &commands[0],
@@ -267,7 +267,7 @@ impl EffectBackend for PillPainter {
 
     fn render(&mut self, canvas: &Canvas, request: &EffectRequest<'_>) {
         let mut paint = skia_safe::Paint::default();
-        let _chained_paint = paint.set_color(skia_safe::Color::WHITE);
+        let _paint_returned_for_chaining = paint.set_color(skia_safe::Color::WHITE);
         let saved = canvas.save();
         let shapes = request.painter;
         let drawn = shapes.clip_inside(canvas, &self.0).and_then(|()| {
@@ -280,7 +280,7 @@ impl EffectBackend for PillPainter {
         if let Err(failure) = drawn {
             shapes.record(failure);
         }
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     }
 }
 
@@ -300,7 +300,7 @@ fn effects_fill_and_clip_shapes_the_way_the_painter_draws_them() -> Result<(), T
     };
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((40, 10)).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     painter.paint_as_leaf(surface.canvas(), &[circle], Density::ONE)?;
     let pixels = surface
         .canvas()

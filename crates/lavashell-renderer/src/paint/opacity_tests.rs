@@ -97,7 +97,8 @@ fn assert_first_frame_blur(surface: &mut Surface) -> Result<(), TestError> {
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     for background_alpha in [1.0, 0.25] {
         for alpha in [0.1, 0.5, 0.9, 1.0] {
-            let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+            let _canvas_returned_for_chaining =
+                surface.canvas().clear(skia_safe::Color::TRANSPARENT);
             painter.paint_as_leaf(
                 surface.canvas(),
                 &commands(alpha, background_alpha),
@@ -162,7 +163,7 @@ fn assert_nested_groups<S: DerefMut<Target = Surface>>(
     let (headroom, background_alpha) = (3.0, 0.25);
     let mut render = |alpha| -> Result<S, TestError> {
         let mut surface = create()?;
-        let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         let mut commands = commands(1.0, background_alpha);
         commands.truncate(24);
         for command in &mut commands {
@@ -242,10 +243,10 @@ fn assert_independent_reader(retained: bool) -> Result<(), TestError> {
             let filter = image_filters::blur((5.0, 5.0), skia_safe::TileMode::Clamp, None, None)
                 .ok_or(DrawFailure::ShaderRejected)?;
             let mut paint = Paint::default();
-            let _chained_paint = paint.set_blend_mode(skia_safe::BlendMode::Src);
-            let _save_count =
+            let _paint_returned_for_chaining = paint.set_blend_mode(skia_safe::BlendMode::Src);
+            let _restored_by_the_next_restore =
                 canvas.save_layer(&SaveLayerRec::default().paint(&paint).backdrop(&filter));
-            let _chained_canvas = canvas.restore();
+            let _canvas_returned_for_chaining = canvas.restore();
             Ok(())
         }
     }
@@ -279,7 +280,7 @@ fn assert_independent_reader(retained: bool) -> Result<(), TestError> {
     };
     let mut surface = surface()?;
     for pass in 0..4 {
-        let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         if retained {
             let inside = commands[25..27].to_vec();
             let tree = faded(commands[..24].to_vec(), 0.5, inside)?;

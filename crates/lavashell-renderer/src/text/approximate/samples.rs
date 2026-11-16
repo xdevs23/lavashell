@@ -74,7 +74,7 @@ fn translucent_coverage_samples_stay_premultiplied_and_differ_per_pixel_geometry
         );
         let mut target =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
         let bytes = pixels(&mut target);
         assert!(

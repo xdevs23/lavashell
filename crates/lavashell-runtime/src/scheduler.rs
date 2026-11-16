@@ -97,7 +97,8 @@ impl FrameScheduler {
         let surface = input.surface();
         let started = match input {
             SchedulerInput::Opened(surface) => {
-                let _reopened = self.surfaces.insert(surface, Pacing::default());
+                let _pacing_of_a_reopened_surface_starts_again =
+                    self.surfaces.insert(surface, Pacing::default());
                 None
             }
             SchedulerInput::Timing(event) => self.handle_timing(now, event, out),

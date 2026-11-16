@@ -48,7 +48,7 @@ impl Scopes {
     }
 
     pub fn leave(&self, EnteredScope(()): EnteredScope) {
-        let _left_frame = change_frames(&self.0, |frames| frames.0.pop());
+        let _left_frame_is_not_needed = change_frames(&self.0, |frames| frames.0.pop());
     }
 
     pub fn opaque(&self) -> bool {

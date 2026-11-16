@@ -70,7 +70,8 @@ impl SceneLayer<'_> {
     pub(crate) fn draw(&self) {
         let layer = skia_safe::Rect::from_isize(self.canvas.base_layer_size());
         let paint = skia_safe::Paint::default();
-        let _chained_canvas = self.canvas.draw_image_rect(self.image, None, layer, &paint);
+        let _canvas_returned_for_chaining =
+            self.canvas.draw_image_rect(self.image, None, layer, &paint);
     }
 }
 

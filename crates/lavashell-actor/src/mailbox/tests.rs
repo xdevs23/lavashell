@@ -135,7 +135,7 @@ fn a_mailbox_poisoned_by_a_panicking_thread_is_closed_for_both_ends() {
     let poisoner = thread::scope(|scope| {
         scope
             .spawn(|| {
-                let _state = receiver.shared.lock();
+                let _mailbox_locked_while_the_thread_panics = receiver.shared.lock();
                 resume_unwind(Box::new("the mailbox is held while the thread panics"));
             })
             .join()

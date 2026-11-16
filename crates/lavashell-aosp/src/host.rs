@@ -95,7 +95,7 @@ impl Drop for Served {
         {
             drop(messages);
             for retired in destroying {
-                let _returned_callback = retired.send(());
+                let _retiring_caller_may_have_left = retired.send(());
             }
         }
     }
@@ -128,7 +128,7 @@ impl AospHost {
     pub fn serve<T>(self, run: impl FnOnce(HostLink) -> T) -> Result<T, AospError> {
         let messages =
             (lock_unpoisoned(&self.0.unserved)?.take()).ok_or(AospError::HostAlreadyServed)?;
-        let _served = Served(Arc::clone(&self.0));
+        let _awaiting_messages_end_on_drop = Served(Arc::clone(&self.0));
         Ok(run(HostLink {
             messages,
             channel: self.0,

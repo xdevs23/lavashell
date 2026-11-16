@@ -66,7 +66,8 @@ fn a_polled_release_is_complete_once_its_queue_is_idle_and_imports() -> Result<(
     let ReleaseProgress::Complete(completed) = pending.poll()? else {
         return Err(TestError::Missing("completed release"));
     };
-    let _imported_scene = consumer.import_scene(completed.image, 1, Duration::ZERO)?;
+    let _imported_scene_is_checked_through_the_count =
+        consumer.import_scene(completed.image, 1, Duration::ZERO)?;
     assert_eq!(imported(&consumer), 1);
     Ok(())
 }

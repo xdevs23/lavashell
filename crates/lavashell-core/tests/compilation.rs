@@ -151,7 +151,7 @@ fn each_fixture_compiles_or_fails_with_its_error_code() -> Result<(), FixtureErr
     let project = Path::new(env!("CARGO_TARGET_TMPDIR")).join("fixtures");
     std::fs::create_dir_all(&project)?;
     std::fs::write(project.join("Cargo.toml"), fixture_manifest(&expected)?)?;
-    let _copied_bytes = std::fs::copy(
+    let _copied_byte_count_is_not_needed = std::fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock"),
         project.join("Cargo.lock"),
     )?;

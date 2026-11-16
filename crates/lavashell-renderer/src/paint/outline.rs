@@ -35,10 +35,10 @@ pub fn clip_path(outline: &Path, density: Density) -> Result<Path, OutlineError>
 
 fn contour_path(contours: &[Polygon]) -> Result<Path, OutlineError> {
     let mut path = PathBuilder::new();
-    let _chained_builder = path.set_fill_type(PathFillType::EvenOdd);
+    let _builder_returned_for_chaining = path.set_fill_type(PathFillType::EvenOdd);
     for contour in contours {
         let contour = skpath(contour).map_err(OutlineError::Scalar)?;
-        let _chained_builder = path.add_path(&contour, None);
+        let _builder_returned_for_chaining = path.add_path(&contour, None);
     }
     Ok(path.detach())
 }

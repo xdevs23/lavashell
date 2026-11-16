@@ -88,7 +88,7 @@ impl RunningSample {
 }
 
 fn flush_and_submit(context: &mut DirectContext) {
-    let _chained_context = context.flush_and_submit();
+    let _context_returned_for_chaining = context.flush_and_submit();
 }
 
 impl PerSurface for GpuTiming {

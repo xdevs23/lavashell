@@ -104,7 +104,7 @@ impl<'a> Coverage<'a> {
     }
 
     pub fn clip(&self, canvas: &Canvas, band: Band, op: ClipOp) -> Result<(), DrawFailure> {
-        let _chained_canvas = canvas.clip_shader(self.shader(band)?, op);
+        let _canvas_returned_for_chaining = canvas.clip_shader(self.shader(band)?, op);
         Ok(())
     }
 
@@ -112,10 +112,11 @@ impl<'a> Coverage<'a> {
         let saved = canvas.save();
         let clipped = self.clip(canvas, band, ClipOp::Intersect);
         let filled = clipped.and_then(|()| {
-            let _chained_canvas = canvas.draw_rect(band.area(canvas, self.bounds)?, paint);
+            let _canvas_returned_for_chaining =
+                canvas.draw_rect(band.area(canvas, self.bounds)?, paint);
             Ok(())
         });
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
         filled
     }
 

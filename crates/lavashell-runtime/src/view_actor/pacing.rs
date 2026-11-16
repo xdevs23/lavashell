@@ -19,11 +19,11 @@ pub(super) struct FramePacing {
 
 impl FramePacing {
     pub(super) fn start_frame(&mut self, surface: SurfaceId, kind: FrameKind, time: FrameTime) {
-        let _older_frame = self.started_frames.insert(surface, (kind, time));
+        let _older_frame_is_superseded = self.started_frames.insert(surface, (kind, time));
     }
 
     pub(super) fn commit_state(&mut self, surface: SurfaceId, built: Arc<BuiltSurface>) {
-        let _replaced = self.state_commits.insert(surface, built);
+        let _older_commit_is_superseded = self.state_commits.insert(surface, built);
     }
 
     pub(super) fn set_scene_deadline(&mut self, deadline: Option<Duration>) {

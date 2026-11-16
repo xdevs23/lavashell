@@ -17,7 +17,7 @@ impl View {
     pub(super) fn replace_tree(&mut self, nodes: Vec<Node>) {
         let repaired = self.repaired(nodes, BTreeSet::new());
         let failed_exits = self.reconcile(repaired);
-        let _lost_nodes = self.fail(failed_exits);
+        let _whether_nodes_were_lost_is_not_needed = self.fail(failed_exits);
     }
 
     pub(super) fn reconcile(&mut self, tree: Repaired) -> Vec<Failed> {

@@ -183,9 +183,9 @@ impl Painter {
         let whole = plan.unknown_sampling || self.compositing_destination() == Destination::Layer;
         let repainted = plan.repaint(if whole { target } else { damage });
         let saved = canvas.save();
-        let _chained_canvas = canvas.clip_irect(repainted, None).clear(clear);
+        let _canvas_returned_for_chaining = canvas.clip_irect(repainted, None).clear(clear);
         if let Some(shape) = shape {
-            let _chained_canvas = canvas.clip_path(shape, None, true);
+            let _canvas_returned_for_chaining = canvas.clip_path(shape, None, true);
         }
         if let Some(scene) = &scene {
             scene.draw();
@@ -194,7 +194,7 @@ impl Painter {
             (repainted.width_64() * repainted.height_64()).cast_unsigned();
         self.paint_tree(canvas, &plan, Area::Pixels(repainted), density, streams);
         self.paint_configuration.painted(surface);
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
         Ok(())
     }
 
@@ -238,7 +238,7 @@ impl Painter {
             match command {
                 DrawCommand::Restore => match enclosing.pop() {
                     Some(outer) => {
-                        let _chained_canvas = canvas.restore();
+                        let _canvas_returned_for_chaining = canvas.restore();
                         self.text_scopes.close();
                         destination = outer;
                     }
@@ -263,7 +263,7 @@ impl Painter {
                 }
             }
         }
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
         if let Some(entered) = text_scope {
             self.text_scopes.leave(entered);
         }
@@ -286,11 +286,12 @@ impl Painter {
                 self.open_opacity(canvas, leaf, index, *alpha, Some(*bounds))
             }
             DrawCommand::Transform(affine) => {
-                let _chained_canvas = canvas.concat(&skmatrix(affine)?);
+                let _canvas_returned_for_chaining = canvas.concat(&skmatrix(affine)?);
                 Ok(None)
             }
             DrawCommand::Clip { rect, corners } => {
-                let _chained_canvas = canvas.clip_rrect(rrect(*rect, *corners)?, None, true);
+                let _canvas_returned_for_chaining =
+                    canvas.clip_rrect(rrect(*rect, *corners)?, None, true);
                 Ok(None)
             }
             DrawCommand::EffectLayer {
@@ -372,7 +373,7 @@ impl Painter {
                 brush,
             } => {
                 let paint = brush_paint(brush)?;
-                let _chained_canvas =
+                let _canvas_returned_for_chaining =
                     canvas.draw_circle(skpoint(*center)?, sklength(*radius)?, &paint);
                 Ok(())
             }
@@ -385,7 +386,7 @@ impl Painter {
             } => {
                 let mut paint = brush_paint(brush)?;
                 if let Some(width) = stroke {
-                    let _chained_paint = paint
+                    let _paint_returned_for_chaining = paint
                         .set_style(PaintStyle::Stroke)
                         .set_stroke_width(sklength(*width)?)
                         .set_stroke_cap(skia_safe::PaintCap::Round)

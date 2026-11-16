@@ -88,7 +88,7 @@ fn a_row_that_scrolls_lays_out_past_its_width_and_shifts_its_content_by_the_offs
 fn reveal_scrolls_a_row_the_least_distance_that_shows_the_span() -> TestResult {
     let scroll = ScrollState::new(Axis::Horizontal);
     let mut scene = Scene::default();
-    let _view = tabs(&mut scene, scroll.clone())?;
+    let _view_only_builds_the_scene = tabs(&mut scene, scroll.clone())?;
     scroll.reveal(180.dp(), 240.dp());
     assert_eq!(scroll.offset(), 140.dp());
     scroll.reveal(60.dp(), 120.dp());

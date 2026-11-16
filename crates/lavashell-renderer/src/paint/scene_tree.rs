@@ -47,10 +47,10 @@ impl Painter {
         let text_scope = (self.text_rasterizers)
             .reads_destination(self.shaper.configuration().rendering)
             .then(|| self.text_scopes.enter(canvas));
-        let _chained_canvas = canvas.scale((scale, scale));
+        let _canvas_returned_for_chaining = canvas.scale((scale, scale));
         self.begin_compositing(canvas);
         self.paint_steps(canvas, &plan.steps, area, plan.pass, streams);
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
         if let Some(entered) = text_scope {
             self.text_scopes.leave(entered);
         }
@@ -97,9 +97,9 @@ impl Painter {
         let transform = skmatrix(&values.transform)?;
         let clip = values.clip.as_ref().map(rounded).transpose()?;
         let saved = self.text_scopes.save(canvas, group.opacity.destination());
-        let _chained_canvas = canvas.concat(&transform);
+        let _canvas_returned_for_chaining = canvas.concat(&transform);
         if let Some(clip) = clip {
-            let _chained_canvas = canvas.clip_rrect(clip, None, true);
+            let _canvas_returned_for_chaining = canvas.clip_rrect(clip, None, true);
         }
         if group.opacity.destination() == Destination::Layer {
             super::clip_device(canvas, group.device_extent.unwrap_or(IRect::new_empty()));

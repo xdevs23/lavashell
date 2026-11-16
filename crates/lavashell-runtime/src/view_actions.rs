@@ -109,7 +109,7 @@ impl ActionQueue {
     }
 
     pub(crate) fn open_surface(&self, surface: SurfaceId) {
-        let _newly_open = self.0.borrow_mut().open.insert(surface);
+        let _whether_newly_open_is_not_needed = self.0.borrow_mut().open.insert(surface);
     }
 
     pub fn forget_surface(&self, surface: SurfaceId) {

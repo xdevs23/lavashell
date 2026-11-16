@@ -34,7 +34,7 @@ fn each_used_subsystem_needs_its_capability() {
     let mut dragging = runtime_setup(vec![window("target")]);
     dragging.drags.on_drop(|_, _| true);
     let copying = runtime_setup(vec![window("editor")]);
-    let _handle = copying.clipboard.clipboard();
+    let _handle_marks_the_clipboard_as_used = copying.clipboard.clipboard();
     let setups = [
         (
             runtime_setup(vec![panel(LayerSurface::new("bar"))]),

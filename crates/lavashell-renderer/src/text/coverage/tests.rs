@@ -46,7 +46,8 @@ fn coverage_remains_data_and_foreground_uses_destination_color_management() -> R
                 let color = Color::encoded([0.8, 0.2, 0.4], f64::from(alpha), gamut);
                 let mut foreground = skia_safe::surfaces::raster(&info, None, None)
                     .ok_or(TestError::RasterSurface)?;
-                let _chained_canvas = foreground.canvas().clear(skia_safe::Color::TRANSPARENT);
+                let _canvas_returned_for_chaining =
+                    foreground.canvas().clear(skia_safe::Color::TRANSPARENT);
                 let mut painter = crate::Painter::new(
                     &crate::Fonts::new(),
                     crate::UniformRange::VULKAN_REQUIRED,

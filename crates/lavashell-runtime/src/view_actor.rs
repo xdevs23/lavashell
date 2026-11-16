@@ -292,7 +292,7 @@ impl<P: Platform> ViewActor<P> {
             match surface {
                 SurfaceSetup::Window(window, view) => self.open_window(window, view)?,
                 SurfaceSetup::Panel(options, view) => {
-                    let _panel = self.open_panel(options, view, None)?;
+                    let _opened_panel_is_not_needed = self.open_panel(options, view, None)?;
                 }
             }
         }

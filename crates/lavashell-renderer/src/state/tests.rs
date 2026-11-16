@@ -301,14 +301,14 @@ fn a_rebound_stream_frame_repaints_its_area_and_leaves_the_rest() -> Result<(), 
         ),
     ]))?;
     let mut red = state.gpu.offscreen(PixelSize::new(16, 12))?;
-    let _chained_canvas = red.canvas().clear(skia_safe::Color::RED);
+    let _canvas_returned_for_chaining = red.canvas().clear(skia_safe::Color::RED);
     (state.streams.frames_mut()).bind(&image(1), red.image_snapshot().into(), IPoint::new(0, 0));
     let drawn = state.draw(SURFACE, frame(1, &surface_state), &tree.snapshot())?;
     assert_eq!(drawn.outcome, FrameOutcome::Shown);
     assert_eq!(painted_pixel(&mut state, 16, 12)?, [255, 0, 0, 255]);
     let outside = painted_pixel(&mut state, 2, 2)?;
     let mut blue = state.gpu.offscreen(PixelSize::new(16, 12))?;
-    let _chained_canvas = blue.canvas().clear(skia_safe::Color::BLUE);
+    let _canvas_returned_for_chaining = blue.canvas().clear(skia_safe::Color::BLUE);
     (state.streams.frames_mut()).bind(&image(2), blue.image_snapshot().into(), IPoint::new(0, 0));
     tree.show(SceneUpdate::from_iter([Change::SetContent {
         id: SceneNodeId(2),

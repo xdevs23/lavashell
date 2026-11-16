@@ -314,7 +314,8 @@ impl ClipboardTransfers {
         match result {
             Ok(pipe) => {
                 let pipes = self.0.borrow().pipes.clone();
-                let _watched = pipes.start(Transfer::receive(pipe, surface, format, done));
+                let _transfer_ends_without_its_watch_id =
+                    pipes.start(Transfer::receive(pipe, surface, format, done));
             }
             Err(refusal) => done(Err(read_error(refusal))),
         }
@@ -338,7 +339,7 @@ impl ClipboardTransfers {
             return;
         };
         let pipes = self.0.borrow().pipes.clone();
-        let _watched = pipes.start(Transfer::send(
+        let _transfer_ends_without_its_watch_id = pipes.start(Transfer::send(
             pipe,
             bytes,
             Box::new(|result| {

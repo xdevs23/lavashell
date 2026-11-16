@@ -12,7 +12,7 @@ const SIDE: i32 = 32;
 fn filled(gpu: &mut VulkanRenderer, color: SkColor) -> Result<OffscreenSurface, TestError> {
     let side = u32::try_from(SIDE)?;
     let mut surface = gpu.offscreen(PixelSize::new(side, side))?;
-    let _chained_canvas = surface.canvas().clear(color);
+    let _canvas_returned_for_chaining = surface.canvas().clear(color);
     Ok(surface)
 }
 

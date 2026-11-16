@@ -15,7 +15,7 @@ pub(crate) fn surface(width: i32, height: i32) -> Result<Surface, TestError> {
         None,
     )
     .ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     Ok(surface)
 }
 

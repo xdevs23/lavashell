@@ -16,7 +16,8 @@ fn a_deadline_of_the_view_wakes_at_the_deadline() -> TestResult {
 #[test]
 fn a_report_of_the_view_while_drawing_replaces_the_deadline() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
-    let _frame = script.compose_at(0, wants(ViewState::Changed, Some(ms(50))))?;
+    let _composed_frame_is_not_checked =
+        script.compose_at(0, wants(ViewState::Changed, Some(ms(50))))?;
     assert!(
         script
             .at(1, wants(ViewState::Unchanged, Some(ms(30))))

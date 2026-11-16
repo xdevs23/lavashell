@@ -111,7 +111,7 @@ impl Painter {
         }
         match scalar(density.get()) {
             Ok(scale) => {
-                let _chained_matrix = matrix.pre_scale((scale, scale), None);
+                let _matrix_returned_for_chaining = matrix.pre_scale((scale, scale), None);
             }
             Err(failure) => {
                 self.failures.record(failure);
@@ -270,7 +270,7 @@ impl<'a> PaintVisitor<'a> for Walk<'_, 'a> {
             planned.device_extent
         };
         self.frame.device_extent = join(self.frame.device_extent, painted);
-        let _newly_shown = self.shown.insert(leaf.key);
+        let _whether_newly_shown_is_not_needed = self.shown.insert(leaf.key);
         self.frame.steps.push(Planned::Leaf(planned));
     }
 

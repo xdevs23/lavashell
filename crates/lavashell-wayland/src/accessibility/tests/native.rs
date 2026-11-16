@@ -235,13 +235,14 @@ fn child() -> Result<(), TestError> {
     text_navigation(&text_proxy, &mut signals, &mut bridge)?;
     lifecycle(&client, &mut reported, &mut bridge, initial)?;
     let app = embeds.recv()?;
-    let _window = wait_for(
+    let _shown_window_is_not_checked = wait_for(
         &mut signals,
         || children(&client, &app),
         |windows| windows.len() == 1,
     )?;
     drop(bridge);
-    let _no_window = wait_for(&mut signals, || children(&client, &app), Vec::is_empty)?;
+    let _empty_children_are_not_checked =
+        wait_for(&mut signals, || children(&client, &app), Vec::is_empty)?;
     Ok(())
 }
 
@@ -305,7 +306,7 @@ fn text_navigation(
     ];
     for (value, runs) in [("one two three", &words[..]), ("abcאבג\nnext", &lines[..])] {
         bridge.publish(tree(runs)?);
-        let _text = wait_for(
+        let _published_text_is_not_checked = wait_for(
             signals,
             || Ok(proxy.call::<_, _, String>("GetText", &(0i32, -1i32))?),
             |text| text == value,

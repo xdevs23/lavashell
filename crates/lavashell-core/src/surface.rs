@@ -96,7 +96,7 @@ pub struct SurfaceState {
 
 impl SurfaceState {
     pub fn apply(&mut self, change: SurfaceChange) {
-        let _replaced = self.parts.insert(change.field(), change);
+        let _earlier_change_of_the_field_is_superseded = self.parts.insert(change.field(), change);
     }
 
     #[must_use]

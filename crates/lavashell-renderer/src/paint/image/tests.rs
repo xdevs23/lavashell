@@ -99,7 +99,7 @@ fn cover_draws_the_pixels_of_a_centered_crop_computed_by_hand() -> Result<(), Te
     let destination = Rect::new(3.dp(), 5.dp(), 64.dp(), 64.dp());
     let covered = render(&commands(&image(&decoded)?, destination, ImageFit::cover()))?;
     let mut reference = surface(SIDE, SIDE)?;
-    let _chained_canvas = reference.canvas().draw_image_rect_with_sampling_options(
+    let _canvas_returned_for_chaining = reference.canvas().draw_image_rect_with_sampling_options(
         &decoded,
         Some((
             &SkRect::from_xywh(10.0, 0.0, 50.0, 50.0),
@@ -178,7 +178,7 @@ fn an_image_cropped_between_pixels_on_a_cached_card_is_the_image_drawn_directly(
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut cached = surface(SIDE, SIDE)?;
     for _ in 0..3 {
-        let _chained_canvas = cached.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = cached.canvas().clear(skia_safe::Color::TRANSPARENT);
         crate::test_scenes::paint(&mut painter, cached.canvas(), &tree, Density::ONE);
     }
     assert!(painter.render_stats().cache_hits > 0);

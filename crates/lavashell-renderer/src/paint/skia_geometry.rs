@@ -60,9 +60,9 @@ pub(crate) fn skpath_through(
     closed: bool,
 ) -> Result<Path, DrawFailure> {
     let mut builder = PathBuilder::new();
-    let _chained_builder = builder.move_to(skpoint(start)?);
+    let _builder_returned_for_chaining = builder.move_to(skpoint(start)?);
     for segment in segments {
-        let _chained_builder = match *segment {
+        let _builder_returned_for_chaining = match *segment {
             Segment::Line(to) => builder.line_to(skpoint(to)?),
             Segment::Quadratic { control, to } => builder.quad_to(skpoint(control)?, skpoint(to)?),
             Segment::Cubic {
@@ -77,7 +77,7 @@ pub(crate) fn skpath_through(
         };
     }
     if closed {
-        let _chained_builder = builder.close();
+        let _builder_returned_for_chaining = builder.close();
     }
     Ok(builder.detach())
 }
@@ -114,7 +114,7 @@ pub(crate) fn max_image_side(canvas: &Canvas) -> i32 {
 
 pub(crate) fn clip_device(canvas: &Canvas, pixels: IRect) {
     let matrix = canvas.local_to_device();
-    let _chained_canvas = canvas.reset_matrix();
-    let _chained_canvas = canvas.clip_irect(pixels, None);
-    let _chained_canvas = canvas.set_matrix(&matrix);
+    let _canvas_returned_for_chaining = canvas.reset_matrix();
+    let _canvas_returned_for_chaining = canvas.clip_irect(pixels, None);
+    let _canvas_returned_for_chaining = canvas.set_matrix(&matrix);
 }

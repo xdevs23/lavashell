@@ -95,7 +95,7 @@ impl SceneProducerPlugin {
 
 impl Plugin for SceneProducerPlugin {
     fn build(&self, app: &mut App) {
-        let _chained_app = app
+        let _app_returned_for_chaining = app
             .insert_resource(self.bridge.clone())
             .insert_resource(self.size)
             .init_resource::<Targets>()
@@ -105,7 +105,7 @@ impl Plugin for SceneProducerPlugin {
                 ExtractResourcePlugin::<Selection>::default(),
             ))
             .add_systems(PostUpdate, rotate.before(bevy::camera::CameraUpdateSystems));
-        let _chained_render_app = app
+        let _render_app_returned_for_chaining = app
             .sub_app_mut(RenderApp)
             .insert_resource(self.bridge.clone())
             .init_resource::<ScenePublication>()

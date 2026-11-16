@@ -148,7 +148,7 @@ fn forgetting_a_surface_drops_the_actions_and_watches_for_it() -> TestResult {
     assert_eq!(unwatched(&watches.take_requests()), ids[..1]);
     assert!(!queue.has_pending_for(forgotten));
     assert!(queue.has_pending_for(open));
-    let _taken = queue.take_batch();
+    let _taken_batch_is_not_checked = queue.take_batch();
     for id in &ids {
         watches.handle(WatchEvent::Ready(*id));
     }

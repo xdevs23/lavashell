@@ -33,7 +33,7 @@ fn coverage(context: &mut DirectContext) -> Result<Coverage, Error> {
         .ok_or(Error::CoverageSurface)?;
     let paint = Paint::new(colors::WHITE, None);
     let ramp_coverage = compare(context, ramp_size, |canvas| {
-        let _chained_canvas = canvas.draw_image(&ramp, (0, 0), Some(&paint));
+        let _canvas_returned_for_chaining = canvas.draw_image(&ramp, (0, 0), Some(&paint));
     })?;
     if ramp_coverage == Coverage::Corrupt {
         return Ok(Coverage::Corrupt);
@@ -46,7 +46,7 @@ fn coverage(context: &mut DirectContext) -> Result<Coverage, Error> {
     }
     compare(context, bounds.size(), |canvas| {
         let origin = (-bounds.left, -bounds.top);
-        let _chained_canvas = canvas.draw_str(&text, origin, &font, &paint);
+        let _canvas_returned_for_chaining = canvas.draw_str(&text, origin, &font, &paint);
     })
 }
 

@@ -9,7 +9,7 @@ pub(super) fn sampling() -> skia_safe::SamplingOptions {
 }
 
 pub(super) fn draw_image(canvas: &Canvas, image: &Image, destination: Rect) {
-    let _chained_canvas = canvas.draw_image_rect_with_sampling_options(
+    let _canvas_returned_for_chaining = canvas.draw_image_rect_with_sampling_options(
         image,
         None,
         destination,
@@ -65,7 +65,7 @@ impl RasterCache {
             .with_alpha_type(skia_safe::AlphaType::Premul);
         let retained_as = tile.retained_as.clone();
         self.cached_image(canvas, retained_as, tile.bytes, &info, None, |target| {
-            let _chained_canvas = target.clear(Color::TRANSPARENT);
+            let _canvas_returned_for_chaining = target.clear(Color::TRANSPARENT);
             rasterize(target);
         })
         .map_err(DrawFailure::from)

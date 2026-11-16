@@ -162,7 +162,7 @@ where
         let actor = spawn("renderer", receiver, move || {
             let state = RendererState::with_streams(&backend, setup, streams)
                 .map_err(RendererError::Start)?;
-            let _sent = rendering.send(state.text_rendering());
+            let _spawner_may_have_left = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
                 clock,

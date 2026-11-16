@@ -247,7 +247,7 @@ impl Probes<'_> {
                 }
             }
         }
-        let _followed = self.open.pop();
+        let _followed_node_is_known_already = self.open.pop();
         let _none_for_a_new_node = self.known.insert(node, outside.clone());
         Ok(outside)
     }

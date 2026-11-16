@@ -172,7 +172,7 @@ fn native_results(
         };
         painter.set_text_rendering(request, target_properties);
         let mut target = gpu.offscreen(PixelSize::new(300, 48))?;
-        let _chained_canvas = target.canvas().clear(if name == "translucent" {
+        let _canvas_returned_for_chaining = target.canvas().clear(if name == "translucent" {
             skia_safe::Color::TRANSPARENT
         } else {
             skia_safe::Color::BLACK
@@ -209,7 +209,7 @@ fn assert_native_color_formula(
         brush: backdrop.into(),
     };
     let mut target = gpu.offscreen(PixelSize::new(300, 48))?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     painter.paint_as_leaf(
         target.canvas(),
         &[background.clone(), text(13.0, foreground, rect)],
@@ -242,7 +242,7 @@ fn assert_native_color_formula(
         Packet::new(vec![background].into())?,
         Packet::new(vec![text(13.0, foreground, rect)].into())?,
     ])?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     crate::test_scenes::paint(painter, target.canvas(), &tree, Density::ONE);
     let retained = read(&gpu.png(&mut target)?)?;
     let retained_error = actual

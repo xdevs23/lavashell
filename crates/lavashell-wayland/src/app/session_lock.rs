@@ -33,7 +33,7 @@ fn request_lock(
 
 fn send_unlock(proxy: &ExtSessionLockV1, connection: &Connection, qh: &QueueHandle<Translator>) {
     proxy.unlock_and_destroy();
-    let _sync = connection.display().sync(qh, UnlockSync);
+    let _callback_answers_through_unlock_sync = connection.display().sync(qh, UnlockSync);
 }
 
 pub(super) enum SessionLock {

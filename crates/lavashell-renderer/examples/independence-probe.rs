@@ -48,7 +48,7 @@ impl EffectBackend for GreenFill {
     }
 
     fn render(&mut self, canvas: &skia::Canvas, _: &EffectRequest<'_>) {
-        let _chained_canvas = canvas.clear(skia::Color::GREEN);
+        let _canvas_returned_for_chaining = canvas.clear(skia::Color::GREEN);
     }
 }
 

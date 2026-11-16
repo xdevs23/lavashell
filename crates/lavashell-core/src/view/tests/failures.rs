@@ -97,7 +97,7 @@ fn the_next_frame_returns_a_measured_failure_and_composes_again() -> TestResult 
         width: None,
         height: None,
     };
-    let _measured = view.size_that_fits(open, &mut Metrics)?;
+    let _size_is_not_checked_by_this_test = view.size_that_fits(open, &mut Metrics)?;
     assert_eq!(view.bounds_of(&"hour"), None);
     broken.set(false);
     let cause = ComponentError::Composition(CompositionError::DuplicateItemKey);

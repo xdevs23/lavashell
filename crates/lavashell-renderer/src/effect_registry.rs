@@ -146,7 +146,7 @@ impl EffectRegistry {
         let Entry::Vacant(slot) = self.definitions.entry(effect) else {
             return Err(crate::Error::DuplicateEffect(effect));
         };
-        let _registered_definition = slot.insert(Definition {
+        let _registered_definition_is_not_needed = slot.insert(Definition {
             accepts,
             backend: Box::new(backend),
         });

@@ -125,10 +125,11 @@ impl VulkanRenderer {
         let info = crate::image::png_export_info(surface.image_info().dimensions());
         let mut export =
             gpu_render_target(context, &info, gpu::Budgeted::Yes).ok_or(Error::PngSurface)?;
-        let _cleared_canvas = export.canvas().clear(skia_safe::Color::TRANSPARENT);
-        let _drawn_canvas = export
-            .canvas()
-            .draw_image(surface.image_snapshot(), (0, 0), None);
+        let _canvas_returned_for_chaining = export.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining =
+            export
+                .canvas()
+                .draw_image(surface.image_snapshot(), (0, 0), None);
         context.flush_and_submit_surface(&mut export, Some(SyncCpu::Yes));
         let image = export.image_snapshot();
         let data = image
@@ -185,7 +186,7 @@ impl Drop for VulkanRenderer {
         if let Err(error) = self.context.device().wait_idle() {
             log::error!("the renderer is dropped without finishing its GPU work: {error}");
         }
-        let _chained_context = self.context.release_resources_and_abandon();
+        let _context_returned_for_chaining = self.context.release_resources_and_abandon();
         self.imported.clear();
     }
 }

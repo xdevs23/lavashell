@@ -21,7 +21,7 @@ impl OutputRecords {
     pub fn handle(&mut self, event: OutputEvent) {
         match event {
             OutputEvent::Added(output) => {
-                let _record = self.record_mut(output);
+                let _record_is_created_on_first_access = self.record_mut(output);
             }
             OutputEvent::Updated(output, info) => self.record_mut(output).info = Some(info),
             OutputEvent::Removed(output) => {
@@ -29,11 +29,12 @@ impl OutputRecords {
             }
             OutputEvent::Refresh(output, refresh) => self.record_mut(output).refresh = refresh,
             OutputEvent::Entered(output, surface) => {
-                let _newly_entered = self.record_mut(output).entered.insert(surface);
+                let _whether_newly_entered_is_not_needed =
+                    self.record_mut(output).entered.insert(surface);
             }
             OutputEvent::Left(output, surface) => {
                 if let Some(record) = self.records.get_mut(&output) {
-                    let _was_entered = record.entered.remove(&surface);
+                    let _whether_it_was_entered_is_not_needed = record.entered.remove(&surface);
                 }
             }
         }
@@ -41,7 +42,7 @@ impl OutputRecords {
 
     pub fn forget(&mut self, surface: SurfaceId) {
         for record in self.records.values_mut() {
-            let _was_entered = record.entered.remove(&surface);
+            let _whether_it_was_entered_is_not_needed = record.entered.remove(&surface);
         }
     }
 

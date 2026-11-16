@@ -10,11 +10,12 @@ use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 fn foreground_is_managed_but_rgb_and_center_coverage_remain_data() -> Result<(), TestError> {
     let info = ImageInfo::new((4, 4), ColorType::RGBA8888, AlphaType::Opaque, None);
     let mut rgb = skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = rgb.canvas().clear(skia_safe::Color::from_rgb(32, 128, 223));
+    let _canvas_returned_for_chaining =
+        rgb.canvas().clear(skia_safe::Color::from_rgb(32, 128, 223));
     let mut center =
         skia_safe::surfaces::raster(&info.with_alpha_type(AlphaType::Premul), None, None)
             .ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = center
+    let _canvas_returned_for_chaining = center
         .canvas()
         .clear(skia_safe::Color::from_argb(128, 255, 255, 255));
     let masks = masks::Masks {
@@ -34,7 +35,7 @@ fn foreground_is_managed_but_rgb_and_center_coverage_remain_data() -> Result<(),
         let info = ImageInfo::new((4, 4), ColorType::RGBAF32, AlphaType::Premul, space);
         let mut target =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         let skia_color = crate::paint::color4f(color)?;
         let blend = blend::MaskBlend::new()?;
         blend.draw(target.canvas(), &blend.coverage(&masks)?, skia_color)?;
@@ -75,7 +76,7 @@ fn a_text_color_change_reuses_the_paragraph_and_the_masks() -> Result<(), TestEr
     };
     let mut warmed = new_painter(PixelGeometry::Rgb)?;
     let mut output = target()?;
-    let _chained_canvas = output.canvas().clear(skia_safe::Color::new(0xff17_3967));
+    let _canvas_returned_for_chaining = output.canvas().clear(skia_safe::Color::new(0xff17_3967));
     warmed.paint_as_leaf(output.canvas(), &[command(Color::WHITE)], Density::ONE)?;
     let cached = |painter: &mut crate::Painter| {
         let tiles = painter.resources.tiles.get_mut().images().count();
@@ -83,11 +84,13 @@ fn a_text_color_change_reuses_the_paragraph_and_the_masks() -> Result<(), TestEr
     };
     let before = cached(&mut warmed);
     for color in [Color::rgb(0x00a9_dd75), Color::rgb(0x006a_3fd0)] {
-        let _chained_canvas = output.canvas().clear(skia_safe::Color::new(0xff17_3967));
+        let _canvas_returned_for_chaining =
+            output.canvas().clear(skia_safe::Color::new(0xff17_3967));
         warmed.paint_as_leaf(output.canvas(), &[command(color)], Density::ONE)?;
         assert_eq!(cached(&mut warmed), before);
         let mut fresh = target()?;
-        let _chained_canvas = fresh.canvas().clear(skia_safe::Color::new(0xff17_3967));
+        let _canvas_returned_for_chaining =
+            fresh.canvas().clear(skia_safe::Color::new(0xff17_3967));
         new_painter(PixelGeometry::Rgb)?.paint_as_leaf(
             fresh.canvas(),
             &[command(color)],

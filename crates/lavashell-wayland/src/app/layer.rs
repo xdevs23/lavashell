@@ -97,7 +97,7 @@ impl LayerControl {
             if oldest.token == token {
                 return Some(oldest.serial);
             }
-            let _superseded = self.configures.pop_front();
+            let _superseded_configure_is_not_acknowledged = self.configures.pop_front();
         }
         None
     }

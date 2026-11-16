@@ -134,7 +134,7 @@ fn set_weight(
 ) {
     let whole = skia_weight(weight);
     let font_style = FontStyle::new(whole, Width::NORMAL, slant);
-    let _chained_style = text_style.set_font_style(font_style);
+    let _style_returned_for_chaining = text_style.set_font_style(font_style);
     let faces = fonts.find_typefaces(families, font_style);
     if (faces.first())
         .is_some_and(|face| has_weight_axis(face) && face.font_style().weight() != whole)
@@ -182,7 +182,7 @@ pub(super) fn build(
 ) -> Paragraph {
     let mut ts = SkTextStyle::new();
     let families = fonts.loaded_fonts.families(&style.family);
-    let _chained_style = ts
+    let _style_returned_for_chaining = ts
         .set_font_size(layout.size)
         .set_foreground_paint(&layout.foreground)
         .set_font_families(&families);
@@ -194,13 +194,14 @@ pub(super) fn build(
         style.weight,
         Slant::Upright,
     );
-    let _chained_style = ts.set_letter_spacing(layout.letter_spacing);
+    let _style_returned_for_chaining = ts.set_letter_spacing(layout.letter_spacing);
     let mut ps = ParagraphStyle::new();
     rendering.apply(&mut ts, &mut ps);
     crate::text_alignment::apply(style, &mut ps);
-    let _chained_paragraph_style = ps.set_text_style(&ts).set_max_lines(style.max_lines);
+    let _paragraph_style_returned_for_chaining =
+        ps.set_text_style(&ts).set_max_lines(style.max_lines);
     if let Some(ellipsis) = ellipsis(style) {
-        let _chained_paragraph_style = ps.set_ellipsis(ellipsis);
+        let _paragraph_style_returned_for_chaining = ps.set_ellipsis(ellipsis);
     }
     let spans = span_styles(&mut fonts, text, style, &ts);
     let text_styles = std::iter::once(&ts).chain(spans.iter().map(|span| &span.style));
@@ -208,13 +209,13 @@ pub(super) fn build(
     let mut builder = ParagraphBuilder::new(&ps, collection);
     let mut cursor = 0;
     for span in &spans {
-        let _chained_builder = builder.add_text(&text[cursor..span.range.start]);
-        let _chained_builder = builder.push_style(&span.style);
-        let _chained_builder = builder.add_text(&text[span.range.clone()]);
-        let _chained_builder = builder.pop();
+        let _builder_returned_for_chaining = builder.add_text(&text[cursor..span.range.start]);
+        let _builder_returned_for_chaining = builder.push_style(&span.style);
+        let _builder_returned_for_chaining = builder.add_text(&text[span.range.clone()]);
+        let _builder_returned_for_chaining = builder.pop();
         cursor = span.range.end;
     }
-    let _chained_builder = builder.add_text(&text[cursor..]);
+    let _builder_returned_for_chaining = builder.add_text(&text[cursor..]);
     let mut paragraph = builder.build();
     paragraph.layout(layout.width);
     paragraph
@@ -243,7 +244,7 @@ fn span_styles(
             || families.clone(),
             |family| fonts.loaded_fonts.families(family),
         );
-        let _chained_style = inline.set_font_families(&span_families);
+        let _style_returned_for_chaining = inline.set_font_families(&span_families);
         let slant = if span.italic {
             Slant::Italic
         } else {

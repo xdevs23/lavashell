@@ -47,7 +47,7 @@ pub(crate) fn move_bytes(watches: &Watches) {
     let mut open = BTreeSet::new();
     loop {
         for request in watches.take_requests() {
-            let _changed = match request {
+            let _whether_changed_is_not_needed = match request {
                 WatchRequest::Watch(id, ..) => open.insert(id),
                 WatchRequest::Resume(_) => false,
                 WatchRequest::Unwatch(id) => open.remove(&id),
@@ -123,7 +123,7 @@ fn a_set_selection_is_written_to_each_client_that_pastes_it() -> TestResult {
         .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     move_bytes(&run.watches);
     let mut bytes = Vec::new();
-    let _count = reader.read_to_end(&mut bytes)?;
+    let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
     assert_eq!(bytes, [0, 255, 1]);
     Ok(())
 }
@@ -147,7 +147,7 @@ fn a_paste_whose_pipe_failed_leaves_the_selection_for_the_next_paste() -> TestRe
         .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     move_bytes(&run.watches);
     let mut bytes = Vec::new();
-    let _count = reader.read_to_end(&mut bytes)?;
+    let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
     assert_eq!(bytes, b"copied");
     Ok(())
 }
@@ -168,7 +168,7 @@ fn a_refused_selection_reports_the_refusal_and_sends_nothing() -> TestResult {
         .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
-    let _count = reader.read_to_end(&mut bytes)?;
+    let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
     assert!(bytes.is_empty());
     Ok(())
 }
@@ -189,7 +189,7 @@ fn a_send_after_the_selection_was_cancelled_writes_nothing() -> TestResult {
         .handle(ClipboardEvent::SourceSend(id, format, Ok(writer.into())));
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
-    let _count = reader.read_to_end(&mut bytes)?;
+    let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
     assert!(bytes.is_empty());
     Ok(())
 }

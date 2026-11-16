@@ -32,7 +32,7 @@ fn red(color: [f32; 4]) -> bool {
 #[test]
 fn four_radii_fill_round_only_their_own_corners() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let shape = RoundedRect::new(
         Rect::new(8.dp(), 8.dp(), 80.dp(), 32.dp()),
         Corners::new(16.dp(), 0.dp(), 16.dp(), 0.dp()),
@@ -76,7 +76,7 @@ fn contour_borders_follow_their_placement() -> Result<(), TestError> {
         (BorderPlacement::Outside, false, true),
     ] {
         let mut s = surface()?;
-        let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
         let material =
             Material::new(Color::WHITE).border(Stroke::new(RED, 4.dp())?.placement(placement));
         let contour = square()?;
@@ -92,7 +92,7 @@ fn contour_borders_follow_their_placement() -> Result<(), TestError> {
 #[test]
 fn contour_shadows_spread_and_inset_around_the_outline() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT)
         .shadow(Shadow::new(RED, 0.dp(), Point::new(0.dp(), 0.dp()))?.spread(4.dp())?)
         .shadow(
@@ -112,7 +112,7 @@ fn contour_shadows_spread_and_inset_around_the_outline() -> Result<(), TestError
 #[test]
 fn unions_fill_every_member() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
             rounded(Rect::new(4.dp(), 4.dp(), 30.dp(), 40.dp()), 8.dp()),
@@ -176,7 +176,7 @@ fn pills(gap: f64, spacing: f64) -> Result<Shape, TestError> {
 fn unions_fuse_once_their_gap_reaches_the_spacing() -> Result<(), TestError> {
     for (gap, fused) in [(16.0, false), (10.0, true), (6.0, true), (0.0, true)] {
         let mut s = surface()?;
-        let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
         let pair = pills(gap, 12.0)?;
         draw(&mut s, |d| {
             d.material(pair, &Material::new(Color::WHITE));
@@ -191,7 +191,7 @@ fn unions_fuse_once_their_gap_reaches_the_spacing() -> Result<(), TestError> {
 #[test]
 fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
             rounded(Rect::new(10.dp(), 14.dp(), 34.dp(), 20.dp()), 0.dp()),
@@ -210,7 +210,7 @@ fn fused_unions_keep_aligned_straight_edges_straight() -> Result<(), TestError> 
 fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError> {
     let fused = pills(4.0, 12.0)?;
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT).border(Stroke::new(RED, 3.dp())?);
     draw(&mut s, |d| d.material(fused.clone(), &material))?;
     assert!(red(sample(&mut s, 17, 24)));
@@ -221,7 +221,7 @@ fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError>
     );
 
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let material = Material::new(Color::TRANSPARENT)
         .shadow(Shadow::new(RED, 0.dp(), Point::new(0.dp(), 0.dp()))?.spread(4.dp())?)
         .shadow(
@@ -243,7 +243,7 @@ fn union_borders_and_shadows_follow_the_fused_outline() -> Result<(), TestError>
 #[test]
 fn unions_with_contour_members_cover_through_a_field_texture() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let fused = union(
         [
             rounded(Rect::new(4.dp(), 8.dp(), 26.dp(), 32.dp()), 8.dp()),

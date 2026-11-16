@@ -266,7 +266,7 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let scene = grouped(group(Affine::IDENTITY, 0.5, None), nothing)?;
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut target = surface(WIDTH, HEIGHT)?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::WHITE);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::WHITE);
     let before = pixels(&mut target);
     let plan = painter.plan(
         target.canvas(),
@@ -308,7 +308,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     let mut target = surface(WIDTH, HEIGHT)?;
     let mut paint = |painter: &mut Painter, scene: &SceneTree| {
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_scene(
             target.canvas(),
             TEST_SURFACE,

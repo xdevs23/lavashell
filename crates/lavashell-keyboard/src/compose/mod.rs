@@ -79,7 +79,8 @@ fn keyboard_node<K: Hash + 'static>(
     let height = (closed.zip(&open).zip(&rest))
         .map(|((closed, open), rest)| stage::interpolated(closed, rest, open));
     let lift = entrance.lift(&height, size.height);
-    let _current_root = ui.state_of(ui.next_id(), "root", || keyboard.root());
+    let _root_state_is_created_for_later_frames =
+        ui.state_of(ui.next_id(), "root", || keyboard.root());
     let (keyboard, recording) = (keyboard.clone(), keyboard.clone());
     let scoped = move |ui: &mut Ui| {
         ui.scoped("keyboard", Modifier::new(), move |ui| {

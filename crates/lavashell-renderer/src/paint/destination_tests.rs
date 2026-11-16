@@ -52,17 +52,18 @@ fn blur_backdrop(canvas: &Canvas, command: &DrawCommand) -> Result<(), DrawFailu
     let filter = image_filters::blur((5.0, 5.0), skia_safe::TileMode::Clamp, None, None)
         .ok_or(DrawFailure::ShaderRejected)?;
     let saved = canvas.save();
-    let _chained_canvas = canvas.clip_rrect(RRect::new_rect_xy(bounds, radius, radius), None, true);
+    let _canvas_returned_for_chaining =
+        canvas.clip_rrect(RRect::new_rect_xy(bounds, radius, radius), None, true);
     let mut paint = Paint::default();
-    let _chained_paint = paint.set_blend_mode(skia_safe::BlendMode::Src);
-    let _save_count = canvas.save_layer(
+    let _paint_returned_for_chaining = paint.set_blend_mode(skia_safe::BlendMode::Src);
+    let _restored_by_the_next_restore = canvas.save_layer(
         &SaveLayerRec::default()
             .bounds(&bounds)
             .paint(&paint)
             .backdrop(&filter),
     );
-    let _chained_canvas = canvas.restore();
-    let _chained_canvas = canvas.restore_to_count(saved);
+    let _canvas_returned_for_chaining = canvas.restore();
+    let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     Ok(())
 }
 
@@ -157,7 +158,7 @@ fn paint_damage(
 }
 
 fn paint_full(painter: &mut Painter, target: &mut Surface, tree: &SceneTree, density: Density) {
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     crate::test_scenes::paint(painter, target.canvas(), &tree.snapshot(), density);
 }
 

@@ -44,7 +44,7 @@ pub fn raster_png(
         .next_id()
         .map_err(Error::NumberImageSurface)?;
     let mut surface = skia_safe::surfaces::raster(&info, None, None).ok_or(Error::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     crate::Painter::new(fonts, crate::UniformRange::VULKAN_REQUIRED)?.paint_scene(
         surface.canvas(),
         image_surface,
@@ -54,10 +54,11 @@ pub fn raster_png(
     let export_info = png_export_info(skia_safe::ISize::new(width, height));
     let mut export =
         skia_safe::surfaces::raster(&export_info, None, None).ok_or(Error::PngSurface)?;
-    let _chained_canvas = export.canvas().clear(skia_safe::Color::TRANSPARENT);
-    let _chained_canvas = export
-        .canvas()
-        .draw_image(surface.image_snapshot(), (0, 0), None);
+    let _canvas_returned_for_chaining = export.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining =
+        export
+            .canvas()
+            .draw_image(surface.image_snapshot(), (0, 0), None);
     export
         .image_snapshot()
         .encode(None, skia_safe::EncodedImageFormat::PNG, None)

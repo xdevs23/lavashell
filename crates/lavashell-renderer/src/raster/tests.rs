@@ -106,7 +106,7 @@ fn gradient_path_cache_distinguishes_shaders_and_reuses_equal_gradients() -> Res
             gradient,
             None,
         );
-        let _chained_canvas = surface.canvas().clear(Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = surface.canvas().clear(Color::TRANSPARENT);
         painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
         let pixel = unpremultiplied_pixel(&mut surface, 16, 4);
         let dominant = if rgb == 0x00ff_0000 { 0 } else { 2 };
@@ -125,18 +125,19 @@ fn scrolling_a_small_path_through_a_clip_reuses_its_complete_tile() -> Result<()
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((40, 40)).ok_or(TestError::RasterSurface)?;
     let mut builder = skia_safe::PathBuilder::new();
-    let _chained_builder = builder.add_rect(Rect::from_xywh(0.0, 0.0, 10.0, 10.0), None, None);
+    let _builder_returned_for_chaining =
+        builder.add_rect(Rect::from_xywh(0.0, 0.0, 10.0, 10.0), None, None);
     let path = builder.detach();
     let paint = Paint::new(skia_safe::Color4f::from(Color::WHITE), None);
     for top in [-10.0, -5.0, 0.0, 5.0] {
         let canvas = surface.canvas();
-        let _chained_canvas = canvas.clear(Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = canvas.clear(Color::TRANSPARENT);
         let saved = canvas.save();
-        let _chained_canvas =
+        let _canvas_returned_for_chaining =
             canvas.clip_rect(Rect::from_xywh(10.0, 10.0, 20.0, 20.0), None, false);
-        let _chained_canvas = canvas.translate((10.0, top));
+        let _canvas_returned_for_chaining = canvas.translate((10.0, top));
         cache.draw(canvas, &path, &paint)?;
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     }
     assert_eq!(
         cache.images().count(),
@@ -222,9 +223,9 @@ fn floating_point_tiles_keep_hdr_headroom() -> Result<(), TestError> {
         &spec(7, 8 * 8 * 8, (8, 8), Rect::from_xywh(0.0, 0.0, 8.0, 8.0)),
         |tile| {
             let mut paint = Paint::default();
-            let _chained_paint =
+            let _paint_returned_for_chaining =
                 paint.set_color4f(skia_safe::Color4f::new(2.0, 0.125, 0.5, 1.0), &space);
-            let _chained_canvas = tile.draw_paint(&paint);
+            let _canvas_returned_for_chaining = tile.draw_paint(&paint);
         },
     )?;
     let read = info
@@ -246,12 +247,12 @@ fn a_reused_tile_follows_its_new_position_and_parent_opacity() -> Result<(), Tes
     let mut cache = RasterCache::new(RasterMode::Tiles, Failures::default());
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((40, 16)).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(Color::TRANSPARENT);
     cache.draw_tile(
         surface.canvas(),
         &spec(7, 400, (10, 10), Rect::from_xywh(0.0, 0.0, 10.0, 10.0)),
         |tile| {
-            let _chained_canvas = tile.clear(Color::WHITE);
+            let _canvas_returned_for_chaining = tile.clear(Color::WHITE);
         },
     )?;
     let saved = surface.canvas().save_layer_alpha_f(None, 0.5);
@@ -264,7 +265,7 @@ fn a_reused_tile_follows_its_new_position_and_parent_opacity() -> Result<(), Tes
         },
     )?;
     assert!(!rasterized, "a cache hit is not rasterized again");
-    let _chained_canvas = surface.canvas().restore_to_count(saved);
+    let _canvas_returned_for_chaining = surface.canvas().restore_to_count(saved);
     let pixels = crate::test_surfaces::pixels(&mut surface);
     let at = |x: usize| &pixels[(5 * 40 + x) * 4..(5 * 40 + x) * 4 + 4];
     assert_eq!(at(5), [255, 255, 255, 255]);
@@ -311,7 +312,8 @@ fn a_large_path_draws_through_kept_tiles_and_only_visible_ones_draw() -> Result<
     assert_eq!(unpremultiplied_pixel(&mut surface, 1500, 2990), [255; 4]);
 
     let canvas = surface.canvas();
-    let _chained_canvas = canvas.clip_rect(Rect::from_xywh(0.0, 0.0, 600.0, 600.0), None, false);
+    let _canvas_returned_for_chaining =
+        canvas.clip_rect(Rect::from_xywh(0.0, 0.0, 600.0, 600.0), None, false);
     let Placement::Tiles(visible) = cache.place(canvas, &path, &paint)? else {
         return Err(TestError::Unexpected("a placement through tiles"));
     };
@@ -328,7 +330,7 @@ fn coverage_and_truth(
     const SAMPLES: u16 = 8;
     const WINDOW: u16 = 100;
     let mut paint = Paint::new(skia_safe::Color4f::from(Color::WHITE), None);
-    let _chained_paint = paint.set_anti_alias(true);
+    let _paint_returned_for_chaining = paint.set_anti_alias(true);
     let square = |side: u16| (i32::from(side), i32::from(side));
     let alpha = |surface: &mut skia_safe::Surface, side: u16| {
         let info = skia_safe::ImageInfo::new_a8(square(side));
@@ -340,18 +342,19 @@ fn coverage_and_truth(
         skia_safe::surfaces::raster_n32_premul(square(size)).ok_or(TestError::RasterSurface)?;
     draw(surface.canvas(), &paint)?;
     let drawn = alpha(&mut surface, size);
-    let _chained_paint = paint.set_anti_alias(false);
+    let _paint_returned_for_chaining = paint.set_anti_alias(false);
     let mut pairs = Vec::new();
     for top in (0..size).step_by(usize::from(WINDOW)) {
         for left in (0..size).step_by(usize::from(WINDOW)) {
             let fine_side = WINDOW * SAMPLES;
             let mut fine = skia_safe::surfaces::raster_n32_premul(square(fine_side))
                 .ok_or(TestError::RasterSurface)?;
-            let _chained_canvas = fine
+            let _canvas_returned_for_chaining = fine
                 .canvas()
                 .scale((f32::from(SAMPLES), f32::from(SAMPLES)));
-            let _chained_canvas = fine.canvas().translate((-f32::from(left), -f32::from(top)));
-            let _chained_canvas = fine.canvas().draw_path(path, &paint);
+            let _canvas_returned_for_chaining =
+                fine.canvas().translate((-f32::from(left), -f32::from(top)));
+            let _canvas_returned_for_chaining = fine.canvas().draw_path(path, &paint);
             let samples = alpha(&mut fine, fine_side);
             for (y, x) in (0..WINDOW).flat_map(|y| (0..WINDOW).map(move |x| (y, x))) {
                 let inside = (0..SAMPLES * SAMPLES)
@@ -387,16 +390,16 @@ fn a_path_cut_into_tiles_is_as_close_to_true_coverage_as_the_whole_path() -> Res
             let angle = std::f32::consts::TAU * f32::from(corner) / 10.0 + 0.05;
             let radius = if corner % 2 == 0 { 600.0 } else { 330.0 };
             let point = (0.3 + radius * angle.sin(), 0.7 - radius * angle.cos());
-            let _chained_builder = match corner {
+            let _builder_returned_for_chaining = match corner {
                 0 => builder.move_to(point),
                 _ => builder.line_to(point),
             };
         }
-        let _chained_builder = builder.close();
+        let _builder_returned_for_chaining = builder.close();
         builder.detach()
     };
     let whole = coverage_and_truth(&star, 800, |canvas, paint| {
-        let _chained_canvas = canvas.draw_path(&star, paint);
+        let _canvas_returned_for_chaining = canvas.draw_path(&star, paint);
         Ok(())
     })?;
     let tiled = coverage_and_truth(&star, 800, |canvas, paint| {
@@ -423,7 +426,7 @@ fn a_tile_without_retained_content_is_neither_reused_nor_retained() -> Result<()
         skia_safe::surfaces::raster_n32_premul((8, 8)).ok_or(TestError::RasterSurface)?;
     let rect = Rect::from_xywh(0.0, 0.0, 8.0, 8.0);
     cache.draw_tile(surface.canvas(), &spec(7, 256, (8, 8), rect), |tile| {
-        let _chained_canvas = tile.clear(Color::WHITE);
+        let _canvas_returned_for_chaining = tile.clear(Color::WHITE);
     })?;
     let ids: Vec<_> = cache.images().map(Image::unique_id).collect();
     let transient = TileSpec {
@@ -435,7 +438,7 @@ fn a_tile_without_retained_content_is_neither_reused_nor_retained() -> Result<()
         (Color::BLUE, [0, 0, 255, 255]),
     ] {
         cache.draw_tile(surface.canvas(), &transient, |tile| {
-            let _chained_canvas = tile.clear(color);
+            let _canvas_returned_for_chaining = tile.clear(color);
         })?;
         assert_eq!(unpremultiplied_pixel(&mut surface, 2, 2), pixel);
         assert_eq!(

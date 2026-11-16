@@ -127,10 +127,10 @@ impl GlassPrograms {
                     };
                     return within(canvas, resources, clip, || {
                         let mut paint = Paint::default();
-                        let _chained_paint = paint
+                        let _paint_returned_for_chaining = paint
                             .set_shader(shader)
                             .set_blend_mode(skia_safe::BlendMode::Src);
-                        let _chained_canvas = canvas.draw_rect(bounds, &paint);
+                        let _canvas_returned_for_chaining = canvas.draw_rect(bounds, &paint);
                     });
                 }
                 None => lens = Err(DrawFailure::LensWithoutSurface.into()),
@@ -139,15 +139,15 @@ impl GlassPrograms {
         if let Some(filter) = filter {
             within(canvas, resources, clip, || {
                 let mut paint = Paint::default();
-                let _chained_paint = paint.set_blend_mode(skia_safe::BlendMode::Src);
-                let _save_count = canvas.save_layer(
+                let _paint_returned_for_chaining = paint.set_blend_mode(skia_safe::BlendMode::Src);
+                let _restored_by_the_next_restore = canvas.save_layer(
                     &SaveLayerRec::default()
                         .bounds(&bounds)
                         .paint(&paint)
                         .backdrop(&filter)
                         .backdrop_tile_mode(TileMode::Clamp),
                 );
-                let _chained_canvas = canvas.restore();
+                let _canvas_returned_for_chaining = canvas.restore();
             })?;
         }
         lens
@@ -201,7 +201,7 @@ pub(super) fn within(
     if clipped.is_ok() {
         draw();
     }
-    let _chained_canvas = canvas.restore_to_count(saved);
+    let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     clipped
 }
 
@@ -222,7 +222,7 @@ fn blurred_surface(
         .new_surface(&canvas.image_info().with_dimensions(capture.size()), None)
         .ok_or(DrawFailure::Allocation)?;
     let mut paint = Paint::default();
-    let _chained_paint = paint
+    let _paint_returned_for_chaining = paint
         .set_blend_mode(skia_safe::BlendMode::Src)
         .set_image_filter(image_filters::blur(
             (sigma * matrix.scale_x(), sigma * matrix.scale_y()),
@@ -230,7 +230,8 @@ fn blurred_surface(
             None,
             None,
         ));
-    let _chained_canvas = blurred.canvas().draw_image(&snapshot, (0, 0), Some(&paint));
+    let _canvas_returned_for_chaining =
+        blurred.canvas().draw_image(&snapshot, (0, 0), Some(&paint));
     let inverse = matrix.invert().ok_or(DrawFailure::SingularTransform)?;
     let placement = Matrix::concat(
         &inverse,

@@ -106,7 +106,7 @@ impl Actor for ChoreographerActor {
             }
             ChoreographerInput::Restart(surface) => self.surface_frames(surface).restart(),
             ChoreographerInput::Retire(surface) => {
-                let _retired = self.surfaces.remove(&surface);
+                let _retired_surface_is_not_needed = self.surfaces.remove(&surface);
                 if self.builder.push(BuilderInput::Retire(surface)).is_err() {
                     return Ok(Flow::Stop);
                 }

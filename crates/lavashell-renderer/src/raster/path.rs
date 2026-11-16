@@ -19,16 +19,16 @@ impl RasterCache {
             Placement::Tiles(tiles) => tiles,
             Placement::Hidden => return Ok(()),
             Placement::Vector => {
-                let _chained_canvas = canvas.draw_path(path, paint);
+                let _canvas_returned_for_chaining = canvas.draw_path(path, paint);
                 return Ok(());
             }
         };
         let mut shape = paint.clone();
-        let _chained_paint = shape.set_image_filter(None);
+        let _paint_returned_for_chaining = shape.set_image_filter(None);
         let saved = match paint.image_filter() {
             Some(filter) => {
                 let mut layer = Paint::default();
-                let _chained_paint = layer.set_image_filter(filter.clone());
+                let _paint_returned_for_chaining = layer.set_image_filter(filter.clone());
                 let bounds = filter.compute_fast_bounds(tiles.covered());
                 canvas.save_layer(&SaveLayerRec::default().bounds(&bounds).paint(&layer))
             }
@@ -37,23 +37,24 @@ impl RasterCache {
         let drawn = tiles.iter().try_for_each(|tile| {
             self.draw_tile(canvas, &tile.spec, |c| tile.rasterize(c, path, &shape))
         });
-        let _chained_canvas = canvas.restore_to_count(saved);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
         drawn
     }
 
     pub fn clip(&mut self, canvas: &Canvas, path: &Path, op: ClipOp) -> Result<(), DrawFailure> {
         let mut coverage = Paint::default();
-        let _chained_paint = coverage.set_anti_alias(true);
+        let _paint_returned_for_chaining = coverage.set_anti_alias(true);
         let tiles = match self.place(canvas, path, &coverage)? {
             Placement::Tiles(tiles) => tiles,
             Placement::Hidden => {
                 if op == ClipOp::Intersect {
-                    let _chained_canvas = canvas.clip_rect(Rect::new_empty(), None, false);
+                    let _canvas_returned_for_chaining =
+                        canvas.clip_rect(Rect::new_empty(), None, false);
                 }
                 return Ok(());
             }
             Placement::Vector => {
-                let _chained_canvas = canvas.clip_path(path, op, true);
+                let _canvas_returned_for_chaining = canvas.clip_path(path, op, true);
                 return Ok(());
             }
         };
@@ -62,7 +63,7 @@ impl RasterCache {
             let covered = self.tile_shader(canvas, tile, path, &coverage)?;
             shader = skia_safe::shaders::blend(BlendMode::Plus, shader, covered);
         }
-        let _chained_canvas = canvas.clip_shader(shader, op);
+        let _canvas_returned_for_chaining = canvas.clip_shader(shader, op);
         Ok(())
     }
 
@@ -76,7 +77,8 @@ impl RasterCache {
         let image = self.tile_image(canvas, &tile.spec, |c| tile.rasterize(c, path, paint))?;
         let destination = tile.spec.destination;
         let mut placement = Matrix::translate((destination.left, destination.top));
-        let _chained_matrix = placement.pre_scale((1.0 / tile.scale, 1.0 / tile.scale), None);
+        let _matrix_returned_for_chaining =
+            placement.pre_scale((1.0 / tile.scale, 1.0 / tile.scale), None);
         image
             .to_shader(
                 (TileMode::Decal, TileMode::Decal),
@@ -300,8 +302,8 @@ pub(super) struct PathTile {
 
 impl PathTile {
     fn rasterize(&self, tile: &Canvas, path: &Path, paint: &Paint) {
-        let _chained_canvas = tile.scale((self.scale, self.scale));
-        let _chained_canvas = tile.translate(-self.origin);
-        let _chained_canvas = tile.draw_path(path, paint);
+        let _canvas_returned_for_chaining = tile.scale((self.scale, self.scale));
+        let _canvas_returned_for_chaining = tile.translate(-self.origin);
+        let _canvas_returned_for_chaining = tile.draw_path(path, paint);
     }
 }

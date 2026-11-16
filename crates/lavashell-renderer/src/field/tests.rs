@@ -22,7 +22,7 @@ fn pixels(shader: Shader) -> Result<Vec<[f64; 4]>, TestError> {
         None,
     );
     let mut surface = surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface
+    let _canvas_returned_for_chaining = surface
         .canvas()
         .draw_paint(Paint::default().set_shader(shader));
     let mut bytes = vec![0u8; info.compute_min_byte_size()];
@@ -309,7 +309,7 @@ fn texture_lens(shape: &Shape, density: Density) -> Result<Vec<[f64; 4]>, TestEr
         .ok_or(TestError::RasterSurface)?;
     let canvas = surface.canvas();
     let scale = crate::scalar::scalar(density.get())?;
-    let _chained_canvas = canvas.scale((scale, scale));
+    let _canvas_returned_for_chaining = canvas.scale((scale, scale));
     let texels = TexelPixels::lens(canvas).ok_or(TestError::Missing("texel size of the lens"))?;
     let lens = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?
         .lens(canvas, &Solid::of(shape), texels)?

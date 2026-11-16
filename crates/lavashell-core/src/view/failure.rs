@@ -102,7 +102,7 @@ impl View {
             inside: index,
             cause: ComponentError::CompositionCycle,
         };
-        let _lost_nodes = self.fail([cycle]);
+        let _whether_nodes_were_lost_is_not_needed = self.fail([cycle]);
     }
 
     pub(super) fn fail_paint_failures(&mut self) -> bool {

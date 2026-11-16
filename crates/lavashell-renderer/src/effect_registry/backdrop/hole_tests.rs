@@ -111,8 +111,8 @@ fn render(backend: &mut Backend, s: &mut Surface, drawn: Drawn) -> Result<Vec<u8
         Failures::default(),
     );
     let s = background(s)?;
-    let _chained_canvas = s.canvas().clip_irect(placement.clip, None);
-    let _chained_canvas = s.canvas().concat(&placement.matrix);
+    let _canvas_returned_for_chaining = s.canvas().clip_irect(placement.clip, None);
+    let _canvas_returned_for_chaining = s.canvas().concat(&placement.matrix);
     let command = DrawCommand::Backdrop {
         shape: card().minus(lens(lens_x)),
         effect,

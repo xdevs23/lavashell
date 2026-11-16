@@ -27,8 +27,8 @@ impl UploadBatch {
             return;
         };
         if self.would_exceed(id, bytes, context.resource_cache_limit()) {
-            let _chained_context = context.flush_submit_and_sync_cpu();
-            let _chained_context =
+            let _context_returned_for_chaining = context.flush_submit_and_sync_cpu();
+            let _context_returned_for_chaining =
                 context.purge_unlocked_resources(PurgeResourceOptions::AllResources);
             self.images.clear();
             self.bytes = 0;
@@ -109,7 +109,7 @@ mod gpu_tests {
             .direct_context()
             .ok_or(TestError::Missing("GPU context of the canvas"))?
             .set_resource_cache_limit(limit);
-        let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
         let png = gpu.png(&mut surface)?;
         let tiles = painter.resources.tiles.borrow();

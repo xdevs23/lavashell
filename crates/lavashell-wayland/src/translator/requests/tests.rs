@@ -90,7 +90,7 @@ fn a_take_that_found_requests_wakes_the_next_take() -> Result<(), TestError> {
     let (sender, receiver) = mailbox();
     sender.push(release(FIRST))?;
     let mut wakes = 0;
-    let _found = take(&receiver, &wake, None);
+    let _taken_events_are_not_checked = take(&receiver, &wake, None);
     event_loop.dispatch(Duration::ZERO, &mut wakes)?;
     assert_eq!(wakes, 1);
     let _found_nothing = take(&receiver, &wake, None);

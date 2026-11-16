@@ -136,12 +136,12 @@ impl TextRendering {
     }
 
     pub(crate) fn apply(self, text: &mut TextStyle, paragraph: &mut ParagraphStyle) {
-        let _chained_style = text
+        let _style_returned_for_chaining = text
             .set_font_hinting(self.hinting.into())
             .set_subpixel(self.fractional_positioning)
             .set_font_edging(self.edging());
         if self.hinting == Hinting::None {
-            let _chained_paragraph_style = paragraph.turn_hinting_off();
+            let _paragraph_style_returned_for_chaining = paragraph.turn_hinting_off();
         }
     }
 }

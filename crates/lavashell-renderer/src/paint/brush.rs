@@ -8,7 +8,7 @@ use skia_safe::Paint;
 
 pub(crate) fn solid(color: Color) -> Result<Paint, DrawFailure> {
     let mut paint = Paint::default();
-    let _chained_paint = paint
+    let _paint_returned_for_chaining = paint
         .set_anti_alias(true)
         .set_dither(true)
         .set_color4f(color4f(color)?, &skia_safe::ColorSpace::new_srgb_linear());
@@ -110,9 +110,9 @@ fn gradient_paint(gradient: &Gradient) -> Result<Paint, DrawFailure> {
         ),
     };
     if shader.is_none() {
-        let _chained_paint = paint.set_color(skia_safe::Color::TRANSPARENT);
+        let _paint_returned_for_chaining = paint.set_color(skia_safe::Color::TRANSPARENT);
     }
-    let _chained_paint = paint.set_shader(shader);
+    let _paint_returned_for_chaining = paint.set_shader(shader);
     Ok(paint)
 }
 

@@ -67,7 +67,7 @@ impl Actor for BuilderActor {
         let frames = match input {
             BuilderInput::Frames(frames) => frames,
             BuilderInput::Retire(surface) => {
-                let _retired = self.scenes.remove(&surface);
+                let _retired_scene_is_not_needed = self.scenes.remove(&surface);
                 self.slots.retire(surface);
                 return Ok(Flow::Continue);
             }

@@ -75,7 +75,7 @@ impl Run {
     }
 
     fn drop_png(&mut self) -> Rc<RefCell<Vec<DropEvent>>> {
-        let _events = accept_png(&mut self.drags);
+        let _drag_events_are_not_checked = accept_png(&mut self.drags);
         let drops = Rc::new(RefCell::new(Vec::new()));
         let seen = drops.clone();
         self.drags.on_drop(move |event, _| {
@@ -175,7 +175,7 @@ fn answers(
 #[test]
 fn an_offer_is_answered_once_with_the_acceptance_that_its_actions_allow() -> TestResult {
     let mut run = Run::new()?;
-    let _events = accept_png(&mut run.drags);
+    let _drag_events_are_not_checked = accept_png(&mut run.drags);
     run.enter();
     assert_eq!(
         answers(run.drags.take_target_requests())?,
@@ -241,7 +241,7 @@ fn an_unreadable_drop_is_reported_to_the_drop_observer_and_released() -> TestRes
 fn a_received_drop_that_the_app_used_is_finished() -> TestResult {
     let mut run = Run::new()?;
     let drops = run.drop_png();
-    let _requests = run.drags.take_target_requests();
+    let _target_requests_are_not_checked = run.drags.take_target_requests();
     let (reader, mut writer) = io::pipe()?;
     writer.write_all(&[1, 2, 3])?;
     drop(writer);

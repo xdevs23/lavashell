@@ -112,14 +112,16 @@ where
             },
             it_value: it_value.map_err(Error::InputDeadline)?,
         };
-        let _previous = timerfd_settime(&self.deadline, TimerfdTimerFlags::empty(), &value)
-            .map_err(Error::WaitForInput)?;
+        let _earlier_deadline_is_not_needed =
+            timerfd_settime(&self.deadline, TimerfdTimerFlags::empty(), &value)
+                .map_err(Error::WaitForInput)?;
         Ok(())
     }
 
     fn reset_signal(&self) -> Result<(), Error> {
         let mut count = [0_u8; 8];
-        let _bytes = read(&self.arrived.descriptor, &mut count).map_err(Error::WaitForInput)?;
+        let _count_of_read_bytes_is_not_needed =
+            read(&self.arrived.descriptor, &mut count).map_err(Error::WaitForInput)?;
         Ok(())
     }
 }

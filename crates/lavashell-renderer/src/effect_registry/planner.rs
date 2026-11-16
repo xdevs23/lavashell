@@ -363,11 +363,11 @@ impl Painter {
         let blank = copy.canvas();
         let saved = blank.save();
         if let Some(clip) = canvas.device_clip_bounds() {
-            let _chained_canvas = blank.clip_irect(clip, None);
+            let _canvas_returned_for_chaining = blank.clip_irect(clip, None);
         }
-        let _chained_canvas = blank.set_matrix(&canvas.local_to_device());
+        let _canvas_returned_for_chaining = blank.set_matrix(&canvas.local_to_device());
         for key in unmeasured {
-            let _chained_canvas = blank.clear(skia_safe::Color::TRANSPARENT);
+            let _canvas_returned_for_chaining = blank.clear(skia_safe::Color::TRANSPARENT);
             let request = EffectRequest {
                 surface,
                 id,
@@ -392,7 +392,7 @@ impl Painter {
                 }
             }
         }
-        let _chained_canvas = blank.restore_to_count(saved);
+        let _canvas_returned_for_chaining = blank.restore_to_count(saved);
     }
 }
 

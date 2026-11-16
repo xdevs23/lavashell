@@ -236,9 +236,9 @@ impl Painter {
 
 fn composite(canvas: &Canvas, image: &Image, pixels: IRect) {
     let mut copy = Paint::default();
-    let _chained_paint = copy.set_blend_mode(BlendMode::Src);
+    let _paint_returned_for_chaining = copy.set_blend_mode(BlendMode::Src);
     let saved = canvas.save();
-    let _chained_canvas = canvas
+    let _canvas_returned_for_chaining = canvas
         .reset_matrix()
         .draw_image(image, IPoint::new(pixels.left, pixels.top), Some(&copy))
         .restore_to_count(saved);

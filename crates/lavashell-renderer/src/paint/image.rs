@@ -75,7 +75,7 @@ pub(super) fn draw_framed(
     let Some(source_to_box) = Matrix::rect_2_rect(source, skrect(destination)?, None) else {
         return Ok(());
     };
-    let _chained_canvas = canvas.draw_image_rect_with_sampling_options(
+    let _canvas_returned_for_chaining = canvas.draw_image_rect_with_sampling_options(
         pixels,
         Some((&visible, SrcRectConstraint::Strict)),
         source_to_box.map_rect(visible).0,

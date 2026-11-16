@@ -14,7 +14,7 @@ fn encoded(format: EncodedImageFormat) -> Result<Vec<u8>, TestError> {
     );
     let mut surface =
         skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface
+    let _canvas_returned_for_chaining = surface
         .canvas()
         .clear(skia_safe::Color::from_rgb(48, 96, 144));
     let data = surface
@@ -88,7 +88,7 @@ fn jpeg_and_png_pixels_survive_vulkan_upload() -> Result<(), TestError> {
     for format in [EncodedImageFormat::JPEG, EncodedImageFormat::PNG] {
         let commands = scene(encoded(format)?)?;
         let mut surface = gpu.offscreen(PixelSize::new(8, 8))?;
-        let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
         let png = gpu.png(&mut surface)?;
         assert_color(&png, format)?;

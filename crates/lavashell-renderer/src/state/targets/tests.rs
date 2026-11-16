@@ -53,7 +53,8 @@ fn another_lineage_repaints_everything_without_reading_the_target() -> Result<()
     let shown = snapshot.at(Duration::ZERO);
     let other = inputs(SceneTree::default().snapshot().lineage());
     let mut damage = SurfaceDamage::default();
-    let _first = damage.area(shown, viewport(), &inputs(snapshot.lineage()), current())?;
+    let _damage_of_the_first_frame_is_not_checked =
+        damage.area(shown, viewport(), &inputs(snapshot.lineage()), current())?;
     assert_eq!(
         damage.area(shown, viewport(), &other, unreadable)?,
         Some(whole())
@@ -68,7 +69,8 @@ fn lost_pixels_damage_the_whole_viewport() -> Result<(), TestError> {
     let shown = snapshot.at(Duration::ZERO);
     let unchanged = inputs(snapshot.lineage());
     let mut damage = SurfaceDamage::default();
-    let _first = damage.area(shown, viewport(), &unchanged, current())?;
+    let _damage_of_the_first_frame_is_not_checked =
+        damage.area(shown, viewport(), &unchanged, current())?;
     assert_eq!(
         damage.area(shown, viewport(), &unchanged, outdated())?,
         Some(whole())
@@ -93,7 +95,8 @@ fn a_new_quality_or_scene_image_damages_everything() -> Result<(), TestError> {
     ];
     for changed in altered {
         let mut damage = SurfaceDamage::default();
-        let _first = damage.area(shown, viewport(), &unchanged, current())?;
+        let _damage_of_the_first_frame_is_not_checked =
+            damage.area(shown, viewport(), &unchanged, current())?;
         assert_eq!(
             damage.area(shown, viewport(), &changed, current())?,
             Some(whole())
@@ -109,7 +112,8 @@ fn a_frame_that_was_not_shown_damages_the_whole_viewport_next() -> Result<(), Te
     let unchanged = inputs(snapshot.lineage());
     for outcome in [FrameOutcome::Pending, FrameOutcome::Stale] {
         let mut damage = SurfaceDamage::default();
-        let _first = damage.area(shown, viewport(), &unchanged, current())?;
+        let _damage_of_the_first_frame_is_not_checked =
+            damage.area(shown, viewport(), &unchanged, current())?;
         damage.forget_unless_shown(outcome);
         assert_eq!(
             damage.area(shown, viewport(), &unchanged, current())?,

@@ -41,10 +41,10 @@ fn a_path_keeps_its_curves_and_closes_only_when_asked() -> Result<(), TestError>
 fn opaque_mask_after_clip(clip: IRect) -> Result<Vec<bool>, TestError> {
     let mut target = surface(SIDE, SIDE)?;
     let canvas = target.canvas();
-    let _chained_canvas = canvas.scale((CANVAS_SCALE, CANVAS_SCALE));
+    let _canvas_returned_for_chaining = canvas.scale((CANVAS_SCALE, CANVAS_SCALE));
     clip_device(canvas, clip);
     let everything = SkRect::from_irect(IRect::from_wh(SIDE, SIDE));
-    let _chained_canvas = canvas.draw_rect(everything, &Paint::default());
+    let _canvas_returned_for_chaining = canvas.draw_rect(everything, &Paint::default());
     let bytes = pixels(&mut target);
     let (texels, _no_partial_texel) = bytes.as_chunks::<4>();
     Ok(texels.iter().map(|texel| texel[3] > 0).collect())

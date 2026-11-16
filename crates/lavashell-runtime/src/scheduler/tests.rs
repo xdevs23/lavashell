@@ -165,7 +165,8 @@ fn presented_after_16_ms() -> Result<Script, MissingOutput> {
     let mut script = Script::opened(Redraw::OnChange);
     let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, shown(first, ms(1))).is_empty());
-    let _presented_report = script.report_at(16, presented(first, Some(ms(16)), None))?;
+    let _presented_report_is_not_checked =
+        script.report_at(16, presented(first, Some(ms(16)), None))?;
     Ok(script)
 }
 
@@ -173,7 +174,8 @@ fn presented_on_a_10_ms_refresh() -> Result<Script, MissingOutput> {
     let mut script = Script::opened(Redraw::OnChange);
     let first = script.drawn_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, shown(first, ms(1))).is_empty());
-    let _presented_report = script.report_at(16, presented(first, Some(ms(16)), Some(ms(10))))?;
+    let _presented_report_is_not_checked =
+        script.report_at(16, presented(first, Some(ms(16)), Some(ms(10))))?;
     Ok(script)
 }
 
@@ -182,7 +184,7 @@ fn a_view_composes_again_only_once_the_display_is_ready() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
     let first = script.compose_at(0, wants(ViewState::Changed, None))?;
     assert!(script.at(1, wants(ViewState::Changed, None)).is_empty());
-    let _drawn = script.render_at(2, built(first.sequence))?;
+    let _drawn_frame_is_not_checked = script.render_at(2, built(first.sequence))?;
     assert!(script.at(3, wants(ViewState::Changed, None)).is_empty());
     assert!(script.at(4, shown(first, ms(4))).is_empty());
     assert!(script.at(5, wants(ViewState::Changed, None)).is_empty());
@@ -196,7 +198,7 @@ fn a_continuous_redraw_composes_when_the_display_is_ready() -> TestResult {
     let mut script = Script::opened(Redraw::Continuous);
     let first = script.compose_at(0, wants(ViewState::Unchanged, None))?;
     assert!(script.at(1, wants(ViewState::Unchanged, None)).is_empty());
-    let _drawn = script.render_at(2, built(first.sequence))?;
+    let _drawn_frame_is_not_checked = script.render_at(2, built(first.sequence))?;
     assert!(script.at(3, shown(first, ms(1))).is_empty());
     let second = script.compose_at(16, display_ready())?;
     assert_eq!(second.sequence, first.sequence + 1);
@@ -227,7 +229,7 @@ fn a_view_that_needs_nothing_composes_nothing_when_the_display_is_ready() -> Tes
 #[test]
 fn a_continuous_redraw_composes_an_unchanged_view() -> TestResult {
     let mut script = Script::opened(Redraw::Continuous);
-    let _frame = script.compose_at(0, wants(ViewState::Unchanged, None))?;
+    let _composed_frame_is_not_checked = script.compose_at(0, wants(ViewState::Unchanged, None))?;
     Ok(())
 }
 
@@ -262,7 +264,8 @@ fn the_render_cost_is_the_reported_cost() -> TestResult {
     let mut script = Script::opened(Redraw::OnChange);
     let first = script.drawn_at(100, wants(ViewState::Changed, None))?;
     assert!(script.at(150, shown(first, ms(4))).is_empty());
-    let _presented_report = script.report_at(160, presented(first, Some(ms(160)), Some(ms(10))))?;
+    let _presented_report_is_not_checked =
+        script.report_at(160, presented(first, Some(ms(160)), Some(ms(10))))?;
     assert!(script.at(165, display_ready()).is_empty());
     let second = script.compose_at(165, wants(ViewState::Changed, None))?;
     assert_eq!(second.presentation, ms(170));
@@ -342,7 +345,7 @@ fn a_pending_frame_draws_again_with_the_next_report() -> TestResult {
             .at(1, rendered(first, FrameOutcome::Pending, ms(1)))
             .is_empty()
     );
-    let _again = script.compose_at(2, wants(ViewState::Changed, None))?;
+    let _composed_frame_is_not_checked = script.compose_at(2, wants(ViewState::Changed, None))?;
     Ok(())
 }
 

@@ -16,7 +16,7 @@ fn pixels(
 ) -> Result<Vec<u8>, TestError> {
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((300, 160)).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     painter.paint_as_leaf(
         surface.canvas(),
         &[DrawCommand::Text {

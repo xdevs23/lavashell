@@ -209,7 +209,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
             streams: &StreamFrames::default(),
         };
         painter.paint_surface(retained.canvas(), frame)?;
-        let _chained_canvas = reference.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = reference.canvas().clear(skia_safe::Color::TRANSPARENT);
         paint(&mut full, &mut reference, &tree.snapshot());
         let a = pixels(&mut retained);
         let b = pixels(&mut reference);

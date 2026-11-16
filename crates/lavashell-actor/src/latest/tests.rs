@@ -101,7 +101,7 @@ fn a_slot_poisoned_by_a_panicking_thread_still_publishes_reads_and_clears() {
     let poisoner = thread::scope(|scope| {
         scope
             .spawn(|| {
-                let _guard = latest.lock();
+                let _slot_locked_while_the_thread_panics = latest.lock();
                 resume_unwind(Box::new("the slot is held while the thread panics"));
             })
             .join()

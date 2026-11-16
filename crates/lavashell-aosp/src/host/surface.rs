@@ -73,7 +73,7 @@ impl HostSurface {
                 self.require_open(surface)?;
                 self.surface = RuntimeSurface::Absent;
                 for retired in self.destroying.drain(..) {
-                    let _returned_callback = retired.send(());
+                    let _retiring_caller_may_have_left = retired.send(());
                 }
                 Ok(())
             }
@@ -116,7 +116,7 @@ impl HostSurface {
             }
             RuntimeSurface::Closing(_) => self.destroying.push(retired),
             RuntimeSurface::Absent | RuntimeSurface::Requested { .. } => {
-                let _returned_callback = retired.send(());
+                let _retiring_caller_may_have_left = retired.send(());
             }
         }
     }

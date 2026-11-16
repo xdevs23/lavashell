@@ -218,7 +218,7 @@ impl DragSources {
 
     fn end_gesture(&mut self, pointer: PointerDevice, ends: impl FnOnce(&Gesture) -> bool) {
         if self.gestures.get(&pointer).is_some_and(ends) {
-            let _ended = self.gestures.remove(&pointer);
+            let _ended_gesture_is_not_needed = self.gestures.remove(&pointer);
         }
     }
 
@@ -241,7 +241,7 @@ impl DragSources {
         let Some(request) = self.dispatch_drag_source(gesture, shared, records) else {
             return false;
         };
-        let _started = self.gestures.remove(&pointer);
+        let _started_gesture_was_read_above = self.gestures.remove(&pointer);
         self.start(pointer, gesture.surface, request, records);
         true
     }

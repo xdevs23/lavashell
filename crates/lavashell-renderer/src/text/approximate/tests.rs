@@ -57,15 +57,15 @@ fn transparent_blend_raises_only_the_alpha_needed_for_valid_rgb() -> Result<(), 
     let info = ImageInfo::new((4, 4), ColorType::RGBA8888, AlphaType::Premul, None);
     let mut target =
         skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
     let mut rgb = skia_safe::surfaces::raster(&info.with_alpha_type(AlphaType::Opaque), None, None)
         .ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = rgb
+    let _canvas_returned_for_chaining = rgb
         .canvas()
         .clear(skia_safe::Color4f::new(0.125, 0.5, 0.875, 1.0));
     let mut center =
         skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = center
+    let _canvas_returned_for_chaining = center
         .canvas()
         .clear(skia_safe::Color4f::new(1.0, 1.0, 1.0, 0.5));
     let masks = masks::Masks {
@@ -112,7 +112,8 @@ fn actual_small_and_clock_text_preserve_alpha_and_output_geometry() -> Result<()
                     },
                 );
                 let mut surface = target()?;
-                let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+                let _canvas_returned_for_chaining =
+                    surface.canvas().clear(skia_safe::Color::TRANSPARENT);
                 warmed.paint_as_leaf(
                     surface.canvas(),
                     std::slice::from_ref(&command),
@@ -129,7 +130,8 @@ fn actual_small_and_clock_text_preserve_alpha_and_output_geometry() -> Result<()
                     );
                 } else {
                     let mut gray = target()?;
-                    let _chained_canvas = gray.canvas().clear(skia_safe::Color::TRANSPARENT);
+                    let _canvas_returned_for_chaining =
+                        gray.canvas().clear(skia_safe::Color::TRANSPARENT);
                     new_painter(PixelGeometry::None)?.paint_as_leaf(
                         gray.canvas(),
                         std::slice::from_ref(&command),
@@ -158,7 +160,8 @@ fn actual_small_and_clock_text_preserve_alpha_and_output_geometry() -> Result<()
                         .any(|p| p[3] < 255 && p[3] > 0)
                 );
                 let mut fresh = target()?;
-                let _chained_canvas = fresh.canvas().clear(skia_safe::Color::TRANSPARENT);
+                let _canvas_returned_for_chaining =
+                    fresh.canvas().clear(skia_safe::Color::TRANSPARENT);
                 new_painter(geometry)?.paint_as_leaf(
                     fresh.canvas(),
                     std::slice::from_ref(&command),
@@ -186,7 +189,7 @@ fn foreground_alpha_is_applied_before_overlapping_glyph_coverage_is_combined()
         style.letter_spacing = (-0.625).em();
     }
     let mut target = target()?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
     painter.paint_as_leaf(target.canvas(), &[command], Density::ONE)?;
     let output = pixels(&mut target);
     assert!(
@@ -216,11 +219,12 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
     )?])?;
     for background in [0xf50d_111a, 0xff17_3967, 0x0000_0000, 0xf50d_111a] {
         let mut warmed = target()?;
-        let _chained_canvas = warmed.canvas().clear(skia_safe::Color::new(background));
+        let _canvas_returned_for_chaining =
+            warmed.canvas().clear(skia_safe::Color::new(background));
         crate::test_scenes::paint(&mut painter, warmed.canvas(), &retained, Density::ONE);
         let actual = pixels(&mut warmed);
         let mut fresh = target()?;
-        let _chained_canvas = fresh.canvas().clear(skia_safe::Color::new(background));
+        let _canvas_returned_for_chaining = fresh.canvas().clear(skia_safe::Color::new(background));
         new_painter(PixelGeometry::Rgb)?.paint_as_leaf(
             fresh.canvas(),
             std::slice::from_ref(&command),
@@ -228,7 +232,8 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
         )?;
         assert_eq!(actual, pixels(&mut fresh));
         let mut transient = target()?;
-        let _chained_canvas = transient.canvas().clear(skia_safe::Color::new(background));
+        let _canvas_returned_for_chaining =
+            transient.canvas().clear(skia_safe::Color::new(background));
         let configuration = painter.shaper.configuration();
         let DrawCommand::Text { style, .. } = &command else {
             return Err(TestError::Missing("text command"));
@@ -319,8 +324,9 @@ fn unsafe_transforms_layers_and_oversized_masks_use_the_native_gray_path() -> Re
     for commands in cases {
         let mut approximate = target()?;
         let mut gray = target()?;
-        let _chained_canvas = approximate.canvas().clear(skia_safe::Color::TRANSPARENT);
-        let _chained_canvas = gray.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining =
+            approximate.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = gray.canvas().clear(skia_safe::Color::TRANSPARENT);
         warmed.paint_as_leaf(approximate.canvas(), &commands, Density::ONE)?;
         let mut painter = new_painter(PixelGeometry::None)?;
         painter.paint_as_leaf(gray.canvas(), &commands, Density::ONE)?;

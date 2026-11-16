@@ -60,7 +60,7 @@ impl ClipboardState {
 
     pub(crate) fn leave_drag(&mut self, device: &WlDataDevice) -> Option<DragTargetEvent> {
         let id = self.take_entered(device)?;
-        let _left = self.offers.remove(&id);
+        let _left_offer_is_not_needed = self.offers.remove(&id);
         Some(DragTargetEvent::Leave(id))
     }
 

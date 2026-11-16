@@ -158,7 +158,7 @@ fn glass_dispersion_preserves_neutral_color_across_transparent_edges() -> Result
 }
 
 fn assert_neutral_glass(s: &mut Surface) -> Result<(), TestError> {
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(s, |d| {
         d.fill(Rect::new(0.dp(), 0.dp(), 20.dp(), 48.dp()), Color::WHITE);
         d.fill(
@@ -196,7 +196,7 @@ fn glass_refraction_is_continuous_across_corner_diagonals() -> Result<(), TestEr
 fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
     for radius in [0.0, 12.0, 20.0] {
         for end in [Point::new(96.dp(), 0.dp()), Point::new(0.dp(), 48.dp())] {
-            let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+            let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
             let ramp = Gradient::linear(
                 Point::new(0.dp(), 0.dp()),
                 end,
@@ -247,7 +247,7 @@ fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
 #[test]
 fn group_opacity_and_blending_apply_once_to_the_subtree() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(&mut s, |d| {
         d.commands.push(DrawCommand::Opacity(0.5));
         d.fill(Rect::new(10.dp(), 10.dp(), 40.dp(), 25.dp()), Color::WHITE);
@@ -293,7 +293,7 @@ fn default_gradient_interpolation_matches_color_mix() -> Result<(), TestError> {
 #[test]
 fn transparent_gradient_endpoint_does_not_introduce_a_colored_fringe() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     let gradient = Gradient::linear(
         Point::new(0.dp(), 0.dp()),
         Point::new(96.dp(), 0.dp()),
@@ -317,7 +317,7 @@ fn transparent_gradient_endpoint_does_not_introduce_a_colored_fringe() -> Result
 #[test]
 fn shadows_and_stroke_placement_respect_the_surface_bounds() -> Result<(), TestError> {
     let mut s = surface()?;
-    let _chained_canvas = s.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
     draw(&mut s, |d| {
         let rect = Rect::new(20.dp(), 10.dp(), 30.dp(), 28.dp());
         d.shadow(

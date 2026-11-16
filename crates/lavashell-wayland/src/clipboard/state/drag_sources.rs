@@ -47,7 +47,7 @@ impl ClipboardState {
     }
 
     pub(crate) fn end_drag(&mut self, drag: DragSourceId) {
-        let _ended = self.drags.remove(&drag);
+        let _ended_drag_is_not_needed = self.drags.remove(&drag);
     }
 
     pub(crate) fn source_drag(&self, source: &WlDataSource) -> Option<DragSourceId> {

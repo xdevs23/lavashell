@@ -229,8 +229,8 @@ impl Grid {
         let scale = scalar(1.0 / self.texel)?;
         let origin = scalars([-self.region.x.get(), -self.region.y.get()])?;
         let target = surface.canvas();
-        let _chained_canvas = target.scale((scale, scale));
-        let _chained_canvas = target.translate((origin[0], origin[1]));
+        let _canvas_returned_for_chaining = target.scale((scale, scale));
+        let _canvas_returned_for_chaining = target.translate((origin[0], origin[1]));
         Ok(surface)
     }
 
@@ -251,7 +251,7 @@ impl Grid {
     }
 
     fn fill(&self, target: &Canvas, shader: Shader, blender: &Blender) -> Result<(), DrawFailure> {
-        let _chained_canvas = target.draw_rect(
+        let _canvas_returned_for_chaining = target.draw_rect(
             skrect(self.region)?,
             Paint::default()
                 .set_shader(shader)

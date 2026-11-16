@@ -162,7 +162,8 @@ impl CoverageTile {
                 &info,
                 props,
                 |canvas| {
-                    let _chained_canvas = canvas.clear(background.color()).scale((scale, scale));
+                    let _canvas_returned_for_chaining =
+                        canvas.clear(background.color()).scale((scale, scale));
                     source.paragraph.paint(canvas, origin);
                 },
             )
@@ -191,7 +192,7 @@ impl Rasterizers {
                     return Err(Error::DuplicateTextRasterizer(*taken.key()));
                 }
                 Entry::Vacant(slot) => {
-                    let _registered_rasterizer = slot.insert(rasterizer);
+                    let _registered_rasterizer_is_not_needed = slot.insert(rasterizer);
                 }
             }
         }

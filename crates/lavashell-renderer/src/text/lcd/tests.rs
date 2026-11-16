@@ -59,7 +59,7 @@ fn pixels(surface: &mut Surface) -> Vec<u8> {
 fn actual_coverage_reuses_masks_across_foreground_and_backdrop_changes() -> Result<(), TestError> {
     let mut painter = new_painter()?;
     let mut target = surface()?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     painter.paint_as_leaf(target.canvas(), &[text(Color::WHITE)], Density::ONE)?;
     let mask = pixels(&mut target);
     assert!(
@@ -74,7 +74,7 @@ fn actual_coverage_reuses_masks_across_foreground_and_backdrop_changes() -> Resu
             let encoded = foreground.to_encoded(Gamut::Srgb);
             let backdrop = Color::rgb(background).to_encoded(Gamut::Srgb);
             let [_alpha_replaced_by_opaque, red, green, blue] = u32::to_be_bytes(background);
-            let _chained_canvas = target
+            let _canvas_returned_for_chaining = target
                 .canvas()
                 .clear(skia_safe::Color::from_argb(255, red, green, blue));
             painter.paint_as_leaf(target.canvas(), &[text(foreground)], Density::ONE)?;
@@ -118,11 +118,11 @@ fn output_geometry_changes_do_not_reuse_the_other_channels_mask() -> Result<(), 
         let policy = warmed.text_rendering();
         warmed.set_text_rendering(policy, destination);
         let mut target = surface()?;
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
         warmed.paint_as_leaf(target.canvas(), &[text(Color::WHITE)], Density::ONE)?;
         let actual = pixels(&mut target);
         let mut fresh = surface()?;
-        let _chained_canvas = fresh.canvas().clear(skia_safe::Color::BLACK);
+        let _canvas_returned_for_chaining = fresh.canvas().clear(skia_safe::Color::BLACK);
         let mut painter = new_painter()?;
         painter.set_text_rendering(policy, destination);
         painter.paint_as_leaf(fresh.canvas(), &[text(Color::WHITE)], Density::ONE)?;
@@ -179,7 +179,7 @@ fn isolated_opacity_and_fractional_or_rotated_transforms_use_grayscale_tiles()
     ];
     for commands in cases {
         let mut target = surface()?;
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
         painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
         let actual = pixels(&mut target);
         assert!(
@@ -209,10 +209,10 @@ fn destination_reading_retained_text_is_not_baked_into_a_transparent_layer() -> 
         skia_safe::Color::BLACK,
     ] {
         let mut retained = surface()?;
-        let _chained_canvas = retained.canvas().clear(background);
+        let _canvas_returned_for_chaining = retained.canvas().clear(background);
         crate::test_scenes::paint(&mut painter, retained.canvas(), &tree, Density::ONE);
         let mut direct = surface()?;
-        let _chained_canvas = direct.canvas().clear(background);
+        let _canvas_returned_for_chaining = direct.canvas().clear(background);
         new_painter()?.paint_as_leaf(direct.canvas(), &[text(Color::WHITE)], Density::ONE)?;
         assert_eq!(pixels(&mut retained), pixels(&mut direct));
     }
@@ -225,7 +225,7 @@ fn destination_reading_retained_text_is_not_baked_into_a_transparent_layer() -> 
 fn a_text_color_change_reuses_the_paragraph_and_the_mask() -> Result<(), TestError> {
     let mut warmed = new_painter()?;
     let mut target = surface()?;
-    let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
     warmed.paint_as_leaf(target.canvas(), &[text(Color::WHITE)], Density::ONE)?;
     let cached = |painter: &mut crate::Painter| {
         let tiles = painter.resources.tiles.get_mut().images().count();
@@ -233,11 +233,11 @@ fn a_text_color_change_reuses_the_paragraph_and_the_mask() -> Result<(), TestErr
     };
     let before = cached(&mut warmed);
     for color in [Color::rgb(0x00a9_dd75), Color::rgb(0x006a_3fd0)] {
-        let _chained_canvas = target.canvas().clear(skia_safe::Color::BLACK);
+        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
         warmed.paint_as_leaf(target.canvas(), &[text(color)], Density::ONE)?;
         assert_eq!(cached(&mut warmed), before);
         let mut fresh = surface()?;
-        let _chained_canvas = fresh.canvas().clear(skia_safe::Color::BLACK);
+        let _canvas_returned_for_chaining = fresh.canvas().clear(skia_safe::Color::BLACK);
         new_painter()?.paint_as_leaf(fresh.canvas(), &[text(color)], Density::ONE)?;
         assert_eq!(pixels(&mut target), pixels(&mut fresh));
     }

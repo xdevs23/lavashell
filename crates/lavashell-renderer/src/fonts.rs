@@ -126,7 +126,7 @@ impl Fonts {
                     .new_from_data(Data::new_copy(bytes), None)
                     .ok_or_else(|| Error::DecodeFont { font: font.clone() })?;
                 for instance in weight_instances(&font, &face)? {
-                    let _registered_count =
+                    let _count_of_registered_faces_is_not_needed =
                         provider.register_typeface(instance, Some(alias.as_str()));
                 }
             }

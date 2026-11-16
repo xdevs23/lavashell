@@ -142,6 +142,6 @@ impl NativeSources {
     }
 
     pub fn close_link(&self, id: TransferId) {
-        let _unlinked = self.0.borrow_mut().linked.remove(&id);
+        let _whether_linked_is_not_needed = self.0.borrow_mut().linked.remove(&id);
     }
 }

@@ -14,7 +14,7 @@ fn counting_wake() -> (Arc<AtomicU32>, impl Fn() + Send + Sync + 'static) {
     let count = Arc::new(AtomicU32::new(0));
     let counter = count.clone();
     let wake = move || {
-        let _earlier_count = counter.fetch_add(1, Ordering::SeqCst);
+        let _count_before_the_wake_is_not_needed = counter.fetch_add(1, Ordering::SeqCst);
     };
     (count, wake)
 }

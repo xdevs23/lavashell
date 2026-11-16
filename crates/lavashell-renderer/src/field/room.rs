@@ -92,10 +92,11 @@ fn largest_buffer_within(range: usize) -> usize {
 }
 
 fn compiled_floats(wanted: usize) -> Result<usize, Error> {
-    let _smallest_probe = probe(1).map_err(|source| Error::CompileProgram {
-        program: "uniform probe".to_owned(),
-        source,
-    })?;
+    let _floats_of_the_smallest_probe_are_not_needed =
+        probe(1).map_err(|source| Error::CompileProgram {
+            program: "uniform probe".to_owned(),
+            source,
+        })?;
     let compiles = |floats| probe(floats).is_ok();
     if compiles(wanted) {
         return Ok(wanted);

@@ -77,10 +77,10 @@ impl Plugin for LavashellOverlayPlugin {
         let world = app.world_mut();
         world.commands().queue(StartOverlayScene);
         world.flush();
-        let _chained_app = app
+        let _app_returned_for_chaining = app
             .add_plugins(ExtractComponentPlugin::<OverlayCamera>::default())
             .add_systems(PostUpdate, prepare_overlay_targets);
-        let _chained_render_app = app
+        let _render_app_returned_for_chaining = app
             .sub_app_mut(RenderApp)
             .add_systems(ExtractSchedule, extract_overlay)
             .add_render_graph_node::<ViewNodeRunner<OverlayNode>>(Core3d, OverlayLabel)

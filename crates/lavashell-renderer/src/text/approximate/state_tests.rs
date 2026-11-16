@@ -87,7 +87,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
         )?;
         let actual = pixels(&mut persistent);
         let mut fresh = target()?;
-        let _chained_canvas = fresh.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = fresh.canvas().clear(skia_safe::Color::TRANSPARENT);
         paint(
             &mut new_painter(geometry)?,
             fresh.canvas(),

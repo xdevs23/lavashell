@@ -62,8 +62,8 @@ impl TextTransfers {
 
 impl TextTransfers {
     pub(super) fn forget(&mut self, id: TransferId) {
-        let _accepted = self.accepted.remove(&id);
-        let _pending = self.pending.remove(&id);
+        let _whether_accepted_is_not_needed = self.accepted.remove(&id);
+        let _pending_transfer_is_not_needed = self.pending.remove(&id);
         self.sources.close_link(id);
     }
 
@@ -76,7 +76,7 @@ impl TextTransfers {
         match event {
             DragEvent::Enter(info) | DragEvent::Motion(info) => {
                 let choice = text_acceptance(info, view);
-                let _changed = if choice.is_some() {
+                let _whether_changed_is_not_needed = if choice.is_some() {
                     self.accepted.insert(info.id)
                 } else {
                     self.accepted.remove(&info.id)
@@ -93,7 +93,7 @@ impl TextTransfers {
                 None
             }
             DragEvent::Leave { id, .. } => {
-                let _left = self.accepted.remove(id);
+                let _whether_accepted_is_not_needed = self.accepted.remove(id);
                 None
             }
             DragEvent::Cancelled { id, .. } => {

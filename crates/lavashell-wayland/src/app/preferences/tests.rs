@@ -23,7 +23,8 @@ fn the_languages_of_the_user_reach_the_view_before_the_desktop_reports_a_prefere
     let event_loop: EventLoop<'static, Translator> = EventLoop::try_new()?;
     let (sender, view) = mailbox::<PlatformEvent>();
     let link = ViewLink::new(sender.outlet(|event| event));
-    let _registrations = install(&event_loop.handle(), &link).map_err(Error::from)?;
+    let _registrations_stay_installed_for_the_test =
+        install(&event_loop.handle(), &link).map_err(Error::from)?;
     assert!(matches!(
         view.take_arrived()?[..],
         [PlatformEvent::Settings(SettingsEvent::Locales(_))]

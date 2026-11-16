@@ -23,7 +23,7 @@ fn render(
     let info = skia_safe::ImageInfo::new((1300, 170), skia_safe::ColorType::BGRA8888, alpha, None);
     let mut surface = skia_safe::surfaces::raster(&info, None, Some(&target.surface_props()))
         .ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(if target.opaque {
+    let _canvas_returned_for_chaining = surface.canvas().clear(if target.opaque {
         skia_safe::Color::BLACK
     } else {
         skia_safe::Color::TRANSPARENT
@@ -208,7 +208,7 @@ fn cached_rgba_tiles_preserve_an_opaque_colored_background() -> Result<(), TestE
     );
     let mut surface =
         skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::BLUE);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::BLUE);
     let mut drawing = Vec::new();
     let context = DrawContext::new(Viewport::new(Size::new(10.dp(), 10.dp()), Density::ONE));
     Drawing::new(

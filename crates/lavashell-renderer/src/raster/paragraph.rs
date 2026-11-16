@@ -61,7 +61,8 @@ impl RasterCache {
             destination: tile_geometry.destination,
         };
         let image = self.tile_image(canvas, &spec, |tile| {
-            let _chained_canvas = tile.scale((tile_geometry.scale, tile_geometry.scale));
+            let _canvas_returned_for_chaining =
+                tile.scale((tile_geometry.scale, tile_geometry.scale));
             paragraph.paragraph.paint(tile, tile_geometry.paint_origin);
         })?;
         Ok(Some((image, spec.destination)))
@@ -104,7 +105,8 @@ mod tests {
                     );
                     let mut surface = skia_safe::surfaces::raster(&info, None, None)
                         .ok_or(TestError::RasterSurface)?;
-                    let _chained_canvas = surface.canvas().clear(skia_safe::Color::BLACK);
+                    let _canvas_returned_for_chaining =
+                        surface.canvas().clear(skia_safe::Color::BLACK);
                     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
                     Ok(crate::test_surfaces::pixels(&mut surface))
                 };

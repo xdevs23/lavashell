@@ -171,7 +171,7 @@ fn a_failed_action_publishes_the_whole_tree_and_returns_the_failure() -> TestRes
         outcome.failures.as_slice(),
         [AccessibilityFailure::PerformAction(ActionError::Count(_))]
     ));
-    let _tree = published_tree(outcome.publish, surface)?;
+    let _tree_is_only_checked_to_exist = published_tree(outcome.publish, surface)?;
     Ok(())
 }
 
@@ -179,13 +179,13 @@ fn a_failed_action_publishes_the_whole_tree_and_returns_the_failure() -> TestRes
 fn a_frame_that_fails_to_show_is_returned_next_to_the_whole_tree() -> TestResult {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let surface = open_button(&mut records, &start_name(), |_| Ok(()))?;
-    let _first = activate_accessibility(&mut records, surface)?;
+    let _first_activation_is_not_checked = activate_accessibility(&mut records, surface)?;
     let outcome = records.handle_accessibility(AccessibilityEvent::Activate(surface), fail_to_show);
     assert!(matches!(
         outcome.failures.as_slice(),
         [AccessibilityFailure::Show(AccessibilityTestError::NotShown)]
     ));
-    let _tree = published_tree(outcome.publish, surface)?;
+    let _tree_is_only_checked_to_exist = published_tree(outcome.publish, surface)?;
     Ok(())
 }
 
@@ -227,7 +227,7 @@ fn semantics_that_change_without_a_frame_are_published_once() -> TestResult {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let progress = State::new(1.0);
     let surface = open_progress(&mut records, &progress)?;
-    let _first = activate_accessibility(&mut records, surface)?;
+    let _first_activation_is_not_checked = activate_accessibility(&mut records, surface)?;
     frame(&mut records, surface)?;
     progress.set(2.0);
     let tree = only_published_tree(records.update_accessibility()?, surface)?;
@@ -242,7 +242,7 @@ fn a_frame_publishes_the_semantics_it_changed_once() -> TestResult {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let name = start_name();
     let surface = open_button(&mut records, &name, |_| Ok(()))?;
-    let _first = activate_accessibility(&mut records, surface)?;
+    let _first_activation_is_not_checked = activate_accessibility(&mut records, surface)?;
     name.set("Stop".into());
     frame(&mut records, surface)?;
     let tree = published_tree(records.publish_accessibility(surface)?, surface)?;
@@ -256,7 +256,7 @@ fn a_retired_surface_publishes_nothing() -> TestResult {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let name = start_name();
     let surface = open_button(&mut records, &name, |_| Ok(()))?;
-    let _first = activate_accessibility(&mut records, surface)?;
+    let _first_activation_is_not_checked = activate_accessibility(&mut records, surface)?;
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     records.retire(surface);
     name.set("Stop".into());

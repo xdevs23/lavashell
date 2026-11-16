@@ -154,7 +154,8 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
             );
             let mut surface =
                 skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-            let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+            let _canvas_returned_for_chaining =
+                surface.canvas().clear(skia_safe::Color::TRANSPARENT);
             paint(painter, surface.canvas(), &tree, Density::ONE);
             let info = skia_safe::ImageInfo::new(
                 (96, 48),

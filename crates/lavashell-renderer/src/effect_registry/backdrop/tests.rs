@@ -24,15 +24,15 @@ pub(super) fn pixels(surface: &mut Surface) -> Vec<u8> {
 }
 
 pub(super) fn background(canvas: &Canvas) {
-    let _chained_canvas = canvas.clear(skia_safe::Color::BLACK);
+    let _canvas_returned_for_chaining = canvas.clear(skia_safe::Color::BLACK);
     let mut paint = Paint::default();
     for x in 0..24_u16 {
-        let _chained_paint = paint.set_color(if x % 2 == 0 {
+        let _paint_returned_for_chaining = paint.set_color(if x % 2 == 0 {
             skia_safe::Color::WHITE
         } else {
             skia_safe::Color::BLUE
         });
-        let _chained_canvas = canvas.draw_rect(
+        let _canvas_returned_for_chaining = canvas.draw_rect(
             skia_safe::Rect::from_xywh(f32::from(x) * 4.0, 0.0, 4.0, 48.0),
             &paint,
         );
@@ -142,9 +142,9 @@ fn vulkan_cached_glass_preserves_optics_and_fractional_geometry() -> Result<(), 
 
 fn prepare(canvas: &Canvas, clip: bool) {
     background(canvas);
-    let _chained_canvas = canvas.scale((1.25, 1.25));
+    let _canvas_returned_for_chaining = canvas.scale((1.25, 1.25));
     if clip {
-        let _chained_canvas = canvas.clip_rect(
+        let _canvas_returned_for_chaining = canvas.clip_rect(
             skia_safe::Rect::from_xywh(10.0, 10.0, 45.0, 20.0),
             None,
             false,
@@ -219,7 +219,7 @@ fn compare(surface: &mut Surface, reference: &mut Surface, clip: bool) -> Result
         Failures::default(),
     );
     let (mut backend, command, input) = setup()?;
-    let _save_count = surface.canvas().save();
+    let _restored_when_the_surface_drops = surface.canvas().save();
     prepare(surface.canvas(), clip);
     let request = |variant| EffectRequest {
         surface: SurfaceId::numbered(0),
@@ -253,8 +253,8 @@ fn compare(surface: &mut Surface, reference: &mut Surface, clip: bool) -> Result
         filled.worst <= 2,
         "cache fill differs from ordinary glass: {filled}"
     );
-    let _chained_canvas = surface.canvas().restore_to_count(1);
-    let _chained_canvas = surface.canvas().reset_matrix();
+    let _canvas_returned_for_chaining = surface.canvas().restore_to_count(1);
+    let _canvas_returned_for_chaining = surface.canvas().reset_matrix();
     prepare(surface.canvas(), clip);
     backend.render(surface.canvas(), &request(CACHED));
     let replayed = pixels(surface);
@@ -289,7 +289,7 @@ fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(),
         },
     );
     background(surface.canvas());
-    let _save_count = surface.canvas().save_layer_alpha_f(None, 0.5);
+    let _restored_when_the_surface_drops = surface.canvas().save_layer_alpha_f(None, 0.5);
     let before = pixels(&mut surface);
     backend.render(
         surface.canvas(),
@@ -303,7 +303,7 @@ fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(),
             painter: ShapePainter::new(&resources, &failures),
         },
     );
-    let _chained_canvas = surface.canvas().restore();
+    let _canvas_returned_for_chaining = surface.canvas().restore();
     assert_eq!(pixels(&mut surface), before);
     input.scene_generation += 1;
     let before = pixels(&mut surface);
@@ -350,7 +350,7 @@ fn cached_pixels_and_retirement_respect_the_window_surface() -> Result<(), TestE
     );
     let mut second =
         skia_safe::surfaces::raster_n32_premul((96, 48)).ok_or(TestError::RasterSurface)?;
-    let _chained_canvas = second.canvas().clear(skia_safe::Color::RED);
+    let _canvas_returned_for_chaining = second.canvas().clear(skia_safe::Color::RED);
     let before = pixels(&mut second);
     backend.render(
         second.canvas(),

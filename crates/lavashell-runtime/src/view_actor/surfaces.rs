@@ -26,7 +26,7 @@ impl<P: Platform> ViewActor<P> {
             accessible_name: Some(window.title),
             composition_order: 0,
         };
-        let _window = self.open_surface(spec, view, opening)?;
+        let _opened_surface_is_not_needed = self.open_surface(spec, view, opening)?;
         Ok(())
     }
 

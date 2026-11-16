@@ -113,7 +113,7 @@ trait Observer {
 }
 
 pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
-    let _frame = TrackingFrame::push(Tracker::Untracked);
+    let _frame_popped_on_return = TrackingFrame::push(Tracker::Untracked);
     f()
 }
 
@@ -140,7 +140,7 @@ impl Scope {
 
     pub fn track_further<R>(&self, phase: Phase, f: impl FnOnce() -> R) -> R {
         let epoch = self.0.epochs.get()[phase.index()];
-        let _frame = TrackingFrame::push(Tracker::Scope(Tracking {
+        let _frame_popped_on_return = TrackingFrame::push(Tracker::Scope(Tracking {
             scope: Rc::downgrade(&self.0),
             phase,
             epoch,
@@ -365,7 +365,7 @@ impl<U: PartialEq> Observer for Derivation<U> {
 }
 
 fn tracked<U>(tracker: &Weak<dyn Observer>, derive: &dyn Fn() -> U) -> U {
-    let _frame = TrackingFrame::push(Tracker::Derivation(tracker.clone()));
+    let _frame_popped_on_return = TrackingFrame::push(Tracker::Derivation(tracker.clone()));
     derive()
 }
 

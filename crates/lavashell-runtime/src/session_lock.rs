@@ -139,7 +139,7 @@ impl ActiveLock {
     }
 
     pub fn opened(&mut self, output: OutputId, surface: SurfaceId) {
-        let _replaced = self.surfaces.insert(output, surface);
+        let _earlier_surface_of_the_output_is_superseded = self.surfaces.insert(output, surface);
     }
 
     pub fn remove_output(&mut self, output: OutputId) -> Option<SurfaceId> {

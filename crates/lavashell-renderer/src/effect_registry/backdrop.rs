@@ -319,7 +319,7 @@ fn composite(
     cached: &Cached,
 ) -> Result<(), FailedDraw> {
     glass::within(canvas, resources, Clip::Shape(shape), || {
-        let _chained_canvas = canvas.reset_matrix().draw_image_rect(
+        let _canvas_returned_for_chaining = canvas.reset_matrix().draw_image_rect(
             &cached.image,
             None,
             skia_safe::Rect::from(cached.device_bounds),

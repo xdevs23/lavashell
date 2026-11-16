@@ -86,7 +86,7 @@ fn geometry_outputs(
             },
         );
         let mut native = gpu.offscreen(PixelSize::new(900, 340))?;
-        let _chained_canvas = native.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = native.canvas().clear(skia_safe::Color::TRANSPARENT);
         painter.paint_as_leaf(native.canvas(), &commands, Density::ONE)?;
         let png = gpu.png(&mut native)?;
         let bytes = read(&png)?;
@@ -100,7 +100,7 @@ fn geometry_outputs(
         let info = native.image_info();
         let mut cpu =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-        let _chained_canvas = cpu.canvas().clear(skia_safe::Color::TRANSPARENT);
+        let _canvas_returned_for_chaining = cpu.canvas().clear(skia_safe::Color::TRANSPARENT);
         let mut reference = super::tests::new_painter(geometry)?;
         reference.set_blend_space(crate::BlendSpace::Srgb);
         reference.paint_as_leaf(cpu.canvas(), &commands, Density::ONE)?;
@@ -168,7 +168,8 @@ fn assert_unsafe_scopes_fall_back(
                 },
             );
             let mut target = gpu.offscreen(PixelSize::new(300, 48))?;
-            let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
+            let _canvas_returned_for_chaining =
+                target.canvas().clear(skia_safe::Color::TRANSPARENT);
             painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
             read(&gpu.png(&mut target)?)
         };

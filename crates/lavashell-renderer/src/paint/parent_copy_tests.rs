@@ -59,7 +59,7 @@ fn raster() -> Result<Surface, TestError> {
 }
 
 fn painted(surface: &mut Surface, commands: &[DrawCommand]) -> Result<Vec<u8>, TestError> {
-    let _chained_canvas = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+    let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
     let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     painter.paint_as_leaf(surface.canvas(), commands, Density::ONE)?;
     Ok(pixels(surface))

@@ -148,7 +148,8 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             });
         match created {
             Ok(target) => {
-                let _attached = entry.insert(AttachedSurface::new(target, control));
+                let _attached_surface_is_not_needed =
+                    entry.insert(AttachedSurface::new(target, control));
                 Ok(())
             }
             Err(error) => Err(AttachError { control, error }),

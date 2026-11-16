@@ -99,9 +99,11 @@ impl crate::Painter {
             paragraphs.paragraph(Face::Heavier)?.paragraph,
         )?);
         let bounds = outset_by_antialiasing(ink, scale);
-        let _combined = layers.save(&self.text_scopes, canvas, &bounds, &combining);
+        let _first_face_layer_restored_on_return =
+            layers.save(&self.text_scopes, canvas, &bounds, &combining);
         draw_on_canvas(canvas, tiles, rect, paragraphs.paragraph(Face::Lighter)?)?;
-        let _added = layers.save(&self.text_scopes, canvas, &bounds, &adding);
+        let _second_face_layer_restored_on_return =
+            layers.save(&self.text_scopes, canvas, &bounds, &adding);
         draw_on_canvas(canvas, tiles, rect, paragraphs.paragraph(Face::Heavier)?)
     }
 

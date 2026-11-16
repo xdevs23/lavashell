@@ -50,7 +50,7 @@ impl<'a> Silhouette<'a> {
     pub fn fill(&self, canvas: &Canvas, paint: &Paint) -> Result<(), DrawFailure> {
         match &self.form {
             Form::Rounded(shape) => {
-                let _chained_canvas = canvas.draw_rrect(rounded(shape)?, paint);
+                let _canvas_returned_for_chaining = canvas.draw_rrect(rounded(shape)?, paint);
             }
             Form::Path(outline) => self.tiles().draw(canvas, &outline.path, paint)?,
             Form::Field(coverage) => coverage.fill(canvas, Band::FILL, paint)?,
@@ -61,7 +61,7 @@ impl<'a> Silhouette<'a> {
     pub fn clip(&self, canvas: &Canvas, op: ClipOp) -> Result<(), DrawFailure> {
         match &self.form {
             Form::Rounded(shape) => {
-                let _chained_canvas = canvas.clip_rrect(rounded(shape)?, op, true);
+                let _canvas_returned_for_chaining = canvas.clip_rrect(rounded(shape)?, op, true);
             }
             Form::Path(outline) => self.tiles().clip(canvas, &outline.path, op)?,
             Form::Field(coverage) => coverage.clip(canvas, Band::FILL, op)?,
@@ -73,7 +73,7 @@ impl<'a> Silhouette<'a> {
         let mut blurred = paint.clone();
         let sigma = scalar(band.sigma)?;
         if sigma > 0.0 {
-            let _chained_paint = blurred.set_image_filter(image_filters::blur(
+            let _paint_returned_for_chaining = blurred.set_image_filter(image_filters::blur(
                 (sigma, sigma),
                 skia_safe::TileMode::Decal,
                 None,
@@ -84,7 +84,7 @@ impl<'a> Silhouette<'a> {
             Form::Rounded(shape) => {
                 let shape = shape.translated(band.offset);
                 let outset = |distance: Dp| rounded(&shape.outset(distance));
-                let _chained_canvas = match band.range {
+                let _canvas_returned_for_chaining = match band.range {
                     Range::Below(outer) => canvas.draw_rrect(outset(outer)?, &blurred),
                     Range::Above(inner) => canvas.draw_drrect(
                         RRect::new_rect(band.area(canvas, shape.rect)?),
@@ -92,7 +92,7 @@ impl<'a> Silhouette<'a> {
                         &blurred,
                     ),
                     Range::Between { inner, outer } => {
-                        let _chained_paint = blurred
+                        let _paint_returned_for_chaining = blurred
                             .set_style(PaintStyle::Stroke)
                             .set_stroke_width(sklength(outer - inner)?);
                         canvas.draw_rrect(outset((inner + outer) / 2.0)?, &blurred)
@@ -130,7 +130,8 @@ pub(crate) fn clip_inside(
     if let Some(silhouette) = Silhouette::new(canvas, resources, shape, 0.0)? {
         (silhouette.clip(canvas, ClipOp::Intersect)).map_err(FailedDraw::from)
     } else {
-        let _chained_canvas = canvas.clip_rect(skia_safe::Rect::new_empty(), None, false);
+        let _canvas_returned_for_chaining =
+            canvas.clip_rect(skia_safe::Rect::new_empty(), None, false);
         Ok(())
     }
 }
@@ -186,7 +187,7 @@ fn offset(path: &Path, amount: f32) -> Option<Path> {
         return Some(path.clone());
     }
     let mut stroke = Paint::default();
-    let _chained_paint = stroke
+    let _paint_returned_for_chaining = stroke
         .set_style(PaintStyle::Stroke)
         .set_stroke_width(2.0 * amount.abs())
         .set_stroke_join(PaintJoin::Round);

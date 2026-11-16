@@ -65,7 +65,7 @@ fn a_send_in_a_format_that_the_drag_did_not_offer_fails_the_drag() -> TestResult
     let mut run = Run::new()?;
     let result = Rc::new(RefCell::new(None));
     let drag = run.start(png_drag(&result)?)?;
-    let _reader = run.send(drag, "text/plain")?;
+    let _reader_keeps_the_pipe_open = run.send(drag, "text/plain")?;
     run.source(DragSourceEvent::Finished(drag));
     assert!(matches!(
         *result.borrow(),
@@ -116,7 +116,7 @@ fn a_cancelled_drag_ends_its_running_sends() -> TestResult {
     let mut run = Run::new()?;
     let result = Rc::new(RefCell::new(None));
     let drag = run.start(png_drag(&result)?)?;
-    let _reader = run.send(drag, PNG)?;
+    let _reader_keeps_the_pipe_open = run.send(drag, PNG)?;
     assert!(matches!(
         run.watches.take_requests()[..],
         [WatchRequest::Watch(..)]
@@ -142,7 +142,7 @@ fn a_closed_surface_cancels_the_drags_and_gestures_on_it() -> TestResult {
     let result = Rc::new(RefCell::new(None));
     let drag = run.start(png_drag(&result)?)?;
     assert!(!run.pointer(&press(Button::Primary)));
-    let _destroy = run.records.handle(run.surface, SurfaceEvent::Closed);
+    let _destroy_request_is_not_checked = run.records.handle(run.surface, SurfaceEvent::Closed);
     run.drags.forget_surface(run.surface, &mut run.records);
     assert!(matches!(
         run.drags.take_source_requests().as_slice(),
@@ -162,7 +162,7 @@ fn a_closed_surface_reports_the_cancel_of_a_drop_whose_data_is_arriving() -> Tes
     let drops = run.drop_png();
     let (reader, _writer) = io::pipe()?;
     run.target(DragTargetEvent::ReceiveStarted(OFFER, Ok(reader.into())));
-    let _destroy = run.records.handle(run.surface, SurfaceEvent::Closed);
+    let _destroy_request_is_not_checked = run.records.handle(run.surface, SurfaceEvent::Closed);
     run.drags.forget_surface(run.surface, &mut run.records);
     assert!(matches!(
         drops.borrow().as_slice(),
