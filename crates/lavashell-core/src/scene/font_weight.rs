@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::units::NumberError;
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FontWeight(f64);
 
 impl FontWeight {
@@ -44,10 +45,20 @@ impl FontWeight {
     }
 
     pub const fn saturating(weight: f64) -> Result<Self, NumberError> {
-        match Self::try_new(weight) {
-            Err(NumberError::OutOfRange) => Ok(Self(weight.clamp(Self::LIGHTEST, Self::HEAVIEST))),
-            checked => checked,
+        if weight.is_finite() {
+            Ok(Self::clamp_to_range(weight))
+        } else {
+            Err(NumberError::NotFinite)
         }
+    }
+
+    #[must_use]
+    pub fn saturating_whole(weight: i32) -> Self {
+        Self::clamp_to_range(f64::from(weight))
+    }
+
+    const fn clamp_to_range(finite_weight: f64) -> Self {
+        Self(finite_weight.clamp(Self::LIGHTEST, Self::HEAVIEST))
     }
 
     #[must_use]
@@ -57,6 +68,18 @@ impl FontWeight {
 }
 
 impl Eq for FontWeight {}
+
+impl Ord for FontWeight {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+
+impl PartialOrd for FontWeight {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 impl Hash for FontWeight {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -88,6 +111,23 @@ mod tests {
         assert_eq!(
             FontWeight::saturating(f64::INFINITY),
             Err(NumberError::NotFinite)
+        );
+    }
+
+    #[test]
+    fn a_whole_weight_stops_at_the_nearest_end() {
+        assert_eq!(FontWeight::saturating_whole(0), FontWeight(1.0));
+        assert_eq!(FontWeight::saturating_whole(550), FontWeight(550.0));
+        assert_eq!(FontWeight::saturating_whole(i32::MAX), FontWeight(1000.0));
+    }
+
+    #[test]
+    fn weights_order_from_lightest_to_heaviest() {
+        let mut weights = [FontWeight::BOLD, FontWeight::THIN, FontWeight::NORMAL];
+        weights.sort_unstable();
+        assert_eq!(
+            weights,
+            [FontWeight::THIN, FontWeight::NORMAL, FontWeight::BOLD]
         );
     }
 }

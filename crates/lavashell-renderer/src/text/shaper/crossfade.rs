@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Shaper;
 use lavashell_core::prelude::*;
-use skia_safe::font_style::Weight;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum WeightRendering {
@@ -28,12 +27,10 @@ impl FaceShare {
 }
 
 impl WeightRendering {
-    fn between(face_weights: &[Weight], weight: FontWeight) -> Self {
-        let face_weight = |face: &Weight| FontWeight::saturating(f64::from(**face)).ok();
-        let faces = || face_weights.iter().filter_map(face_weight);
-        let by_weight = |a: &FontWeight, b: &FontWeight| a.get().total_cmp(&b.get());
-        let lighter = faces().filter(|face| *face <= weight).max_by(by_weight);
-        let heavier = faces().filter(|face| *face >= weight).min_by(by_weight);
+    fn between(face_weights: &[FontWeight], weight: FontWeight) -> Self {
+        let faces = || face_weights.iter().copied();
+        let lighter = faces().filter(|face| *face <= weight).max();
+        let heavier = faces().filter(|face| *face >= weight).min();
         match (lighter, heavier) {
             (Some(lighter), Some(heavier)) if lighter != heavier => {
                 let heavier_share =
@@ -74,7 +71,7 @@ mod tests {
     #[test]
     fn a_weight_between_two_faces_shows_both_in_shares_of_its_distance_to_each()
     -> Result<(), TestError> {
-        let faces = [Weight::NORMAL, Weight::BOLD];
+        let faces = [FontWeight::NORMAL, FontWeight::BOLD];
         assert_eq!(
             WeightRendering::between(&faces, weight(475.0)?),
             WeightRendering::TwoFaces([
@@ -93,7 +90,7 @@ mod tests {
 
     #[test]
     fn a_weight_of_a_face_or_beyond_every_face_shows_one_face() -> Result<(), TestError> {
-        let faces = [Weight::NORMAL, Weight::BOLD];
+        let faces = [FontWeight::NORMAL, FontWeight::BOLD];
         let one_face = WeightRendering::OneFace;
         assert_eq!(WeightRendering::between(&faces, FontWeight::BOLD), one_face);
         assert_eq!(WeightRendering::between(&faces, weight(800.0)?), one_face);

@@ -152,7 +152,7 @@ pub(crate) struct LoadedFonts {
     aliases: BTreeMap<String, Vec<String>>,
     embedded: FontMgr,
     system: FontMgr,
-    static_face_weights_by_family: HashMap<String, Vec<Weight>>,
+    static_face_weights_by_family: HashMap<String, Vec<FontWeight>>,
 }
 
 impl LoadedFonts {
@@ -160,7 +160,7 @@ impl LoadedFonts {
         alias_families(&self.aliases, alias)
     }
 
-    pub fn static_face_weights(&mut self, alias: &str) -> &[Weight] {
+    pub fn static_face_weights(&mut self, alias: &str) -> &[FontWeight] {
         (self.static_face_weights_by_family.entry(alias.to_owned())).or_insert_with(|| {
             let families = alias_families(&self.aliases, alias);
             find_static_face_weights([&self.embedded, &self.system], &families)
@@ -200,7 +200,7 @@ fn alias_families<'a>(aliases: &'a BTreeMap<String, Vec<String>>, alias: &'a str
     )
 }
 
-fn find_static_face_weights(managers: [&FontMgr; 2], families: &[&str]) -> Vec<Weight> {
+fn find_static_face_weights(managers: [&FontMgr; 2], families: &[&str]) -> Vec<FontWeight> {
     let mut faces = (families.iter().chain(&[DEFAULT_FAMILY]))
         .flat_map(|family| managers.map(|manager| manager.match_family(family)))
         .find_map(|mut faces| (faces.count() > 0).then_some(faces))
@@ -208,7 +208,7 @@ fn find_static_face_weights(managers: [&FontMgr; 2], families: &[&str]) -> Vec<W
     (0..faces.count())
         .filter_map(|index| faces.new_typeface(index))
         .filter(|face| face.font_style().slant() == Slant::Upright && !has_weight_axis(face))
-        .map(|face| face.font_style().weight())
+        .map(|face| FontWeight::saturating_whole(*face.font_style().weight()))
         .collect()
 }
 
@@ -366,6 +366,7 @@ mod variable_font_tests {
 mod static_face_tests {
     use crate::test_error::TestError;
     use crate::test_font::PROBE_FAMILY;
+    use lavashell_core::scene::FontWeight;
     use skia_safe::FontStyle;
     use skia_safe::font_style::{Slant, Weight, Width};
 
@@ -374,7 +375,7 @@ mod static_face_tests {
         let mut fonts = crate::test_font::static_test_faces()?.load()?;
         let mut weights = fonts.static_face_weights(PROBE_FAMILY).to_vec();
         weights.sort_unstable();
-        assert_eq!(weights, [Weight::NORMAL, Weight::BOLD]);
+        assert_eq!(weights, [FontWeight::NORMAL, FontWeight::BOLD]);
         let mut collection = fonts.collection();
         let mut identities = std::collections::BTreeSet::new();
         for weight in [Weight::NORMAL, Weight::BOLD] {
