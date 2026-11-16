@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::app::wire_messages::{FakeCompositor, WireMessage};
+use crate::native::wire_messages::{FakeCompositor, WireMessage};
 use crate::sctk;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;

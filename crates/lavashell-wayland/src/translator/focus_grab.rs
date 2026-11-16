@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
 use crate::FocusGrabError;
-use crate::app::Surface;
 use crate::focus_grab::protocol::{
     hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1 as Manager,
     hyprland_focus_grab_v1::{self, HyprlandFocusGrabV1 as Grab},
 };
+use crate::native::Surface;
 use crate::sctk;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::FocusGrabRequest;

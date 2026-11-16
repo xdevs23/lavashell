@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::app::wire_messages::WireMessage;
 use crate::focus_grab::protocol::{hyprland_focus_grab_manager_v1, hyprland_focus_grab_v1};
+use crate::native::wire_messages::WireMessage;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
 use lavashell_platform::{FocusGrabEvent, FocusGrabRequest};

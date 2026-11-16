@@ -46,7 +46,7 @@ pub(crate) enum TestError {
     #[error(transparent)]
     AccessibilityTest(#[from] crate::accessibility::test_error::AccessibilityTestError),
     #[error(transparent)]
-    LayerTest(#[from] crate::app::layer::test_error::LayerTestError),
+    LayerTest(#[from] crate::native::layer::test_error::LayerTestError),
     #[error(transparent)]
     PipesTest(#[from] crate::clipboard::pipes::test_error::PipesTestError),
     #[error(transparent)]
@@ -54,7 +54,7 @@ pub(crate) enum TestError {
     #[error(transparent)]
     TestBus(#[from] crate::test_bus::test_error::TestBusError),
     #[error(transparent)]
-    WireTest(#[from] crate::app::wire_messages::test_error::WireTestError),
+    WireTest(#[from] crate::native::wire_messages::test_error::WireTestError),
 }
 
 impl<T> From<InsertError<T>> for TestError {

@@ -4,11 +4,11 @@ use super::links::ViewLink;
 use super::requests::{Ending, Requests};
 use crate::Error;
 use crate::EventLoopError;
-use crate::app::{
+use crate::clipboard::ClipboardState;
+use crate::native::{
     Control, Grabs, NativeSurfaces, PresentationFeedbackSource, SeatSet, SurfaceProtocols,
     WatchSources, install_preferences,
 };
-use crate::clipboard::ClipboardState;
 use crate::sctk;
 use lavashell_platform::Reports;
 use lavashell_renderer::NoStreams;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
-use crate::app::{SeatDevice, cursor_icon, is_primary_press, key_event, key_repeat};
-use crate::app::{keyboard_device, pointer_device, pointer_event};
+use crate::native::{SeatDevice, cursor_icon, is_primary_press, key_event, key_repeat};
+use crate::native::{keyboard_device, pointer_device, pointer_event};
 use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
 use lavashell_core::ui::InputModifiers;

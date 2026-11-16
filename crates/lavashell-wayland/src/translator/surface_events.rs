@@ -2,7 +2,7 @@
 mod window_state;
 
 use super::Translator;
-use crate::app::{configure_event, translate_configure};
+use crate::native::{configure_event, translate_configure};
 use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
 use lavashell_core::surface::SurfaceId;

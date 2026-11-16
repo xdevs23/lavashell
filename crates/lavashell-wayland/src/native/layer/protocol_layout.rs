@@ -54,7 +54,7 @@ pub(super) fn protocol_zone(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(in crate::app) struct ProtocolLayout {
+pub(in crate::native) struct ProtocolLayout {
     pub(super) anchor: Anchor,
     pub(super) width: u32,
     pub(super) height: u32,
@@ -71,7 +71,7 @@ pub(super) struct ProtocolMargins {
 }
 
 impl ProtocolLayout {
-    pub(in crate::app) fn new(geometry: PanelGeometry) -> Result<Self, LayerLayoutError> {
+    pub(in crate::native) fn new(geometry: PanelGeometry) -> Result<Self, LayerLayoutError> {
         let margin =
             |length: FiniteDp| round_to_i32(length.get()).ok_or(LayerLayoutError::Margin(length));
         let margins = geometry.margins();

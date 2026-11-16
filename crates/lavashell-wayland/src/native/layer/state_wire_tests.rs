@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::test_error::LayerTestError;
 use super::*;
-use crate::app::wire_messages::WireMessage;
+use crate::native::wire_messages::WireMessage;
 use crate::test_error::TestError;
 use lavashell_core::prelude::{Density, DpExt, FrameTime, Rect, Size, Viewport};
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};

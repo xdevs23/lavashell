@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::app::device::protocol_id;
+use crate::native::device::protocol_id;
 use crate::sctk;
 use lavashell_core::transfer::{DragAction, DragActions};
 use lavashell_platform::DragDevice;

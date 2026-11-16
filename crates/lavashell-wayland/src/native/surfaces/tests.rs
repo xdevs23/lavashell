@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::app::layer::layer_client::LayerClient;
-use crate::app::wire_messages::WireMessage;
+use crate::native::layer::layer_client::LayerClient;
+use crate::native::wire_messages::WireMessage;
 use crate::sctk;
 use crate::test_error::TestError;
 use sctk::reexports::protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1;

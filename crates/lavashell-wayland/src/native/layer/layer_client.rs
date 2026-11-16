@@ -2,13 +2,13 @@
 use super::test_error::LayerTestError;
 use super::*;
 use crate::Error;
-use crate::app::SurfaceExtensions;
-use crate::app::control::{Control, RoleControl, SurfaceObjects};
-use crate::app::focus_grab::Grabs;
-use crate::app::owned_wl_surface::OwnedWlSurface;
-use crate::app::wire_messages::{FakeCompositor, WireMessage};
 use crate::focus_grab::protocol::hyprland_focus_grab_manager_v1::HyprlandFocusGrabManagerV1;
 use crate::focus_grab::protocol::hyprland_focus_grab_v1::HyprlandFocusGrabV1;
+use crate::native::SurfaceExtensions;
+use crate::native::control::{Control, RoleControl, SurfaceObjects};
+use crate::native::focus_grab::Grabs;
+use crate::native::owned_wl_surface::OwnedWlSurface;
+use crate::native::wire_messages::{FakeCompositor, WireMessage};
 use crate::sctk;
 use crate::test_error::TestError;
 use lavashell_core::geometry::Size;
@@ -31,7 +31,7 @@ pub(super) fn top_bar(content: Size) -> Result<PanelGeometry, TestError> {
     Ok(PanelGeometry::of(layout, ContentSize::try_from(content)?))
 }
 
-pub(in crate::app) struct LayerClient {
+pub(in crate::native) struct LayerClient {
     pub(super) compositor: FakeCompositor,
     qh: QueueHandle<Translator>,
     pub(super) surface: wl_surface::WlSurface,
@@ -44,7 +44,7 @@ pub(in crate::app) struct LayerClient {
 }
 
 impl LayerClient {
-    pub(in crate::app) fn new(version: u32) -> Result<Self, TestError> {
+    pub(in crate::native) fn new(version: u32) -> Result<Self, TestError> {
         let compositor = FakeCompositor::new()?;
         let connection = &compositor.connection;
         let qh = connection.new_event_queue::<Translator>().handle();
@@ -102,7 +102,7 @@ impl LayerClient {
         Ok(proxy)
     }
 
-    pub(in crate::app) fn native_surface(&mut self) -> Result<(Surface, u32), TestError> {
+    pub(in crate::native) fn native_surface(&mut self) -> Result<(Surface, u32), TestError> {
         let layer = self.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
         let role = layer.id().protocol_id();
         let backend = self.compositor.connection.backend();
@@ -125,7 +125,7 @@ impl LayerClient {
         Ok(())
     }
 
-    pub(in crate::app) fn flush(&mut self) -> Result<Vec<WireMessage>, TestError> {
+    pub(in crate::native) fn flush(&mut self) -> Result<Vec<WireMessage>, TestError> {
         self.compositor.flush()
     }
 

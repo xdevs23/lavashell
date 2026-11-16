@@ -23,10 +23,10 @@ pub(crate) use state::Translator;
 
 use crate::Error;
 use crate::RequestsError;
-use crate::app::{
+use crate::bind::bind_optional;
+use crate::native::{
     Control, Grabs, PresentationFeedbackSource, SurfaceProtocols, advertised_outputs,
 };
-use crate::bind::bind_optional;
 use crate::sctk;
 use crate::wayland_presentation::WaylandPresentation;
 use lavashell_actor::SystemClock;

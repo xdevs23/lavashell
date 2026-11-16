@@ -23,7 +23,7 @@ mod protocol_layout;
 #[cfg(test)]
 mod focus_wire_tests;
 #[cfg(test)]
-pub(in crate::app) mod layer_client;
+pub(in crate::native) mod layer_client;
 #[cfg(test)]
 mod state_wire_tests;
 #[cfg(test)]

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
-use crate::app::{monitor_info, output_id, refresh_interval};
+use crate::native::{monitor_info, output_id, refresh_interval};
 use crate::sctk;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{OutputEvent, OutputId};

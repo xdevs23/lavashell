@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
-use crate::app::{PresentationFeedbackTarget, presentation_flags};
+use crate::native::{PresentationFeedbackTarget, presentation_flags};
 use crate::sctk;
 use lavashell_platform::TimingEvent;
 use sctk::reexports::client::{Connection, Dispatch, QueueHandle};

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
 use crate::accessibility::Bridge;
-use crate::app::{
+use crate::native::{
     Control, LayerTarget, NativeRole, OwnedWlSurface, RoleControl, Surface, SurfaceExtensions,
     SurfaceObjects, initial_role_state, protocol_serial,
 };

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
-use crate::app::{UnlockSync, configure_event};
+use crate::native::{UnlockSync, configure_event};
 use crate::sctk;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::SessionLockEvent;
