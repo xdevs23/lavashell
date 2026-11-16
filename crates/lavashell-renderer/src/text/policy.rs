@@ -98,31 +98,48 @@ impl Default for TextRendering {
 impl TextRendering {
     #[must_use]
     pub fn for_destination(mut self, destination: TextDestination) -> Self {
-        let subpixel = matches!(
-            self.antialiasing,
-            TextAntialiasing::Subpixel | TextAntialiasing::SubpixelApproximate
-        );
-        if subpixel
-            && (destination.geometry == PixelGeometry::None
-                || (!destination.opaque && self.antialiasing == TextAntialiasing::Subpixel))
-        {
+        if self.requests_subpixel() && !self.shows_subpixel_on(destination) {
             self.antialiasing = TextAntialiasing::Grayscale;
         }
         self
     }
 
-    pub(crate) fn apply(self, text: &mut TextStyle, paragraph: &mut ParagraphStyle) {
-        let edging = match self.antialiasing {
+    pub(crate) fn subpixel_applies(self, destination: TextDestination, opaque_scope: bool) -> bool {
+        opaque_scope && self.requests_subpixel() && self.shows_subpixel_on(destination)
+    }
+
+    pub(crate) fn skia_draws_lcd(self, destination: TextDestination, opaque_scope: bool) -> bool {
+        self.edging() == Edging::SubpixelAntiAlias
+            && self.subpixel_applies(destination, opaque_scope)
+    }
+
+    fn requests_subpixel(self) -> bool {
+        matches!(
+            self.antialiasing,
+            TextAntialiasing::Subpixel | TextAntialiasing::SubpixelApproximate
+        )
+    }
+
+    fn shows_subpixel_on(self, destination: TextDestination) -> bool {
+        destination.geometry != PixelGeometry::None
+            && (destination.opaque || self.antialiasing == TextAntialiasing::SubpixelApproximate)
+    }
+
+    fn edging(self) -> Edging {
+        match self.antialiasing {
             TextAntialiasing::Aliased => Edging::Alias,
             TextAntialiasing::Grayscale | TextAntialiasing::SubpixelApproximate => {
                 Edging::AntiAlias
             }
             TextAntialiasing::Subpixel => Edging::SubpixelAntiAlias,
-        };
+        }
+    }
+
+    pub(crate) fn apply(self, text: &mut TextStyle, paragraph: &mut ParagraphStyle) {
         let _chained_style = text
             .set_font_hinting(self.hinting.into())
             .set_subpixel(self.fractional_positioning)
-            .set_font_edging(edging);
+            .set_font_edging(self.edging());
         if self.hinting == Hinting::None {
             let _chained_paragraph_style = paragraph.turn_hinting_off();
         }

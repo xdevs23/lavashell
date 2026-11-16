@@ -10,7 +10,7 @@ pub(super) fn save(canvas: &Canvas, restore: &Paint, bounds: Option<&skia_safe::
     let layer = SaveLayerRec::default()
         .paint(restore)
         .flags(SaveLayerFlags::INIT_WITH_PREVIOUS);
-    let _save_count = canvas.save_layer(&match bounds {
+    let _restored_by_the_caller = canvas.save_layer(&match bounds {
         Some(bounds) => layer.bounds(bounds),
         None => layer,
     });
@@ -35,10 +35,10 @@ pub(super) fn save_effect_layer(
     };
     let bounds = bounds.map(skrect).transpose()?;
     let mut restore = Paint::default();
-    let _chained_paint = restore.set_blend_mode(skia_safe::BlendMode::Src);
+    let _paint_returned_for_chaining = restore.set_blend_mode(skia_safe::BlendMode::Src);
     save(canvas, &restore, area.as_ref());
     if let Some(bounds) = bounds {
-        let _chained_canvas = canvas.clip_rect(bounds, None, false);
+        let _canvas_returned_for_chaining = canvas.clip_rect(bounds, None, false);
     }
     Ok(())
 }

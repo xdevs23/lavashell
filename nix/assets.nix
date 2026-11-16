@@ -16,6 +16,16 @@ let
       mkdir -p "$out/${name}"
       tar -xzf ${archive} --strip-components=1 -C "$out/${name}"
     '';
+  fetchStaticNotoSansFace =
+    face: hash:
+    pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/notofonts/notofonts.github.io/noto-monthly-release-2026.09.01/fonts/NotoSans/unhinted/ttf/NotoSans-${face}.ttf";
+      inherit hash;
+    };
+  staticNotoSansFaces = lib.mapAttrsToList fetchStaticNotoSansFace {
+    Regular = "sha256-85YanN4BbUGkh5rs2hR006Nta/VPoORkPeApzCJIsOg=";
+    Bold = "sha256-h8sthEcqfWbaZZ7ke2zblVIybowSgkUjHxkbasclKdk=";
+  };
 in
 rec {
   nodeModules = pkgs.runCommand "lavashell-example-assets" { } (
@@ -32,6 +42,7 @@ rec {
   };
   testEnvironment = {
     LAVASHELL_TEST_FONT = "${pkgs.noto-fonts}/share/fonts/noto/NotoSans.ttf";
+    LAVASHELL_TEST_STATIC_FONTS = lib.concatStringsSep ":" staticNotoSansFaces;
   };
   waylandEnvironment = {
     LAVASHELL_HYPRLAND_PROTOCOLS = "${pkgs.hyprland-protocols}";

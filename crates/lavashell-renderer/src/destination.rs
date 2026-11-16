@@ -6,18 +6,33 @@ pub(crate) enum Destination {
 }
 
 impl Destination {
-    pub fn for_opacity(opacity: f64) -> Self {
-        if opacity >= 1.0 {
-            Self::Surface
-        } else {
-            Self::Layer
-        }
-    }
-
     pub fn inside(self, group: Self) -> Self {
         match group {
             Self::Surface => self,
             Self::Layer => Self::Layer,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum GroupOpacity {
+    Opaque,
+    Translucent { alpha: f64 },
+}
+
+impl GroupOpacity {
+    pub fn new(alpha: f64) -> Self {
+        if alpha >= 1.0 {
+            Self::Opaque
+        } else {
+            Self::Translucent { alpha }
+        }
+    }
+
+    pub fn destination(self) -> Destination {
+        match self {
+            Self::Opaque => Destination::Surface,
+            Self::Translucent { .. } => Destination::Layer,
         }
     }
 }

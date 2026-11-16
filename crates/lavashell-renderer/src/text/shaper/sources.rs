@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::fonts::LoadedFonts;
 use skia_safe::textlayout::FontCollection;
 
 pub(crate) struct Sources {
@@ -7,11 +8,11 @@ pub(crate) struct Sources {
 }
 
 impl Sources {
-    pub fn new(registry: &crate::Fonts) -> Result<Self, crate::Error> {
-        Ok(Self {
-            fonts: registry.collection()?,
+    pub fn new(loaded_fonts: &LoadedFonts) -> Self {
+        Self {
+            fonts: loaded_fonts.collection(),
             rendering: None,
-        })
+        }
     }
 
     pub fn collection(&mut self, rendering: crate::text::TextRendering) -> FontCollection {

@@ -36,7 +36,8 @@ fn foreground_is_managed_but_rgb_and_center_coverage_remain_data() -> Result<(),
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
         let _chained_canvas = target.canvas().clear(skia_safe::Color::TRANSPARENT);
         let skia_color = crate::paint::color4f(color)?;
-        blend::MaskBlend::new()?.draw(target.canvas(), &masks, skia_color)?;
+        let blend = blend::MaskBlend::new()?;
+        blend.draw(target.canvas(), &blend.coverage(&masks)?, skia_color)?;
         let mut bytes = [0; 16];
         assert!(target.read_pixels(&info.with_dimensions((1, 1)), &mut bytes, 16, (1, 1)));
         let actual: [f32; 4] = floats(&bytes);

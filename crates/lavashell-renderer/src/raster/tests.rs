@@ -21,7 +21,12 @@ impl RasterCache {
 
 pub(super) fn spec(key: u64, bytes: usize, size: (i32, i32), destination: Rect) -> TileSpec {
     TileSpec {
-        content: TileContent::paragraph(key, ParagraphRaster::Native, 1.0, Vector::default()),
+        retained_as: Some(TileContent::paragraph(
+            key,
+            ParagraphRaster::Native,
+            1.0,
+            Vector::default(),
+        )),
         bytes,
         size: size.into(),
         destination,
@@ -408,5 +413,40 @@ fn a_path_cut_into_tiles_is_as_close_to_true_coverage_as_the_whole_path() -> Res
         tiled.0 <= whole.0 && tiled.1 <= whole.1,
         "tiles {tiled:?} against the whole path {whole:?} (largest, mean)"
     );
+    Ok(())
+}
+
+#[test]
+fn a_tile_without_retained_content_is_neither_reused_nor_retained() -> Result<(), TestError> {
+    let mut cache = RasterCache::new(RasterMode::Tiles, Failures::default());
+    let mut surface =
+        skia_safe::surfaces::raster_n32_premul((8, 8)).ok_or(TestError::RasterSurface)?;
+    let rect = Rect::from_xywh(0.0, 0.0, 8.0, 8.0);
+    cache.draw_tile(surface.canvas(), &spec(7, 256, (8, 8), rect), |tile| {
+        let _chained_canvas = tile.clear(Color::WHITE);
+    })?;
+    let ids: Vec<_> = cache.images().map(Image::unique_id).collect();
+    let transient = TileSpec {
+        retained_as: None,
+        ..spec(7, 256, (8, 8), rect)
+    };
+    for (color, pixel) in [
+        (Color::RED, [255, 0, 0, 255]),
+        (Color::BLUE, [0, 0, 255, 255]),
+    ] {
+        cache.draw_tile(surface.canvas(), &transient, |tile| {
+            let _chained_canvas = tile.clear(color);
+        })?;
+        assert_eq!(unpremultiplied_pixel(&mut surface, 2, 2), pixel);
+        assert_eq!(
+            cache.images().map(Image::unique_id).collect::<Vec<_>>(),
+            ids
+        );
+    }
+    let mut rasterized = false;
+    cache.draw_tile(surface.canvas(), &spec(7, 256, (8, 8), rect), |_| {
+        rasterized = true;
+    })?;
+    assert!(!rasterized, "the retained tile keeps its pixels");
     Ok(())
 }

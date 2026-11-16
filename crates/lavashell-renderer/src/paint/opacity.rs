@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::destination::Destination;
+use crate::destination::GroupOpacity;
 use crate::error::{Error, SkslDiagnostic};
 use crate::failure::{DrawFailure, Failures};
+use crate::scalar::scalar;
 use skia_safe::{Canvas, Data, Paint, Rect, RuntimeEffect};
 
 pub(super) struct Opacity {
@@ -25,15 +26,16 @@ impl Opacity {
     pub fn save(
         &self,
         canvas: &Canvas,
-        alpha: f32,
+        opacity: GroupOpacity,
         bounds: Option<Rect>,
         reads_parent: bool,
         failures: &Failures,
-    ) {
-        if Destination::for_opacity(f64::from(alpha)) == Destination::Surface {
-            let _save_count = canvas.save();
-            return;
-        }
+    ) -> Result<(), DrawFailure> {
+        let GroupOpacity::Translucent { alpha } = opacity else {
+            let _restored_by_the_caller = canvas.save();
+            return Ok(());
+        };
+        let alpha = scalar(alpha)?;
         if reads_parent {
             let alpha = if alpha.is_finite() {
                 alpha.max(0.0)
@@ -43,14 +45,15 @@ impl Opacity {
             let uniforms = Data::new_copy(&alpha.to_ne_bytes());
             let Some(blender) = self.interpolate.make_blender(uniforms, None) else {
                 failures.record(DrawFailure::ShaderRejected);
-                let _save_count = canvas.save_layer_alpha_f(bounds, alpha);
-                return;
+                let _restored_by_the_caller = canvas.save_layer_alpha_f(bounds, alpha);
+                return Ok(());
             };
             let mut paint = Paint::default();
-            let _chained_paint = paint.set_blender(blender);
+            let _paint_returned_for_chaining = paint.set_blender(blender);
             super::parent_copy::save(canvas, &paint, None);
         } else {
-            let _save_count = canvas.save_layer_alpha_f(bounds, alpha);
+            let _restored_by_the_caller = canvas.save_layer_alpha_f(bounds, alpha);
         }
+        Ok(())
     }
 }

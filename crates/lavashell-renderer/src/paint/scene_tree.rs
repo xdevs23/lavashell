@@ -4,6 +4,7 @@ use crate::destination::Destination;
 use crate::failure::DrawFailure;
 use crate::plan::{Area, Plan, Planned, PlannedGroup};
 use crate::scalar::scalar;
+use crate::text::SavedScope;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Presented;
 use lavashell_core::surface::SurfaceId;
@@ -64,7 +65,7 @@ impl Painter {
         streams: &StreamFrames,
     ) {
         for step in steps {
-            let (saved, inside) = match step {
+            let (_restored_on_drop, inside) = match step {
                 Planned::Leaf(leaf) => {
                     match area.repainted(leaf.device_extent) {
                         Some(extent) => self.paint_leaf(canvas, leaf, extent, streams, pass),
@@ -72,41 +73,44 @@ impl Painter {
                     }
                     continue;
                 }
-                Planned::Group { group, steps } => {
-                    let saved = canvas.save();
-                    if let Err(failure) = self.open_group(canvas, group) {
+                Planned::Group { group, steps } => match self.open_group(canvas, group) {
+                    Ok(saved) => (saved, steps),
+                    Err(failure) => {
                         self.failures.record(failure);
-                        let _chained_canvas = canvas.restore_to_count(saved);
                         continue;
                     }
-                    (saved, steps)
-                }
+                },
                 Planned::Graft(steps) => {
-                    let saved = canvas.save();
-                    self.text_scopes.open(Destination::Surface);
-                    (saved, steps)
+                    (self.text_scopes.save(canvas, Destination::Surface), steps)
                 }
             };
             self.paint_steps(canvas, inside, area, pass, streams);
-            let _chained_canvas = canvas.restore_to_count(saved);
-            self.text_scopes.close();
         }
     }
 
-    fn open_group(&mut self, canvas: &Canvas, group: &PlannedGroup) -> Result<(), DrawFailure> {
+    fn open_group<'c>(
+        &mut self,
+        canvas: &'c Canvas,
+        group: &PlannedGroup,
+    ) -> Result<SavedScope<'c>, DrawFailure> {
         let values = &group.values;
         let transform = skmatrix(&values.transform)?;
         let clip = values.clip.as_ref().map(rounded).transpose()?;
-        let alpha = scalar(values.opacity)?;
+        let saved = self.text_scopes.save(canvas, group.opacity.destination());
         let _chained_canvas = canvas.concat(&transform);
         if let Some(clip) = clip {
             let _chained_canvas = canvas.clip_rrect(clip, None, true);
         }
-        self.text_scopes.open(group.destination);
-        if group.destination == Destination::Layer {
+        if group.opacity.destination() == Destination::Layer {
             super::clip_device(canvas, group.device_extent.unwrap_or(IRect::new_empty()));
         }
-        (self.opacity).save(canvas, alpha, None, group.reads_parent, &self.failures);
-        Ok(())
+        (self.opacity).save(
+            canvas,
+            group.opacity,
+            None,
+            group.reads_parent,
+            &self.failures,
+        )?;
+        Ok(saved)
     }
 }

@@ -21,10 +21,10 @@ pub(crate) fn layer(
 ) -> Result<Destination, DrawFailure> {
     let layout_bounds = skrect(bounds)?;
     let mut paint = Paint::default();
-    let _chained_paint = paint.set_blend_mode(blend(mode));
+    let _paint_returned_for_chaining = paint.set_blend_mode(blend(mode));
     let sigma = sklength(sigma)?;
     if sigma > 0.0 {
-        let _chained_paint = paint.set_image_filter(image_filters::blur(
+        let _paint_returned_for_chaining = paint.set_image_filter(image_filters::blur(
             (sigma, sigma),
             skia_safe::TileMode::Decal,
             None,
@@ -34,16 +34,16 @@ pub(crate) fn layer(
     if let Some(filter) = filter
         && let Some(filtered) = crate::source_filters::resolve(filter, bounds)?
     {
-        let _chained_paint = paint.set_image_filter(match paint.image_filter() {
+        let _paint_returned_for_chaining = paint.set_image_filter(match paint.image_filter() {
             Some(inner) => image_filters::compose(filtered, inner),
             None => Some(filtered),
         });
     }
     let save = SaveLayerRec::default().paint(&paint);
     if expanding_input || paint.image_filter().is_some() {
-        let _save_count = canvas.save_layer(&save);
+        let _restored_by_restore_command = canvas.save_layer(&save);
     } else {
-        let _save_count = canvas.save_layer(&save.bounds(&layout_bounds));
+        let _restored_by_restore_command = canvas.save_layer(&save.bounds(&layout_bounds));
     }
     Ok(Destination::Layer)
 }
@@ -100,7 +100,7 @@ pub(crate) fn shadow(
         .clip(canvas, op)
         .map_err(FailedDraw::from)
         .and_then(|()| silhouette.band(canvas, band, &paint));
-    let _chained_canvas = canvas.restore_to_count(saved);
+    let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     painted
 }
 

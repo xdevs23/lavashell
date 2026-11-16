@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::Painter;
-use crate::destination::Destination;
+use crate::destination::{Destination, GroupOpacity};
 use crate::failure::{DrawFailure, Failures};
 use crate::paint::analysis::Analysis;
 use crate::paint::{dp_of, rounded, skmatrix, skrect};
@@ -55,7 +55,7 @@ pub(crate) enum Planned<'a> {
 
 pub(crate) struct PlannedGroup {
     pub values: GroupValues,
-    pub destination: Destination,
+    pub opacity: GroupOpacity,
     pub reads_parent: bool,
     pub device_extent: Option<IRect>,
 }
@@ -225,11 +225,11 @@ impl<'a> PaintVisitor<'a> for Walk<'_, 'a> {
                 }
             }
         }
-        let destination = Destination::for_opacity(values.opacity);
-        inner.destination = inner.destination.inside(destination);
+        let opacity = GroupOpacity::new(values.opacity);
+        inner.destination = inner.destination.inside(opacity.destination());
         inner.group = Some(PlannedGroup {
             values,
-            destination,
+            opacity,
             reads_parent: false,
             device_extent: None,
         });
@@ -359,7 +359,7 @@ impl Planned<'_> {
 
     fn uncut(&self) -> Option<IRect> {
         match self {
-            Self::Group { group, .. } if group.destination == Destination::Layer => {
+            Self::Group { group, .. } if group.opacity.destination() == Destination::Layer => {
                 group.device_extent
             }
             Self::Leaf(leaf) => match leaf.cached {

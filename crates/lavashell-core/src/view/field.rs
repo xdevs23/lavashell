@@ -176,12 +176,13 @@ impl FieldPaint<'_> {
     pub fn selectable_text(
         &mut self,
         node: &Node,
+        style: &TextStyle<Dp>,
         rect: Rect,
         scale: Scale,
         focus: FieldFocus,
         text: &mut impl TextMeasurer,
     ) {
-        let NodeKind::Text(value, style) = &node.kind else {
+        let NodeKind::Text(value, _node_style_replaced_by_the_painted_style) = &node.kind else {
             return;
         };
         let geometry = text.geometry(value, style, rect.width);

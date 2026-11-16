@@ -59,6 +59,7 @@ fn the_parts_of_the_vector_of_a_visual_are_the_vectors_of_its_parts() {
             opacity: 0.5,
             material: None,
             group_material: None,
+            text: None,
         },
     };
     let vector = visual.vector();

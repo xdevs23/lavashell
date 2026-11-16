@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::coverage::RgbBlend;
 use super::{Glyphs, TextAntialiasing, TextDestination, TextRendering};
 use crate::Error;
 use crate::raster::{
@@ -7,8 +8,10 @@ use crate::raster::{
 };
 use crate::text_cache::ShapedParagraph;
 use lavashell_core::prelude::*;
+use skia_safe::matrix::ScaleToFit;
 use skia_safe::{
-    AlphaType, Canvas, Color, Color4f, ColorType, Image, ImageInfo, Point, Rect, SurfaceProps,
+    AlphaType, Blender, Canvas, Color, Color4f, ColorType, Image, ImageInfo, Matrix, Point, Rect,
+    SamplingOptions, Shader, SurfaceProps, TileMode,
 };
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -19,6 +22,7 @@ pub(crate) struct RasterInput<'a> {
     pub policy: TextRendering,
     pub destination: TextDestination,
     pub opaque_scope: bool,
+    pub rgb_blend: RgbBlend,
     pub style: &'a TextStyle<Dp>,
     pub foreground: Color4f,
 }
@@ -38,14 +42,49 @@ pub(crate) trait TextRasterizer {
         input.policy
     }
 
-    fn draw(
+    fn coverage(
         &self,
         input: &RasterInput<'_>,
         origin: Point,
         source: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         tiles: &mut RasterCache,
-    ) -> Result<Drawn, Error>;
+    ) -> Result<Option<Coverage>, Error>;
+
+    fn draw(&self, input: &RasterInput<'_>, coverage: &Coverage) -> Result<(), Error>;
+}
+
+pub(crate) struct Coverage {
+    pub shader: Shader,
+    pub destination: Rect,
+}
+
+impl Coverage {
+    pub fn added_in_shares(
+        [(lighter, lighter_share), (heavier, heavier_share)]: [(Self, f32); 2],
+    ) -> Result<Self, Error> {
+        let blender = Blender::arithmetic(0.0, heavier_share, lighter_share, 0.0, false)
+            .ok_or(Error::SubpixelBlender)?;
+        let mut destination = lighter.destination;
+        destination.join(heavier.destination);
+        Ok(Self {
+            shader: skia_safe::shaders::blend(blender, lighter.shader, heavier.shader),
+            destination,
+        })
+    }
+}
+
+pub(super) fn sampled_mask(mask: &Image, destination: Rect) -> Result<Shader, Error> {
+    let outside_is_uncovered = (TileMode::Decal, TileMode::Decal);
+    Matrix::rect_2_rect(
+        Rect::from_irect(mask.bounds()),
+        destination,
+        ScaleToFit::Fill,
+    )
+    .and_then(|matrix| {
+        mask.to_raw_shader(outside_is_uncovered, SamplingOptions::default(), &matrix)
+    })
+    .ok_or(Error::SubpixelMask)
 }
 
 #[derive(Clone, Copy)]
@@ -72,7 +111,7 @@ impl CoverageBackground {
 
 pub(super) struct CoverageTile {
     tile: ParagraphTile,
-    content: TileContent,
+    retained_as: Option<TileContent>,
 }
 
 impl CoverageTile {
@@ -81,7 +120,7 @@ impl CoverageTile {
         source: &mut ShapedParagraph,
         origin: Point,
         scale: f32,
-        key: u64,
+        key: Option<u64>,
         raster: ParagraphRaster,
         images_sharing_cache: usize,
     ) -> Option<Self> {
@@ -91,8 +130,8 @@ impl CoverageTile {
         };
         let tile =
             ParagraphTile::at_integer_scale(input.canvas, source.ink(), origin, scale, budget)?;
-        let content = TileContent::paragraph(key, raster, scale, tile.phase);
-        Some(Self { tile, content })
+        let retained_as = key.map(|key| TileContent::paragraph(key, raster, scale, tile.phase));
+        Some(Self { tile, retained_as })
     }
 
     pub fn destination(&self) -> Rect {
@@ -114,11 +153,11 @@ impl CoverageTile {
             None,
         );
         let (scale, origin) = (self.tile.scale, self.tile.paint_origin);
-        let content = self.content.clone();
+        let retained_as = self.retained_as.clone();
         tiles
             .cached_image(
                 input.canvas,
-                content,
+                retained_as,
                 self.tile.bytes,
                 &info,
                 props,
@@ -173,6 +212,13 @@ impl Rasterizers {
     }
 }
 
+#[cfg(test)]
+impl Rasterizers {
+    pub fn only(rasterizer: Rc<dyn TextRasterizer>) -> Self {
+        Self(HashMap::from([(rasterizer.antialiasing(), rasterizer)]))
+    }
+}
+
 pub(crate) struct Rasterization {
     pub style: TextStyle<Dp>,
     pub rendering: TextRendering,
@@ -180,17 +226,22 @@ pub(crate) struct Rasterization {
 }
 
 impl Rasterization {
-    pub fn draw(
+    pub fn coverage(
         &self,
         input: &RasterInput<'_>,
         origin: Point,
         paragraph: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         tiles: &mut RasterCache,
-    ) -> Result<Drawn, Error> {
+    ) -> Result<Option<Coverage>, Error> {
         if paragraph.glyphs() != Glyphs::Coverage {
-            return Ok(Drawn::NotApplicable);
+            return Ok(None);
         }
-        self.rasterizer.draw(input, origin, paragraph, key, tiles)
+        self.rasterizer
+            .coverage(input, origin, paragraph, key, tiles)
+    }
+
+    pub fn draw(&self, input: &RasterInput<'_>, coverage: &Coverage) -> Result<(), Error> {
+        self.rasterizer.draw(input, coverage)
     }
 }

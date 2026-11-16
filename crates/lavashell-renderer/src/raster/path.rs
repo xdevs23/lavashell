@@ -232,10 +232,10 @@ impl Region {
         let size = pixels.size();
         Ok(PathTile {
             spec: TileSpec {
-                content: TileContent::Path {
+                retained_as: Some(TileContent::Path {
                     drawing: drawing.clone(),
                     start: (pixels.left, pixels.top),
-                },
+                }),
                 bytes: pixel_bytes(size, bytes_per_pixel).ok_or(DrawFailure::TileSize)?,
                 size,
                 destination: Rect::from_xywh(

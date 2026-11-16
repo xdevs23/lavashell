@@ -22,10 +22,11 @@ use crate::shape::{Corners, Shape};
 use crate::style::{AnimatedAppearance, ContentColors};
 use crate::ui::{Identity, ModifierElement, NodeId};
 use crate::view::component::index_of;
-use crate::view::transition::AnimatedVisual;
+use crate::view::transition::{AnimatedVisual, TextBlend};
 pub(super) use above::Above;
 use above::OpenAbove;
 pub(super) use group::{OpenGroup, Playback, Unwind};
+use kind::KindInput;
 use modifiers::{ModifierInput, PaintedModifiers};
 use presence::TransitionSpace;
 use scroll::Scrolled;
@@ -128,6 +129,7 @@ impl View {
             decorated_surface,
             mut radius_scale,
         } = self.open_visual(index, &plan, parent_transform, inherited);
+        let text_blend = visual.as_ref().and_then(AnimatedVisual::text_blend);
         scale::apply(
             &mut self.painting.canvas,
             self.nodes[index].visual_scale.get(),
@@ -160,6 +162,7 @@ impl View {
             surfaces,
             decorated_surface,
             painted,
+            text_blend,
         }
     }
 
@@ -192,7 +195,8 @@ impl View {
             self.clip_scope(viewport, Corners::default(), transform, clips, unwind);
         }
         let outer = (!groups.is_empty()).then(|| self.painting.open_items());
-        self.record_accessibility_geometry(index, rect, transform, clips);
+        let painted = self.painted_rect(index, rect, opened.text_blend, text);
+        self.record_accessibility_geometry(index, painted, transform, clips);
         let pushed = (interaction.and_then(|state| state.content))
             .map(|content| inherited.content_colors.pushed(content));
         let at_rest = opened.painted.offset_at_rest;
@@ -203,7 +207,13 @@ impl View {
             composed_parent: inherited.composed_parent,
             laid_out: inherited.laid_out.offset(at_rest.x, at_rest.y),
         };
-        self.paint_kind(index, decorated_surface, rect, transform, inside, text);
+        let input = KindInput {
+            bounds: decorated_surface,
+            rect: painted,
+            transform,
+            text_blend: opened.text_blend,
+        };
+        self.paint_kind(index, input, inside, text);
         if self.is_focused(id) && self.focus_shows_on(index) {
             self.paint_focus_ring(index, decorated_surface, interaction);
         }
@@ -355,6 +365,7 @@ struct Opened {
     surfaces: Surfaces,
     decorated_surface: Rect,
     painted: PaintedModifiers,
+    text_blend: Option<TextBlend>,
 }
 
 struct OpenVisual {

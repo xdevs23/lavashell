@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::key::{TileContent, TileKey};
-use super::storage::TileStorage;
 use super::{RasterCache, Tile, resource_cache_limit};
 use crate::failure::DrawFailure;
 use skia_safe::{Canvas, Color, ISize, Image, ImageInfo, Paint, Rect, SurfaceProps};
@@ -20,7 +19,7 @@ pub(super) fn draw_image(canvas: &Canvas, image: &Image, destination: Rect) {
 }
 
 pub(super) struct TileSpec {
-    pub content: TileContent,
+    pub retained_as: Option<TileContent>,
     pub bytes: usize,
     pub size: ISize,
     pub destination: Rect,
@@ -64,8 +63,8 @@ impl RasterCache {
             .image_info()
             .with_dimensions(tile.size)
             .with_alpha_type(skia_safe::AlphaType::Premul);
-        let content = tile.content.clone();
-        self.cached_image(canvas, content, tile.bytes, &info, None, |target| {
+        let retained_as = tile.retained_as.clone();
+        self.cached_image(canvas, retained_as, tile.bytes, &info, None, |target| {
             let _chained_canvas = target.clear(Color::TRANSPARENT);
             rasterize(target);
         })
@@ -75,7 +74,7 @@ impl RasterCache {
     pub(crate) fn cached_image(
         &mut self,
         canvas: &Canvas,
-        content: TileContent,
+        retained_as: Option<TileContent>,
         bytes: usize,
         info: &ImageInfo,
         props: Option<&SurfaceProps>,
@@ -93,9 +92,9 @@ impl RasterCache {
                 bytes,
             })
         };
-        let tile = match self.storage {
-            TileStorage::Transient => rasterized()?,
-            TileStorage::Retained => {
+        let tile = match retained_as {
+            None => rasterized()?,
+            Some(content) => {
                 if bytes > resource_cache_limit(canvas) {
                     return Err(Uncached::TooLarge);
                 }

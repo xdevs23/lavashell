@@ -33,8 +33,8 @@ impl Painter {
         if self.compositing_destination() == Destination::Layer {
             let color_space = ColorSpace::new_srgb();
             let mut paint = Paint::default();
-            let _chained_paint = paint.set_blend_mode(skia_safe::BlendMode::Src);
-            let _save_count = canvas.save_layer(
+            let _paint_returned_for_chaining = paint.set_blend_mode(skia_safe::BlendMode::Src);
+            let _restored_at_the_end_of_the_frame = canvas.save_layer(
                 &SaveLayerRec::default()
                     .color_space(&color_space)
                     .paint(&paint)
@@ -64,7 +64,7 @@ mod tests {
             );
             let mut surface =
                 skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-            let _chained_canvas = surface.canvas().clear(skia_safe::Color::BLACK);
+            let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::BLACK);
             painter.paint_as_leaf(
                 surface.canvas(),
                 &[DrawCommand::Fill {

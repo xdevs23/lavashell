@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-only
+uniform shader backdrop;
+uniform float2 shares;
+
+half4 main(half4 src, half4 dst) {
+    half4 under = backdrop.eval(float2(0));
+    return under + half(shares.x) * (dst - under) + half(shares.y) * (src - under);
+}

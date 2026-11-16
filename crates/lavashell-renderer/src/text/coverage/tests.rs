@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::super::raster::sampled_mask;
 use super::*;
 use crate::float_asserts::assert_f32_eq;
 use crate::test_error::TestError;
@@ -65,10 +66,14 @@ fn coverage_remains_data_and_foreground_uses_destination_color_management() -> R
                 let mut result = skia_safe::surfaces::raster(&info, None, None)
                     .ok_or(TestError::RasterSurface)?;
                 assert!(result.canvas().write_pixels(&info, &bytes, 16, (0, 0)));
+                let destination = skia_safe::Rect::from_wh(1.0, 1.0);
+                let sampled_coverage = Coverage {
+                    shader: sampled_mask(&mask.image_snapshot(), destination)?,
+                    destination,
+                };
                 blend.draw(
                     result.canvas(),
-                    &mask.image_snapshot(),
-                    skia_safe::Rect::from_wh(1.0, 1.0),
+                    &sampled_coverage,
                     crate::paint::color4f(color)?,
                 )?;
                 let result = pixel(&mut result, &info);

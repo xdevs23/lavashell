@@ -30,13 +30,23 @@ impl FontWeight {
     ];
 
     // https://www.w3.org/TR/2026/WD-css-fonts-4-20261112/#font-weight-numeric-values
+    const LIGHTEST: f64 = 1.0;
+    const HEAVIEST: f64 = 1000.0;
+
     pub const fn try_new(weight: f64) -> Result<Self, NumberError> {
         if !weight.is_finite() {
             Err(NumberError::NotFinite)
-        } else if weight >= 1.0 && weight <= 1000.0 {
+        } else if weight >= Self::LIGHTEST && weight <= Self::HEAVIEST {
             Ok(Self(weight))
         } else {
             Err(NumberError::OutOfRange)
+        }
+    }
+
+    pub const fn saturating(weight: f64) -> Result<Self, NumberError> {
+        match Self::try_new(weight) {
+            Err(NumberError::OutOfRange) => Ok(Self(weight.clamp(Self::LIGHTEST, Self::HEAVIEST))),
+            checked => checked,
         }
     }
 
@@ -68,5 +78,16 @@ mod tests {
         assert_eq!(FontWeight::try_new(0.5), Err(NumberError::OutOfRange));
         assert_eq!(FontWeight::try_new(1000.5), Err(NumberError::OutOfRange));
         assert_eq!(FontWeight::try_new(f64::NAN), Err(NumberError::NotFinite));
+    }
+
+    #[test]
+    fn a_saturated_weight_stops_at_the_nearest_end_and_fails_only_when_not_finite() {
+        assert_eq!(FontWeight::saturating(0.5), Ok(FontWeight(1.0)));
+        assert_eq!(FontWeight::saturating(550.0), Ok(FontWeight(550.0)));
+        assert_eq!(FontWeight::saturating(1040.0), Ok(FontWeight(1000.0)));
+        assert_eq!(
+            FontWeight::saturating(f64::INFINITY),
+            Err(NumberError::NotFinite)
+        );
     }
 }

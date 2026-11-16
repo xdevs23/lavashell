@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::key::{ParagraphRaster, TileContent};
-use super::storage::TileStorage;
 use super::tiles::{TileSpec, draw_image};
 use super::{ParagraphTile, RasterCache, RasterMode, TileBudget, resource_cache_limit};
 use crate::failure::DrawFailure;
@@ -12,7 +11,7 @@ impl RasterCache {
         &mut self,
         canvas: &Canvas,
         paragraph: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         origin: Point,
     ) {
         let tile = match self.mode {
@@ -29,7 +28,7 @@ impl RasterCache {
         &mut self,
         canvas: &Canvas,
         paragraph: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         origin: Point,
     ) -> Result<Option<(Image, Rect)>, DrawFailure> {
         let budget = TileBudget {
@@ -40,21 +39,23 @@ impl RasterCache {
         else {
             return Ok(None);
         };
-        let tile_geometry = match self.storage {
-            TileStorage::Retained => Some(tile_geometry),
-            TileStorage::Transient => (canvas.local_clip_bounds())
+        let tile_geometry = match key {
+            Some(_) => Some(tile_geometry),
+            None => (canvas.local_clip_bounds())
                 .and_then(|clip| tile_geometry.clipped(clip, budget.bytes_per_pixel)),
         };
         let Some(tile_geometry) = tile_geometry else {
             return Ok(None);
         };
         let spec = TileSpec {
-            content: TileContent::paragraph(
-                key,
-                ParagraphRaster::Native,
-                tile_geometry.scale,
-                tile_geometry.phase,
-            ),
+            retained_as: key.map(|key| {
+                TileContent::paragraph(
+                    key,
+                    ParagraphRaster::Native,
+                    tile_geometry.scale,
+                    tile_geometry.phase,
+                )
+            }),
             bytes: tile_geometry.bytes,
             size: tile_geometry.size,
             destination: tile_geometry.destination,

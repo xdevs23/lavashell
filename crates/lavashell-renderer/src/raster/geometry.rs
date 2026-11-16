@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::EDGE_PIXELS;
+use super::{ANTIALIASING_PIXELS, EDGE_PIXELS};
 use crate::paint::{device_scale, max_image_side};
 use skia_safe::{
     Canvas, IRect, ISize, Matrix, Point, Rect, RoundOut, Size, Vector, textlayout::Paragraph,
@@ -18,6 +18,11 @@ pub(crate) fn ink_bounds(paragraph: &mut Paragraph) -> Rect {
         }
     });
     ink
+}
+
+pub(crate) fn outset_by_antialiasing(ink: Rect, device_scale: f32) -> Rect {
+    let margin = ANTIALIASING_PIXELS / device_scale;
+    ink.with_outset((margin, margin))
 }
 
 #[derive(Clone, Copy)]

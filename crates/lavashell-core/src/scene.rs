@@ -61,6 +61,18 @@ pub enum ParagraphDirection {
     RightToLeft,
 }
 
+impl TextAlignment {
+    pub(crate) fn share_of_widening_on_the_left(self, direction: ParagraphDirection) -> f64 {
+        match (self, direction) {
+            (Self::Start, ParagraphDirection::LeftToRight)
+            | (Self::End, ParagraphDirection::RightToLeft) => 0.0,
+            (Self::Center, _) => 0.5,
+            (Self::Start, ParagraphDirection::RightToLeft)
+            | (Self::End, ParagraphDirection::LeftToRight) => 1.0,
+        }
+    }
+}
+
 mod sealed {
     pub trait Sealed {}
 

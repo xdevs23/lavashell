@@ -2,6 +2,7 @@
 mod changing;
 mod departure;
 mod registry;
+mod text_blend;
 
 use super::{View, paint};
 use crate::animation::{Composite, MotionSpec, Playing, composite_fields};
@@ -18,6 +19,7 @@ pub(super) use changing::Changing;
 pub(super) use departure::Departure;
 pub(super) use registry::Transitions;
 use std::rc::Rc;
+pub(super) use text_blend::TextBlend;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BoundsMotion {
@@ -170,6 +172,7 @@ pub(super) struct VisualAppearance {
     pub opacity: f64,
     pub material: Option<Interpolated<ShapedMaterial>>,
     pub group_material: Option<Interpolated<Material>>,
+    pub text: Option<TextBlend>,
 }
 
 composite_fields! {
@@ -179,6 +182,7 @@ composite_fields! {
         opacity: f64,
         material: Option<Interpolated<ShapedMaterial>>,
         group_material: Option<Interpolated<Material>>,
+        text: Option<TextBlend>,
     }
 }
 
@@ -190,6 +194,7 @@ impl VisualAppearance {
             opacity: 1.0,
             material: None,
             group_material: None,
+            text: None,
         }
     }
 }
@@ -204,6 +209,7 @@ impl Composite for VisualAppearance {
             opacity: self.opacity,
             material: self.material.clone(),
             group_material: self.group_material.clone(),
+            text: self.text,
         }
     }
 
@@ -214,6 +220,7 @@ impl Composite for VisualAppearance {
             opacity: parts.opacity.clamp(0.0, 1.0),
             material: parts.material,
             group_material: parts.group_material,
+            text: parts.text,
         }
     }
 }
@@ -281,6 +288,10 @@ impl AnimatedVisual {
             .as_ref()
             .map(Interpolated::value)
     }
+
+    pub fn text_blend(&self) -> Option<TextBlend> {
+        self.visual.appearance.text
+    }
 }
 
 impl View {
@@ -304,7 +315,11 @@ impl View {
         let node = &self.nodes[index];
         let transition = node.transition?;
         let found = FoundElements::of(&node.modifier);
-        let appearance = found.appearance(transition.appearance.unwrap_or_default());
+        let interpolation = transition.appearance.unwrap_or_default();
+        let appearance = VisualAppearance {
+            text: (node.text_style()).map(|style| TextBlend::of(style, interpolation)),
+            ..found.appearance(interpolation)
+        };
         let target = Visual {
             rect,
             presence: Presence::default(),
@@ -402,6 +417,7 @@ impl<'a> FoundElements<'a> {
                 .map(|(_, material)| Interpolated::new(material.clone(), interpolation)),
             group_material: (self.group)
                 .map(|(_, (material, _))| Interpolated::new(material.clone(), interpolation)),
+            text: None,
         }
     }
 }

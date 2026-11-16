@@ -278,7 +278,7 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let [crate::plan::Planned::Group { group: planned, .. }] = plan.steps.as_slice() else {
         return Err(TestError::Missing("group"));
     };
-    assert_eq!(planned.destination, Destination::Layer);
+    assert_eq!(planned.opacity.destination(), Destination::Layer);
     assert_eq!(planned.device_extent, None);
     let streams = StreamFrames::default();
     painter.paint_tree(

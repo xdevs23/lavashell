@@ -1,53 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Painter;
 use crate::failure::DrawFailure;
-use crate::text::{Drawn, RasterInput};
+use crate::text::{FaceParagraphs, PaintableParagraph, PaintableText, ParagraphRequest, Shaper};
 use crate::text_cache::ShapedParagraph;
-use lavashell_core::{prelude::*, protected_text::PrivateText};
-use skia_safe::Canvas;
+use lavashell_core::protected_text::PrivateText;
 
-impl Painter {
-    pub(super) fn paint_private_text(
-        &mut self,
-        canvas: &Canvas,
-        text: &PrivateText,
-        rect: Rect,
-        style: &TextStyle<Dp>,
-    ) -> Result<(), DrawFailure> {
-        let configuration = self.shaper.tracked_configuration();
-        text.expose(|value| {
-            let paragraph =
-                self.shaper
-                    .private_paragraph(configuration.rendering, value, style, rect.width)?;
-            let origin = crate::text::centered(rect, &paragraph)?;
-            let input = RasterInput {
-                canvas,
-                policy: configuration.rendering,
-                destination: configuration.destination,
-                opaque_scope: self.text_scopes.opaque(),
-                style,
-                foreground: super::color4f(style.color)?,
-            };
-            let rasterization = self.text_rasterizers.rasterization(&input);
-            self.resources.tiles.get_mut().without_storage(|tiles| {
-                if let Some(rasterization) = rasterization {
-                    let mut source = ShapedParagraph::new(self.shaper.private_paragraph(
-                        rasterization.rendering,
-                        value,
-                        &rasterization.style,
-                        rect.width,
-                    )?);
-                    match rasterization.draw(&input, origin, &mut source, 0, tiles) {
-                        Ok(Drawn::Painted) => return Ok(()),
-                        Ok(Drawn::NotApplicable) => {}
-                        Err(error) => self
-                            .failures
-                            .record_caused(DrawFailure::SubpixelText, &error),
-                    }
-                }
-                tiles.paragraph(canvas, &mut ShapedParagraph::new(paragraph), 1, origin);
-                Ok(())
-            })
+impl PaintableText for PrivateText {
+    fn with_paragraph<R>(
+        &self,
+        shaper: &mut Shaper,
+        request: &ParagraphRequest<'_>,
+        paint: impl FnOnce(PaintableParagraph<'_>) -> Result<R, DrawFailure>,
+    ) -> Result<R, DrawFailure> {
+        let paragraph = self.expose(|value| {
+            shaper.private_paragraph(request.rendering, value, request.style, request.width)
+        })?;
+        paint(PaintableParagraph {
+            paragraph: &mut ShapedParagraph::new(paragraph),
+            key: None,
+        })
+    }
+
+    fn face_paragraphs<'s>(
+        &'s self,
+        shaper: &'s mut Shaper,
+        [lighter, heavier]: [ParagraphRequest<'s>; 2],
+    ) -> Result<FaceParagraphs<'s>, DrawFailure> {
+        let mut face_paragraph = |value: &str, request: ParagraphRequest<'_>| {
+            (shaper.private_paragraph(request.rendering, value, request.style, request.width))
+                .map(ShapedParagraph::new)
+        };
+        self.expose(|value| {
+            Ok(FaceParagraphs::Built([
+                face_paragraph(value, lighter)?,
+                face_paragraph(value, heavier)?,
+            ]))
         })
     }
 }

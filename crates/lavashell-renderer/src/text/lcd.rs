@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::TextAntialiasing;
-use super::coverage::RgbBlend;
 use super::raster::{
-    CoverageBackground, CoverageTile, Drawn, RasterInput, Registration, TextRasterizer,
+    Coverage, CoverageBackground, CoverageTile, RasterInput, Registration, TextRasterizer,
+    sampled_mask,
 };
 use crate::Error;
 use crate::raster::{ParagraphRaster, ParagraphTile, RasterCache};
 use crate::text_cache::ShapedParagraph;
 use lavashell_core::prelude::*;
 
-inventory::submit! { Registration { create } }
+inventory::submit! { Registration { create: || Ok(Box::new(OpaqueCoverage)) } }
 
-fn create() -> Result<Box<dyn TextRasterizer>, Error> {
-    Ok(Box::new(OpaqueCoverage {
-        blend: RgbBlend::new()?,
-    }))
-}
-
-struct OpaqueCoverage {
-    blend: RgbBlend,
-}
+struct OpaqueCoverage;
 
 fn scale(input: &RasterInput<'_>) -> Option<f32> {
-    if !input.opaque_scope || !input.destination.opaque {
+    if !(input.policy).subpixel_applies(input.destination, input.opaque_scope) {
         return None;
     }
     ParagraphTile::integer_scale(input.canvas)
@@ -45,20 +37,20 @@ impl TextRasterizer for OpaqueCoverage {
         })
     }
 
-    fn draw(
+    fn coverage(
         &self,
         input: &RasterInput<'_>,
         origin: skia_safe::Point,
         source: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         tiles: &mut RasterCache,
-    ) -> Result<Drawn, Error> {
+    ) -> Result<Option<Coverage>, Error> {
         let Some(scale) = scale(input) else {
-            return Ok(Drawn::NotApplicable);
+            return Ok(None);
         };
         let raster = ParagraphRaster::OpaqueCoverage;
         let Some(tile) = CoverageTile::new(input, source, origin, scale, key, raster, 1) else {
-            return Ok(Drawn::NotApplicable);
+            return Ok(None);
         };
         let props = input.destination.surface_props();
         let image = tile.image(
@@ -68,7 +60,13 @@ impl TextRasterizer for OpaqueCoverage {
             CoverageBackground::Black,
             Some(&props),
         )?;
-        (self.blend).draw(input.canvas, &image, tile.destination(), input.foreground)?;
-        Ok(Drawn::Painted)
+        Ok(Some(Coverage {
+            shader: sampled_mask(&image, tile.destination())?,
+            destination: tile.destination(),
+        }))
+    }
+
+    fn draw(&self, input: &RasterInput<'_>, coverage: &Coverage) -> Result<(), Error> {
+        (input.rgb_blend).draw(input.canvas, coverage, input.foreground)
     }
 }

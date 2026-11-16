@@ -74,7 +74,8 @@ fn transparent_blend_raises_only_the_alpha_needed_for_valid_rgb() -> Result<(), 
         destination: skia_safe::Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
     };
     let white = crate::paint::color4f(Color::WHITE)?;
-    blend::MaskBlend::new()?.draw(target.canvas(), &masks, white)?;
+    let blend = blend::MaskBlend::new()?;
+    blend.draw(target.canvas(), &blend.coverage(&masks)?, white)?;
     let output = pixels(&mut target);
     let pixel = &output[..4];
     assert!(
@@ -237,6 +238,7 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
             policy: configuration.rendering,
             destination: configuration.destination,
             opaque_scope: true,
+            rgb_blend: painter.text_blends.rgb.clone(),
             style,
             foreground: crate::paint::color4f(style.color)?,
         };
@@ -244,7 +246,7 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
         let source_style = provider
             .source_style(&input)
             .ok_or(TestError::Missing("source style"))?;
-        let source_input = painter.source_paragraph_input(
+        let source_input = painter.shaper.source_paragraph_input(
             "Headphones p",
             &source_style,
             280.dp(),
@@ -255,11 +257,11 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
             7.25,
             3.5 + ((142.0 - cached.shaped.paragraph.height()) / 2.0).max(0.0),
         );
-        let key = cached.key;
-        let drawn = painter.resources.tiles.get_mut().without_storage(|tiles| {
-            provider.draw(&input, origin, &mut cached.shaped, key, tiles)
-        })?;
-        assert_eq!(drawn, Drawn::Painted);
+        let tiles = painter.resources.tiles.get_mut();
+        let coverage = provider
+            .coverage(&input, origin, &mut cached.shaped, None, tiles)?
+            .ok_or(TestError::Missing("coverage of the paragraph"))?;
+        provider.draw(&input, &coverage)?;
         assert_eq!(actual, pixels(&mut transient));
     }
     assert_eq!(painter.render_stats().cache_bytes, 0);

@@ -23,16 +23,15 @@ mod scene_tree_tests;
 mod skia_geometry;
 #[cfg(test)]
 mod skia_geometry_tests;
-mod sources;
 mod stream;
 
 use crate::Error;
-use crate::destination::Destination;
+use crate::destination::{Destination, GroupOpacity};
 use crate::failure::{DrawFailure, FailedDraw, Failures};
 use crate::plan::{Area, Leaf};
 use crate::resources::ImageCache;
-use crate::scalar::{scalar, scalars};
-use crate::text::{ParagraphInput, Shaper};
+use crate::scalar::scalars;
+use crate::text::Shaper;
 use crate::vulkan::SceneImage;
 use brush::brush_paint;
 pub(crate) use brush::{color4f, solid};
@@ -73,10 +72,10 @@ pub struct Painter {
     opacity: opacity::Opacity,
     pub(crate) failures: Failures,
     pub(crate) shaper: Shaper,
-    source_fonts: sources::Sources,
     pub(crate) paint_configuration: configuration::Configuration,
     pub(crate) text_rasterizers: crate::text::Rasterizers,
     pub(crate) text_scopes: crate::text::Scopes,
+    pub(crate) text_blends: crate::text::TextBlends,
     pub(crate) images: HashMap<UniqueId, (std::sync::Weak<[u8]>, skia_safe::Image)>,
     pub(crate) resources: crate::resources::PaintResources,
 }
@@ -86,6 +85,7 @@ impl Painter {
         let room = crate::field::FieldRoom::new(range)?;
         let failures = Failures::default();
         let resources = crate::resources::PaintResources::new(&room, failures.clone())?;
+        let loaded_fonts = registry.load()?;
         Ok(Self {
             blend_space: crate::BlendSpace::default(),
             effect_registry: crate::effect_registry::EffectRegistry::new(&room)?,
@@ -95,12 +95,12 @@ impl Painter {
             gpu_timing: None,
             frame: 0,
             opacity: opacity::Opacity::new()?,
-            shaper: Shaper::new(registry, failures.clone())?,
+            shaper: Shaper::new(loaded_fonts, failures.clone()),
             failures,
-            source_fonts: sources::Sources::new(registry)?,
             paint_configuration: configuration::Configuration::default(),
             text_rasterizers: crate::text::Rasterizers::new()?,
             text_scopes: crate::text::Scopes::default(),
+            text_blends: crate::text::TextBlends::new()?,
             images: HashMap::new(),
             resources,
         })
@@ -202,35 +202,6 @@ impl Painter {
         &mut self.shaper
     }
 
-    pub(crate) fn source_paragraph_input<'t>(
-        &mut self,
-        text: &'t str,
-        style: &'t TextStyle<Dp>,
-        width: Dp,
-        rendering: crate::text::TextRendering,
-    ) -> Result<ParagraphInput<'t>, DrawFailure> {
-        self.shaper.observe_rendering();
-        ParagraphInput::new(
-            text,
-            style,
-            width,
-            rendering,
-            self.source_fonts.collection(rendering),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn prepare_source_paragraph(
-        &mut self,
-        text: &str,
-        style: &TextStyle<Dp>,
-        width: Dp,
-        rendering: crate::text::TextRendering,
-    ) -> Result<&mut skia_safe::textlayout::Paragraph, DrawFailure> {
-        let input = self.source_paragraph_input(text, style, width, rendering)?;
-        Ok(&mut self.shaper.cached(input).shaped.paragraph)
-    }
-
     pub(crate) fn paint_commands(
         &mut self,
         canvas: &Canvas,
@@ -252,7 +223,6 @@ impl Painter {
         let mut enclosing = Vec::new();
         let mut effects = 0;
         for (index, command) in commands.iter().enumerate() {
-            self.text_scopes.observe(command);
             if self.effect_registry.identify(command).is_some() {
                 self.render_effect(
                     canvas,
@@ -269,12 +239,14 @@ impl Painter {
                 DrawCommand::Restore => match enclosing.pop() {
                     Some(outer) => {
                         let _chained_canvas = canvas.restore();
+                        self.text_scopes.close();
                         destination = outer;
                     }
                     None => self.failures.record(DrawFailure::UnbalancedRestore),
                 },
                 group if group.is_structural() => match self.open(canvas, leaf, index, group) {
                     Ok(Some(group)) => {
+                        self.text_scopes.open(group);
                         enclosing.push(destination);
                         destination = destination.inside(group);
                     }
@@ -309,24 +281,9 @@ impl Painter {
                 let _restored_by_restore_command = canvas.save();
                 Ok(Some(Destination::Surface))
             }
-            DrawCommand::Opacity(alpha) => {
-                let reads_parent = leaf.analysis.reads_group(index);
-                (self.opacity).save(canvas, scalar(*alpha)?, None, reads_parent, &self.failures);
-                Ok(Some(Destination::for_opacity(*alpha)))
-            }
+            DrawCommand::Opacity(alpha) => self.open_opacity(canvas, leaf, index, *alpha, None),
             DrawCommand::OpacityLayer { alpha, bounds } => {
-                let bounds = (!leaf.analysis.expands_group(index))
-                    .then(|| skrect(*bounds))
-                    .transpose()?;
-                let reads_parent = leaf.analysis.reads_group(index);
-                (self.opacity).save(
-                    canvas,
-                    scalar(*alpha)?,
-                    bounds,
-                    reads_parent,
-                    &self.failures,
-                );
-                Ok(Some(Destination::for_opacity(*alpha)))
+                self.open_opacity(canvas, leaf, index, *alpha, Some(*bounds))
             }
             DrawCommand::Transform(affine) => {
                 let _chained_canvas = canvas.concat(&skmatrix(affine)?);
@@ -364,6 +321,23 @@ impl Painter {
             .map(Some),
             _ => Ok(None),
         }
+    }
+
+    fn open_opacity(
+        &self,
+        canvas: &Canvas,
+        leaf: &Leaf<'_>,
+        index: usize,
+        alpha: f64,
+        bounds: Option<Rect>,
+    ) -> Result<Option<Destination>, DrawFailure> {
+        let opacity = GroupOpacity::new(alpha);
+        let bounds = (bounds.filter(|_| !leaf.analysis.expands_group(index)))
+            .map(skrect)
+            .transpose()?;
+        let reads_parent = leaf.analysis.reads_group(index);
+        (self.opacity).save(canvas, opacity, bounds, reads_parent, &self.failures)?;
+        Ok(Some(opacity.destination()))
     }
 
     fn draw(
@@ -422,10 +396,10 @@ impl Painter {
                     .map_err(FailedDraw::from)
             }
             DrawCommand::Text { text, rect, style } => {
-                (self.paint_text(canvas, text, *rect, style)).map_err(FailedDraw::from)
+                (self.paint_text(canvas, text.as_str(), *rect, style)).map_err(FailedDraw::from)
             }
             DrawCommand::PrivateText { text, rect, style } => {
-                (self.paint_private_text(canvas, text, *rect, style)).map_err(FailedDraw::from)
+                (self.paint_text(canvas, text, *rect, style)).map_err(FailedDraw::from)
             }
             DrawCommand::Save
             | DrawCommand::Restore
@@ -446,7 +420,7 @@ mod text_tests {
 
     #[test]
     fn shaped_carets_use_graphemes_and_keep_both_sides_of_soft_wraps() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let mut style = TextStyle::new("sans-serif", 20.sp(), Color::WHITE).resolve_unscaled();
         style.max_lines = None;
         let value = "e\u{301} 🙂 words that wrap onto several rows";

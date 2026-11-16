@@ -66,7 +66,10 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
     let mut painter = new_painter(PixelGeometry::Rgb)?;
     let value = "Headphones p e\u{301} office אבג";
     let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
-    let ordinary_input = painter.shaper.paragraph_input(value, &style, 280.dp())?;
+    let ordinary_input =
+        painter
+            .shaper
+            .paragraph_input(value, &style, 280.dp(), painter.text_rendering())?;
     let ordinary = ordinary_input.key();
     let policies = font_policies(&mut painter.shaper.cached(ordinary_input).shaped.paragraph);
     assert!(
@@ -80,6 +83,7 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
         policy: painter.text_rendering(),
         destination: painter.shaper.configuration().destination,
         opaque_scope: true,
+        rgb_blend: painter.text_blends.rgb.clone(),
         style: &style,
         foreground: crate::paint::color4f(style.color)?,
     };
@@ -99,7 +103,7 @@ fn source_native_caches_keep_mask_and_ordinary_font_policies_separate() -> Resul
             fractional_positioning,
             ..source
         };
-        let source_input = painter.source_paragraph_input(
+        let source_input = painter.shaper.source_paragraph_input(
             value,
             &style,
             Dp::new(280.0 + f64::from(iteration)),
@@ -135,7 +139,7 @@ fn lcd_source_warmup_preserves_default_wrapping_and_shaped_carets() -> Result<()
         for width in [280.dp(), 79.dp(), 280.dp()] {
             let expected = reference.shaper.geometry(value, &style, width);
             assert_geometry(&painter.shaper.geometry(value, &style, width), &expected);
-            let paragraph = painter.prepare_source_paragraph(
+            let paragraph = painter.shaper.prepare_source_paragraph(
                 value,
                 &style,
                 width,

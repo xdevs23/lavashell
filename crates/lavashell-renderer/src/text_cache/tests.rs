@@ -57,7 +57,7 @@ fn text_measured_after_a_paint_leaves_its_paragraphs_in_the_cache() -> Result<()
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter
         .shaper
-        .paragraph_input("Brightness", &style, rect.width)?
+        .paragraph_input("Brightness", &style, rect.width, painter.text_rendering())?
         .key();
     let label = DrawCommand::Text {
         text: "Brightness".into(),
@@ -89,7 +89,7 @@ fn text_measured_after_three_surfaces_paint_keeps_the_first_paragraph() -> Resul
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter
         .shaper
-        .paragraph_input("Brightness", &style, rect.width)?
+        .paragraph_input("Brightness", &style, rect.width, painter.text_rendering())?
         .key();
     let label = DrawCommand::Text {
         text: "Brightness".into(),

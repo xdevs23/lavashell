@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::raster::{Drawn, RasterInput, Registration, TextRasterizer};
+use super::raster::{Coverage, RasterInput, Registration, TextRasterizer};
 use super::{TextAntialiasing, TextRendering};
 use crate::Error;
 use crate::raster::RasterCache;
@@ -61,22 +61,24 @@ impl TextRasterizer for ApproximateCoverage {
         }
     }
 
-    fn draw(
+    fn coverage(
         &self,
         input: &RasterInput<'_>,
         origin: skia_safe::Point,
         source: &mut ShapedParagraph,
-        key: u64,
+        key: Option<u64>,
         tiles: &mut RasterCache,
-    ) -> Result<Drawn, Error> {
-        let Some(masks) = masks::Masks::paint(input, origin, source, key, tiles)? else {
-            return Ok(Drawn::NotApplicable);
-        };
+    ) -> Result<Option<Coverage>, Error> {
+        masks::Masks::paint(input, origin, source, key, tiles)?
+            .map(|masks| self.blend.coverage(&masks))
+            .transpose()
+    }
+
+    fn draw(&self, input: &RasterInput<'_>, coverage: &Coverage) -> Result<(), Error> {
         let opaque = Color4f {
             a: 1.0,
             ..input.foreground
         };
-        (self.blend).draw(input.canvas, &masks, opaque)?;
-        Ok(Drawn::Painted)
+        (self.blend).draw(input.canvas, coverage, opaque)
     }
 }

@@ -345,6 +345,13 @@ impl Node {
             .filter(|_| axis == Axis::Vertical)
     }
 
+    pub(crate) fn text_style(&self) -> Option<&TextStyle<Dp>> {
+        match &self.kind {
+            NodeKind::Text(_, style) => Some(style),
+            _ => None,
+        }
+    }
+
     pub(super) fn text_style_mut(&mut self) -> Option<&mut TextStyle<Dp>> {
         match &mut self.kind {
             NodeKind::Text(_, style) | NodeKind::TextInput { style, .. } => Some(style),

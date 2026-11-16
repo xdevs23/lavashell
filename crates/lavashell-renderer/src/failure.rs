@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::Error;
+use crate::fault::{DefectNotice, Fault, REPORT_THE_FAILURE};
 use crate::paint::StreamRejection;
 use lavashell_core::error::message_chain;
 use std::{cell::RefCell, collections::BTreeMap, fmt, rc::Rc};
@@ -27,8 +28,29 @@ pub enum DrawFailure {
     NumberRange,
 }
 
-impl fmt::Display for DrawFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl DrawFailure {
+    pub(crate) fn fault(self) -> Fault {
+        match self {
+            Self::ColorSpace | Self::TileSize | Self::ShaderRejected => Fault::DefectInThisBuild,
+            Self::Allocation
+            | Self::SurfaceRead
+            | Self::LensWithoutSurface
+            | Self::UnbalancedRestore
+            | Self::ImageSize
+            | Self::ImageUndecodable
+            | Self::ImagePixels
+            | Self::StreamUnbound
+            | Self::StreamStale
+            | Self::StreamRejected(_)
+            | Self::GpuTimestamp
+            | Self::SingularTransform
+            | Self::OutlineLength
+            | Self::SubpixelText
+            | Self::NumberRange => Fault::OutsideThisBuild,
+        }
+    }
+
+    fn write_fact(self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::Allocation => {
                 "cannot allocate an offscreen texture, so shapes that need one are left out; \
@@ -70,15 +92,17 @@ impl fmt::Display for DrawFailure {
                 "a stream image belongs to another frame than the frame bound for the stream, so \
                  it is left out; draw the stream image of the frame that was bound last"
             }
-            Self::StreamRejected(rejection) => return rejection.fmt(f),
+            Self::StreamRejected(rejection) => return fmt::Display::fmt(&rejection, f),
             Self::GpuTimestamp => {
-                "cannot write or read a GPU timestamp, so the GPU time of a frame or an effect is \
-                 not measured; update the graphics driver, or report the failure with this log"
+                return write!(
+                    f,
+                    "cannot write or read a GPU timestamp, so the GPU time of a frame or an effect \
+                     is not measured; update the graphics driver, or {REPORT_THE_FAILURE}"
+                );
             }
             Self::ColorSpace => {
-                "Skia cannot build the working color space, so retained layers are painted again \
-                 on every frame instead of being cached; this is a defect in this build of the \
-                 renderer, so report it with this log"
+                "Skia cannot build the working color space, so the renderer paints retained layers \
+                 again on every frame instead of caching them"
             }
             Self::SingularTransform => {
                 "glass is drawn under a transform that scales it to almost nothing, so the \
@@ -90,13 +114,15 @@ impl fmt::Display for DrawFailure {
                  draw it as several shorter contours"
             }
             Self::TileSize => {
-                "a raster tile has no pixels or more bytes than the resource cache of the GPU \
-                 context holds, so the shape that needs it is left out; this is a defect in this \
-                 build of the renderer, so report it with this log"
+                "a raster tile is empty or has more bytes than the GPU context's resource cache \
+                 allows, so the renderer leaves out the shape that needs it"
             }
             Self::SubpixelText => {
-                "subpixel text cannot be rasterized as subpixel coverage, so it is drawn with the \
-                 ordinary text rendering; free memory, or report the failure with this log"
+                return write!(
+                    f,
+                    "subpixel text cannot be rasterized as subpixel coverage, so it is drawn with \
+                     the ordinary text rendering; free memory, or {REPORT_THE_FAILURE}"
+                );
             }
             Self::NumberRange => {
                 "a length, a color or another number of a draw lies beyond the range of the \
@@ -104,12 +130,26 @@ impl fmt::Display for DrawFailure {
                  the scene within that range"
             }
             Self::ShaderRejected => {
-                "Skia rejects a shader that the renderer builds, so the draw that needs it is left \
-                 out or drawn without it; this is a defect in this build of the renderer, so \
-                 report it with this log"
+                "Skia rejects a shader that the renderer builds, so the renderer leaves out the \
+                 draw that needs it, or draws it without the shader"
             }
         };
         f.write_str(message)
+    }
+
+    fn write_with_notice(self, f: &mut fmt::Formatter<'_>, cause: Option<&Error>) -> fmt::Result {
+        self.write_fact(f)?;
+        let notice_in_cause = cause.map(Error::fault) == Some(Fault::DefectInThisBuild);
+        if self.fault() == Fault::DefectInThisBuild && !notice_in_cause {
+            write!(f, ". {DefectNotice}")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for DrawFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write_with_notice(f, None)
     }
 }
 
@@ -137,7 +177,7 @@ impl FailedDraw {
 
 impl fmt::Display for FailedDraw {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.failure, f)
+        self.failure.write_with_notice(f, self.cause.as_deref())
     }
 }
 
@@ -176,6 +216,7 @@ impl Failures {
 
     pub fn record_caused(&self, failure: DrawFailure, cause: &(dyn std::error::Error + 'static)) {
         if let Some(count) = self.count_logged(failure) {
+            let failure = fmt::from_fn(|f| failure.write_with_notice(f, cause.downcast_ref()));
             let cause = message_chain(cause);
             log::warn!(
                 "{failure}; the cause this time: {cause} (recorded {count} times since the renderer \

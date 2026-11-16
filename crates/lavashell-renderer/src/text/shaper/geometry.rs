@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn text_sized_beyond_the_range_of_skia_scalars_measures_as_empty() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let style =
             TextStyle::new("sans-serif", Sp::new(f64::MAX), Color::WHITE).resolve_unscaled();
         assert_eq!(shaper.measure("Display", &style, Dp::INFINITY), Size::ZERO);
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn wrapping_text_is_at_least_as_wide_as_its_longest_word() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         for max_lines in [Some(2), None] {
             let style = TextStyle {
                 max_lines,
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn one_line_text_is_as_wide_as_its_ellipsis_or_itself_if_narrower() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let mut width = |text: &str| shaper.measure(text, &style(), Dp::INFINITY).width;
         let (ellipsis, word, dot) = (width("…"), width("Display"), width("."));
         assert!(Dp::ZERO < dot && dot < ellipsis && ellipsis < word);
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn a_probe_at_zero_width_measures_text_at_its_smallest_width() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let zero = Proposal {
             width: Some(0.dp()),
             height: None,
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn skia_clusters_use_real_bidi_bounds_and_utf8_ranges() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let value = "abcאבג🙂";
         let geometry = shaper.geometry(value, &style(), 500.dp());
         assert!(!geometry.clusters.is_empty());
@@ -379,7 +379,7 @@ mod tests {
 
     #[test]
     fn skia_combining_and_zwj_clusters_match_keyboard_caret_boundaries() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let value = "e\u{301}👩\u{200d}💻z";
         let geometry = shaper.geometry(value, &style(), 500.dp());
         assert!(!geometry.carets.iter().any(|caret| caret.index == 1));
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn skia_icu_word_starts_convert_surrogates_and_skip_whitespace() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let value = "  café 🦀 κόσμος  \nשלום world";
         let geometry = shaper.geometry(value, &style(), 500.dp());
         let words = ["café", "🦀", "κόσμος", "שלום", "world"];
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn skia_lines_convert_utf16_ranges_and_preserve_final_blank_line() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let style = TextStyle {
             max_lines: None,
             ..style()
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn skia_crlf_geometry_preserves_each_scalar_once() -> Result<(), TestError> {
-        let mut shaper = Shaper::new(&crate::Fonts::new(), Failures::default())?;
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
         let style = TextStyle {
             max_lines: None,
             ..style()

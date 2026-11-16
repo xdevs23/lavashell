@@ -1,25 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::Painter;
 use crate::failure::Failures;
+use crate::raster::RasterCache;
 use crate::test_error::TestError;
-use crate::text::Shaper;
+use crate::text::{Coverage, RasterInput, Rasterizers, Shaper, TextRasterizer};
 use crate::text_cache::ShapedParagraph;
 use crate::{
     BlendSpace,
     text::{Hinting, PixelGeometry, TextAntialiasing, TextDestination, TextRendering},
 };
+use lavashell_core::prelude::*;
 use lavashell_core::protected_text::ProtectedText;
 use lavashell_core::scene::tree::{
     Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
 };
 use lavashell_test_fixtures::WithoutFailures;
 use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 fn new_painter() -> Result<Painter, TestError> {
-    let fonts = crate::test_font::test_font()?;
-    let mut painter = Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
+    new_painter_with(&crate::test_font::test_font()?)
+}
+
+fn new_painter_with(fonts: &crate::Fonts) -> Result<Painter, TestError> {
+    let mut painter = Painter::new(fonts, crate::UniformRange::VULKAN_REQUIRED)?
         .with_raster_mode(crate::raster::RasterMode::Tiles);
     painter.set_blend_space(BlendSpace::Srgb);
     Ok(painter)
@@ -231,11 +238,197 @@ fn private_pixels_match_ordinary_font_and_coverage_policy_without_storing_tiles(
                 });
                 let actual = pixels(&mut painter, &[command])?;
                 let expected = pixels(&mut reference, &[ordinary])?;
-                assert!(actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1));
+                assert_eq!(actual, expected);
                 assert_eq!(painter.resources.tiles.borrow().images().count(), 0);
                 assert_eq!(painter.shaper.private_skia_cache_count(), 0);
             }
         }
+    }
+    Ok(())
+}
+
+const ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS: u8 = 1;
+
+#[test]
+fn a_weight_between_two_static_faces_adds_the_coverage_of_both_for_ordinary_and_private_text()
+-> Result<(), TestError> {
+    let fonts = crate::test_font::static_test_faces()?;
+    let mut painter = new_painter_with(&fonts)?;
+    let mut reference = new_painter_with(&fonts)?;
+    let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
+        field(&mut painter, "Mon 5 Oct office")?;
+    let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
+    let style = |weight, alpha| -> Result<TextStyle<Dp>, TestError> {
+        Ok(
+            TextStyle::new("probe", 13.sp(), Color::WHITE.with_alpha(alpha))
+                .weight(FontWeight::try_new(weight)?)
+                .resolve_unscaled(),
+        )
+    };
+    let ordinary = |style| {
+        private.expose(|value| DrawCommand::Text {
+            text: value.into(),
+            rect,
+            style,
+        })
+    };
+    let alike = |a: &[u8], b: &[u8]| {
+        (a.iter().zip(b)).all(|(a, b)| a.abs_diff(*b) <= ROUNDING_STEP_OF_TWO_SEPARATE_DRAWS)
+    };
+    let lighter_face = pixels(&mut reference, &[ordinary(style(400.0, 0.75)?)])?;
+    let heavier_face = pixels(&mut reference, &[ordinary(style(700.0, 0.25)?)])?;
+    let lighter_and_heavier_face: Vec<u8> = (lighter_face.iter().zip(&heavier_face))
+        .map(|(lighter, heavier)| lighter.saturating_add(*heavier))
+        .collect();
+    let only_lighter_face = pixels(&mut reference, &[ordinary(style(400.0, 1.0)?)])?;
+    assert!((lighter_and_heavier_face.as_chunks::<4>().0.iter()).any(|pixel| pixel[3] > 0));
+    assert!(!alike(&lighter_and_heavier_face, &only_lighter_face));
+    let between = style(475.0, 1.0)?;
+    let protected = DrawCommand::PrivateText {
+        text: private.clone(),
+        rect,
+        style: between.clone(),
+    };
+    for command in [ordinary(between), protected] {
+        let actual = pixels(&mut painter, &[command])?;
+        assert!(alike(&actual, &lighter_and_heavier_face));
+    }
+    Ok(())
+}
+
+#[test]
+fn subpixel_text_stays_subpixel_from_one_static_face_through_the_blend_to_the_other()
+-> Result<(), TestError> {
+    let fonts = crate::test_font::static_test_faces()?;
+    let mut painter = Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
+        .with_raster_mode(crate::raster::RasterMode::Tiles);
+    painter.set_text_rendering(
+        TextRendering {
+            antialiasing: TextAntialiasing::Subpixel,
+            ..Default::default()
+        },
+        TextDestination {
+            opaque: true,
+            geometry: PixelGeometry::Rgb,
+        },
+    );
+    let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
+        field(&mut painter, "Mon 5 Oct office")?;
+    let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
+    for weight in [400.0, 475.0, 700.0] {
+        let style = TextStyle::new("probe", 13.sp(), Color::WHITE)
+            .weight(FontWeight::try_new(weight)?)
+            .resolve_unscaled();
+        let ordinary = private.expose(|value| DrawCommand::Text {
+            text: value.into(),
+            rect,
+            style: style.clone(),
+        });
+        let protected = DrawCommand::PrivateText {
+            text: private.clone(),
+            rect,
+            style,
+        };
+        for command in [ordinary, protected] {
+            let image =
+                drawn_on_black(|canvas| painter.paint_as_leaf(canvas, &[command], Density::ONE))?;
+            let colored_fringe = |pixel: &[u8; 4]| pixel[0] != pixel[1] || pixel[1] != pixel[2];
+            assert!(
+                image.as_chunks::<4>().0.iter().any(colored_fringe),
+                "{weight}"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn drawn_on_black(
+    paint: impl FnOnce(&skia_safe::Canvas) -> Result<(), TestError>,
+) -> Result<Vec<u8>, TestError> {
+    let info = ImageInfo::new(
+        (300, 48),
+        ColorType::RGBA8888,
+        AlphaType::Opaque,
+        ColorSpace::new_srgb(),
+    );
+    let mut surface =
+        skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
+    paint(surface.canvas().clear(skia_safe::Color::BLACK))?;
+    let mut pixels = vec![0; 300 * 48 * 4];
+    assert!(surface.read_pixels(&info, &mut pixels, 300 * 4, (0, 0)));
+    Ok(pixels)
+}
+
+struct FixedOutcomeRasterizer(fn() -> Result<Option<Coverage>, crate::Error>);
+
+impl TextRasterizer for FixedOutcomeRasterizer {
+    fn antialiasing(&self) -> TextAntialiasing {
+        TextAntialiasing::Grayscale
+    }
+
+    fn source_style(&self, input: &RasterInput<'_>) -> Option<TextStyle<Dp>> {
+        Some(input.style.clone())
+    }
+
+    fn coverage(
+        &self,
+        _input_not_rasterized: &RasterInput<'_>,
+        _origin_not_rasterized: skia_safe::Point,
+        _source_not_rasterized: &mut ShapedParagraph,
+        _key_not_rasterized: Option<u64>,
+        _tiles_not_rasterized: &mut RasterCache,
+    ) -> Result<Option<Coverage>, crate::Error> {
+        (self.0)()
+    }
+
+    fn draw(
+        &self,
+        _input_not_drawn: &RasterInput<'_>,
+        _coverage_never_produced: &Coverage,
+    ) -> Result<(), crate::Error> {
+        Ok(())
+    }
+}
+
+#[test]
+fn private_text_declined_or_failed_by_the_rasterizer_matches_ordinary_text_without_storing_tiles()
+-> Result<(), TestError> {
+    let grayscale = TextRendering {
+        antialiasing: TextAntialiasing::Grayscale,
+        ..Default::default()
+    };
+    let declined: fn() -> Result<Option<Coverage>, crate::Error> = || Ok(None);
+    let failed: fn() -> Result<Option<Coverage>, crate::Error> = || Err(crate::Error::SubpixelTile);
+    for (outcome, recorded_failures) in [(declined, 0), (failed, 1)] {
+        let mut painter = new_painter()?;
+        let (_view_not_framed_again, _builder_not_framed_again, _secret_not_changed, private) =
+            field(&mut painter, "Mon 5 Oct office")?;
+        painter.set_text_rendering(grayscale, TextDestination::default());
+        painter.text_rasterizers = Rasterizers::only(Rc::new(FixedOutcomeRasterizer(outcome)));
+        let mut reference = new_painter()?;
+        reference.set_text_rendering(grayscale, TextDestination::default());
+        let rect = Rect::new(7.dp(), 2.dp(), 280.dp(), 40.dp());
+        let style = TextStyle::new("probe", 13.sp(), Color::WHITE).resolve_unscaled();
+        let protected = DrawCommand::PrivateText {
+            text: private.clone(),
+            rect,
+            style: style.clone(),
+        };
+        let ordinary = private.expose(|value| DrawCommand::Text {
+            text: value.into(),
+            rect,
+            style,
+        });
+        let actual = pixels(&mut painter, &[protected])?;
+        let expected = pixels(&mut reference, &[ordinary])?;
+        assert!(expected.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
+        assert_eq!(actual, expected);
+        assert_eq!(painter.resources.tiles.borrow().images().count(), 0);
+        assert_eq!(painter.shaper.private_skia_cache_count(), 0);
+        assert_eq!(
+            painter.failures.count(DrawFailure::SubpixelText),
+            recorded_failures
+        );
     }
     Ok(())
 }
@@ -323,7 +516,7 @@ fn long_private_runs_clip_transient_tiles_on_the_original_sampling_grid() -> Res
         .resources
         .tiles
         .get_mut()
-        .without_storage(|tiles| tiles.paragraph_image(canvas, &mut paragraph, 0, origin))?
+        .paragraph_image(canvas, &mut paragraph, None, origin)?
         .ok_or(TestError::Missing("paragraph image"))?;
     assert_eq!(image.dimensions(), clipped.size);
     assert_eq!(bounds, clipped.destination);
@@ -335,7 +528,7 @@ fn long_private_runs_clip_transient_tiles_on_the_original_sampling_grid() -> Res
 fn the_smallest_private_width_is_shaped_from_the_value_outside_the_shared_caches()
 -> Result<(), TestError> {
     let mut painter = new_painter()?;
-    let mut reference = Shaper::new(&crate::test_font::test_font()?, Failures::default())?;
+    let mut reference = Shaper::new(crate::test_font::test_font()?.load()?, Failures::default());
     let style = TextStyle {
         max_lines: Some(1),
         ..TextStyle::new("probe", 13.sp(), Color::WHITE)
@@ -385,7 +578,7 @@ fn field_beside_text(secret: &ProtectedText) -> View {
 fn private_intrinsic_measurement_does_not_expand_a_row_or_displace_its_sibling()
 -> Result<(), TestError> {
     let mut painter = new_painter()?;
-    let mut reference = Shaper::new(&crate::test_font::test_font()?, Failures::default())?;
+    let mut reference = Shaper::new(crate::test_font::test_font()?.load()?, Failures::default());
     let style = TextStyle {
         max_lines: Some(1),
         ..TextStyle::new("probe", 13.sp(), Color::WHITE)

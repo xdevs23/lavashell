@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::failure::DrawFailure;
+use crate::fault::{DefectNotice, Fault};
+use crate::fonts::RegisteredFont;
 use ash::vk;
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::{NumberError, OutputProfile, PixelSize};
@@ -12,6 +14,8 @@ use std::fmt;
 use std::num::TryFromIntError;
 use std::path::PathBuf;
 use std::str::Utf8Error;
+
+const FONT_NEXT_STEP: &str = "register a different TrueType or OpenType font file under that alias";
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -32,37 +36,27 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    #[error(
-        "cannot decode the font registered as {alias}; register a TrueType or OpenType font file under that alias"
-    )]
-    DecodeFont { alias: String },
-    #[error("cannot read the variation axes of the font registered as {alias}")]
-    ReadFontAxes { alias: String },
-    #[error("cannot instantiate the font registered as {alias} at weight {}", .weight.get())]
-    InstantiateFont { alias: String, weight: FontWeight },
-    #[error(
-        "the weight {} of the font registered as {alias} lies beyond the range of a Skia scalar",
-        .weight.get()
-    )]
-    FontWeightRange {
-        alias: String,
+    #[error("cannot decode the {font}; {}", FONT_NEXT_STEP)]
+    DecodeFont { font: RegisteredFont },
+    #[error("cannot read the variation axes of the {font}; {}", FONT_NEXT_STEP)]
+    ReadFontAxes { font: RegisteredFont },
+    #[error("cannot instantiate the {font} at weight {}; {}", .weight.get(), FONT_NEXT_STEP)]
+    InstantiateFont {
+        font: RegisteredFont,
         weight: FontWeight,
-        #[source]
-        source: DrawFailure,
     },
     #[error("a font is registered twice under the alias {0}")]
     DuplicateFontAlias(String),
-    #[error(
-        "cannot compile the {program} program, which is a defect in this build of the renderer"
-    )]
+    #[error("the font alias {alias} is registered with an empty list of font files")]
+    NoFontFiles { alias: String },
+    #[error("cannot compile the {program} program. {DefectNotice}")]
     CompileProgram {
         program: String,
         #[source]
         source: SkslDiagnostic,
     },
     #[error(
-        "the {program} program declares the uniforms {declared:?} where the renderer writes {expected:?}, which is \
-         a defect in this build of the renderer"
+        "the {program} program declares the uniforms {declared:?} where the renderer writes {expected:?}. {DefectNotice}"
     )]
     ProgramUniforms {
         program: String,
@@ -70,8 +64,7 @@ pub enum Error {
         expected: BTreeMap<String, usize>,
     },
     #[error(
-        "the {program} program declares the children {declared:?} where the renderer passes {expected:?}, which is \
-         a defect in this build of the renderer"
+        "the {program} program declares the children {declared:?} where the renderer passes {expected:?}. {DefectNotice}"
     )]
     ProgramChildren {
         program: String,
@@ -79,13 +72,11 @@ pub enum Error {
         expected: Vec<String>,
     },
     #[error(
-        "Skia finds no uniform {name} in the {program} program although the program declares it, which is a defect \
-         in this build of the renderer"
+        "Skia finds no uniform {name} in the {program} program although the program declares it. {DefectNotice}"
     )]
     MissingUniform { program: String, name: String },
     #[error(
-        "Skia finds no child {name} in the {program} program although the program declares it, which is a defect in \
-         this build of the renderer"
+        "Skia finds no child {name} in the {program} program although the program declares it. {DefectNotice}"
     )]
     MissingChild { program: String, name: &'static str },
     #[error(
@@ -101,9 +92,7 @@ pub enum Error {
         #[source]
         source: TryFromIntError,
     },
-    #[error(
-        "the {effect} effect of subpixel text does not compile, which is a defect in this build of the renderer"
-    )]
+    #[error("the {effect} effect of subpixel text does not compile. {DefectNotice}")]
     CompileSubpixelEffect {
         effect: &'static str,
         #[source]
@@ -112,8 +101,8 @@ pub enum Error {
     #[error("cannot allocate the coverage tile of subpixel text")]
     SubpixelTile,
     #[error(
-        "the coverage tile of subpixel text has no pixels or more bytes than the resource cache holds, although it \
-         was sized to fit, which is a defect in this build of the renderer"
+        "the coverage tile of subpixel text is empty or has more bytes than the resource cache allows, although \
+         the renderer sized it to fit. {DefectNotice}"
     )]
     SubpixelTileSize,
     #[error("Skia cannot sample the coverage mask of subpixel text")]
@@ -360,6 +349,31 @@ pub enum Error {
     ExplicitTimestampRequired,
     #[error("{}", InOrder(.0))]
     Several(Vec<Error>),
+}
+
+impl Error {
+    pub(crate) fn fault(&self) -> Fault {
+        match self {
+            Self::CompileProgram { .. }
+            | Self::ProgramUniforms { .. }
+            | Self::ProgramChildren { .. }
+            | Self::MissingUniform { .. }
+            | Self::MissingChild { .. }
+            | Self::CompileSubpixelEffect { .. }
+            | Self::SubpixelTileSize => Fault::DefectInThisBuild,
+            Self::Several(failures) => {
+                if failures
+                    .iter()
+                    .any(|failure| failure.fault() == Fault::DefectInThisBuild)
+                {
+                    Fault::DefectInThisBuild
+                } else {
+                    Fault::OutsideThisBuild
+                }
+            }
+            _ => Fault::OutsideThisBuild,
+        }
+    }
 }
 
 struct InOrder<'a>(&'a [Error]);

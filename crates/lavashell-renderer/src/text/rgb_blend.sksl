@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 uniform shader foreground;
+uniform shader drawn;
+uniform shader backdrop;
+uniform float clampedToUnitRange;
+
+half3 stored(half3 color, half alpha) {
+    return clampedToUnitRange > 0 ? clamp(color, 0, alpha) : color;
+}
 
 half4 main(half4 src, half4 dst) {
     half4 color = foreground.eval(float2(0));
-    return half4(src.rgb * color.rgb + (1 - src.rgb * color.a) * dst.rgb, 1);
+    color.rgb = stored(color.rgb, color.a);
+    half3 under = backdrop.eval(float2(0)).rgb;
+    half3 coverage = (src.rgb - under) / (stored(drawn.eval(float2(0)).rgb, 1) - under);
+    return half4(coverage * color.rgb + (1 - coverage * color.a) * dst.rgb, 1);
 }

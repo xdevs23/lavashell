@@ -35,6 +35,7 @@ in
   buildInputs = runtime.libraries;
   env =
     assets.environment
+    // assets.testEnvironment
     // assets.waylandEnvironment
     // runtime.environment
     // {
@@ -54,7 +55,6 @@ in
   preCheck = ''
     export DBUS_DAEMON="${privateBus}"
     export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json"
-    export LAVASHELL_TEST_FONT="${assets.testEnvironment.LAVASHELL_TEST_FONT}"
     export XDG_CACHE_HOME="$TMPDIR/lavashell-test-cache"
     mkdir -p "$XDG_CACHE_HOME"
   '';

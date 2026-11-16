@@ -4,7 +4,6 @@ mod geometry;
 mod key;
 mod paragraph;
 mod path;
-mod storage;
 #[cfg(test)]
 mod tests;
 mod tiles;
@@ -12,11 +11,12 @@ mod upload;
 
 use crate::failure::Failures;
 use crate::retention::{Frames, Retained};
-pub(crate) use geometry::{ParagraphTile, TileBudget, ink_bounds, pixel_bytes};
+pub(crate) use geometry::{
+    ParagraphTile, TileBudget, ink_bounds, outset_by_antialiasing, pixel_bytes,
+};
 pub(crate) use key::{ParagraphRaster, TileContent};
 use lavashell_core::surface::SurfaceId;
 use skia_safe::{Canvas, Image};
-use storage::TileStorage;
 pub(crate) use tiles::Uncached;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,7 +39,6 @@ struct Tile {
 
 pub(crate) struct RasterCache {
     mode: RasterMode,
-    storage: TileStorage,
     uploads: upload::UploadBatch,
     tiles: Retained<key::TileKey, Tile>,
     frames: Frames,
@@ -50,7 +49,6 @@ impl RasterCache {
     pub fn new(mode: RasterMode, failures: Failures) -> Self {
         Self {
             mode,
-            storage: TileStorage::Retained,
             uploads: upload::UploadBatch::default(),
             tiles: Retained::default(),
             frames: Frames::default(),

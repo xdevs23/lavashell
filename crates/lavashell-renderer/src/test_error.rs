@@ -61,8 +61,8 @@ pub(crate) enum TestError {
     Missing(&'static str),
     #[error("the result is not {0}")]
     Unexpected(&'static str),
-    #[error("LAVASHELL_TEST_FONT names no font file")]
-    MissingTestFont,
+    #[error("{0} is not set")]
+    UnsetVariable(&'static str),
     #[error("the test process has a logger that is not the recorder of the test")]
     Logger(#[source] &'static SetLoggerError),
 }

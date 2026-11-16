@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{DrawFailure, FailedDraw, Failures};
-use crate::Error;
+use crate::error::{Error, SkslDiagnostic};
 use crate::test_error::TestError;
 use lavashell_core::prelude::NumberError;
 use std::{cell::RefCell, rc::Rc, sync::OnceLock};
@@ -100,5 +100,29 @@ fn a_failed_draw_is_logged_with_its_cause() -> Result<(), TestError> {
     };
     assert!(message.contains(&format!("{cause}: {source}")));
     assert_eq!(failures.count(DrawFailure::ImageSize), 1);
+    Ok(())
+}
+
+#[test]
+fn a_failed_draw_shows_the_defect_notice_once_whether_or_not_its_cause_shows_it()
+-> Result<(), TestError> {
+    let compile = Error::CompileProgram {
+        program: "glass".to_owned(),
+        source: SkslDiagnostic(String::new()),
+    };
+    for cause in [compile, Error::DecodeImage] {
+        let failed = FailedDraw::caused(DrawFailure::ShaderRejected, Rc::new(cause));
+        let records = recorded(|| Failures::default().record(failed))?;
+        let [(_level_not_under_test, message)] = records.as_slice() else {
+            return Err(TestError::Unexpected("one log record"));
+        };
+        assert_eq!(
+            message
+                .matches("This is a defect in this build of the renderer")
+                .count(),
+            1,
+            "{message}"
+        );
+    }
     Ok(())
 }

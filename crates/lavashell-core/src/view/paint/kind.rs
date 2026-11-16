@@ -4,22 +4,53 @@ use crate::geometry::{Point, Rect};
 use crate::scene::{DrawCommand, Drawing, TextStyle, Transform};
 use crate::text_edit::FieldGeometry;
 use crate::ui::{NodeId, NodeKind};
+use crate::units::Dp;
 use crate::view::field::{FieldFocus, TextMove};
+use crate::view::transition::TextBlend;
 use crate::view::{Hit, HitClip, TextMeasurer, TextTarget, View};
 
+#[derive(Clone, Copy)]
+pub(super) struct KindInput {
+    pub bounds: Rect,
+    pub rect: Rect,
+    pub transform: Transform,
+    pub text_blend: Option<TextBlend>,
+}
+
 impl View {
+    pub(super) fn painted_rect(
+        &self,
+        index: usize,
+        rect: Rect,
+        text_blend: Option<TextBlend>,
+        text: &mut impl TextMeasurer,
+    ) -> Rect {
+        match (&self.nodes[index].kind, text_blend) {
+            (NodeKind::Text(value, style), Some(blend)) => {
+                rect_keeping_lines(rect, value, style, &blend.applied_to(style), text)
+            }
+            _ => rect,
+        }
+    }
+
     pub(super) fn paint_kind(
         &mut self,
         index: usize,
-        bounds: Rect,
-        rect: Rect,
-        transform: Transform,
+        input: KindInput,
         inside: Inherited,
         text: &mut impl TextMeasurer,
     ) {
+        let KindInput {
+            bounds,
+            rect,
+            transform,
+            text_blend,
+        } = input;
         let colored = |color| inside.content_colors.applied_to(color);
         match &self.nodes[index].kind {
-            NodeKind::Text(..) => self.paint_text(index, rect, transform, &inside, text),
+            NodeKind::Text(..) => {
+                self.paint_text(index, rect, transform, &inside, text_blend, text);
+            }
             NodeKind::Icon {
                 icon, color, style, ..
             } => {
@@ -53,14 +84,17 @@ impl View {
         rect: Rect,
         transform: Transform,
         inside: &Inherited,
+        text_blend: Option<TextBlend>,
         text: &mut impl TextMeasurer,
     ) {
         let node = &self.nodes[index];
-        let NodeKind::Text(value, style) = &node.kind else {
+        let NodeKind::Text(value, node_style) = &node.kind else {
             return;
         };
         let id = node.id;
         text.observe_rendering();
+        let blended = text_blend.map(|blend| blend.applied_to(node_style));
+        let style = blended.as_ref().unwrap_or(node_style);
         let focus = self.field_focus(id);
         if self.text_selectable(index) {
             if node.enabled {
@@ -74,7 +108,7 @@ impl View {
             let (caret_width, device_pixel) = (self.caret_width(), self.device_pixel());
             (self.editing)
                 .field_painter(self.painting.canvas.commands(), caret_width, device_pixel)
-                .selectable_text(node, rect, transform.scale, focus, text);
+                .selectable_text(node, style, rect, transform.scale, focus, text);
         } else if self.accessibility.text_geometry {
             let geometry = text.geometry(value, style, rect.width);
             let _geometry_of_the_previous_frame = self.editing.positions.insert(
@@ -137,4 +171,21 @@ impl View {
             FieldFocus::Unfocused
         }
     }
+}
+
+fn rect_keeping_lines(
+    rect: Rect,
+    value: &str,
+    laid_out: &TextStyle<Dp>,
+    blended: &TextStyle<Dp>,
+    text: &mut impl TextMeasurer,
+) -> Rect {
+    let laid_out_width = text.measure(value, laid_out, Dp::INFINITY).width;
+    if laid_out_width <= Dp::ZERO {
+        return rect;
+    }
+    let growth = text.measure(value, blended, Dp::INFINITY).width / laid_out_width;
+    let added = (rect.width * growth - rect.width).max(Dp::ZERO);
+    let left = added * (blended.alignment).share_of_widening_on_the_left(blended.direction);
+    Rect::new(rect.x - left, rect.y, rect.width + added, rect.height)
 }

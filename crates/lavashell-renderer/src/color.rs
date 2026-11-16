@@ -153,6 +153,48 @@ pub(crate) fn channel_step(color_type: ColorType) -> Option<f64> {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChannelRange {
+    Unit,
+    Extended,
+}
+
+impl ChannelRange {
+    pub fn of(color_type: ColorType) -> Self {
+        match color_type {
+            ColorType::Unknown
+            | ColorType::ARGB4444
+            | ColorType::RGB565
+            | ColorType::Alpha8
+            | ColorType::RGBA8888
+            | ColorType::RGB888x
+            | ColorType::BGRA8888
+            | ColorType::Gray8
+            | ColorType::R8G8UNorm
+            | ColorType::SRGBA8888
+            | ColorType::R8UNorm
+            | ColorType::RGBA1010102
+            | ColorType::BGRA1010102
+            | ColorType::RGB101010x
+            | ColorType::BGR101010x
+            | ColorType::RGBA10x6
+            | ColorType::A16UNorm
+            | ColorType::R16UNorm
+            | ColorType::R16G16UNorm
+            | ColorType::R16G16B16A16UNorm
+            | ColorType::RGBAF16Norm => Self::Unit,
+            ColorType::BGR101010xXR
+            | ColorType::BGRA10101010XR
+            | ColorType::RGBAF16
+            | ColorType::RGBF16F16F16x
+            | ColorType::A16Float
+            | ColorType::R16Float
+            | ColorType::R16G16Float
+            | ColorType::RGBAF32 => Self::Extended,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
