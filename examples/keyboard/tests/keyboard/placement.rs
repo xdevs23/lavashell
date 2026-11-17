@@ -89,7 +89,7 @@ pub(super) fn pinch(play: &mut Play) {
         assert_eq!(
             demo.placement.get(),
             Placement::FullWidth,
-            "fingers that drift a little leave the placement as it is"
+            "fingers that drift leave the placement as it is"
         );
         assert_eq!(
             demo.query.get(),
