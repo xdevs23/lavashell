@@ -23,6 +23,8 @@ use lavashell_error_chain::message_chain;
 use lavashell_process_scope::{RunOutcome, run_ending_groups_on_termination};
 use next_steps::next_step;
 use run_label::RunLabel;
+use serde::{Serialize, Serializer};
+use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -53,8 +55,12 @@ pub struct CheckOptions {
         help = "render node of the compositor (default: chosen by the compositor)"
     )]
     drm_device: Option<PathBuf>,
-    #[arg(long, value_enum, default_value_t = CompositorRenderer::Gles2)]
-    renderer: CompositorRenderer,
+    #[arg(
+        long,
+        value_enum,
+        help = "renderer of the compositor (default: chosen by the compositor)"
+    )]
+    renderer: Option<CompositorRenderer>,
     #[arg(
         long,
         help = "directory of the logs, screenshots and report (default: a new temporary directory)"
@@ -66,6 +72,27 @@ pub struct CheckOptions {
 pub enum CompositorRenderer {
     Gles2,
     Pixman,
+}
+
+impl CompositorRenderer {
+    fn wlroots_name(self) -> &'static str {
+        match self {
+            Self::Gles2 => "gles2",
+            Self::Pixman => "pixman",
+        }
+    }
+}
+
+impl fmt::Display for CompositorRenderer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.wlroots_name())
+    }
+}
+
+impl Serialize for CompositorRenderer {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.wlroots_name())
+    }
 }
 
 fn main() -> ExitCode {

@@ -9,7 +9,7 @@ use replies::{CommandResult, Node, Output};
 pub use replies::{OutputSize, SwayWindow};
 use serde::de::DeserializeOwned;
 use sockets::SwaySockets;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::os::fd::AsFd;
@@ -38,7 +38,7 @@ enum WindowWake {
 impl HeadlessSway {
     pub fn start(
         drm_device: Option<&Path>,
-        renderer: CompositorRenderer,
+        renderer: Option<CompositorRenderer>,
         log: File,
     ) -> Result<Self, HarnessError> {
         let runtime = (tempfile::Builder::new().prefix("headless-sway-").tempdir())
@@ -53,10 +53,10 @@ impl HeadlessSway {
                 ("XDG_RUNTIME_DIR", runtime.path().as_os_str()),
                 ("WLR_BACKENDS", "headless".as_ref()),
                 ("WLR_LIBINPUT_NO_DEVICES", "1".as_ref()),
-                ("WLR_RENDERER", renderer.wlroots_name().as_ref()),
             ]
             .into_iter()
             .chain(drm_device.map(|device| ("WLR_RENDER_DRM_DEVICE", device.as_os_str())))
+            .chain(renderer.map(|renderer| ("WLR_RENDERER", OsStr::new(renderer.wlroots_name()))))
             .map(|(name, value)| (OsString::from(name), value.to_owned())),
         );
         let watch = SwaySockets::watch(runtime.path())?;
@@ -190,15 +190,6 @@ impl HeadlessSway {
             if ready(&windows) {
                 return Ok(windows);
             }
-        }
-    }
-}
-
-impl CompositorRenderer {
-    fn wlroots_name(self) -> &'static str {
-        match self {
-            Self::Gles2 => "gles2",
-            Self::Pixman => "pixman",
         }
     }
 }

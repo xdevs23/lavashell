@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::CheckOptions;
+use crate::CompositorRenderer;
 use crate::capture::OutputCapture;
 use crate::error::HarnessError;
 use crate::launch::{Run, run_app};
@@ -30,6 +31,7 @@ pub fn check_every_app(options: &CheckOptions) -> Result<(), HarnessError> {
         options.renderer,
         files.create("compositor.log")?,
     )?;
+    print_renderer(options.renderer);
     let mut capture = OutputCapture::start(&sway)?;
     let empty_screenshot = files.path("empty.png");
     capture.capture_change(&empty_screenshot, None)?;
@@ -55,6 +57,7 @@ pub fn check_every_app(options: &CheckOptions) -> Result<(), HarnessError> {
     let report = Report {
         flake: flake.to_string(),
         all_wayland_apps: options.only.is_empty(),
+        requested_renderer: options.renderer,
         examples,
     };
     let report_path = files.report_path();
@@ -65,4 +68,11 @@ pub fn check_every_app(options: &CheckOptions) -> Result<(), HarnessError> {
         report_path.display()
     );
     Ok(())
+}
+
+fn print_renderer(requested: Option<CompositorRenderer>) {
+    match requested {
+        Some(renderer) => println!("Compositor renderer: {renderer} (requested)"),
+        None => println!("Compositor renderer: chosen by the compositor"),
+    }
 }
