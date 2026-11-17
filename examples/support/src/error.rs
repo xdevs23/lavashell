@@ -48,6 +48,8 @@ pub enum Error {
     UnplayedSteps(usize),
     #[error("the test platform cannot press the keys of a step")]
     Press(#[source] lavashell_test_platform::Error),
+    #[error("the view does not give a delay for the next step")]
+    UnreadDelay,
     #[error("the window {app_id} did not show a frame")]
     NothingShown { app_id: String },
     #[error("cannot create the frame log")]

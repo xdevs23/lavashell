@@ -17,12 +17,14 @@ pub struct Steps<C, L, E> {
 }
 
 pub struct Start {
-    delay: Option<Duration>,
+    delay: Option<Delay>,
     every: Option<FrameInterval>,
     condition: Option<Condition>,
 }
 
 type Condition = Box<dyn Fn(&View) -> bool>;
+
+type Delay = Box<dyn Fn(&View) -> Option<Duration>>;
 
 type Action<C, E> = Box<dyn FnOnce(&mut View, Viewport, &C) -> Result<(), E>>;
 type Check<C, E> = Box<dyn FnOnce(&View, Viewport, &C) -> Result<(), E>>;
@@ -58,13 +60,14 @@ struct Playing<C, L, E> {
     phase: Phase<E>,
     started: Vec<(Marked, L)>,
     recording: Option<MarkRecording>,
-    previous: Option<Duration>,
+    due: Option<Duration>,
     frame_requested: bool,
     links: PacedLinks,
 }
 
 enum Phase<E> {
     Ready,
+    Ran,
     Queued,
     Failed(E),
 }
@@ -90,7 +93,7 @@ impl<C, L, E> Steps<C, L, E> {
             phase: Phase::Ready,
             started: Vec::new(),
             recording: None,
-            previous: None,
+            due: None,
             frame_requested: false,
             links: self.links,
         }
@@ -154,7 +157,7 @@ impl<C: 'static, L: Clone + 'static, E: From<Error> + 'static> Steps<C, L, E> {
         let frames = record(app, script)?.into_frames();
         let mut played = playing.borrow_mut();
         let unplayed = match mem::replace(&mut played.phase, Phase::Ready) {
-            Phase::Ready => played.waiting.len(),
+            Phase::Ready | Phase::Ran => played.waiting.len(),
             Phase::Queued => played.waiting.len() + 1,
             Phase::Failed(failure) => return Err(failure),
         };
@@ -186,11 +189,15 @@ impl Start {
     }
 
     #[must_use]
-    pub const fn after(delay: Duration) -> Self {
+    pub fn after(delay: Duration) -> Self {
+        Self::after_reading(move |_| Some(delay))
+    }
+
+    #[must_use]
+    pub fn after_reading(delay: impl Fn(&View) -> Option<Duration> + 'static) -> Self {
         Self {
-            delay: Some(delay),
-            every: None,
-            condition: None,
+            delay: Some(Box::new(delay)),
+            ..Self::NEXT
         }
     }
 
@@ -210,31 +217,57 @@ impl Start {
         }
     }
 
-    fn due(&self, previous: Option<Duration>) -> Option<Duration> {
-        (previous.zip(self.delay)).map(|(previous, delay)| previous.saturating_add(delay))
+    fn due(&self, view: &View) -> Result<Option<Duration>, Error> {
+        let Some(read) = &self.delay else {
+            return Ok(None);
+        };
+        let delay = read(view).ok_or(Error::UnreadDelay)?;
+        Ok(Some(view.motion().now().saturating_add(delay)))
     }
 
-    fn starts(&self, view: &View, now: Duration, previous: Option<Duration>) -> bool {
-        self.due(previous).is_none_or(|due| now >= due)
+    fn starts(&self, view: &View, now: Duration, due: Option<Duration>) -> bool {
+        due.is_none_or(|due| now >= due)
             && (self.condition.as_ref()).is_none_or(|holds| holds(view))
+    }
+}
+
+impl<C, L, E: From<Error>> Playing<C, L, E> {
+    fn schedule_after_ran(&mut self, view: &View) {
+        if !matches!(self.phase, Phase::Ran) {
+            return;
+        }
+        match (self.waiting.front()).map_or(Ok(None), |next| next.start.due(view)) {
+            Ok(due) => {
+                self.due = due;
+                self.phase = Phase::Ready;
+            }
+            Err(failure) => self.phase = Phase::Failed(failure.into()),
+        }
     }
 }
 
 impl<C, L, E> Playing<C, L, E> {
     fn take_started(&mut self, view: &View, now: Duration) -> Option<Work<C, L, E>> {
         let next = self.waiting.front()?;
-        if !(matches!(self.phase, Phase::Ready) && next.start.starts(view, now, self.previous)) {
+        if !(matches!(self.phase, Phase::Ready) && next.start.starts(view, now, self.due)) {
             return None;
         }
         self.waiting.pop_front().map(|step| step.work)
     }
 
+    fn step_ran(&mut self, ran: Result<(), E>) {
+        self.phase = match ran {
+            Ok(()) => Phase::Ran,
+            Err(failure) => Phase::Failed(failure),
+        };
+    }
+
     fn waits_for(&self) -> Pace {
         match (&self.phase, self.waiting.front()) {
-            (Phase::Queued, _) => Pace::FrameAtSameTime,
+            (Phase::Queued | Phase::Ran, _) => Pace::FrameAtSameTime,
             (Phase::Failed(_), _) | (Phase::Ready, None) => Pace::Finished,
             (Phase::Ready, Some(next)) => Pace::Wake {
-                at: next.start.due(self.previous),
+                at: self.due,
                 every: next.start.every,
             },
         }
@@ -280,7 +313,7 @@ fn on_screen(frames: &[RecordedFrame], marked: Marked) -> impl Iterator<Item = &
 #[cfg(test)]
 mod tests;
 
-fn observe<C: 'static, L: 'static, E: 'static>(
+fn observe<C: 'static, L: 'static, E: From<Error> + 'static>(
     playing: &Rc<RefCell<Playing<C, L, E>>>,
     actions: &ViewActions,
     shown: Marked,
@@ -290,19 +323,21 @@ fn observe<C: 'static, L: 'static, E: 'static>(
     let now = view.motion().now();
     let mut state = playing.borrow_mut();
     let mut marked = false;
-    while let Some(work) = state.take_started(view, now) {
+    loop {
+        state.schedule_after_ran(view);
+        let Some(work) = state.take_started(view, now) else {
+            break;
+        };
         match work {
             Work::Mark(label, recording) => {
                 state.started.push((shown, label));
-                state.previous = Some(now);
+                state.step_ran(Ok(()));
                 state.recording = Some(recording);
                 marked = true;
             }
             Work::Check(check) => {
-                state.previous = Some(now);
-                if let Err(failure) = check(view, viewport, &state.context) {
-                    state.phase = Phase::Failed(failure);
-                }
+                let checked = check(view, viewport, &state.context);
+                state.step_ran(checked);
             }
             Work::Act(action) => {
                 let act = move |view: &mut View, context: &C| action(view, viewport, context);
@@ -329,7 +364,7 @@ fn observe<C: 'static, L: 'static, E: 'static>(
     state.links.pace.publish(waits);
 }
 
-fn queue<C: 'static, L: 'static, E: 'static>(
+fn queue<C: 'static, L: 'static, E: From<Error> + 'static>(
     playing: &Rc<RefCell<Playing<C, L, E>>>,
     state: &mut Playing<C, L, E>,
     actions: &ViewActions,
@@ -341,11 +376,7 @@ fn queue<C: 'static, L: 'static, E: 'static>(
     actions.dispatch(surface, move |view| {
         let ran = run(view, &context);
         let mut state = playing.borrow_mut();
-        state.previous = Some(view.motion().now());
-        state.phase = match ran {
-            Ok(()) => Phase::Ready,
-            Err(failure) => Phase::Failed(failure),
-        };
+        state.step_ran(ran);
         state.links.pace.publish(state.waits_for());
     });
 }

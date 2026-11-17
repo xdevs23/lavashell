@@ -89,6 +89,7 @@ impl ExampleError for Error {
             | Self::NotServed(_)
             | Self::Press(_)
             | Self::UnplayedSteps(_)
+            | Self::UnreadDelay
             | Self::NothingShown { .. }
             | Self::Icon(_) => NextStep::ReportDefect,
         }
