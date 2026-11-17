@@ -32,5 +32,8 @@ original.lib.getAttrs input.keys {
   referenceFramework = reference.frameworkArtifacts.drvPath;
   reference = reference.drvPath;
   native = tree.packages.interactions.drvPath;
+  waylandInput = tree.packages.wayland-input.drvPath;
+  aospRoundTrip = tree.aospRoundTrip.drvPath;
+  sourceRules = tree.sourceRules.drvPath;
   directory = toString reference.directory;
 }

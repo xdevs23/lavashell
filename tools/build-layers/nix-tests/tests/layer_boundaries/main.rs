@@ -76,6 +76,7 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
     assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
+    assert_unchanged(&current, &Derivation::OFF_FRAMEWORK)?;
     assert_changed(
         &current,
         &[
@@ -85,6 +86,20 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
             Derivation::Native,
         ],
     )
+}
+
+#[test]
+fn an_edit_of_the_error_chain_changes_the_packages_off_the_framework() -> Result<(), LayerTestError>
+{
+    let fixture = Fixture::new()?;
+    append_newline(
+        &fixture
+            .root()
+            .join("crates/lavashell-error-chain/src/lib.rs"),
+    )?;
+    let current = fixture.all_layers()?;
+    assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
+    assert_changed(&current, &Derivation::OFF_FRAMEWORK)
 }
 
 #[test]

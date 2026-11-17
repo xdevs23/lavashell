@@ -19,6 +19,7 @@ struct TreeArguments {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CheckPhase {
+    drv_path: String,
     do_check: bool,
     cargo_test_flags: Vec<String>,
 }
@@ -78,13 +79,19 @@ fn the_support_layer_tests_every_crate_of_its_projection() -> Result<(), Fixture
 }
 
 #[test]
-fn every_local_crate_of_an_example_is_tested_once() -> Result<(), FixtureError> {
-    for (name, example) in check_phases()?.examples {
-        let tested: Vec<&str> = example
-            .derivations
-            .iter()
-            .flat_map(CheckPhase::tested_packages)
-            .collect();
+fn every_local_crate_of_an_example_is_tested_once_in_the_whole_build() -> Result<(), FixtureError> {
+    let phases = check_phases()?;
+    let build: BTreeMap<&str, &CheckPhase> = phases
+        .examples
+        .values()
+        .flat_map(|example| &example.derivations)
+        .map(|derivation| (derivation.drv_path.as_str(), derivation))
+        .collect();
+    let tested: Vec<&str> = build
+        .values()
+        .flat_map(|derivation| derivation.tested_packages())
+        .collect();
+    for (name, example) in &phases.examples {
         let runs: BTreeMap<&str, usize> = example
             .closure
             .iter()

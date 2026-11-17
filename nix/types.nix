@@ -15,6 +15,11 @@ in
   hosts = enumOf appDeclarations.hosts;
   launchKinds = enumOf appDeclarations.launchKinds;
   layers = enumOf contract.layers;
+  layerRoutes = enumOf [
+    "registryOnly"
+    "framework"
+    "frameworkWithEngine"
+  ];
   targetRoles = {
     device = "device";
     emulator = "emulator";

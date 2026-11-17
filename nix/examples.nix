@@ -50,7 +50,6 @@ let
       ;
   };
   inherit (sources) nativeDirectory;
-  nativePackages = sources.packageNames nativeDirectory;
   registry = artifacts.registry nativeDirectory;
   framework = artifacts.framework nativeDirectory [ registry ] { example = false; };
   package =
@@ -58,20 +57,30 @@ let
     let
       program = sources.packageName directory;
       library = !builtins.pathExists (directory + "/src/main.rs");
-      dependencies = lib.remove program (sources.packageNames directory);
-      native = !(sources.needsEngine directory);
-      engine = if native then null else artifacts.engine directory;
-      usesFramework = lib.any (dependency: builtins.elem dependency nativePackages) dependencies;
+      crates = sources.localCrates directory;
+      closure = sources.crateNames crates;
+      dependencies = lib.remove program closure;
+      route = sources.layerRoute {
+        package = program;
+        inherit crates;
+      };
+      withEngine = route == types.layerRoutes.frameworkWithEngine;
+      engine = if withEngine then artifacts.engine directory else null;
       requirements = requirementsOf dependencies;
       local =
-        if native then
-          (if usesFramework then framework else artifacts.registry directory)
-        else
-          artifacts.framework directory (lib.optional usesFramework framework ++ [ engine ]) {
+        {
+          ${types.layerRoutes.registryOnly} = artifacts.registry directory;
+          ${types.layerRoutes.framework} = framework;
+          ${types.layerRoutes.frameworkWithEngine} = artifacts.framework directory [ framework engine ] {
             validateEngine = true;
           };
+        }
+        .${route};
       selected = artifacts.selectedPackages directory;
-      testPackages = lib.subtractLists (artifacts.packagesTestedThrough local) selected;
+      testPackages = lib.subtractLists (lib.concatMap artifacts.packagesTestedThrough [
+        framework
+        local
+      ]) closure;
     in
     pkgs.rustPlatform.buildRustPackage (
       rustPackageDefaults
@@ -102,7 +111,7 @@ let
           rustPackageDefaults.preBuild
           + (import ./vendor-directory-times.nix)
           + artifacts.copy [ local ]
-          + lib.optionalString (!native) (artifacts.planCheck directory selected);
+          + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
           inherit directory;
           registryArtifacts = registry;
@@ -124,7 +133,7 @@ let
 in
 {
   reference = bevy;
-  inherit buildLayers aospRoundTrip;
+  inherit buildLayers aospRoundTrip sourceRules;
   packages = packages // {
     inherit examples;
   };

@@ -9,9 +9,12 @@ let
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
   examples = removeAttrs tree.packages [ "examples" ] // {
     aosp-round-trip = tree.aospRoundTrip;
+    source-rules = tree.sourceRules;
     bevy = tree.reference;
   };
-  checkOf = built: { inherit (built) doCheck cargoTestFlags; };
+  checkOf = built: {
+    inherit (built) drvPath doCheck cargoTestFlags;
+  };
   layersThrough = layer: [ layer ] ++ lib.concatMap layersThrough layer.previous;
 in
 {

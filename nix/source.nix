@@ -54,7 +54,7 @@ in
 {
   inherit (projection)
     project
-    needsEngine
+    layerRoute
     seedPlan
     ;
   inherit (workspaceCrates)
@@ -62,6 +62,7 @@ in
     nativeNames
     packageName
     packageNames
+    localCrates
     crateNames
     ;
   version = workspaceCrates.workspace.workspace.package.version;

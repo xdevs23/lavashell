@@ -4,6 +4,7 @@
   "target": "x86_64-unknown-linux-gnu",
   "projectionDirectory": "nix/cargo-projections",
   "engineRoot": "bevy",
+  "frameworkRoot": "lavashell-core",
   "nativeDirectory": "examples/support",
   "layers": ["engine", "registry"],
   "companions": ["lavashell-renderer"],

@@ -24,19 +24,27 @@ pub enum Derivation {
     ReferenceFramework,
     Reference,
     Native,
+    WaylandInput,
+    AospRoundTrip,
+    SourceRules,
 }
 
 impl Derivation {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 9] = [
         Self::Registry,
         Self::Framework,
         Self::Engine,
         Self::ReferenceFramework,
         Self::Reference,
         Self::Native,
+        Self::WaylandInput,
+        Self::AospRoundTrip,
+        Self::SourceRules,
     ];
     pub const ON_ENGINE: [Self; 3] = [Self::Engine, Self::ReferenceFramework, Self::Reference];
     pub const OFF_ENGINE: [Self; 3] = [Self::Registry, Self::Framework, Self::Native];
+    pub const OFF_FRAMEWORK: [Self; 3] =
+        [Self::WaylandInput, Self::AospRoundTrip, Self::SourceRules];
 
     pub fn above_engine() -> Vec<Self> {
         Self::ALL

@@ -260,20 +260,27 @@ let
         };
     in
     seed // { seedHash = builtins.hashString "sha256" (builtins.toJSON seed); };
-  needsEngine =
-    directory:
+  nativeRegistry = map (package: package.name) (
+    lib.filter (package: package ? source) nativeMetadata.lock.package
+  );
+  frameworkRoot =
+    lib.throwIfNot (builtins.elem contract.frameworkRoot nativeNames)
+      "frameworkRoot ${contract.frameworkRoot} in nix/projection-contract.json is not a crate that ${contract.nativeDirectory} depends on"
+      contract.frameworkRoot;
+  layerRoute =
+    { package, crates }:
     let
-      crates = localCrates directory;
-      name = packageName directory;
-      nativeRegistry = map (package: package.name) (
-        lib.filter (package: package ? source) nativeMetadata.lock.package
-      );
+      names = crateNames crates;
+      needsEngine =
+        lib.any (dependency: !(builtins.elem dependency nativeRegistry)) (externalDependencies crates)
+        || lib.any (name: name != package && !(builtins.elem name nativeNames)) names;
     in
-    lib.any (dependency: !(builtins.elem dependency nativeRegistry)) (externalDependencies crates)
-    || lib.any (
-      crate:
-      crate.manifest.package.name != name && !(builtins.elem crate.manifest.package.name nativeNames)
-    ) crates;
+    if !(builtins.elem frameworkRoot names) then
+      types.layerRoutes.registryOnly
+    else if needsEngine then
+      types.layerRoutes.frameworkWithEngine
+    else
+      types.layerRoutes.framework;
 in
 {
   inherit
@@ -283,6 +290,6 @@ in
     project
     plan
     seedPlan
-    needsEngine
+    layerRoute
     ;
 }
