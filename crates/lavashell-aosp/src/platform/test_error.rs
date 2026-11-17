@@ -4,6 +4,7 @@ use crate::{BufferSizesError, Error};
 use lavashell_actor::Closed;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::ApplyError;
+use lavashell_core::units::NumberError;
 use lavashell_renderer::{Error as RendererError, Latch};
 use log::SetLoggerError;
 use std::num::TryFromIntError;
@@ -22,6 +23,8 @@ pub(crate) enum TestError {
     Scene(#[from] ApplyError),
     #[error("the commands of a test do not make a packet")]
     Packet(#[from] UnbalancedRestore),
+    #[error("a number used by a test is not a valid value")]
+    Number(#[from] NumberError),
     #[error("cannot install the logger that records the warnings of a test")]
     InstallLogger(#[source] &'static SetLoggerError),
     #[error("the latch found no new frame, but {0:?}")]

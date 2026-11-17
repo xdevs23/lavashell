@@ -3,15 +3,13 @@
 use crate::sctk;
 use lavashell_core::geometry::Size;
 use lavashell_core::output::{Millimetres, MonitorInfo, PhysicalSize};
-use lavashell_core::units::Dp;
+use lavashell_core::units::{Dp, RefreshRate};
 use lavashell_platform::OutputId;
 use sctk::output::{Mode, OutputData, OutputInfo};
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::globals::GlobalList;
 use sctk::reexports::client::protocol::wl_output;
 use std::time::Duration;
-
-const MILLIHERTZ_PER_HERTZ: f64 = 1000.0;
 
 fn output_id_of_global(name: u32) -> OutputId {
     OutputId(u64::from(name))
@@ -62,8 +60,8 @@ pub(crate) fn monitor_info(info: &OutputInfo) -> Option<MonitorInfo> {
 
 pub(crate) fn refresh_interval(modes: &[Mode]) -> Option<Duration> {
     (modes.iter())
-        .filter(|mode| mode.current && mode.refresh_rate > 0)
-        .map(|mode| Duration::from_secs_f64(MILLIHERTZ_PER_HERTZ / f64::from(mode.refresh_rate)))
+        .filter(|mode| mode.current)
+        .filter_map(|mode| RefreshRate::from_millihertz(mode.refresh_rate).interval())
         .min()
 }
 

@@ -3,8 +3,8 @@ use crate::error::NativeMethodError;
 use crate::pane::{Pane, run_pane};
 use lavashell_actor::{Receiver, Sender, mailbox};
 use lavashell_aosp::{
-    AospHost, AospStreams, BufferSizes, HardwareBufferMemory, MotionEvent, NativeWindow,
-    StreamFormat, SurfaceStream,
+    AospHost, AospStreams, BufferSizes, HardwareBufferMemory, HostConfiguration, HostDisplay,
+    MotionEvent, NativeWindow, StreamFormat, SurfaceStream,
 };
 use lavashell_core::prelude::*;
 use lavashell_renderer::{
@@ -30,12 +30,18 @@ pub struct StreamRoundTrip {
 }
 
 impl StreamRoundTrip {
-    pub fn new(sizes: BufferSizes, format: StreamFormat) -> Result<Self, NativeMethodError> {
+    pub fn new(
+        sizes: BufferSizes,
+        format: StreamFormat,
+        display: HostDisplay,
+        configuration: HostConfiguration,
+    ) -> Result<Self, NativeMethodError> {
         let (width, height) = sizes.default_lengths();
         let (mut target, ended) = TargetReader::new(width, height)?;
         let window = (target.reader.window()).map_err(NativeMethodError::CreateTarget)?;
         let (requested, panes) = mailbox();
-        let run = Run::start(Size::new(width.dp(), height.dp()), panes, ended)?;
+        let size = Size::from_px(width.px(), height.px(), display.density);
+        let run = Run::start(AospHost::new(display, configuration), size, panes, ended)?;
         run.host.surface_created(NativeWindow::new(window));
         target.read_next_frame(|_| Ok(()))?;
         let (notify, arrived) = mpsc::channel();
@@ -145,7 +151,7 @@ impl StreamRoundTrip {
         self.show(Pane::Grouped {
             image,
             opacity,
-            shift: left.width().dp(),
+            shift: left.width().px(),
         });
         let (left, right) = (find_center(left), find_center(right));
         self.target
@@ -253,11 +259,11 @@ fn serve_pane(
 
 impl Run {
     fn start(
+        host: AospHost,
         size: Size,
         requested: Receiver<Pane>,
         ended: mpsc::Sender<TargetEvent>,
     ) -> Result<Self, NativeMethodError> {
-        let host = AospHost::new();
         let served = host.clone();
         let thread = (thread::Builder::new().name("round trip".to_owned()))
             .spawn(move || {

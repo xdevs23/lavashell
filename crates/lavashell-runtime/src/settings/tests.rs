@@ -50,7 +50,7 @@ fn a_new_view_gets_the_overrides_in_place_of_the_preferences_of_the_host() -> Te
         contrast: Some(ContrastPreference::More),
     });
     records.change_settings(SettingsEvent::Appearance(Appearance {
-        reduced_motion: true,
+        reduced_motion: Some(true),
         ..Appearance::default()
     }));
     let reader = open_reader(&mut records)?;
@@ -74,8 +74,8 @@ fn an_appearance_reaches_every_open_view_and_leaves_the_overrides_in_place() -> 
     });
     let readers = [open_reader(&mut records)?, open_reader(&mut records)?];
     records.change_settings(SettingsEvent::Appearance(Appearance {
-        reduced_motion: true,
-        contrast: ContrastPreference::More,
+        reduced_motion: Some(true),
+        contrast: Some(ContrastPreference::More),
         color_scheme: None,
     }));
     for reader in &readers {
@@ -83,6 +83,22 @@ fn an_appearance_reaches_every_open_view_and_leaves_the_overrides_in_place() -> 
         assert!(!actual.reduced_motion);
         assert_eq!(actual.contrast, ContrastPreference::More);
     }
+    Ok(())
+}
+
+#[test]
+fn an_appearance_leaves_the_preferences_it_does_not_carry_as_they_were() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let reader = open_reader(&mut records)?;
+    records.change_settings(SettingsEvent::Appearance(Appearance {
+        reduced_motion: Some(true),
+        contrast: Some(ContrastPreference::More),
+        color_scheme: None,
+    }));
+    records.change_settings(color_scheme(Some(ColorScheme::Dark)));
+    let actual = read(&mut records, &reader)?;
+    assert!(actual.reduced_motion);
+    assert_eq!(actual.contrast, ContrastPreference::More);
     Ok(())
 }
 

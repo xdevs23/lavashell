@@ -4,9 +4,11 @@ mod checked;
 #[cfg(feature = "serde")]
 mod encoding;
 mod positive;
+mod refresh_rate;
 
 pub use checked::{FiniteDp, Fraction, NonNegative, NonNegativeDp, NumberError};
 pub use positive::{Positive, PositiveDp};
+pub use refresh_rate::RefreshRate;
 
 #[cfg(test)]
 mod tests;

@@ -1048,6 +1048,7 @@
         "version": "0.1.0",
         "dependencies": [
           "ash",
+          "icu_locale_core",
           "jni",
           "lavashell-actor",
           "lavashell-core",
@@ -2612,7 +2613,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "ebae031f9898c999b9a51554af818c80716608313fe1f78d5a3bf50bf52b1d67",
+        "seedHash": "a4a29c6ae9ae175722be8752068689a071c3248cca81e4548ffd10a4cb58870d",
         "plan": {
           "schema": 1,
           "selection": {

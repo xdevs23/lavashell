@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package org.lavashell.surfacestream
 
+import android.content.Context
 import android.hardware.HardwareBuffer
 import android.view.MotionEvent
 import android.view.Surface
 
-internal class StreamRoundTrip(sizes: BufferSizes, format: StreamFormat) : AutoCloseable {
+internal class StreamRoundTrip(context: Context, sizes: BufferSizes, format: StreamFormat) : AutoCloseable {
     private val handle = create(
+        context,
         sizes.default.width, sizes.default.height, sizes.max.width, sizes.max.height, format.id,
     )
     private var unreceivedWakesAtClose: Long? = null
@@ -42,7 +44,14 @@ internal class StreamRoundTrip(sizes: BufferSizes, format: StreamFormat) : AutoC
         }
     }
 
-    private external fun create(width: Int, height: Int, maxWidth: Int, maxHeight: Int, format: Int): Long
+    private external fun create(
+        context: Context,
+        width: Int,
+        height: Int,
+        maxWidth: Int,
+        maxHeight: Int,
+        format: Int,
+    ): Long
 
     private external fun createSurface(handle: Long): Surface
 

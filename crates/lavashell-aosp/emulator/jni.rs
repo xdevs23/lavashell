@@ -8,7 +8,9 @@ use ::jni::errors::ThrowRuntimeExAndDefault;
 use ::jni::objects::{JIntArray, JLongArray, JObject, JPrimitiveArray, TypeArray};
 use ::jni::sys::{jboolean, jfloat, jint, jlong};
 use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
-use lavashell_aosp::{BufferSizes, StreamFormat, motion_event_of, surface_of_window};
+use lavashell_aosp::{
+    BufferSizes, StreamFormat, configuration_of, display_of, motion_event_of, surface_of_window,
+};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
 use lavashell_renderer::{ForeignFormat, skia};
@@ -25,15 +27,20 @@ native_methods! {
     pub fn create<'local>(
         env: EnvUnowned<'local>,
         _: JObject<'local>,
+        context: JObject<'local>,
         width: jint,
         height: jint,
         max_width: jint,
         max_height: jint,
         format: jint,
     ) -> jlong {
-        export(env, |_| {
+        export(env, |env| {
             let sizes = to_buffer_sizes([width, height], [max_width, max_height])?;
-            let round_trip = StreamRoundTrip::new(sizes, to_stream_format(format)?)?;
+            let display = display_of(env, &context).map_err(NativeMethodError::ReadDisplay)?;
+            let configuration =
+                configuration_of(env, &context).map_err(NativeMethodError::ReadConfiguration)?;
+            let format = to_stream_format(format)?;
+            let round_trip = StreamRoundTrip::new(sizes, format, display, configuration)?;
             with_round_trips(|round_trips| round_trips.insert(round_trip))
         })
     }

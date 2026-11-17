@@ -3,6 +3,7 @@
 use crate::buffer_importer::HardwareBufferImporter;
 use crate::host::{AospError, HostLink};
 use crate::native_window::NativeWindow;
+use crate::output::DISPLAY;
 use crate::presentation::AospPresentation;
 use crate::streams::AospStreams;
 use lavashell_actor::SystemClock;
@@ -30,7 +31,7 @@ impl Platform for Aosp {
             presentation: AospPresentation,
             streams,
             host: HostFacts {
-                outputs: Vec::new(),
+                outputs: vec![DISPLAY],
                 reports_presentation: false,
             },
             clock: Arc::new(SystemClock::start()),

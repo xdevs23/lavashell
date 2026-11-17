@@ -2,20 +2,19 @@
 use super::AospError;
 use crate::input::ShownSurface;
 use crate::native_window::NativeWindow;
+use crate::output::HostOutput;
 use crate::platform::vulkan_window;
 use crate::streams::AospStreams;
 use lavashell_core::geometry::Size;
 use lavashell_core::prelude::{PixelScale, PixelSize};
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::units::{Density, Dp, Px};
+use lavashell_core::units::{Density, Px};
 use lavashell_core::window::{Edges, WindowState};
 use lavashell_platform::{
     InputRequest, PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
     SurfaceSpec, TimingEvent,
 };
 use std::sync::mpsc;
-
-const DENSITY: Density = Density::ONE;
 
 #[derive(Default)]
 enum RuntimeSurface {
@@ -28,6 +27,7 @@ enum RuntimeSurface {
     Shown {
         surface: SurfaceId,
         size: PixelSize,
+        density: Density,
         window: Option<WindowState>,
     },
     Closing(SurfaceId),
@@ -55,6 +55,7 @@ impl HostSurface {
     pub(crate) fn execute(
         &mut self,
         request: PlatformRequest,
+        density: Density,
         reports: &Reports<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
         let request = match request {
@@ -71,7 +72,7 @@ impl HostSurface {
                     });
                 }
                 self.surface = RuntimeSurface::Requested { surface, spec };
-                self.show(reports)
+                self.show(density, reports)
             }
             SurfaceRequest::Destroy(surface) => {
                 self.require_open(surface)?;
@@ -93,13 +94,14 @@ impl HostSurface {
     pub(crate) fn created(
         &mut self,
         window: NativeWindow,
+        density: Density,
         reports: &Reports<NativeWindow, AospStreams>,
     ) -> Result<(), AospError> {
         if self.window.is_some() {
             return Err(AospError::SecondWindow);
         }
         self.window = Some(window);
-        self.show(reports)
+        self.show(density, reports)
     }
 
     pub(crate) fn changed(
@@ -110,15 +112,32 @@ impl HostSurface {
             RuntimeSurface::Shown {
                 surface,
                 size,
+                density,
                 window,
             },
             Some(native),
         ) = (&mut self.surface, &self.window)
         {
             *size = window_size(native)?;
-            configure(reports, *surface, *size, *window);
+            configure(reports, *surface, *size, *density, *window);
         }
         Ok(())
+    }
+
+    pub(crate) fn change_density(
+        &mut self,
+        density: Density,
+        reports: &Reports<NativeWindow, AospStreams>,
+    ) {
+        if let RuntimeSurface::Shown {
+            surface,
+            size,
+            window,
+            ..
+        } = self.surface
+        {
+            self.surface = show_at_density(reports, surface, size, density, window);
+        }
     }
 
     pub(crate) fn destroyed(
@@ -147,13 +166,19 @@ impl HostSurface {
     }
 
     pub(crate) fn shown(&self) -> Option<ShownSurface> {
-        let RuntimeSurface::Shown { surface, size, .. } = self.surface else {
+        let RuntimeSurface::Shown {
+            surface,
+            size,
+            density,
+            ..
+        } = self.surface
+        else {
             return None;
         };
         Some(ShownSurface {
             id: surface,
-            size: Size::new(to_dp(size.width), to_dp(size.height)),
-            density: DENSITY,
+            size: surface_size(size, density),
+            density,
         })
     }
 
@@ -168,7 +193,11 @@ impl HostSurface {
         }
     }
 
-    fn show(&mut self, reports: &Reports<NativeWindow, AospStreams>) -> Result<(), AospError> {
+    fn show(
+        &mut self,
+        density: Density,
+        reports: &Reports<NativeWindow, AospStreams>,
+    ) -> Result<(), AospError> {
         let (RuntimeSurface::Requested { surface, spec }, Some(window)) =
             (&self.surface, &self.window)
         else {
@@ -181,13 +210,9 @@ impl HostSurface {
             attach: Box::new(attach),
             scale: PixelScale::SQUARE,
         });
-        let state = display_filling_window(&spec.role);
-        configure(reports, surface, size, state);
-        self.surface = RuntimeSurface::Shown {
-            surface,
-            size,
-            window: state,
-        };
+        let window = display_filling_window(&spec.role);
+        self.surface = show_at_density(reports, surface, size, density, window);
+        HostOutput::report_entered(surface, reports);
         Ok(())
     }
 }
@@ -196,16 +221,35 @@ fn window_size(window: &NativeWindow) -> Result<PixelSize, AospError> {
     window.size().map_err(AospError::WindowSize)
 }
 
+fn show_at_density(
+    reports: &Reports<NativeWindow, AospStreams>,
+    surface: SurfaceId,
+    size: PixelSize,
+    density: Density,
+    window: Option<WindowState>,
+) -> RuntimeSurface {
+    reports.report((surface, SurfaceEvent::DensityChanged(density)));
+    configure(reports, surface, size, density, window);
+    RuntimeSurface::Shown {
+        surface,
+        size,
+        density,
+        window,
+    }
+}
+
 fn configure(
     reports: &Reports<NativeWindow, AospStreams>,
     surface: SurfaceId,
     size: PixelSize,
+    density: Density,
     window: Option<WindowState>,
 ) {
     if size.width > 0 && size.height > 0 {
+        let size = surface_size(size, density);
         let configured = SurfaceEvent::Configured {
-            width: Some(to_dp(size.width)),
-            height: Some(to_dp(size.height)),
+            width: Some(size.width),
+            height: Some(size.height),
             token: None,
             window,
         };
@@ -220,6 +264,7 @@ fn display_filling_window(role: &Role) -> Option<WindowState> {
     })
 }
 
-fn to_dp(pixels: u32) -> Dp {
-    DENSITY.to_dp(Px::new(f64::from(pixels)))
+fn surface_size(size: PixelSize, density: Density) -> Size {
+    let to_px = |pixels: u32| Px::new(f64::from(pixels));
+    Size::from_px(to_px(size.width), to_px(size.height), density)
 }

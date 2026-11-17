@@ -67,12 +67,12 @@ impl AppearanceSettings {
 
 pub(super) fn appearance(settings: AppearanceSettings) -> Appearance {
     Appearance {
-        reduced_motion: settings.reduced_motion == Some(REDUCED_MOTION),
-        contrast: if settings.contrast == Some(HIGHER_CONTRAST) {
+        reduced_motion: Some(settings.reduced_motion == Some(REDUCED_MOTION)),
+        contrast: Some(if settings.contrast == Some(HIGHER_CONTRAST) {
             ContrastPreference::More
         } else {
             ContrastPreference::NoPreference
-        },
+        }),
         color_scheme: match settings.color_scheme {
             Some(PREFER_DARK) => Some(ColorScheme::Dark),
             Some(PREFER_LIGHT) => Some(ColorScheme::Light),

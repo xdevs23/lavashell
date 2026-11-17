@@ -287,3 +287,18 @@ fn a_positive_length_is_finite_and_above_zero() {
         Err(NumberError::NotFinite)
     );
 }
+
+#[test]
+fn a_refresh_rate_repeats_at_the_reciprocal_of_its_hertz() {
+    let interval = Some(Duration::from_millis(20));
+    assert_eq!(RefreshRate::from_hertz(50.0).interval(), interval);
+    assert_eq!(RefreshRate::from_millihertz(50_000).interval(), interval);
+}
+
+#[test]
+fn a_refresh_rate_without_a_positive_finite_interval_has_no_interval() {
+    for hertz in [0.0, -60.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(RefreshRate::from_hertz(hertz).interval(), None);
+    }
+    assert_eq!(RefreshRate::from_millihertz(0).interval(), None);
+}

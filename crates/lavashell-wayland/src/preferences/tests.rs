@@ -20,19 +20,28 @@ fn appearance_of(setting: PortalKey, preference: u32) -> Appearance {
 
 #[test]
 fn portal_preferences_map_to_the_appearance() {
+    let unset = Appearance {
+        reduced_motion: Some(false),
+        contrast: Some(ContrastPreference::NoPreference),
+        color_scheme: None,
+    };
     assert_eq!(
         portal::appearance(portal::AppearanceSettings::default()),
-        Appearance::default()
+        unset
     );
-    assert!(appearance_of(PortalKey::ReducedMotion, 1).reduced_motion);
-    assert!(!appearance_of(PortalKey::ReducedMotion, 0).reduced_motion);
+    for (preference, reduced_motion) in [(1, true), (0, false)] {
+        assert_eq!(
+            appearance_of(PortalKey::ReducedMotion, preference).reduced_motion,
+            Some(reduced_motion)
+        );
+    }
     assert_eq!(
         appearance_of(PortalKey::Contrast, 1).contrast,
-        ContrastPreference::More
+        Some(ContrastPreference::More)
     );
     assert_eq!(
         appearance_of(PortalKey::Contrast, 42).contrast,
-        ContrastPreference::NoPreference
+        Some(ContrastPreference::NoPreference)
     );
     for (preference, scheme) in [
         (1u32, Some(ColorScheme::Dark)),
@@ -179,25 +188,28 @@ fn child() -> Result<(), TestError> {
         .map_err(Error::from)?;
     let mut updates = Updates::default();
     dispatch_until(&mut loop_, &mut updates, 1)?;
-    assert_eq!(updates.appearances[0].contrast, ContrastPreference::More);
+    assert_eq!(
+        updates.appearances[0].contrast,
+        Some(ContrastPreference::More)
+    );
     assert_eq!(updates.appearances[0].color_scheme, None);
     signal(&service, "org.freedesktop.appearance", "reduced-motion", 1)?;
     dispatch_until(&mut loop_, &mut updates, 2)?;
-    assert!(updates.appearances[1].reduced_motion);
+    assert_eq!(updates.appearances[1].reduced_motion, Some(true));
     signal(&service, "org.freedesktop.appearance", "contrast", 42)?;
     dispatch_until(&mut loop_, &mut updates, 3)?;
     assert_eq!(
         updates.appearances[2].contrast,
-        ContrastPreference::NoPreference
+        Some(ContrastPreference::NoPreference)
     );
     signal(&service, "other.namespace", "contrast", 1)?;
     signal(&service, "org.freedesktop.appearance", "reduced-motion", 0)?;
     dispatch_until(&mut loop_, &mut updates, 4)?;
     assert_eq!(
         updates.appearances[3].contrast,
-        ContrastPreference::NoPreference
+        Some(ContrastPreference::NoPreference)
     );
-    assert!(!updates.appearances[3].reduced_motion);
+    assert_eq!(updates.appearances[3].reduced_motion, Some(false));
     loop_.handle().remove(watch);
     loop_.handle().remove(receipt);
     drop(service);

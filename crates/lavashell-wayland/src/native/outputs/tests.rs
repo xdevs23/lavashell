@@ -50,11 +50,6 @@ fn the_refresh_interval_comes_from_the_current_mode_in_millihertz() {
 }
 
 #[test]
-fn a_current_mode_with_a_refresh_rate_of_zero_has_no_refresh_interval() {
-    assert_eq!(refresh_interval(&[mode((3840, 2160), 0, true)]), None);
-}
-
-#[test]
 fn a_physical_size_has_its_width_and_height_in_millimetres() {
     let expected = PhysicalSize {
         width: Millimetres(600.0),

@@ -5,6 +5,7 @@ use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
 use lavashell_core::error::message_chain;
 use lavashell_core::prelude::StreamId;
+use lavashell_core::units::NumberError;
 use lavashell_renderer::{Error as RendererError, FenceCopyError, MultipleFailures};
 
 #[derive(Debug, thiserror::Error)]
@@ -94,6 +95,14 @@ pub enum Error {
     #[cfg(target_os = "android")]
     #[error("the MotionEvent is malformed")]
     MalformedMotion(#[from] MalformedMotion),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the display or the display metrics used by the Context")]
+    ReadDisplay(#[source] jni::errors::Error),
+    #[error("cannot convert the dpi of the display into a density")]
+    ConvertDensity(#[source] NumberError),
+    #[cfg(target_os = "android")]
+    #[error("cannot read the configuration used by the Context")]
+    ReadConfiguration(#[source] jni::errors::Error),
     #[error("{}", in_order(.0))]
     Several(Vec<Error>),
 }
@@ -108,6 +117,15 @@ impl MultipleFailures for Error {
             Self::Several(failures) => failures,
             failure => vec![failure],
         }
+    }
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn ensure_no_exception(env: &jni::Env<'_>) -> Result<(), Error> {
+    if env.exception_check() {
+        Err(Error::PendingException)
+    } else {
+        Ok(())
     }
 }
 

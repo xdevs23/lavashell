@@ -89,7 +89,7 @@ internal class StreamRoundTripScenarios(
 
     private fun checkVirtualDisplay() {
         val (width, height) = displaySize
-        StreamRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Rgba8888).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Rgba8888).use { roundTrip ->
             ColorDisplay.show(activity, main, roundTrip.surface(), Color.RED).use { colorDisplay ->
                 listOf(NOTHING_SHOWN, Color.RED, Color.GREEN, Color.BLUE).zipWithNext().forEach { (before, color) ->
                     colorDisplay.paint(color)
@@ -119,7 +119,7 @@ internal class StreamRoundTripScenarios(
     }
 
     private fun checkGroupedStream() {
-        StreamRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
             ColorDisplay.show(activity, main, roundTrip.surface(), Color.RED).use {
                 val latched = latchColorChange(roundTrip, NOTHING_SHOWN, Color.RED)
                 val (outside, inside) = roundTrip.renderGrouped(FADED_OPACITY)
@@ -134,7 +134,7 @@ internal class StreamRoundTripScenarios(
     }
 
     private fun checkPrivateStream() {
-        StreamRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Private).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Private).use { roundTrip ->
             ColorDisplay.show(activity, main, roundTrip.surface(), Color.RED).use {
                 report.add(Step.PrivateStream, latchColorChange(roundTrip, NOTHING_SHOWN, Color.RED))
             }
@@ -143,7 +143,7 @@ internal class StreamRoundTripScenarios(
 
     private fun checkSolidColorRenderer() {
         val posted = BUFFER_QUEUE_SLOTS + 1
-        StreamRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
             val (single, singleWakes, batch) = SolidColorRenderer(roundTrip.surface(), displaySize).use { renderer ->
                 renderer.draw(Color.CYAN)
                 roundTrip.awaitWake()
@@ -170,7 +170,7 @@ internal class StreamRoundTripScenarios(
     }
 
     private fun checkYuvStream() {
-        StreamRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Private).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, longestSquare), StreamFormat.Private).use { roundTrip ->
             ImageWriter.newInstance(roundTrip.surface(), IMAGES_HELD_AT_ONCE, ImageFormat.YUV_420_888).use { writer ->
                 for (color in listOf(Color.RED, Color.GREEN)) {
                     val image = writer.dequeueInputImage()
@@ -194,7 +194,7 @@ internal class StreamRoundTripScenarios(
     }
 
     private fun checkMotion() {
-        StreamRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
+        openRoundTrip(BufferSizes(displaySize, displaySize), StreamFormat.Rgba8888).use { roundTrip ->
             ColorDisplay.show(activity, main, roundTrip.surface(), Color.RED).use {
                 val received = SyntheticMotion.TOUCH_AND_CLICK.map { motion ->
                     val event = motion.obtain(metrics.widthPixels / 2f, metrics.heightPixels / 2f)
@@ -221,6 +221,8 @@ internal class StreamRoundTripScenarios(
             }
         }
     }
+
+    private fun openRoundTrip(sizes: BufferSizes, format: StreamFormat) = StreamRoundTrip(activity, sizes, format)
 
     private fun latchColorChange(roundTrip: StreamRoundTrip, before: Int, expected: Int): StepResult<ColorEvidence> {
         val observed = generateSequence { roundTrip.latch(); roundTrip.render() }.first { it != before }

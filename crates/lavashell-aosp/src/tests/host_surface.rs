@@ -4,28 +4,40 @@ use crate::host::surface::HostSurface;
 use crate::host::{AospError, AospHost};
 use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, TouchAction};
 use crate::native_window::NativeWindow;
+use crate::output::{DISPLAY, HostDisplay, HostOutput};
 use crate::platform::{DisplaySurface, SIDE, TestError};
+use crate::settings::HostConfiguration;
 use crate::streams::AospStreams;
+use icu_locale_core::langid;
 use lavashell_actor::{Merge, MergeEffect, Receiver, SystemClock, mailbox};
-use lavashell_core::output::OutputRequest;
-use lavashell_core::prelude::{DpExt, Point, Size};
+use lavashell_core::output::{MonitorInfo, OutputRequest};
+use lavashell_core::platform::ColorScheme;
+use lavashell_core::preferences::Appearance;
+use lavashell_core::prelude::{Density, DpExt, Point, PxExt, Size};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::Cursor;
 use lavashell_core::window::{Edge, Edges, WindowCapabilities, WindowState};
 use lavashell_platform::{
-    DeviceEvent, InputRequest, OutputId, PlatformEvent, PlatformLinks, PlatformRequest, Reports,
-    Role, StreamTask, SurfaceAppearance, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
-    SurfaceSpec, TimingEvent, WindowRole,
+    DeviceEvent, InputRequest, OutputEvent, OutputId, PlatformEvent, PlatformLinks,
+    PlatformRequest, Reports, Role, SettingsEvent, StreamTask, SurfaceAppearance,
+    SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent, WindowRole,
 };
 use std::sync::{Arc, mpsc};
+use std::time::Duration;
+
+mod host_display;
 
 const SURFACE_2: SurfaceId = SurfaceId::numbered(2);
 
 const SURFACE: SurfaceId = SurfaceId::numbered(1);
 
+const REFRESH: Duration = Duration::from_millis(16);
+
 #[derive(Debug, PartialEq)]
 enum Sent {
     Surface(SurfaceId, SurfaceEvent),
+    Output(OutputEvent),
+    Settings(SettingsEvent),
     Device(DeviceEvent),
     DisplayReady(SurfaceId),
     Attach(SurfaceId),
@@ -46,6 +58,8 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
     let reports = Reports {
         view: sender.outlet(|event: PlatformEvent| match event {
             PlatformEvent::Surface(surface, event) => Sent::Surface(surface, event),
+            PlatformEvent::Output(event) => Sent::Output(event),
+            PlatformEvent::Settings(event) => Sent::Settings(event),
             PlatformEvent::Device(event) => Sent::Device(event),
             _ => Sent::Unexpected,
         }),
@@ -67,6 +81,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
 }
 
 struct Host {
+    output: HostOutput,
     surface: HostSurface,
     translator: MotionTranslator,
     reports: Reports<NativeWindow, AospStreams>,
@@ -74,9 +89,10 @@ struct Host {
 }
 
 impl Host {
-    fn new() -> Self {
+    fn new(display: HostDisplay) -> Self {
         let (reports, sent) = reports();
         Self {
+            output: HostOutput::report_added(display, &reports),
             surface: HostSurface::default(),
             translator: MotionTranslator::default(),
             reports,
@@ -89,15 +105,22 @@ impl Host {
     }
 
     fn execute(&mut self, request: SurfaceRequest) -> Result<(), AospError> {
-        (self.surface).execute(PlatformRequest::Surface(request), &self.reports)
+        let request = PlatformRequest::Surface(request);
+        (self.surface).execute(request, self.output.density(), &self.reports)
     }
 
     fn created(&mut self, window: NativeWindow) -> Result<(), AospError> {
-        self.surface.created(window, &self.reports)
+        (self.surface).created(window, self.output.density(), &self.reports)
     }
 
     fn changed(&mut self) -> Result<(), AospError> {
         self.surface.changed(&self.reports)
+    }
+
+    fn display_changed(&mut self, display: HostDisplay) {
+        if let Some(density) = self.output.report_change(display, &self.reports) {
+            self.surface.change_density(density, &self.reports);
+        }
     }
 
     fn destroyed(&mut self) -> mpsc::Receiver<()> {
@@ -155,6 +178,57 @@ fn window(display: &DisplaySurface) -> NativeWindow {
     NativeWindow::new(display.window())
 }
 
+fn display(density: Density) -> HostDisplay {
+    HostDisplay {
+        width: SIDE.px(),
+        height: SIDE.px(),
+        density,
+        refresh: Some(REFRESH),
+    }
+}
+
+fn added(side: i32) -> Vec<Sent> {
+    let mut reported = vec![Sent::Output(OutputEvent::Added(DISPLAY))];
+    reported.extend(updated(side));
+    reported
+}
+
+fn updated(side: i32) -> [Sent; 2] {
+    let monitor = MonitorInfo {
+        name: None,
+        size: Size::new(side.dp(), side.dp()),
+        physical_size: None,
+    };
+    [
+        Sent::Output(OutputEvent::Updated(DISPLAY, monitor)),
+        Sent::Output(OutputEvent::Refresh(DISPLAY, Some(REFRESH))),
+    ]
+}
+
+fn displayed(display: HostDisplay) -> Result<Host, TestError> {
+    let host = Host::new(display);
+    let _output_reported = host.sent()?;
+    Ok(host)
+}
+
+fn configuration(color_scheme: ColorScheme) -> HostConfiguration {
+    HostConfiguration {
+        color_scheme,
+        locales: vec![langid!("en")],
+    }
+}
+
+fn settings(color_scheme: ColorScheme) -> [Sent; 2] {
+    let appearance = Appearance {
+        color_scheme: Some(color_scheme),
+        ..Appearance::default()
+    };
+    [
+        Sent::Settings(SettingsEvent::Appearance(appearance)),
+        Sent::Settings(SettingsEvent::Locales(vec![langid!("en")])),
+    ]
+}
+
 fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
     let display_filling = WindowState {
         maximized: false,
@@ -172,8 +246,17 @@ fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
     Sent::Surface(surface, configured)
 }
 
+fn showing(surface: SurfaceId, width: i32, height: i32, density: Density) -> Vec<Sent> {
+    vec![
+        Sent::Attach(surface),
+        Sent::Surface(surface, SurfaceEvent::DensityChanged(density)),
+        configured(surface, width, height),
+        Sent::Output(OutputEvent::Entered(DISPLAY, surface)),
+    ]
+}
+
 fn shown() -> Result<Host, TestError> {
-    let mut host = Host::new();
+    let mut host = displayed(display(Density::ONE))?;
     host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     host.execute(create(SURFACE))?;
     let _attached_and_configured = host.sent()?;
@@ -182,35 +265,31 @@ fn shown() -> Result<Host, TestError> {
 
 #[test]
 fn a_surface_requested_before_the_host_surface_is_shown_with_it() -> Result<(), TestError> {
-    let mut host = Host::new();
+    let mut host = displayed(display(Density::ONE))?;
     host.execute(create(SURFACE))?;
     host.frame();
     assert_eq!(host.sent()?, []);
     host.created(window(&DisplaySurface::new(SIDE, SIDE / 2)))?;
     host.frame();
-    let shown = [
-        Sent::Attach(SURFACE),
-        configured(SURFACE, SIDE, SIDE / 2),
-        Sent::DisplayReady(SURFACE),
-    ];
+    let mut shown = showing(SURFACE, SIDE, SIDE / 2, Density::ONE);
+    shown.push(Sent::DisplayReady(SURFACE));
     assert_eq!(host.sent()?, shown);
     Ok(())
 }
 
 #[test]
 fn a_surface_requested_while_the_host_surface_exists_is_shown_at_once() -> Result<(), TestError> {
-    let mut host = Host::new();
+    let mut host = displayed(display(Density::ONE))?;
     host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     assert_eq!(host.sent()?, []);
     host.execute(create(SURFACE))?;
-    let shown = [Sent::Attach(SURFACE), configured(SURFACE, SIDE, SIDE)];
-    assert_eq!(host.sent()?, shown);
+    assert_eq!(host.sent()?, showing(SURFACE, SIDE, SIDE, Density::ONE));
     Ok(())
 }
 
 #[test]
 fn a_surface_that_is_not_a_window_is_configured_without_a_window_state() -> Result<(), TestError> {
-    let mut host = Host::new();
+    let mut host = displayed(display(Density::ONE))?;
     host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     let lock = Role::Lock {
         output: OutputId(0),
@@ -222,20 +301,30 @@ fn a_surface_that_is_not_a_window_is_configured_without_a_window_state() -> Resu
         token: None,
         window: None,
     };
-    let shown = [Sent::Attach(SURFACE), Sent::Surface(SURFACE, configured)];
+    let shown = [
+        Sent::Attach(SURFACE),
+        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(Density::ONE)),
+        Sent::Surface(SURFACE, configured),
+        Sent::Output(OutputEvent::Entered(DISPLAY, SURFACE)),
+    ];
     assert_eq!(host.sent()?, shown);
     Ok(())
 }
 
 #[test]
 fn a_host_surface_without_a_size_is_configured_once_it_has_one() -> Result<(), TestError> {
-    let mut host = Host::new();
-    let display = DisplaySurface::new(0, 0);
-    host.created(window(&display))?;
+    let mut host = displayed(display(Density::ONE))?;
+    let surface = DisplaySurface::new(0, 0);
+    host.created(window(&surface))?;
     host.changed()?;
     host.execute(create(SURFACE))?;
-    assert_eq!(host.sent()?, [Sent::Attach(SURFACE)]);
-    display.resize(SIDE, SIDE / 2);
+    let unconfigured = [
+        Sent::Attach(SURFACE),
+        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(Density::ONE)),
+        Sent::Output(OutputEvent::Entered(DISPLAY, SURFACE)),
+    ];
+    assert_eq!(host.sent()?, unconfigured);
+    surface.resize(SIDE, SIDE / 2);
     host.changed()?;
     assert_eq!(host.sent()?, [configured(SURFACE, SIDE, SIDE / 2)]);
     Ok(())
@@ -243,12 +332,12 @@ fn a_host_surface_without_a_size_is_configured_once_it_has_one() -> Result<(), T
 
 #[test]
 fn a_destroy_returns_at_once_while_no_surface_is_shown() -> Result<(), TestError> {
-    let mut idle = Host::new();
+    let mut idle = displayed(display(Density::ONE))?;
     idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     let waiter = idle.destroyed();
     assert!(idle.destroy_returned(&waiter));
 
-    let mut requested = Host::new();
+    let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
     let waiter = requested.destroyed();
     assert_eq!(requested.sent()?, []);
@@ -300,11 +389,8 @@ fn a_surface_created_again_while_the_host_surface_lives_is_shown_again() -> Resu
     host.execute(SurfaceRequest::Release(SURFACE))?;
     let again = SurfaceId::numbered(2);
     host.execute(create(again))?;
-    let shown = [
-        Sent::Detach(SURFACE),
-        Sent::Attach(again),
-        configured(again, SIDE, SIDE),
-    ];
+    let mut shown = vec![Sent::Detach(SURFACE)];
+    shown.extend(showing(again, SIDE, SIDE, Density::ONE));
     assert_eq!(host.sent()?, shown);
     Ok(())
 }
@@ -312,12 +398,12 @@ fn a_surface_created_again_while_the_host_surface_lives_is_shown_again() -> Resu
 #[test]
 fn a_motion_produces_device_events_only_on_a_shown_surface() -> Result<(), TestError> {
     let corner = || touch(0, TouchAction::Down(finger(0, 0.0, 0.0)));
-    let mut idle = Host::new();
+    let mut idle = displayed(display(Density::ONE))?;
     idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     idle.motion(corner());
     assert_eq!(idle.sent()?, []);
 
-    let mut requested = Host::new();
+    let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
     requested.motion(corner());
     assert_eq!(requested.sent()?, []);
@@ -340,7 +426,8 @@ fn a_cursor_request_for_a_mouse_over_the_surface_lets_the_run_go_on() -> Result<
     let mut host = shown()?;
     host.motion(mouse(MouseAction::Move(hovering(10.0, 10.0))));
     let cursor = InputRequest::SetCursor(MOUSE, Cursor::Pointer);
-    (host.surface).execute(PlatformRequest::Input(cursor), &host.reports)?;
+    let request = PlatformRequest::Input(cursor);
+    (host.surface).execute(request, host.output.density(), &host.reports)?;
     host.frame();
     let entered = DeviceEvent::PointerEnter {
         pointer: MOUSE,
@@ -373,7 +460,7 @@ fn a_second_surface_or_a_second_host_surface_fails() -> Result<(), TestError> {
 
 #[test]
 fn a_destroy_or_a_release_of_another_surface_fails() -> Result<(), TestError> {
-    let mut idle = Host::new();
+    let mut idle = displayed(display(Density::ONE))?;
     assert!(matches!(
         idle.execute(SurfaceRequest::Destroy(SURFACE)),
         Err(AospError::UnknownSurface {
@@ -403,7 +490,7 @@ fn a_destroy_or_a_release_of_another_surface_fails() -> Result<(), TestError> {
 
 #[test]
 fn a_run_inside_serve_reports_the_host_and_ends_with_its_requests() -> Result<(), TestError> {
-    let host = AospHost::new();
+    let host = AospHost::new(display(Density::ONE), configuration(ColorScheme::Light));
     host.surface_created(window(&DisplaySurface::new(SIDE, SIDE)));
     host.frame();
     let (requests, received) = mailbox();
@@ -416,11 +503,33 @@ fn a_run_inside_serve_reports_the_host_and_ends_with_its_requests() -> Result<()
             requests: received,
         })
     })??;
-    let shown = [Sent::Attach(SURFACE), configured(SURFACE, SIDE, SIDE)];
-    assert_eq!(sent.take_arrived()?, shown);
+    let mut reported = added(SIDE);
+    reported.extend(settings(ColorScheme::Light));
+    reported.extend(showing(SURFACE, SIDE, SIDE, Density::ONE));
+    assert_eq!(sent.take_arrived()?, reported);
     assert!(matches!(
         host.serve(|_link| ()),
         Err(AospError::HostAlreadyServed)
     ));
+    Ok(())
+}
+
+#[test]
+fn a_configuration_change_reaches_the_runtime_as_settings() -> Result<(), TestError> {
+    let host = AospHost::new(display(Density::ONE), configuration(ColorScheme::Light));
+    host.configuration_changed(configuration(ColorScheme::Dark));
+    let (requests, received) = mailbox();
+    drop(requests);
+    let (reports, sent) = reports();
+    host.serve(|link| {
+        link.serve(PlatformLinks {
+            reports,
+            requests: received,
+        })
+    })??;
+    let mut reported = added(SIDE);
+    reported.extend(settings(ColorScheme::Light));
+    reported.extend(settings(ColorScheme::Dark));
+    assert_eq!(sent.take_arrived()?, reported);
     Ok(())
 }

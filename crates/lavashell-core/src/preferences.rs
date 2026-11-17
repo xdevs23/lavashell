@@ -141,8 +141,8 @@ pub struct PreferenceValues {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Appearance {
-    pub reduced_motion: bool,
-    pub contrast: ContrastPreference,
+    pub reduced_motion: Option<bool>,
+    pub contrast: Option<ContrastPreference>,
     pub color_scheme: Option<ColorScheme>,
 }
 
@@ -150,8 +150,8 @@ impl Appearance {
     #[must_use]
     pub fn applied_to(self, system: &PreferenceValues) -> PreferenceValues {
         PreferenceValues {
-            reduced_motion: self.reduced_motion,
-            contrast: self.contrast,
+            reduced_motion: self.reduced_motion.unwrap_or(system.reduced_motion),
+            contrast: self.contrast.unwrap_or(system.contrast),
             ..system.clone()
         }
     }

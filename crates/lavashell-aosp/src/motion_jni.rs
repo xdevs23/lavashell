@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::error::ensure_no_exception;
 use crate::input::{Motion, MotionEvent, MouseAction, MousePosition, TouchAction, TouchPointer};
 use jni::objects::JObject;
 use jni::{Env, JValueOwned, jni_sig, jni_str};
@@ -51,9 +52,7 @@ struct NativeMotionEvent(ndk::event::MotionEvent);
 
 impl NativeMotionEvent {
     fn copy(env: &mut Env<'_>, event: &JObject<'_>) -> Result<Self, Error> {
-        if env.exception_check() {
-            return Err(Error::PendingException);
-        }
+        ensure_no_exception(env)?;
         if event.as_raw().is_null() {
             return Err(Error::NullMotionEvent);
         }
