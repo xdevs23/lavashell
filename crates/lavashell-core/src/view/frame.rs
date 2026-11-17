@@ -105,7 +105,7 @@ impl View {
         let rested = self.transitions.settle_arrivals();
         self.retained.forget_paintings_around(&rested);
         self.settle_followers(presentation);
-        let incoming_focus = self.routing.focus;
+        let incoming_focus = self.routing.focus.node();
         let previous_modal = self.routing.modal_root;
         self.failures.start_frame();
         let (modal, painted_focus) = loop {
@@ -113,7 +113,7 @@ impl View {
             let modal = self.topmost_modal().map(|index| self.nodes[index].id);
             self.routing.modal_root = modal;
             self.sanitize_interactions();
-            let painted_focus = self.routing.focus;
+            let painted_focus = self.routing.focus.node();
             self.routing.shortcuts = self.shown_shortcuts();
             self.painting.canvas = output::Canvas::default();
             self.routing.hits.clear();
@@ -152,7 +152,7 @@ impl View {
         self.withdraw_challengers();
         self.refresh_text_session();
         self.paint_tooltip(text);
-        self.redraw = self.routing.focus != painted_focus;
+        self.redraw = self.routing.focus.node() != painted_focus;
         self.build_accessibility_tree();
         let items = std::mem::take(&mut self.painting.canvas).finish();
         let slots = self.followers.slots();
@@ -290,13 +290,12 @@ impl InputRouting {
         previous_modal: Option<NodeId>,
         incoming_focus: Option<NodeId>,
     ) {
-        match modal {
+        let focus = match modal {
             Some(modal) => {
                 if previous_modal.is_none() {
-                    self.modal_restore = incoming_focus;
+                    self.focus.remember_before_modal(incoming_focus);
                 }
-                self.focus = self
-                    .hits
+                self.hits
                     .iter()
                     .find(|h| h.focusable && h.input.is_some())
                     .or_else(|| {
@@ -304,14 +303,12 @@ impl InputRouting {
                             .iter()
                             .find(|h| h.focusable && h.id != modal && h.action.is_some())
                     })
-                    .map(|h| h.id);
+                    .map(|h| h.id)
             }
             None => {
-                self.focus = self
-                    .modal_restore
-                    .take()
-                    .filter(|id| self.hits.iter().any(|h| h.id == *id));
+                (self.focus.take_before_modal()).filter(|id| self.hits.iter().any(|h| h.id == *id))
             }
-        }
+        };
+        self.focus.move_to(focus);
     }
 }

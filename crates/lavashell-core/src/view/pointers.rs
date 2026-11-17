@@ -117,7 +117,7 @@ impl View {
         let _state_of_the_previous_press = self.routing.pointers.insert(pointer, state);
         self.redraw = true;
         let Some(hit) = hit else {
-            self.routing.focus = None;
+            self.routing.focus.clear();
             return;
         };
         let recognizers = self.press_recognizers(sample, hit);

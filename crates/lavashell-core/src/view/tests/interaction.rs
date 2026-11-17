@@ -182,7 +182,7 @@ fn keyboard_release_repeat_focus_loss_and_disabled_controls_retire_active_state(
     });
     view.input(InputEvent::WindowFocus(false));
     assert!(!view.tagged_state(&"button")?.focus.focused);
-    assert!(view.routing.keyboard_press.is_none());
+    assert!(view.routing.focus.pressed_key().is_none());
     view.input(InputEvent::WindowFocus(true));
     enabled.set(false);
     advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 100)?;
@@ -192,6 +192,78 @@ fn keyboard_release_repeat_focus_loss_and_disabled_controls_retire_active_state(
         shift: false,
     });
     assert_eq!(clicks.get(), 2);
+    Ok(())
+}
+
+fn two_buttons(
+    scene: &mut Scene,
+    first_shown: State<bool>,
+    clicks: State<u32>,
+) -> Result<View, TestError> {
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let (shown, clicks) = (first_shown.get(), clicks.clone());
+        ui.layout(Axis::Vertical, Modifier::new(), move |ui| {
+            let button = |ui: &mut Ui, tag: &'static str| {
+                let clicks = clicks.clone();
+                ui.key(tag, Modifier::new(), move |ui| {
+                    let click = Modifier::new()
+                        .tag(tag)
+                        .on_click(move || clicks.update(|count| *count += 1));
+                    ui.spacer(100.dp(), 40.dp(), click);
+                });
+            };
+            if shown {
+                button(ui, "first");
+            }
+            button(ui, "second");
+        });
+    });
+    advance(scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
+    Ok(view)
+}
+
+fn hold_space_on_the_first_button(view: &mut View) {
+    view.input(InputEvent::Key {
+        key: Key::Tab,
+        shift: false,
+    });
+    view.input(InputEvent::Key {
+        key: Key::Space,
+        shift: false,
+    });
+}
+
+#[test]
+fn tab_away_from_a_held_key_leaves_both_buttons_inactive_and_the_release_does_not_click()
+-> TestResult {
+    let (mut scene, clicks) = (Scene::default(), State::new(0));
+    let mut view = two_buttons(&mut scene, State::new(true), clicks.clone())?;
+    hold_space_on_the_first_button(&mut view);
+    assert!(view.tagged_state(&"first")?.pointer.active);
+    view.input(InputEvent::Key {
+        key: Key::Tab,
+        shift: false,
+    });
+    assert!(view.tagged_state(&"second")?.focus.focused);
+    assert!(!view.tagged_state(&"first")?.pointer.active);
+    assert!(!view.tagged_state(&"second")?.pointer.active);
+    view.input(InputEvent::KeyRelease(Key::Space));
+    assert!(!view.tagged_state(&"second")?.pointer.active);
+    assert_eq!(clicks.get(), 1);
+    Ok(())
+}
+
+#[test]
+fn removing_the_button_with_a_held_key_drops_the_key() -> TestResult {
+    let (mut scene, shown, clicks) = (Scene::default(), State::new(true), State::new(0));
+    let mut view = two_buttons(&mut scene, shown.clone(), clicks.clone())?;
+    hold_space_on_the_first_button(&mut view);
+    shown.set(false);
+    advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
+    assert!(view.routing.focus.pressed_key().is_none());
+    assert!(!view.tagged_state(&"second")?.pointer.active);
+    view.input(InputEvent::KeyRelease(Key::Space));
+    assert_eq!(clicks.get(), 1);
     Ok(())
 }
 

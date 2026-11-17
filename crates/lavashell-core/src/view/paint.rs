@@ -417,11 +417,11 @@ impl View {
     }
 
     pub(super) fn is_focused(&self, id: NodeId) -> bool {
-        self.window_focused && self.routing.focus == Some(id)
+        self.window_focused && self.routing.focus.node() == Some(id)
     }
 
     fn shows_focus_within(&self, index: usize) -> bool {
-        let focused = (self.routing.focus.filter(|_| self.window_focused))
+        let focused = (self.routing.focus.node().filter(|_| self.window_focused))
             .and_then(|id| index_of(&self.nodes, id));
         focused.is_some_and(|focused| {
             self.focus_shows_on(focused) && self.parents.ancestry(focused).any(|node| node == index)

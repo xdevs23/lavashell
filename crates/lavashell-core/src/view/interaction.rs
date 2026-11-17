@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::focus::FocusSource;
 use super::paint::PaintOutput;
 use super::{InputEvent, View, paint};
 use crate::animation::{Animation, AnimationError};
@@ -17,13 +18,6 @@ pub(super) struct StyledAppearance {
     pub animation: Animation<AnimatedAppearance>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub(super) enum FocusSource {
-    Key,
-    Pointer,
-    Assistive,
-}
-
 impl View {
     pub fn cancel_pending_text_drag(&mut self) {
         self.cancel_text_drag();
@@ -39,16 +33,13 @@ impl View {
         let id = node.id;
         let disabled = self.input_disabled(index);
         let available = !disabled && self.window_focused;
-        let focused = available && self.routing.focus == Some(id);
+        let focused = available && self.routing.focus.node() == Some(id);
         InteractionState {
             pointer: PointerState {
                 hovered: !disabled && self.routing.is_hovered(id),
                 active: !disabled
                     && (self.routing.is_pressed(id)
-                        || available
-                            && self.routing.keyboard_press.is_some_and(|(pressed, _)| {
-                                pressed == id && self.routing.focus == Some(id)
-                            })),
+                        || focused && self.routing.focus.pressed_key().is_some()),
                 captured: !disabled && self.routing.is_captured(id),
             },
             focus: FocusState {
@@ -160,14 +151,13 @@ impl View {
 
     pub(super) fn sanitize_interactions(&mut self) {
         let enabled = self.input_enabled_nodes();
-        let keyboard_invalid = (self.routing.keyboard_press)
-            .is_some_and(|(id, _)| self.routing.focus != Some(id) || !enabled.contains(&id));
+        let focus_disabled = (self.routing.focus.node()).is_some_and(|id| !enabled.contains(&id));
         let invalid: BTreeSet<_> = (self.routing.pointers.values())
             .flat_map(|pointer| pointer.nodes().chain(pointer.over))
             .filter(|id| !enabled.contains(id))
             .collect();
-        if keyboard_invalid {
-            self.routing.keyboard_press = None;
+        if focus_disabled {
+            self.routing.focus.set_pressed_key(None);
         }
         if (self.routing.pointers.values())
             .any(|pointer| pointer.nodes().any(|id| invalid.contains(&id)))
@@ -199,19 +189,15 @@ impl View {
                 self.window_focused = *focused;
                 if !focused {
                     self.cancel_pointers();
-                    self.routing.keyboard_press = None;
+                    self.routing.focus.set_pressed_key(None);
                     self.cancel_text_drag();
                 }
                 self.redraw = true;
                 true
             }
             InputEvent::KeyRelease(key) => {
-                if self
-                    .routing
-                    .keyboard_press
-                    .is_some_and(|(_, pressed)| pressed == *key)
-                {
-                    self.routing.keyboard_press = None;
+                if self.routing.focus.pressed_key() == Some(*key) {
+                    self.routing.focus.set_pressed_key(None);
                     self.redraw = true;
                 }
                 true
@@ -220,16 +206,13 @@ impl View {
         }
     }
 
-    pub(super) fn record_focus_source(&mut self, source: FocusSource) {
-        if self.routing.focus_source != Some(source) {
-            self.routing.focus_source = Some(source);
-            self.redraw = true;
-        }
+    pub(super) fn move_focus_with_source(&mut self, node: NodeId, source: FocusSource) {
+        self.redraw |= self.routing.focus.move_with_source(node, source);
     }
 
     pub(super) fn focus_shows_on(&self, index: usize) -> bool {
         matches!(
-            self.routing.focus_source,
+            self.routing.focus.source(),
             None | Some(FocusSource::Key | FocusSource::Assistive)
         ) || matches!(self.nodes[index].kind, NodeKind::TextInput { .. })
     }
@@ -264,10 +247,10 @@ impl View {
     }
 
     pub(super) fn begin_keyboard_activation(&mut self, key: Key) -> bool {
-        let Some(id) = self.routing.focus.filter(|_| self.window_focused) else {
+        let Some(id) = self.routing.focus.node().filter(|_| self.window_focused) else {
             return false;
         };
-        if self.routing.keyboard_press == Some((id, key)) {
+        if self.routing.focus.pressed_key() == Some(key) {
             return false;
         }
         if !self
@@ -278,7 +261,7 @@ impl View {
         {
             return false;
         }
-        self.routing.keyboard_press = Some((id, key));
+        self.routing.focus.set_pressed_key(Some(key));
         self.redraw = true;
         true
     }

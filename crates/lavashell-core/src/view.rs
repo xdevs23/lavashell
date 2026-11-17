@@ -5,6 +5,7 @@ mod component;
 mod crossing;
 mod failure;
 mod field;
+mod focus;
 mod frame;
 mod frame_error;
 mod frame_result;
@@ -373,7 +374,7 @@ impl View {
 
     #[must_use]
     pub fn focus(&self) -> Option<NodeId> {
-        self.routing.focus
+        self.routing.focus.node()
     }
 
     #[must_use]

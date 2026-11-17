@@ -127,7 +127,7 @@ impl View {
                 })
             }),
             TextAction::Done => {
-                self.routing.focus = None;
+                self.routing.focus.clear();
                 self.redraw = true;
             }
             TextAction::Search | TextAction::Go | TextAction::Send => {}

@@ -304,7 +304,7 @@ impl TextEditing {
 
 impl InputRouting {
     pub(super) fn selection_target(&self) -> Option<NodeId> {
-        self.focus.filter(|id| {
+        self.focus.node().filter(|id| {
             self.hits
                 .iter()
                 .any(|hit| hit.id == *id && hit.input.is_some())

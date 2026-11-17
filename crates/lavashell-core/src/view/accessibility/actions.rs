@@ -9,7 +9,7 @@ use crate::ui::{FieldContent, NodeKind};
 use crate::units::Dp;
 use crate::view::View;
 use crate::view::component::index_of;
-use crate::view::interaction::FocusSource;
+use crate::view::focus::FocusSource;
 use crate::view::scroll::ScrollStyle;
 
 impl View {
@@ -95,8 +95,7 @@ impl View {
         match action {
             AccessibilityAction::Focus => {
                 self.accessibility_reveal(index);
-                self.routing.focus = Some(id);
-                self.record_focus_source(FocusSource::Assistive);
+                self.move_focus_with_source(id, FocusSource::Assistive);
                 Ok(())
             }
             AccessibilityAction::Activate => {

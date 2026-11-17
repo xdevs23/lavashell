@@ -165,7 +165,7 @@ impl View {
             relations.error_message.retain(|id| ids.contains(id));
             relations.member_of = relations.member_of.filter(|id| ids.contains(id));
         }
-        let focus = self.routing.focus.filter(|id| ids.contains(id));
+        let focus = self.routing.focus.node().filter(|id| ids.contains(id));
         if self.accessibility.tree.nodes != nodes || self.accessibility.tree.focus != focus {
             self.accessibility.tree.revision += 1;
             self.accessibility.tree.nodes = nodes;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::focus::{FocusSource, KeyboardFocus};
 use super::moving::Moving;
 use super::navigation::FocusDirection;
 use super::pointers::Pointer;
@@ -10,7 +11,6 @@ use crate::keyboard::{Key, Shortcut};
 use crate::ui::{
     Action, Activation, ComposedShortcut, InputModifiers, Lines, NodeId, NodeKind, PointerId,
 };
-use crate::view::interaction::FocusSource;
 use std::collections::BTreeMap;
 
 impl InputEvent {
@@ -56,11 +56,8 @@ impl InputEvent {
 pub(super) struct InputRouting {
     pub pointers: BTreeMap<PointerId, Pointer>,
     pub modifiers: InputModifiers,
-    pub keyboard_press: Option<(NodeId, Key)>,
-    pub focus: Option<NodeId>,
-    pub focus_source: Option<FocusSource>,
+    pub focus: KeyboardFocus,
     pub modal_root: Option<NodeId>,
-    pub modal_restore: Option<NodeId>,
     pub shortcuts: Vec<(Shortcut, Action)>,
     pub root_shortcuts: Vec<ComposedShortcut>,
     pub hits: Vec<Hit>,
@@ -86,7 +83,7 @@ impl View {
             return;
         }
         if let Some(source) = input.focus_source() {
-            self.record_focus_source(source);
+            self.redraw |= self.routing.focus.record_source(source);
         }
         if self.key_consumed_by_text_drag(&input) {
             return;
@@ -107,7 +104,7 @@ impl View {
 
     pub(super) fn focused_text(&self) -> Option<FocusedText> {
         let index = (self.routing.hits.iter())
-            .filter(|hit| Some(hit.id) == self.routing.focus)
+            .filter(|hit| Some(hit.id) == self.routing.focus.node())
             .find_map(|hit| hit.input)?
             .index;
         let takes_line_breaks = match &self.nodes[index].kind {
@@ -238,7 +235,7 @@ impl View {
                 let hit = self.routing.hit_at(p).cloned();
                 if let Some(hit) = hit {
                     if hit.focusable {
-                        self.routing.focus = Some(hit.id);
+                        self.routing.focus.move_to(Some(hit.id));
                     }
                     if let Some(action) = hit.context {
                         action.borrow_mut()(Activation {
@@ -279,7 +276,7 @@ impl View {
                 ..
             } => {
                 if self.begin_keyboard_activation(key)
-                    && let Some(focus) = self.routing.focus
+                    && let Some(focus) = self.routing.focus.node()
                 {
                     self.activate_hit(focus, Point::default());
                 }
@@ -292,7 +289,7 @@ impl View {
         let Some(mut index) = self
             .nodes
             .iter()
-            .position(|n| Some(n.id) == self.routing.focus)
+            .position(|n| Some(n.id) == self.routing.focus.node())
         else {
             return false;
         };
@@ -305,12 +302,12 @@ impl View {
             {
                 return true;
             }
-            if Some(self.nodes[index].id) == self.routing.focus
+            if Some(self.nodes[index].id) == self.routing.focus.node()
                 && matches!(shortcut.key, Key::Enter | Key::Space)
                 && !shortcut.control
                 && !shortcut.alt
                 && (self.routing.hits.iter())
-                    .any(|hit| Some(hit.id) == self.routing.focus && hit.activates())
+                    .any(|hit| Some(hit.id) == self.routing.focus.node() && hit.activates())
             {
                 return false;
             }

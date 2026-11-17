@@ -27,7 +27,7 @@ impl View {
             .routing
             .hits
             .iter()
-            .find(|hit| Some(hit.id) == self.routing.focus && hit.input.is_some())
+            .find(|hit| Some(hit.id) == self.routing.focus.node() && hit.input.is_some())
             .and_then(|hit| hit.input.map(|target| target.index))
         else {
             return false;

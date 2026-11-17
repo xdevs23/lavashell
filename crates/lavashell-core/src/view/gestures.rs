@@ -7,6 +7,7 @@ mod scroll;
 mod select;
 mod tap;
 
+use super::focus::FocusSource;
 use super::input::InputRouting;
 use super::pointers::PointerSample;
 use super::{Hit, View};
@@ -14,7 +15,6 @@ use crate::geometry::{Axis, Point, Rect};
 use crate::ui::{NodeId, PointerId};
 use crate::units::Dp;
 use crate::view::component::index_of;
-use crate::view::interaction::FocusSource;
 pub(super) use arena::{Arena, Outcome};
 
 pub(super) type Effect = Box<dyn FnOnce(&mut View)>;
@@ -223,8 +223,7 @@ impl View {
             .iter()
             .any(|hit| hit.id == node && hit.focusable)
         {
-            self.routing.focus = Some(node);
-            self.record_focus_source(FocusSource::Pointer);
+            self.move_focus_with_source(node, FocusSource::Pointer);
         }
         self.redraw = true;
     }

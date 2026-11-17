@@ -16,7 +16,7 @@ fn paste_replaces_captured_selection_independently_of_focus_and_current_selectio
     let id = select(&mut view, 4, 7)?;
     let target = view.text_paste_target(id).required("a paste target")?;
     select_range(&mut view, 0, 3)?;
-    view.routing.focus = None;
+    view.routing.focus.clear();
     assert!(view.paste_text_at(&target, "snow\r\n雪"));
     assert_eq!(state.get(), "abc snow\n雪 xyz");
     assert_eq!(changes.get(), 1);

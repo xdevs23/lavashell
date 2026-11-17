@@ -112,7 +112,7 @@ pub(super) fn padded_field(ui: &mut Ui, placement: Modifier) {
 
 pub(super) fn select_range(view: &mut View, start: usize, end: usize) -> TestResult {
     let id = field_id(view)?;
-    view.routing.focus = Some(id);
+    view.routing.focus.move_to(Some(id));
     let edit = view
         .editing
         .edits
@@ -344,7 +344,7 @@ fn shaped_drop_snapshot_ignores_focus_and_rejects_changes_disabled_and_read_only
         changes,
     } = editor(&mut scene, "abc def", false)?;
     let target = view.text_drop_target(point(3)).required("a drop target")?;
-    view.routing.focus = None;
+    view.routing.focus.clear();
     assert!(view.insert_text_at(&target, "\r\nx"));
     assert_eq!(state.get(), "abc\nx def");
     assert_eq!(changes.get(), 1);
@@ -398,7 +398,7 @@ fn pointer_selection_of_centered_plain_text_repaints_retained_geometry() -> Test
     assert!(view.stats().painted_components > before.painted_components);
     assert!(scene.commands().iter().any(|command| matches!(command,
         DrawCommand::Fill { shape, .. } if *shape == Rect::new(0.dp(), 30.dp(), 30.dp(), 20.dp()).into())));
-    let id = view.routing.focus.required("a focused node")?;
+    let id = view.routing.focus.node().required("a focused node")?;
     assert_eq!(
         view.accessibility.tree.nodes[&id]
             .text

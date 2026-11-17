@@ -31,7 +31,7 @@ fn source_capture_and_copy_do_not_delete_and_move_uses_original_duplicate_range(
     assert_eq!(state.get(), "abc abc xyz");
     assert_eq!(changes.get(), 0);
     select_range(&mut view, 0, 3)?;
-    view.routing.focus = None;
+    view.routing.focus.clear();
     assert!(view.complete_text_move(&source));
     assert_eq!(state.get(), "abc  xyz");
     assert_eq!(changes.get(), 1);

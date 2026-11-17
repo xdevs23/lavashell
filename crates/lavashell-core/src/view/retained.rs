@@ -5,14 +5,13 @@ use super::output::{GroupId, Painted, placed_at};
 use super::paint::{Above, Detached, Inherited};
 use super::{Hit, HitClip, TextMeasurer, TextTarget, View, accessibility, paint, scroll_followers};
 use crate::geometry::{Constraints, Point, Rect, Scale, Size};
-use crate::keyboard::Key;
 use crate::reactive::Phase;
 use crate::scene::{Affine, Transform};
 use crate::style::ContentColors;
 use crate::ui::{Identity, NodeId, Part};
 use crate::units::Dp;
 use crate::view::component::{collect_descendants, index_of};
-use crate::view::interaction::FocusSource;
+use crate::view::focus::{FocusSource, FocusedNode};
 use crate::view::layout::{Layout, Measuring, Visibility};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -54,10 +53,9 @@ struct Painting {
 
 #[derive(PartialEq)]
 struct InteractionKey {
-    focus: Option<NodeId>,
+    focused: Option<FocusedNode>,
     focus_source: Option<FocusSource>,
     pointers: Vec<(Option<NodeId>, Option<NodeId>)>,
-    keyboard_press: Option<(NodeId, Key)>,
     window_focused: bool,
     modal_root: Option<NodeId>,
 }
@@ -229,8 +227,8 @@ impl View {
         let mut indices = BTreeSet::new();
         collect_descendants(&self.nodes, index, &mut indices);
         let key = self.paint_key(index, &indices, position, origin, placed, &inherited);
-        let editing =
-            (key.interaction.focus).is_some_and(|id| self.editing.edits.contains_key(&id));
+        let editing = (key.interaction.focused)
+            .is_some_and(|focused| self.editing.edits.contains_key(&focused.node));
         let subtree_dirty = indices.iter().any(|i| self.nodes[*i].component_is_dirty());
         let current =
             (self.retained.paintings.get(&id)).is_some_and(|painting| painting.key == key);
@@ -297,6 +295,8 @@ impl View {
             .map(|i| self.nodes[*i].id)
             .collect::<BTreeSet<_>>();
         let local = |id: Option<NodeId>| id.filter(|id| ids.contains(id));
+        let focused =
+            (self.routing.focus.focused_node()).filter(|focused| ids.contains(&focused.node));
         let shared =
             (indices.iter()).any(|i| matches!(self.nodes[*i].identity, Identity::Shared { .. }));
         PaintKey {
@@ -326,16 +326,12 @@ impl View {
                 })
                 .collect(),
             interaction: InteractionKey {
-                focus: local(self.routing.focus),
-                focus_source: local(self.routing.focus).and(self.routing.focus_source),
+                focused,
+                focus_source: focused.and(self.routing.focus.source()),
                 pointers: (self.routing.pointers.values())
                     .map(|pointer| (local(pointer.capture()), local(pointer.over)))
                     .filter(|pointer| *pointer != (None, None))
                     .collect(),
-                keyboard_press: self
-                    .routing
-                    .keyboard_press
-                    .filter(|(id, _)| ids.contains(id)),
                 window_focused: self.window_focused,
                 modal_root: self.routing.modal_root,
             },

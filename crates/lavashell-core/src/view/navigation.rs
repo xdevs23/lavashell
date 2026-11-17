@@ -19,7 +19,7 @@ pub(super) enum FocusDirection {
 
 impl View {
     pub(super) fn recover_focus(&mut self, previous: &LaidOutTree) {
-        self.routing.focus = self.routing.focus.and_then(|id| {
+        let recovered = self.routing.focus.node().and_then(|id| {
             let mut index = index_of(previous.nodes(), id)?;
             loop {
                 let id = previous.nodes()[index].id;
@@ -29,17 +29,19 @@ impl View {
                 index = previous.parents().node_of(index)?;
             }
         });
+        self.routing.focus.move_to(recovered);
     }
 
     pub(super) fn normalize_focus(&mut self) {
         if self
             .routing
             .focus
+            .node()
             .is_none_or(|id| self.routing.hits.iter().any(|hit| hit.id == id))
         {
             return;
         }
-        self.routing.focus = self.routing.focus.and_then(|id| {
+        let normalized = self.routing.focus.node().and_then(|id| {
             let mut index = index_of(&self.nodes, id)?;
             loop {
                 let id = self.nodes[index].id;
@@ -54,6 +56,7 @@ impl View {
                 index = self.parents.node_of(index)?;
             }
         });
+        self.routing.focus.move_to(normalized);
     }
 
     pub(super) fn cycle_focus(
@@ -70,14 +73,15 @@ impl View {
         if count == 0 {
             return;
         }
-        let focused = (self.routing.focus).and_then(|focus| ids.iter().position(|id| *id == focus));
+        let focused =
+            (self.routing.focus.node()).and_then(|focus| ids.iter().position(|id| *id == focus));
         let next = match (focused, direction) {
             (None, FocusDirection::Forward) => 0,
             (None, FocusDirection::Backward) => count - 1,
             (Some(index), FocusDirection::Forward) => (index + 1) % count,
             (Some(index), FocusDirection::Backward) => (index + count - 1) % count,
         };
-        self.routing.focus = Some(ids[next]);
+        self.routing.focus.move_to(Some(ids[next]));
         self.redraw = true;
     }
 
