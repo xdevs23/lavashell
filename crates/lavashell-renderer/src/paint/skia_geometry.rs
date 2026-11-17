@@ -100,7 +100,14 @@ pub(crate) fn skmatrix(affine: &Affine) -> Result<Matrix, DrawFailure> {
 }
 
 pub(crate) fn device_scale(canvas: &Canvas) -> Option<f32> {
-    let scale = canvas.local_to_device_as_3x3().max_scale();
+    positive_scale(canvas.local_to_device_as_3x3().max_scale())
+}
+
+pub(crate) fn min_device_scale(canvas: &Canvas) -> Option<f32> {
+    positive_scale(canvas.local_to_device_as_3x3().min_scale())
+}
+
+fn positive_scale(scale: f32) -> Option<f32> {
     (scale > 0.0).then_some(scale)
 }
 

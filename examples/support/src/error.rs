@@ -24,6 +24,8 @@ pub enum Error {
     BufferSize(#[source] NumberError),
     #[error("cannot create the offscreen surface of the capture")]
     Offscreen(#[source] RendererError),
+    #[error("cannot paint the scene of the capture")]
+    Paint(#[source] RendererError),
     #[error("cannot encode the capture as PNG")]
     EncodePng(#[source] RendererError),
     #[error("cannot create the directory {}", path.display())]

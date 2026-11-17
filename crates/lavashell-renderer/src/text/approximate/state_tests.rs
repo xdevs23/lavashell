@@ -42,6 +42,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
         SurfaceId::numbered(11),
         persistent.canvas(),
         &tree,
+        Affine::IDENTITY,
         Some(Rect::new(0.dp(), 0.dp(), 300.dp(), 150.dp())),
         skia_safe::Color::TRANSPARENT,
     )?;
@@ -80,6 +81,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
             SurfaceId::numbered(11),
             persistent.canvas(),
             &tree,
+            Affine::IDENTITY,
             None,
             skia_safe::Color::TRANSPARENT,
         )?;
@@ -91,7 +93,7 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
             fresh.canvas(),
             &tree,
             Density::ONE,
-        );
+        )?;
         assert_eq!(
             actual,
             pixels(&mut fresh),

@@ -78,7 +78,7 @@ fn planned_painter(tree: &SceneTree) -> Result<Painter, TestError> {
 
 fn plan(painter: &mut Painter, tree: &SceneTree, frame: u64, budget: FrameBudget) {
     let at = tree.at(Duration::ZERO);
-    let quality = painter.plan_scene_effects(at, budget, frame, 1, Density::ONE);
+    let quality = painter.plan_scene_effects(at, budget, frame, 1, Affine::IDENTITY);
     assert_eq!(quality, QualityChange::Unchanged);
 }
 

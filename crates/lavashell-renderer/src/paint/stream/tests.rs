@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::failure::DrawFailure;
 use crate::test_error::TestError;
-use crate::test_scenes::leaves;
+use crate::test_scenes::{TEST_SURFACE, leaves};
 use crate::test_surfaces::{Pixels, TestSurface, pattern, pixels, surface};
 use crate::{Fonts, Painter, StreamFrames};
 use lavashell_core::prelude::*;
@@ -214,10 +214,11 @@ fn a_frame_in_a_leaf_is_drawn_on_every_paint_and_never_cached() -> Result<(), Te
         let mut target = surface(SIDE, SIDE)?;
         painter.paint_scene_with_streams(
             target.canvas(),
+            TEST_SURFACE,
             tree.at(Duration::ZERO),
             Density::ONE,
             &streams,
-        );
+        )?;
         assert_eq!(crate::test_surfaces::pixels(&mut target), expected);
     }
     let stats = painter.render_stats();

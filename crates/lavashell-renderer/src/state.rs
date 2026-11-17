@@ -197,11 +197,14 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         &self,
         surface: SurfaceId,
         viewport: Viewport,
+        scale: PixelScale,
     ) -> Result<SurfaceContents, StateError> {
-        let target = &attached(&self.surfaces, surface)?.target;
-        target
-            .contents(physical_size(viewport)?)
-            .map_err(StateError::ReadContents)
+        let attached = attached(&self.surfaces, surface)?;
+        if !attached.damage.drawn_at(scale) {
+            return Ok(SurfaceContents::Outdated);
+        }
+        let size = physical_size(viewport, scale)?;
+        (attached.target.contents(size)).map_err(StateError::ReadContents)
     }
 
     #[must_use]
@@ -232,10 +235,15 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.scene.as_ref().and_then(SceneImages::wake)
     }
 
-    pub fn advance_scene(&mut self, viewport: Viewport, now: Duration) -> Result<(), StateError> {
+    pub fn advance_scene(
+        &mut self,
+        viewport: Viewport,
+        scale: PixelScale,
+        now: Duration,
+    ) -> Result<(), StateError> {
         let frames_in_flight = self.scene_frames_in_flight();
         match &mut self.scene {
-            Some(scene) => scene.tick(&mut self.gpu, now, viewport, frames_in_flight),
+            Some(scene) => scene.tick(&mut self.gpu, now, viewport, scale, frames_in_flight),
             None => Ok(()),
         }
     }
@@ -246,22 +254,27 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
-        self.advance_scene(frame.viewport, frame.time.now)?;
+        self.advance_scene(frame.viewport, frame.scale, frame.time.now)?;
         let scene = self.scene.as_ref().and_then(SceneImages::latest);
-        let physical = physical_size(frame.viewport)?;
+        let physical = physical_size(frame.viewport, frame.scale)?;
         let shown = snapshot.at(frame.time.presentation);
         let scene_generation = scene.as_ref().map_or(0, |scene| scene.generation);
         let attached = attached_mut(&mut self.surfaces, surface)?;
         attached.prepare(&frame)?;
+        attached.damage.draw_at(frame.scale);
         let budget = FrameBudget {
             surface,
             gpu_time: frame.time.refresh,
         };
-        let density = frame.viewport.density;
         let sequence = frame.time.sequence;
-        let quality =
-            self.painter
-                .plan_scene_effects(shown, budget, sequence, scene_generation, density);
+        let dp_to_output = frame.dp_to_output();
+        let quality = (self.painter).plan_scene_effects(
+            shown,
+            budget,
+            sequence,
+            scene_generation,
+            dp_to_output,
+        );
         let inputs = PixelInputs {
             lineage: snapshot.lineage(),
             scene_generation,
@@ -330,6 +343,6 @@ fn attached_mut<C>(
         .ok_or(StateError::UnknownSurface(surface))
 }
 
-fn physical_size(viewport: Viewport) -> Result<PixelSize, StateError> {
-    (PixelScale::SQUARE.buffer_size(viewport)).map_err(StateError::BufferSize)
+fn physical_size(viewport: Viewport, scale: PixelScale) -> Result<PixelSize, StateError> {
+    (scale.buffer_size(viewport)).map_err(StateError::BufferSize)
 }

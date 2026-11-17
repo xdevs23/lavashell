@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{FrameOutcome, Snapshot};
-use lavashell_core::prelude::{FrameTime, Viewport};
+use lavashell_core::prelude::{Affine, FrameTime, PixelScale, Viewport};
 use lavashell_core::surface::SurfaceState;
 use std::time::Duration;
 
@@ -8,8 +8,16 @@ use std::time::Duration;
 pub struct PresentFrame<'a> {
     pub time: FrameTime,
     pub viewport: Viewport,
+    pub scale: PixelScale,
     pub present_at: Option<Duration>,
     pub state: &'a SurfaceState,
+}
+
+impl PresentFrame<'_> {
+    #[must_use]
+    pub fn dp_to_output(&self) -> Affine {
+        self.scale.dp_to_output(self.viewport.density)
+    }
 }
 
 pub trait SurfaceControl {

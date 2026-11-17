@@ -70,7 +70,9 @@ impl Capture {
         let mut surface = self.gpu.offscreen(pixels).map_err(Error::Offscreen)?;
         let _chained_canvas =
             (surface.canvas()).clear(lavashell::renderer::skia::Color::TRANSPARENT);
-        (self.painter).paint_scene(surface.canvas(), self.surface, tree, viewport.density);
+        (self.painter)
+            .paint_scene(surface.canvas(), self.surface, tree, viewport.density)
+            .map_err(Error::Paint)?;
         let png = self.gpu.png(&mut surface).map_err(Error::EncodePng)?;
         write_capture(path, &png)
     }

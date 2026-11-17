@@ -2,6 +2,7 @@
 use super::*;
 use crate::state::tests::{scene, viewport};
 use crate::test_error::TestError;
+use crate::test_surfaces::WIDE_SURFACE;
 use lavashell_core::prelude::SceneTree;
 use std::time::Duration;
 
@@ -120,5 +121,26 @@ fn a_frame_that_was_not_shown_damages_the_whole_viewport_next() -> Result<(), Te
             Some(whole())
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_new_scale_damages_everything_and_an_unchanged_one_nothing() -> Result<(), TestError> {
+    let snapshot = scene()?;
+    let shown = snapshot.at(Duration::ZERO);
+    let unchanged = inputs(snapshot.lineage());
+    let wide = PixelScale::filling(viewport(), WIDE_SURFACE.pixel_size())?;
+    let mut damage = SurfaceDamage::default();
+    damage.draw_at(PixelScale::SQUARE);
+    let _damage_of_the_first_frame_is_not_checked =
+        damage.area(shown, viewport(), &unchanged, current())?;
+    damage.draw_at(PixelScale::SQUARE);
+    assert_eq!(damage.area(shown, viewport(), &unchanged, current())?, None);
+    damage.draw_at(wide);
+    assert_eq!(
+        damage.area(shown, viewport(), &unchanged, current())?,
+        Some(whole())
+    );
+    assert!(damage.drawn_at(wide) && !damage.drawn_at(PixelScale::SQUARE));
     Ok(())
 }

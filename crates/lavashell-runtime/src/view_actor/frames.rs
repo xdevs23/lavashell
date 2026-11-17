@@ -150,11 +150,10 @@ impl<P: Platform> ViewActor<P> {
 
     fn advance_scene(&self) -> Result<(), ViewError> {
         if self.pacing.scene_due(self.clock.now())
-            && let Some(viewport) = self.surfaces.first_configured_viewport()
+            && let Some((surface, viewport)) = self.surfaces.first_configured_viewport()
         {
-            self.actors
-                .renderer
-                .send(RendererInput::AdvanceScene(viewport))?;
+            let advance = RendererInput::AdvanceScene { surface, viewport };
+            self.actors.renderer.send(advance)?;
         }
         Ok(())
     }
@@ -244,7 +243,7 @@ impl<P: Platform> ViewActor<P> {
         let Viewport { size, density } = viewport;
         let mut clip = None;
         let shape_changes = surface.shape.update(size, density, |outline| {
-            let geometry = ShapeGeometry::new(outline, size, density)?;
+            let geometry = ShapeGeometry::new(outline, size)?;
             clip = Some(geometry.clip);
             Ok::<_, ViewError>(geometry.input_cells)
         })?;

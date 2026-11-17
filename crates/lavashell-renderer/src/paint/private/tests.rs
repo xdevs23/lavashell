@@ -89,7 +89,7 @@ fn scene_pixels(
     scene: &SceneSnapshot,
 ) -> Result<Pixels<[u8; 4]>, TestError> {
     drawn(|canvas| {
-        crate::test_scenes::paint(painter, canvas, scene, Density::ONE);
+        crate::test_scenes::paint(painter, canvas, scene, Density::ONE)?;
         Ok(())
     })
 }

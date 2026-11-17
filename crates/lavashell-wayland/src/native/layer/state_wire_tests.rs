@@ -3,7 +3,7 @@ use super::test_error::LayerTestError;
 use super::*;
 use crate::native::wire_messages::WireMessage;
 use crate::test_error::TestError;
-use lavashell_core::prelude::{Density, DpExt, FrameTime, Rect, Size, Viewport};
+use lavashell_core::prelude::{Density, DpExt, FrameTime, PixelScale, Rect, Size, Viewport};
 use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 use layer_client::{LayerClient, top_bar};
 
@@ -40,6 +40,7 @@ fn sends_the_surface_state_of_a_frame_before_its_frame_request_and_only_once()
     let frame = PresentFrame {
         time: FrameTime::default(),
         viewport: Viewport::new(Size::new(4.dp(), 2.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state: &state,
     };
@@ -100,6 +101,7 @@ fn acknowledges_a_layer_configure_with_the_frame_that_contains_its_token() -> Re
     let frame = PresentFrame {
         time: FrameTime::default(),
         viewport: Viewport::new(Size::new(4.dp(), 30.dp()), Density::ONE),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state: &state,
     };

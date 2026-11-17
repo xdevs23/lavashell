@@ -32,6 +32,8 @@ enum RenderError {
     Surface,
     #[error("cannot build the scene")]
     Scene(#[source] ApplyError),
+    #[error("cannot paint the scene")]
+    Paint(#[source] Error),
     #[error("cannot copy the surface into a raster image")]
     RasterImage,
     #[error("cannot read the pixels of the raster image")]
@@ -80,12 +82,14 @@ fn main() -> Result<(), RenderError> {
     let probe_surface = SurfaceIds::default()
         .next_id()
         .map_err(RenderError::NumberSurface)?;
-    painter.paint_scene(
-        surface.canvas(),
-        probe_surface,
-        tree.at(Duration::ZERO),
-        Density::ONE,
-    );
+    painter
+        .paint_scene(
+            surface.canvas(),
+            probe_surface,
+            tree.at(Duration::ZERO),
+            Density::ONE,
+        )
+        .map_err(RenderError::Paint)?;
     let image =
         (surface.image_snapshot().make_raster_image(None, None)).ok_or(RenderError::RasterImage)?;
     let pixels = image.peek_pixels().ok_or(RenderError::Pixels)?;

@@ -33,6 +33,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
             SurfaceId::numbered(index),
             surface.canvas(),
             &tree,
+            Affine::IDENTITY,
             Some(size),
             skia_safe::Color::BLACK,
         )?;
@@ -47,6 +48,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
                 SurfaceId::numbered(index),
                 surface.canvas(),
                 &tree,
+                Affine::IDENTITY,
                 damage,
                 skia_safe::Color::BLACK,
             )?;
@@ -67,6 +69,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
                 SurfaceId::numbered(index),
                 surface.canvas(),
                 &tree,
+                Affine::IDENTITY,
                 None,
                 skia_safe::Color::BLACK,
             )?;
@@ -118,7 +121,7 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
                 },
                 frame,
                 frame,
-                Density::ONE,
+                Affine::IDENTITY,
             ),
             QualityChange::Unchanged
         );
@@ -127,7 +130,7 @@ fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
         }
         let render = |painter: &mut Painter| -> Result<Pixels<[u8; 4]>, TestError> {
             let mut surface = EFFECT_SURFACE.raster()?;
-            paint(painter, surface.canvas(), &tree, Density::ONE);
+            paint(painter, surface.canvas(), &tree, Density::ONE)?;
             Ok(pixels(&mut surface))
         };
         assert_eq!(

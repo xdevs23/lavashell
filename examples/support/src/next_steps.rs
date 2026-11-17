@@ -79,6 +79,7 @@ impl ExampleError for Error {
             }
             Self::Painter(_)
             | Self::NumberSurface(_)
+            | Self::Paint(_)
             | Self::EncodePng(_)
             | Self::Frame(_)
             | Self::ComponentsFailed(_)

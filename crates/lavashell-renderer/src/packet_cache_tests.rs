@@ -130,7 +130,7 @@ fn paint_scene(
     density: Density,
 ) -> impl Fn(&mut Painter, &Canvas) -> Result<(), TestError> {
     move |painter, canvas| {
-        painter.paint_scene(canvas, TEST_SURFACE, tree.at(Duration::ZERO), density);
+        painter.paint_scene(canvas, TEST_SURFACE, tree.at(Duration::ZERO), density)?;
         Ok(())
     }
 }
@@ -294,7 +294,7 @@ fn a_card_is_drawn_from_its_image_only_inside_the_surface_shape_corners() -> Res
             let frame = SurfaceFrame {
                 surface: TEST_SURFACE,
                 tree: tree.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: Affine::IDENTITY,
                 damage: Some(Rect::new(0.dp(), 0.dp(), 120.dp(), 80.dp())),
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -307,6 +307,42 @@ fn a_card_is_drawn_from_its_image_only_inside_the_surface_shape_corners() -> Res
         let hits = cache_hits(ColorType::RGBAF16, |_| Ok(()), paint)?;
         assert_eq!(hits, expected, "{place:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_copy_stored_at_one_pixel_scale_is_not_drawn_at_another() -> Result<(), TestError> {
+    let tree = scene(at(12.0, 8.0), None, card())?;
+    let layout = Viewport::new(Size::new(80.dp(), 80.dp()), Density::ONE);
+    let wide = PixelScale::filling(layout, SURFACE.pixel_size())?;
+    let paint = |painter: &mut Painter, scale: PixelScale| {
+        painted(ColorType::RGBAF16, |canvas| {
+            let frame = SurfaceFrame {
+                surface: TEST_SURFACE,
+                tree: tree.at(Duration::ZERO),
+                dp_to_output: scale.dp_to_output(layout.density),
+                damage: Some(Rect::from_size(layout.size)),
+                clear: skia_safe::Color::TRANSPARENT,
+                scene: None,
+                shape: None,
+                streams: &StreamFrames::default(),
+            };
+            painter.paint_surface(canvas, frame)?;
+            Ok(())
+        })
+    };
+    let differing =
+        |actual: &Pixels<[f32; 4]>, expected| actual.positions_differing_in_bits(expected);
+    let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    direct.set_packet_caching(crate::PacketCaching::Disabled);
+    let square = paint(&mut direct, PixelScale::SQUARE)?;
+    let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    for _ in 0..3 {
+        assert!(differing(&paint(&mut cached, PixelScale::SQUARE)?, &square)?.is_empty());
+    }
+    let expected = paint(&mut direct, wide)?;
+    assert!(differing(&paint(&mut cached, wide)?, &expected)?.is_empty());
+    assert_eq!(cached.render_stats().cache_hits, 1);
     Ok(())
 }
 

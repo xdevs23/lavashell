@@ -142,7 +142,7 @@ fn paint_damage(
     let frame = SurfaceFrame {
         surface: TEST_SURFACE,
         tree: tree.at(Duration::ZERO),
-        density,
+        dp_to_output: PixelScale::SQUARE.dp_to_output(density),
         damage,
         clear: skia_safe::Color::BLACK,
         scene: None,
@@ -153,9 +153,15 @@ fn paint_damage(
     Ok(())
 }
 
-fn paint_full(painter: &mut Painter, target: &mut Surface, tree: &SceneTree, density: Density) {
+fn paint_full(
+    painter: &mut Painter,
+    target: &mut Surface,
+    tree: &SceneTree,
+    density: Density,
+) -> Result<(), TestError> {
     let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
-    crate::test_scenes::paint(painter, target.canvas(), &tree.snapshot(), density);
+    crate::test_scenes::paint(painter, target.canvas(), &tree.snapshot(), density)?;
+    Ok(())
 }
 
 fn redraw_rounding(surface: &Surface, full: f64) -> Result<f64, TestError> {
@@ -254,7 +260,7 @@ fn assert_transformed_damage(in_packet: bool, scale: f64) -> Result<(), TestErro
             "visible transformed changes need damage"
         );
         paint_damage(&mut partial, &mut retained, &tree, density, dirty)?;
-        paint_full(&mut full, &mut reference, &tree, density);
+        paint_full(&mut full, &mut reference, &tree, density)?;
         let (x, y) = (scalar(42.0 * scale)?, scalar(24.0 * scale)?);
         let sampled = skia_safe::Rect::from_xywh(x, y, 1.0, 1.0).round();
         let partial_red = red(&mut retained, sampled.left, sampled.top);
@@ -334,7 +340,7 @@ fn assert_partial_damage(include_known_reader: bool, isolated: bool) -> Result<(
         assert_eq!(dirty, Some(Rect::new(31.dp(), 0.dp(), 6.dp(), height)));
     }
     paint_damage(&mut partial, &mut retained, &tree, Density::ONE, dirty)?;
-    paint_full(&mut full, &mut reference, &tree, Density::ONE);
+    paint_full(&mut full, &mut reference, &tree, Density::ONE)?;
     let partial_red = red(&mut retained, 42, 24);
     let full_red = red(&mut reference, 42, 24);
     assert!(full_red > 0.01, "reference must sample the changed stripe");

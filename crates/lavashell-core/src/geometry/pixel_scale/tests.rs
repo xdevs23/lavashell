@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::float_asserts::assert_f64_eq;
+use crate::float_asserts::{assert_f64_eq, assert_f64s_eq};
 use crate::geometry::Size;
+use crate::scene::Affine;
 use crate::test_error::TestResult;
 use crate::units::{Density, DpExt};
 
@@ -17,10 +18,14 @@ fn sized(width: Dp, height: Dp, density: Density) -> Viewport {
 fn a_scale_fills_a_wider_output_and_the_viewport_covers_exactly_it() -> TestResult {
     let viewport = sized(800.dp(), 480.dp(), Density::ONE);
     let output = PixelSize::new(1280, 480);
-    assert_eq!(
-        PixelScale::filling(viewport, output)?.buffer_size(viewport)?,
-        output
-    );
+    let scale = PixelScale::filling(viewport, output)?;
+    assert_eq!(scale.buffer_size(viewport)?, output);
+    let dp_to_output = scale.dp_to_output(Density::from_ratio(2.0, 1.0)?);
+    let Affine { xx, xy, yx, yy, .. } = dp_to_output;
+    assert_f64s_eq(&[xx, xy, yx, yy], &[3.2, 0.0, 0.0, 2.0]);
+    let half = sized(400.dp(), 240.dp(), Density::ONE);
+    assert_eq!(scale, PixelScale::filling(half, PixelSize::new(640, 240))?);
+    assert_ne!(scale, PixelScale::SQUARE);
     Ok(())
 }
 

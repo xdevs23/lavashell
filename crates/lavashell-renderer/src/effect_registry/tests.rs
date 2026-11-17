@@ -4,6 +4,7 @@ use crate::effect_registry::QualityChange;
 use crate::field::test_shapes::union;
 use crate::test_error::TestError;
 use crate::test_scenes::{TEST_SURFACE, insert, paint};
+use crate::test_surfaces::TestSurface;
 use crate::test_variants::only_variant;
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
@@ -81,7 +82,7 @@ fn a_planned_variant_that_the_canvas_cannot_draw_falls_back_to_the_best_one_it_c
     let (mut painter, commands) = fine_effect(&draws)?;
     let tree = SceneTree::with_leaf(&commands[..])?;
     assert_eq!(
-        painter.plan_scene_effects(tree.at(Duration::ZERO), budget(), 1, 1, Density::ONE),
+        painter.plan_scene_effects(tree.at(Duration::ZERO), budget(), 1, 1, Affine::IDENTITY),
         QualityChange::Unchanged
     );
     let mut halved =
@@ -96,6 +97,41 @@ fn a_planned_variant_that_the_canvas_cannot_draw_falls_back_to_the_best_one_it_c
         0,
     );
     assert_eq!(*draws.borrow(), [VariantId(2)]);
+    Ok(())
+}
+
+struct BestOffered(Rc<RefCell<Vec<VariantId>>>);
+
+impl QualityChooser for BestOffered {
+    fn choose(&mut self, _: FrameBudget, draws: &[EffectDraw]) -> FramePlan {
+        let best = draws.iter().filter_map(EffectDraw::best_option);
+        self.0
+            .borrow_mut()
+            .extend(best.map(|option| option.variant()));
+        FramePlan::for_draws(draws, |draw| draw.id, |_| Planned::Wait)
+    }
+}
+
+impl PerSurface for BestOffered {
+    fn forget_surface(&mut self, _: SurfaceId) {}
+}
+
+#[test]
+fn the_planner_offers_the_variants_for_the_longer_axis_of_a_non_square_scale()
+-> Result<(), TestError> {
+    let draws = Rc::new(RefCell::new(Vec::new()));
+    let (mut painter, commands) = fine_effect(&draws)?;
+    let offered = Rc::new(RefCell::new(Vec::new()));
+    painter.effect_quality(BestOffered(offered.clone()));
+    let tree = SceneTree::with_leaf(&commands[..])?;
+    let viewport = Viewport::new(Size::new(10.dp(), 10.dp()), Density::ONE);
+    for (frame, output) in [(1, TestSurface::new(5, 5)), (2, TestSurface::new(5, 20))] {
+        let dp_to_output =
+            PixelScale::filling(viewport, output.pixel_size())?.dp_to_output(viewport.density);
+        let _quality_of_the_waiting_plan =
+            painter.plan_scene_effects(tree.at(Duration::ZERO), budget(), frame, 1, dp_to_output);
+    }
+    assert_eq!(*offered.borrow(), [VariantId(2), VariantId(1)]);
     Ok(())
 }
 
@@ -129,12 +165,12 @@ fn alternating_windows_keep_distinct_draw_identity_and_unchanged_pixels() -> Res
             gpu_time: Some(Duration::ZERO),
         };
         assert_eq!(
-            painter.plan_scene_effects(tree.at(Duration::ZERO), budget, frame, 1, Density::ONE),
+            painter.plan_scene_effects(tree.at(Duration::ZERO), budget, frame, 1, Affine::IDENTITY),
             QualityChange::Unchanged,
             "switching windows must not invalidate unchanged choices"
         );
         let shown = tree.at(Duration::ZERO);
-        painter.paint_scene(surface.canvas(), budget.surface, shown, Density::ONE);
+        painter.paint_scene(surface.canvas(), budget.surface, shown, Density::ONE)?;
     }
     let draws = draws.borrow();
     assert_ne!(draws[0].0, draws[1].0);
@@ -211,7 +247,7 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
             },
             1,
             77,
-            Density::ONE,
+            Affine::IDENTITY,
         ),
         QualityChange::Unchanged
     );
@@ -222,7 +258,7 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
         surface.canvas(),
         &tree.snapshot(),
         Density::ONE,
-    );
+    )?;
     let observed = draws.borrow();
     assert_eq!(
         observed.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
@@ -240,7 +276,7 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
             budget(),
             2,
             77,
-            Density::ONE,
+            Affine::IDENTITY,
         ),
         QualityChange::Changed,
         "removed effects must invalidate retained pixels"

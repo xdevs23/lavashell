@@ -45,7 +45,7 @@ pub fn raster_png(
         image_surface,
         tree,
         Density::ONE,
-    );
+    )?;
     let export_info = png_export_info(skia_safe::ISize::new(width, height));
     let mut export =
         skia_safe::surfaces::raster(&export_info, None, None).ok_or(Error::PngSurface)?;

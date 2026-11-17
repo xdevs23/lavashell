@@ -179,7 +179,7 @@ fn destination_reading_retained_text_is_not_baked_into_a_transparent_layer() -> 
     ] {
         let mut retained = surface()?;
         let _canvas_returned_for_chaining = retained.canvas().clear(background);
-        crate::test_scenes::paint(&mut painter, retained.canvas(), &tree, Density::ONE);
+        crate::test_scenes::paint(&mut painter, retained.canvas(), &tree, Density::ONE)?;
         let mut direct = surface()?;
         let _canvas_returned_for_chaining = direct.canvas().clear(background);
         new_painter()?.paint_as_leaf(direct.canvas(), &[text(Color::WHITE)], Density::ONE)?;

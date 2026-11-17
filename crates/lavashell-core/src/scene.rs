@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::effects::{Backdrop, BlendMode, Shadow, SourceFilter, Stroke};
-use crate::geometry::{Color, PixelSize, Point, Rect, Size, Viewport};
+use crate::geometry::{Color, PixelScale, PixelSize, Point, Rect, Size, Viewport};
 use crate::image::{Image, ImageFit, StreamImage};
 use crate::local::Local;
 use crate::preferences::TextScaling;
 use crate::shape::{Corners, Radius, Shape};
-use crate::units::{Dp, Em, NonNegativeDp, Sp};
+use crate::units::{Density, Dp, Em, NonNegativeDp, Sp};
 
 mod font_weight;
 
@@ -262,6 +262,14 @@ impl Affine {
         let determinant = xx * yy - xy * yx;
         let spread = (squares * squares - 4.0 * determinant * determinant).max(0.0);
         f64::midpoint(squares, spread.sqrt()).sqrt()
+    }
+}
+
+impl PixelScale {
+    #[must_use]
+    pub fn dp_to_output(self, density: Density) -> Affine {
+        let ratios = self.ratios();
+        Affine::scale(density.get() * ratios.x, density.get() * ratios.y)
     }
 }
 

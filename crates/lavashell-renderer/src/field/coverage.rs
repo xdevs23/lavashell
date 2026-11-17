@@ -3,7 +3,7 @@ use super::FieldTexture;
 use super::program::{Bound, Program};
 use super::programs::{FieldImage, Measure, Texel};
 use crate::failure::DrawFailure;
-use crate::paint::{device_scale, skrect};
+use crate::paint::{min_device_scale, skrect};
 use crate::scalar::scalar;
 use lavashell_core::prelude::*;
 use skia_safe::{Canvas, ClipOp, Paint, Shader};
@@ -75,7 +75,7 @@ impl Band {
 }
 
 fn pixel(canvas: &Canvas) -> Result<f64, DrawFailure> {
-    let scale = device_scale(canvas).ok_or(DrawFailure::SingularTransform)?;
+    let scale = min_device_scale(canvas).ok_or(DrawFailure::SingularTransform)?;
     Ok(1.0 / f64::from(scale))
 }
 

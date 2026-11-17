@@ -214,7 +214,7 @@ fn assert_native_color_formula(
         Packet::new(vec![text(13.0, foreground, rect)].into())?,
     ])?;
     let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::BLACK);
-    crate::test_scenes::paint(painter, target.canvas(), &tree, Density::ONE);
+    crate::test_scenes::paint(painter, target.canvas(), &tree, Density::ONE)?;
     let retained = encoded_pixels(&gpu.png(&mut target)?, AlphaType::Unpremul)?;
     let retained_error = actual.largest_channel_difference(&retained)?;
     assert!(

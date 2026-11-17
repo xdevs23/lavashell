@@ -10,6 +10,7 @@ use std::num::NonZeroUsize;
 
 pub(crate) const EFFECT_SURFACE: TestSurface = TestSurface::new(96, 48);
 pub(crate) const EFFECT_STRIPES: StripedSurface = EFFECT_SURFACE.striped(4);
+pub(crate) const WIDE_SURFACE: TestSurface = TestSurface::new(64, 30);
 
 #[derive(Clone, Copy)]
 pub(crate) struct TestSurface {

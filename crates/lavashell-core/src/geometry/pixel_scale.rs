@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{PixelSize, Point, Viewport};
+use super::{PixelSize, Point, Scale, Viewport};
 use crate::units::{Dp, NonNegative, NumberError, Positive, Px};
 use num_traits::ToPrimitive;
 
@@ -28,6 +28,10 @@ impl AxisScale {
         })
     }
 
+    fn ratio(self) -> f64 {
+        self.output_length.get() / self.viewport_length.get()
+    }
+
     fn to_output(self, length: Px) -> Px {
         Px::new(length.get() / self.viewport_length.get() * self.output_length.get())
     }
@@ -51,6 +55,13 @@ impl PixelScale {
         })
     }
 
+    pub(crate) fn ratios(self) -> Scale {
+        Scale {
+            x: self.x.ratio(),
+            y: self.y.ratio(),
+        }
+    }
+
     pub fn buffer_size(self, viewport: Viewport) -> Result<PixelSize, NumberError> {
         let pixels = |axis: AxisScale, length: Dp| {
             round_up_to_buffer_length(axis.to_output(viewport.density.to_px(length)))
@@ -70,6 +81,15 @@ impl PixelScale {
         )
     }
 }
+
+impl PartialEq for PixelScale {
+    fn eq(&self, other: &Self) -> bool {
+        let bits = |scale: &Self| [scale.x.ratio(), scale.y.ratio()].map(f64::to_bits);
+        bits(self) == bits(other)
+    }
+}
+
+impl Eq for PixelScale {}
 
 fn round_up_to_buffer_length(length: Px) -> Result<u32, NumberError> {
     let pixels = NonNegative::try_new(length.get())?.get().ceil();

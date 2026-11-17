@@ -7,9 +7,8 @@ use crate::{
     destination::Destination,
     vulkan::{GpuSample, SampleKind, SampleTag},
 };
-use lavashell_core::prelude::Density;
-use lavashell_core::scene::DrawCommand;
 use lavashell_core::scene::tree::{NodeKey, Presented};
+use lavashell_core::scene::{Affine, DrawCommand};
 use lavashell_core::surface::{PerSurface, SurfaceId};
 use lavashell_effect_quality::{
     Choice, DrawId, DrawTimeKey, DrawTimes, EffectDraw, EffectId, FrameBudget, OfferedVariant,
@@ -43,7 +42,7 @@ struct SurfaceState {
 struct PlannedFrame {
     budget: FrameBudget,
     scene_generation: u64,
-    density: Density,
+    dp_to_output: Affine,
 }
 
 #[derive(Default)]
@@ -144,7 +143,7 @@ impl Painter {
         budget: FrameBudget,
         frame: u64,
         scene_generation: u64,
-        density: Density,
+        dp_to_output: Affine,
     ) -> QualityChange {
         self.frame = frame;
         let collected = (self.gpu_timing.as_mut())
@@ -166,14 +165,14 @@ impl Painter {
         let planned = PlannedFrame {
             budget,
             scene_generation,
-            density,
+            dp_to_output,
         };
         self.choose_effects(tree, Planning::new(planned))
     }
 
     fn choose_effects(&mut self, tree: Presented<'_>, mut planning: Planning) -> QualityChange {
         for leaf in tree.paint_order().leaves() {
-            let pixels_per_dp = planning.frame.density.get() * leaf.world.stretch();
+            let pixels_per_dp = planning.frame.dp_to_output.then(leaf.world).stretch();
             self.collect_effects(
                 leaf.packet.commands(),
                 leaf.key,

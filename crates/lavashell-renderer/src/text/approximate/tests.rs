@@ -178,7 +178,7 @@ fn retained_and_transient_masks_follow_the_current_backdrop() -> Result<(), Test
         let mut warmed = target()?;
         let _canvas_returned_for_chaining =
             warmed.canvas().clear(skia_safe::Color::new(background));
-        crate::test_scenes::paint(&mut painter, warmed.canvas(), &retained, Density::ONE);
+        crate::test_scenes::paint(&mut painter, warmed.canvas(), &retained, Density::ONE)?;
         let actual = pixels(&mut warmed);
         let mut fresh = target()?;
         let _canvas_returned_for_chaining = fresh.canvas().clear(skia_safe::Color::new(background));

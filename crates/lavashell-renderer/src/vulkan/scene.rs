@@ -2,7 +2,7 @@
 
 use super::{CompletedScene, Completion, OffscreenSurface, Status, VulkanRenderer};
 use crate::Error;
-use lavashell_core::prelude::Viewport;
+use lavashell_core::prelude::{PixelScale, Viewport};
 use skia_safe::Canvas;
 use skia_safe::gpu::{DirectContext, DirectContextId, SyncCpu};
 use std::time::Duration;
@@ -70,8 +70,12 @@ impl SceneLayer<'_> {
     pub(crate) fn draw(&self) {
         let layer = skia_safe::Rect::from_isize(self.canvas.base_layer_size());
         let paint = skia_safe::Paint::default();
-        let _canvas_returned_for_chaining =
-            self.canvas.draw_image_rect(self.image, None, layer, &paint);
+        let saved = self.canvas.save();
+        let _canvas_returned_for_chaining = self
+            .canvas
+            .reset_matrix()
+            .draw_image_rect(self.image, None, layer, &paint)
+            .restore_to_count(saved);
     }
 }
 
@@ -88,6 +92,7 @@ pub trait SceneSource {
         gpu: &mut VulkanRenderer,
         now: Duration,
         viewport: Viewport,
+        scale: PixelScale,
     ) -> Result<Option<PendingScene>, Error>;
 }
 

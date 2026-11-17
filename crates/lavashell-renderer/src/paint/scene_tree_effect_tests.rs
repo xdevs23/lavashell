@@ -69,7 +69,8 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
         surface: SurfaceId::numbered(3),
         gpu_time: Some(Duration::from_millis(1)),
     };
-    let quality = painter.plan_scene_effects(scene.at(Duration::ZERO), budget, 1, 1, Density::ONE);
+    let quality =
+        painter.plan_scene_effects(scene.at(Duration::ZERO), budget, 1, 1, Affine::IDENTITY);
     assert_eq!(quality, QualityChange::Unchanged);
     let mut target = SURFACE.raster()?;
     painter.paint_scene(
@@ -77,7 +78,7 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
         budget.surface,
         scene.at(Duration::ZERO),
         Density::ONE,
-    );
+    )?;
     let planned = planned.0.borrow();
     assert_eq!(planned.len(), 2);
     assert_ne!(planned[0], planned[1], "the same node in two namespaces");

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::plan::Area;
 use crate::test_error::TestError;
-use crate::{Painter, StreamFrames};
+use crate::{Error, Painter, StreamFrames};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{
     Change, Content, Node, Packet, SceneNodeId, SceneTree, SceneUpdate,
@@ -41,8 +40,8 @@ pub(crate) fn paint(
     canvas: &Canvas,
     scene: &SceneSnapshot,
     density: Density,
-) {
-    painter.paint_scene(canvas, TEST_SURFACE, scene.at(Duration::ZERO), density);
+) -> Result<(), Error> {
+    painter.paint_scene(canvas, TEST_SURFACE, scene.at(Duration::ZERO), density)
 }
 
 impl Painter {
@@ -63,19 +62,9 @@ impl Painter {
         streams: &StreamFrames,
     ) -> Result<(), TestError> {
         let tree = SceneTree::with_leaf(commands)?;
-        self.paint_scene_with_streams(canvas, tree.at(Duration::ZERO), density, streams);
+        let tree = tree.at(Duration::ZERO);
+        self.paint_scene_with_streams(canvas, TEST_SURFACE, tree, density, streams)?;
         Ok(())
-    }
-
-    pub(crate) fn paint_scene_with_streams(
-        &mut self,
-        canvas: &Canvas,
-        tree: Presented<'_>,
-        density: Density,
-        streams: &StreamFrames,
-    ) {
-        let plan = self.plan(canvas, TEST_SURFACE, tree, density, None);
-        self.paint_tree(canvas, &plan, Area::Everything, density, streams);
     }
 }
 
@@ -84,13 +73,14 @@ pub(crate) fn paint_damage(
     surface: SurfaceId,
     canvas: &Canvas,
     scene: &SceneSnapshot,
+    dp_to_output: Affine,
     damage: Option<Rect>,
     clear: skia_safe::Color,
 ) -> Result<(), TestError> {
     let frame = crate::SurfaceFrame {
         surface,
         tree: scene.at(Duration::ZERO),
-        density: Density::ONE,
+        dp_to_output,
         damage,
         clear,
         scene: None,

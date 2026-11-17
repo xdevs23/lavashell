@@ -30,7 +30,6 @@ use crate::destination::{Destination, GroupOpacity};
 use crate::failure::{DrawFailure, FailedDraw, Failures};
 use crate::plan::{Area, Leaf};
 use crate::resources::ImageCache;
-use crate::scalar::scalars;
 use crate::text::Shaper;
 use crate::vulkan::SceneImage;
 use brush::brush_paint;
@@ -39,21 +38,25 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Presented;
 use lavashell_core::surface::{PerSurface, SurfaceId};
 use lavashell_core::unique_id::UniqueId;
-pub use outline::{OutlineError, clip_path, outline_path};
+pub use outline::{OutlineError, outline_path};
 pub(crate) use skia_geometry::{
-    clip_device, device_scale, dp_of, max_image_side, rect_of, rounded, rrect, sklength, skmatrix,
-    skpath, skpath_through,
+    clip_device, device_scale, dp_of, max_image_side, min_device_scale, rect_of, rounded, rrect,
+    sklength, skmatrix, skpath, skpath_through,
 };
 pub use skia_geometry::{skpoint, skrect};
 use skia_safe::{Canvas, IRect, PaintStyle, RoundOut};
 use std::collections::HashMap;
 pub use stream::{StreamFrames, StreamPixels, StreamRejection, UnsampledFormat};
 
+fn output_matrix(dp_to_output: &Affine) -> Result<skia_safe::Matrix, Error> {
+    skmatrix(dp_to_output).map_err(Error::OutputTransform)
+}
+
 #[derive(Clone, Copy)]
 pub struct SurfaceFrame<'a> {
     pub surface: SurfaceId,
     pub tree: Presented<'a>,
-    pub density: Density,
+    pub dp_to_output: Affine,
     pub damage: Option<Rect>,
     pub clear: skia_safe::Color,
     pub scene: Option<&'a SceneImage>,
@@ -149,7 +152,7 @@ impl Painter {
         let SurfaceFrame {
             surface,
             tree,
-            density,
+            dp_to_output,
             damage,
             clear,
             scene,
@@ -158,18 +161,16 @@ impl Painter {
         } = frame;
         let scene = scene.map(|scene| scene.layer_of(canvas)).transpose()?;
         let target = IRect::from_size(canvas.base_layer_size());
-        let pixels = |length: Dp| density.to_px(length).get();
-        let damage = damage.map(|damage| {
-            let lengths = [damage.x, damage.y, damage.width, damage.height].map(pixels);
-            match scalars(lengths) {
-                Ok([x, y, width, height]) => {
-                    skia_safe::Rect::from_xywh(x, y, width, height).round_out()
-                }
+        let dp_to_output = output_matrix(&dp_to_output)?;
+        let damage = damage.and_then(|damage| {
+            let pixels = match skrect(damage) {
+                Ok(damage) => dp_to_output.map_rect(damage).0.round_out(),
                 Err(failure) => {
                     self.failures.record(failure);
                     target
                 }
-            }
+            };
+            IRect::intersect(&pixels, &target)
         });
         let damage = if self.paint_configuration.needs_reconstruction(surface) {
             Some(target)
@@ -179,23 +180,37 @@ impl Painter {
         let Some(damage) = damage else {
             return Ok(());
         };
-        let plan = self.plan(canvas, surface, tree, density, shape);
-        let whole = plan.unknown_sampling || self.compositing_destination() == Destination::Layer;
-        let repainted = plan.repaint(if whole { target } else { damage });
-        let saved = canvas.save();
-        let _canvas_returned_for_chaining = canvas.clip_irect(repainted, None).clear(clear);
-        if let Some(shape) = shape {
-            let _canvas_returned_for_chaining = canvas.clip_path(shape, None, true);
-        }
-        if let Some(scene) = &scene {
-            scene.draw();
-        }
-        self.packet_cache.stats.damaged_pixels +=
-            (repainted.width_64() * repainted.height_64()).cast_unsigned();
-        self.paint_tree(canvas, &plan, Area::Pixels(repainted), density, streams);
-        self.paint_configuration.painted(surface);
-        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
+        self.paint_in_output_pixels(canvas, &dp_to_output, |painter| {
+            let plan = painter.plan(canvas, surface, tree, shape);
+            let whole =
+                plan.unknown_sampling || painter.compositing_destination() == Destination::Layer;
+            let repainted = plan.repaint(if whole { target } else { damage });
+            clip_device(canvas, repainted);
+            let _canvas_returned_for_chaining = canvas.clear(clear);
+            if let Some(shape) = shape {
+                let _canvas_returned_for_chaining = canvas.clip_path(shape, None, true);
+            }
+            if let Some(scene) = &scene {
+                scene.draw();
+            }
+            painter.packet_cache.stats.damaged_pixels +=
+                (repainted.width_64() * repainted.height_64()).cast_unsigned();
+            painter.paint_tree(canvas, &plan, Area::Pixels(repainted), streams);
+            painter.paint_configuration.painted(surface);
+        });
         Ok(())
+    }
+
+    fn paint_in_output_pixels(
+        &mut self,
+        canvas: &Canvas,
+        dp_to_output: &skia_safe::Matrix,
+        paint: impl FnOnce(&mut Self),
+    ) {
+        let saved = canvas.save();
+        let _canvas_returned_for_chaining = canvas.concat(dp_to_output);
+        paint(self);
+        let _canvas_returned_for_chaining = canvas.restore_to_count(saved);
     }
 
     pub fn shaper(&mut self) -> &mut Shaper {

@@ -42,7 +42,7 @@ fn plan(painter: &mut Painter, tree: &SceneTree, frame: u64) -> QualityChange {
         gpu_time: Some(Duration::ZERO),
     };
     let at = tree.at(Duration::ZERO);
-    painter.plan_scene_effects(at, budget, frame, frame, Density::ONE)
+    painter.plan_scene_effects(at, budget, frame, frame, Affine::IDENTITY)
 }
 
 #[test]

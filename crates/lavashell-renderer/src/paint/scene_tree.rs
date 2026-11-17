@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Painter, StreamFrames, rounded, skmatrix};
+use super::{Painter, StreamFrames, output_matrix, rounded, skmatrix};
+use crate::Error;
 use crate::destination::Destination;
 use crate::failure::DrawFailure;
 use crate::plan::{Area, Plan, Planned, PlannedGroup};
-use crate::scalar::scalar;
 use crate::text::SavedScope;
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::Presented;
@@ -17,10 +17,24 @@ impl Painter {
         surface: SurfaceId,
         tree: Presented<'_>,
         density: Density,
-    ) {
-        let plan = self.plan(canvas, surface, tree, density, None);
-        let streams = StreamFrames::default();
-        self.paint_tree(canvas, &plan, Area::Everything, density, &streams);
+    ) -> Result<(), Error> {
+        self.paint_scene_with_streams(canvas, surface, tree, density, &StreamFrames::default())
+    }
+
+    pub(crate) fn paint_scene_with_streams(
+        &mut self,
+        canvas: &Canvas,
+        surface: SurfaceId,
+        tree: Presented<'_>,
+        density: Density,
+        streams: &StreamFrames,
+    ) -> Result<(), Error> {
+        let dp_to_output = output_matrix(&PixelScale::SQUARE.dp_to_output(density))?;
+        self.paint_in_output_pixels(canvas, &dp_to_output, |painter| {
+            let plan = painter.plan(canvas, surface, tree, None);
+            painter.paint_tree(canvas, &plan, Area::Everything, streams);
+        });
+        Ok(())
     }
 
     pub(crate) fn paint_tree(
@@ -28,16 +42,8 @@ impl Painter {
         canvas: &Canvas,
         plan: &Plan<'_>,
         area: Area,
-        density: Density,
         streams: &StreamFrames,
     ) {
-        let scale = match scalar(density.get()) {
-            Ok(scale) => scale,
-            Err(failure) => {
-                self.failures.record(failure);
-                return;
-            }
-        };
         self.shaper.begin_paint(plan.surface);
         self.resources.begin_frame(plan.surface);
         if !plan.all_leaves_cacheable {
@@ -47,7 +53,6 @@ impl Painter {
         let text_scope = (self.text_rasterizers)
             .reads_destination(self.shaper.configuration().rendering)
             .then(|| self.text_scopes.enter(canvas));
-        let _canvas_returned_for_chaining = canvas.scale((scale, scale));
         self.begin_compositing(canvas);
         self.paint_steps(canvas, &plan.steps, area, plan.pass, streams);
         let _canvas_returned_for_chaining = canvas.restore_to_count(saved);

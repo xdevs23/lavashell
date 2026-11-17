@@ -89,7 +89,7 @@ fn painted(tree: &SceneTree, density: Density) -> Result<Pixels<[u8; 4]>, TestEr
         TEST_SURFACE,
         tree.at(Duration::ZERO),
         density,
-    );
+    )?;
     Ok(pixels(&mut target))
 }
 
@@ -264,7 +264,6 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
         target.canvas(),
         TEST_SURFACE,
         scene.at(Duration::ZERO),
-        Density::ONE,
         None,
     );
     let [crate::plan::Planned::Group { group: planned, .. }] = plan.steps.as_slice() else {
@@ -273,13 +272,7 @@ fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     assert_eq!(planned.opacity.destination(), Destination::Layer);
     assert_eq!(planned.device_extent, None);
     let streams = StreamFrames::default();
-    painter.paint_tree(
-        target.canvas(),
-        &plan,
-        Area::Everything,
-        Density::ONE,
-        &streams,
-    );
+    painter.paint_tree(target.canvas(), &plan, Area::Everything, &streams);
     assert_eq!(pixels(&mut target), before);
     Ok(())
 }
@@ -306,12 +299,12 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
             TEST_SURFACE,
             scene.at(Duration::ZERO),
             Density::ONE,
-        );
-        pixels(&mut target)
+        )?;
+        Ok::<_, TestError>(pixels(&mut target))
     };
     let direct = painted(&scene, Density::ONE)?;
-    assert_eq!(paint(&mut painter, &scene), direct);
-    assert_eq!(paint(&mut painter, &scene), direct);
+    assert_eq!(paint(&mut painter, &scene)?, direct);
+    assert_eq!(paint(&mut painter, &scene)?, direct);
     assert_eq!(painter.render_stats().cache_misses, 1);
     for (x, y, hits) in [
         (10.0, 6.0, 1),
@@ -325,7 +318,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
         };
         scene.show(SceneUpdate::from_iter([moved]))?;
         assert_eq!(
-            paint(&mut painter, &scene),
+            paint(&mut painter, &scene)?,
             painted(&scene, Density::ONE)?,
             "{x}, {y}"
         );
@@ -371,7 +364,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
             SurfaceFrame {
                 surface: TEST_SURFACE,
                 tree: scene.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: Affine::IDENTITY,
                 damage,
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -410,7 +403,7 @@ fn a_leaf_without_layers_paints_past_its_footprint() -> Result<(), TestError> {
         TEST_SURFACE,
         tree.at(Duration::ZERO),
         Density::ONE,
-    );
+    )?;
     let footprint = rect.outset(4.dp());
     let mut outside = 0;
     for ((x, y), pixel) in pixels(&mut target).positioned()? {

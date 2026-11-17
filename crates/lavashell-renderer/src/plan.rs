@@ -5,7 +5,6 @@ use crate::destination::{Destination, GroupOpacity};
 use crate::failure::{DrawFailure, Failures};
 use crate::paint::analysis::Analysis;
 use crate::paint::{dp_of, rounded, skmatrix, skrect};
-use crate::scalar::scalar;
 use lavashell_core::prelude::*;
 use lavashell_core::retained::{Extent, UnbalancedRestore};
 use lavashell_core::scene::Affine;
@@ -98,25 +97,15 @@ impl Painter {
         canvas: &Canvas,
         surface: SurfaceId,
         tree: Presented<'a>,
-        density: Density,
         shape: Option<&Path>,
     ) -> Plan<'a> {
         let pass = self.packet_cache.begin();
-        let mut matrix = canvas.local_to_device_as_3x3();
+        let matrix = canvas.local_to_device_as_3x3();
         let mut bounds = canvas.device_clip_bounds();
         let mut clips = Vec::new();
         if let Some(shape) = shape {
             bounds = within(bounds, matrix.map_rect(shape.bounds()).0);
             clips.extend(DeviceClip::outline(shape, &matrix));
-        }
-        match scalar(density.get()) {
-            Ok(scale) => {
-                let _matrix_returned_for_chaining = matrix.pre_scale((scale, scale), None);
-            }
-            Err(failure) => {
-                self.failures.record(failure);
-                bounds = None;
-            }
         }
         let frame = GroupFrame {
             group: None,

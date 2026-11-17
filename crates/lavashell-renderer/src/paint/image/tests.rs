@@ -181,7 +181,7 @@ fn an_image_cropped_between_pixels_on_a_cached_card_is_the_image_drawn_directly(
     let mut cached = surface(SIDE, SIDE)?;
     for _ in 0..3 {
         let _canvas_returned_for_chaining = cached.canvas().clear(skia_safe::Color::TRANSPARENT);
-        crate::test_scenes::paint(&mut painter, cached.canvas(), &tree, Density::ONE);
+        crate::test_scenes::paint(&mut painter, cached.canvas(), &tree, Density::ONE)?;
     }
     assert!(painter.render_stats().cache_hits > 0);
     assert_eq!(pixels(&mut cached), direct);

@@ -7,6 +7,7 @@ use crate::native::{
 };
 use crate::sctk;
 use crate::{Error, LayerError, WindowControlError};
+use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
     AccessibilityRequest, PanelRequest, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
@@ -101,8 +102,10 @@ impl Translator {
         let accessibility = Bridge::new(surface, self.view.clone());
         let native = Surface::new(window, extensions, role, accessibility);
         self.surfaces.insert(surface, native);
-        self.links
-            .attach(SurfaceAttachment::Attach(Box::new(attach)));
+        self.links.attach(SurfaceAttachment::Attach {
+            attach: Box::new(attach),
+            scale: PixelScale::SQUARE,
+        });
         Ok(())
     }
 

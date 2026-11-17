@@ -80,7 +80,7 @@ mod tests {
         let mut surface =
             skia_safe::surfaces::raster_n32_premul((1536, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
+        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE)?;
         let pixel = rgba8_pixel(&mut surface, (1508, 8), AlphaType::Premul);
         assert_eq!(pixel, [255; 4]);
         Ok(())
@@ -122,7 +122,7 @@ mod tests {
         let mut surface =
             skia_safe::surfaces::raster_n32_premul((160, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
+        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE)?;
         let pixel = rgba8_pixel(&mut surface, (136, 8), AlphaType::Premul);
         assert_eq!(pixel, [255; 4]);
         Ok(())

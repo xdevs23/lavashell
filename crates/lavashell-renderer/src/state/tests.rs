@@ -3,11 +3,11 @@ use super::*;
 use crate::stream::FrameDevice;
 use crate::test_error::TestError;
 use crate::test_scenes::insert;
-use crate::test_surfaces::TestSurface;
+use crate::test_surfaces::{TestSurface, WIDE_SURFACE};
 use crate::{Error, HeadlessPresentation, StreamFrames};
 use lavashell_core::prelude::{
-    Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, Presented, Rect, SceneTree, Size,
-    StreamId, StreamImage,
+    Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelScale, Presented, Rect,
+    SceneTree, Size, StreamId, StreamImage,
 };
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
@@ -151,6 +151,7 @@ fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
             ..FrameTime::default()
         },
         viewport: viewport(),
+        scale: PixelScale::SQUARE,
         present_at: None,
         state,
     }
@@ -338,5 +339,50 @@ fn a_committed_state_goes_to_the_control_of_its_surface_without_a_draw() -> Resu
         unknown,
         Err(CommitError::State(StateError::UnknownSurface(SURFACE_1)))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_frame_at_a_non_square_scale_fills_exactly_the_scaled_buffer() -> Result<(), TestError> {
+    let events = Rc::default();
+    let mut state = state()?;
+    attach_recording(&mut state, &events)?;
+    let surface_state = SurfaceState::default();
+    let square = frame(1, &surface_state);
+    let wide = PresentFrame {
+        scale: PixelScale::filling(square.viewport, WIDE_SURFACE.pixel_size())?,
+        ..square
+    };
+    let background = DrawCommand::Fill {
+        shape: Rect::from_size(wide.viewport.size).into(),
+        brush: Brush::Solid(Color::WHITE),
+    };
+    let snapshot = SceneTree::with_leaf([background])?.snapshot();
+    assert_eq!(
+        state.draw(SURFACE, wide, &snapshot)?.outcome,
+        FrameOutcome::Shown
+    );
+    let attached = (state.surfaces.get_mut(&SURFACE)).ok_or(TestError::Missing("surface"))?;
+    let pixels = (attached.target.painted_pixels()).ok_or(TestError::Missing("painted image"))?;
+    assert_eq!(pixels.rows()?.map(<[_]>::len).collect::<Vec<_>>(), [64; 30]);
+    assert!(pixels.iter().all(|&pixel| pixel == [255; 4]));
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, wide.scale)?,
+        SurfaceContents::Current
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, PixelScale::SQUARE)?,
+        SurfaceContents::Outdated
+    );
+    let wider = Viewport::new(Size::new(Dp::new(40.1), 30.dp()), Density::ONE);
+    let same_buffer = PixelScale::filling(wider, WIDE_SURFACE.pixel_size())?;
+    assert_eq!(
+        same_buffer.buffer_size(wide.viewport)?,
+        WIDE_SURFACE.pixel_size()
+    );
+    assert_eq!(
+        state.contents(SURFACE, wide.viewport, same_buffer)?,
+        SurfaceContents::Outdated
+    );
     Ok(())
 }

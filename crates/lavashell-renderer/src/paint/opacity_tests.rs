@@ -161,7 +161,7 @@ fn assert_nested_groups<S: DerefMut<Target = Surface>>(
         ];
         let tree = faded(commands, alpha, child)?;
         let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
+        crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE)?;
         Ok(surface)
     };
     let mut parent = render(0.0)?;
@@ -261,7 +261,7 @@ fn assert_independent_reader(retained: bool) -> Result<(), TestError> {
         if retained {
             let inside = commands[25..27].to_vec();
             let tree = faded(commands[..24].to_vec(), 0.5, inside)?;
-            crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE);
+            crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE)?;
         } else {
             painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
         }

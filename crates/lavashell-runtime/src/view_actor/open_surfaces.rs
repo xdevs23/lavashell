@@ -152,10 +152,9 @@ impl OpenSurfaces {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    pub(super) fn first_configured_viewport(&self) -> Option<Viewport> {
-        (self.view_surfaces.keys())
-            .find(|&&id| self.records.is_configured(id))
-            .and_then(|&id| self.records.open_viewport(id))
+    pub(super) fn first_configured_viewport(&self) -> Option<(SurfaceId, Viewport)> {
+        let &id = (self.view_surfaces.keys()).find(|&&id| self.records.is_configured(id))?;
+        Some((id, self.records.open_viewport(id)?))
     }
 
     pub(super) fn wanted_frame(

@@ -171,7 +171,7 @@ fn paint(
         let frame = SurfaceFrame {
             surface: TEST_SURFACE,
             tree: tree.at(Duration::ZERO),
-            density: Density::ONE,
+            dp_to_output: Affine::IDENTITY,
             damage: Some(*damage),
             clear: skia_safe::Color::WHITE,
             scene: None,

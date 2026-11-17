@@ -46,7 +46,7 @@ fn paint(
         surface,
         tree.at(Duration::ZERO),
         Density::ONE,
-    );
+    )?;
     Ok(())
 }
 

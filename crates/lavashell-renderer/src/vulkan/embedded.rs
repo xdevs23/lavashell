@@ -127,18 +127,18 @@ impl EmbeddedVulkanRenderer {
     /// With `ReadySignal::Signaled`, the ready semaphore must have a pending signal that nothing else waits on.
     /// The queue contract of `new` applies to the whole call.
     /// When the draw fails before Skia submits, the renderer still waits on that signal in a submission of its own.
-    pub unsafe fn draw(
+    pub unsafe fn draw<T>(
         &mut self,
         target: BorrowedImage,
-        draw: impl FnOnce(&Canvas),
-    ) -> Result<(), Error> {
+        draw: impl FnOnce(&Canvas) -> T,
+    ) -> Result<T, Error> {
         let (return_layout, mut surface, backend) =
             self.prepare(target)
                 .map_err(|failure| match self.consume_ready(target.ready) {
                     Ok(()) => failure,
                     Err(stuck) => Error::Several(vec![failure, stuck]),
                 })?;
-        draw(surface.canvas());
+        let drawn = draw(surface.canvas());
         let state = skvk::mutable_texture_states::new_vulkan(
             return_layout,
             self.context.device().queue_family(),
@@ -153,7 +153,7 @@ impl EmbeddedVulkanRenderer {
         if !submitted {
             return Err(Error::EmbeddedSubmit);
         }
-        Ok(())
+        Ok(drawn)
     }
 
     fn prepare(

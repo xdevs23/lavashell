@@ -197,6 +197,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
             SurfaceId::numbered(id),
             surface.canvas(),
             &tree,
+            Affine::IDENTITY,
             Some(Rect::from_size(size)),
             skia_safe::Color::TRANSPARENT,
         )?;
@@ -217,7 +218,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
         "this fixture must exercise invisible portable-command changes"
     );
     let mut reference = make()?;
-    paint(&mut painter, reference.canvas(), &tree, Density::ONE);
+    paint(&mut painter, reference.canvas(), &tree, Density::ONE)?;
     let expected = pixels(&mut reference);
     assert_ne!(
         first, expected,
@@ -229,6 +230,7 @@ fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_dama
             SurfaceId::numbered(id),
             surface.canvas(),
             &tree,
+            Affine::IDENTITY,
             None,
             skia_safe::Color::TRANSPARENT,
         )?;

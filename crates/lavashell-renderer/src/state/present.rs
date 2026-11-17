@@ -48,7 +48,7 @@ impl<C: SurfaceControl> AttachedSurface<C> {
                     SurfaceFrame {
                         surface,
                         tree: shown,
-                        density: frame.viewport.density,
+                        dp_to_output: frame.dp_to_output(),
                         damage,
                         clear: skia_safe::Color::TRANSPARENT,
                         scene: scene.map(|scene| &scene.content),

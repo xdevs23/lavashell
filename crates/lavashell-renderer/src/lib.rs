@@ -41,7 +41,7 @@ pub use input_region::{InputSizeError, input_cells};
 pub use packet_cache::PacketCaching;
 pub use paint::{
     OutlineError, Painter, StreamFrames, StreamPixels, StreamRejection, SurfaceFrame,
-    UnsampledFormat, clip_path, outline_path, skpoint, skrect,
+    UnsampledFormat, outline_path, skpoint, skrect,
 };
 pub use skia_safe as skia;
 pub use state::{
@@ -75,6 +75,8 @@ mod packet_cache_tests;
 mod repeated_leaves_tests;
 #[cfg(test)]
 mod retained_tests;
+#[cfg(test)]
+mod scaled_frame_tests;
 #[cfg(test)]
 mod surface_tests;
 #[cfg(test)]

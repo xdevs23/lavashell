@@ -2,7 +2,7 @@
 use super::StateError;
 use crate::effect_registry::QualityChange;
 use crate::{FrameOutcome, SurfaceContents, SurfaceTarget};
-use lavashell_core::prelude::{DamageTracker, PixelSize, Presented, Rect, Viewport};
+use lavashell_core::prelude::{DamageTracker, PixelScale, PixelSize, Presented, Rect, Viewport};
 use lavashell_core::scene::tree::TreeId;
 
 #[cfg(test)]
@@ -59,6 +59,7 @@ pub(super) struct PixelInputs {
 pub(super) struct SurfaceDamage {
     tracker: DamageTracker,
     described: Option<(TreeId, u64)>,
+    scale: Option<PixelScale>,
 }
 
 impl SurfaceDamage {
@@ -78,6 +79,17 @@ impl SurfaceDamage {
             self.described = Some(described);
         }
         Ok(self.tracker.damage(shown, viewport))
+    }
+
+    pub fn draw_at(&mut self, scale: PixelScale) {
+        if !self.drawn_at(scale) {
+            self.invalidate();
+            self.scale = Some(scale);
+        }
+    }
+
+    pub fn drawn_at(&self, scale: PixelScale) -> bool {
+        self.scale == Some(scale)
     }
 
     pub fn forget_unless_shown(&mut self, outcome: FrameOutcome) {

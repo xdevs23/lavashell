@@ -3,7 +3,7 @@ use crate::effect_registry::QualityChange;
 use crate::test_error::TestError;
 use crate::test_scenes::{BACKGROUND_STRIPE_COLORS, TEST_SURFACE, insert, leaves, paint_damage};
 use crate::test_surfaces::{StripedSurface, TestSurface, pixels};
-use crate::{Fonts, Painter, StreamFrames, SurfaceFrame};
+use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{
@@ -28,13 +28,17 @@ fn top_leaf(id: u64, index: usize, packet: Packet) -> Change {
     insert(id, None, index, Node::Leaf(Content::Packet(packet)))
 }
 
-fn paint(painter: &mut Painter, target: &mut skia_safe::Surface, scene: &SceneSnapshot) {
+fn paint(
+    painter: &mut Painter,
+    target: &mut skia_safe::Surface,
+    scene: &SceneSnapshot,
+) -> Result<(), Error> {
     painter.paint_scene(
         target.canvas(),
         TEST_SURFACE,
         scene.at(Duration::ZERO),
         Density::ONE,
-    );
+    )
 }
 
 fn repainted_pixels(
@@ -57,7 +61,7 @@ fn repainted_pixels_on(
             let frame = SurfaceFrame {
                 surface: TEST_SURFACE,
                 tree: tree.at(Duration::ZERO),
-                density: Density::ONE,
+                dp_to_output: Affine::IDENTITY,
                 damage: Some(damage),
                 clear: skia_safe::Color::TRANSPARENT,
                 scene: None,
@@ -173,7 +177,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
         let frame = SurfaceFrame {
             surface: TEST_SURFACE,
             tree: tree.at(Duration::ZERO),
-            density: Density::ONE,
+            dp_to_output: Affine::IDENTITY,
             damage,
             clear: skia_safe::Color::TRANSPARENT,
             scene: None,
@@ -182,7 +186,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
         };
         painter.paint_surface(retained.canvas(), frame)?;
         let _canvas_returned_for_chaining = reference.canvas().clear(skia_safe::Color::TRANSPARENT);
-        paint(&mut full, &mut reference, &tree.snapshot());
+        paint(&mut full, &mut reference, &tree.snapshot())?;
         let a = pixels(&mut retained);
         let b = pixels(&mut reference);
         let worst = a.largest_channel_difference(&b)?;
@@ -212,6 +216,7 @@ fn a_damage_rectangle_repaints_every_pixel_that_it_covers_in_part() -> Result<()
             TEST_SURFACE,
             target.canvas(),
             &tree,
+            Affine::IDENTITY,
             Some(damage),
             clear,
         )?;
@@ -335,7 +340,7 @@ fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), T
                 },
                 frame,
                 0,
-                Density::ONE,
+                Affine::IDENTITY,
             ),
             QualityChange::Unchanged
         );
@@ -345,7 +350,7 @@ fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), T
             SurfaceId::numbered(window),
             shown,
             Density::ONE,
-        );
+        )?;
     }
     assert_eq!(painter.render_stats().cache_misses, 2);
     assert_eq!(painter.render_stats().cache_hits, 2);
@@ -377,8 +382,8 @@ fn transient_packets_paint_correctly_without_allocating_cached_images() -> Resul
         };
         tree.show(SceneUpdate::from_iter([change]))?;
         let scene = tree.snapshot();
-        paint(&mut painter, &mut target, &scene);
-        paint(&mut reference, &mut full, &scene);
+        paint(&mut painter, &mut target, &scene)?;
+        paint(&mut reference, &mut full, &scene)?;
         assert_eq!(pixels(&mut target), pixels(&mut full));
     }
     assert_eq!(painter.render_stats().cache_misses, 0);
@@ -402,7 +407,7 @@ fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(),
         (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
         let scene = builder.snapshot();
         for _ in 0..3 {
-            paint(&mut painter, &mut target, &scene);
+            paint(&mut painter, &mut target, &scene)?;
         }
     }
     assert!(painter.render_stats().cache_hits > 0);

@@ -144,9 +144,10 @@ impl GpuOverlay {
                     frame.surface,
                     frame.built.scene.at(sent.presentation),
                     sent.density,
-                );
+                )
             })
         }
+        .and_then(|painted| painted)
         .map_err(Error::OverlayDraw)
     }
 

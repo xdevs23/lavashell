@@ -152,12 +152,11 @@ fn an_embedded_renderer_paints_into_an_image_of_the_host() -> Result<(), TestErr
         ready: ReadySignal::Unsignaled,
     };
     image.check()?;
-    let mut filled = Ok(());
-    let paint = |canvas: &Canvas| filled = fill(canvas, RED);
+    let paint = |canvas: &Canvas| fill(canvas, RED);
     // SAFETY: drawing into a host image cannot be checked by the embedded renderer, because only the host knows the
     // image and its layout. `target`, created on the host device in `UNDEFINED` layout, outlives the embedded
     // renderer. Dropping the embedded renderer waits until the draw is complete.
-    unsafe { embedded.draw(image, paint) }?;
+    let filled = unsafe { embedded.draw(image, paint) }?;
     filled?;
     drop(embedded);
     let painted = skia_handoff::SkiaImage {

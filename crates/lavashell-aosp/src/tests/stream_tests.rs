@@ -100,7 +100,7 @@ impl Display {
                     let whole = SurfaceFrame {
                         surface: SurfaceId::numbered(1),
                         tree: shown,
-                        density: Density::ONE,
+                        dp_to_output: Affine::IDENTITY,
                         damage: Some(Rect::new(0.dp(), 0.dp(), SIDE.dp(), SIDE.dp())),
                         clear: skia::Color::TRANSPARENT,
                         scene: None,

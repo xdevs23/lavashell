@@ -5,7 +5,7 @@ use crate::native_window::NativeWindow;
 use crate::platform::vulkan_window;
 use crate::streams::AospStreams;
 use lavashell_core::geometry::Size;
-use lavashell_core::prelude::PixelSize;
+use lavashell_core::prelude::{PixelScale, PixelSize};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp, Px};
 use lavashell_core::window::{Edges, WindowState};
@@ -177,7 +177,10 @@ impl HostSurface {
         let surface = *surface;
         let size = window_size(window)?;
         let attach = spec.attach(surface, vulkan_window(window), window.clone());
-        reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
+        reports.attach(SurfaceAttachment::Attach {
+            attach: Box::new(attach),
+            scale: PixelScale::SQUARE,
+        });
         let state = display_filling_window(&spec.role);
         configure(reports, surface, size, state);
         self.surface = RuntimeSurface::Shown {
