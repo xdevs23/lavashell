@@ -4,7 +4,7 @@ use crate::test_error::TestError;
 use crate::test_scenes::TEST_SURFACE;
 use crate::test_surfaces::{TestSurface, WIDE_SURFACE, pixels};
 use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
-use lavashell_core::prelude::{Affine, Density, DpExt, PixelScale, Rect, Size};
+use lavashell_core::prelude::{Affine, Density, DpExt, PixelScale, Rect, Size, Viewport};
 use lavashell_core::scene::tree::SceneTree;
 
 const SURFACE: TestSurface = TestSurface::new(8, 8);

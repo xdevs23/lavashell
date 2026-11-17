@@ -390,6 +390,7 @@ length!(Dp, Vw, Vh, Pct);
 mod axis;
 mod constraints;
 mod pixel_scale;
+mod scaled_viewport;
 
 pub use crate::color::Color;
 use crate::local::Local;
@@ -400,6 +401,7 @@ use crate::units::{
 pub use axis::Axis;
 pub use constraints::{Constraints, Span};
 pub use pixel_scale::PixelScale;
+pub use scaled_viewport::ScaledViewport;
 
 #[cfg(test)]
 mod tests;

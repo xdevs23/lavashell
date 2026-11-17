@@ -7,7 +7,7 @@ use crate::test_surfaces::{TestSurface, WIDE_SURFACE};
 use crate::{Error, HeadlessPresentation, StreamFrames};
 use lavashell_core::prelude::{
     Brush, Color, Density, Dp, DpExt, DrawCommand, FrameTime, PixelScale, Presented, Rect,
-    SceneTree, Size, StreamId, StreamImage,
+    ScaledViewport, SceneTree, Size, StreamId, StreamImage, Viewport,
 };
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneUpdate};
@@ -56,14 +56,14 @@ impl SurfaceControl for RecordingControl {
     fn prepare(&mut self, frame: &PresentFrame) -> Result<(), Infallible> {
         self.events
             .borrow_mut()
-            .push(Event::Prepare(frame.viewport));
+            .push(Event::Prepare(frame.scaled_viewport.viewport));
         Ok(())
     }
 
     fn before_present(&mut self, frame: &PresentFrame) {
         self.events
             .borrow_mut()
-            .push(Event::BeforePresent(frame.viewport));
+            .push(Event::BeforePresent(frame.scaled_viewport.viewport));
     }
 
     fn after_present(&mut self, outcome: FrameOutcome) {
@@ -150,8 +150,10 @@ fn frame(sequence: u64, state: &SurfaceState) -> PresentFrame<'_> {
             sequence,
             ..FrameTime::default()
         },
-        viewport: viewport(),
-        scale: PixelScale::SQUARE,
+        scaled_viewport: ScaledViewport {
+            viewport: viewport(),
+            scale: PixelScale::SQUARE,
+        },
         present_at: None,
         state,
     }
@@ -181,8 +183,8 @@ fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Resul
         assert_eq!(
             events.take(),
             [
-                Event::Prepare(frame.viewport),
-                Event::BeforePresent(frame.viewport),
+                Event::Prepare(frame.scaled_viewport.viewport),
+                Event::BeforePresent(frame.scaled_viewport.viewport),
                 Event::AfterPresent(FrameOutcome::Shown),
             ]
         );
@@ -239,9 +241,9 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
     assert_eq!(
         events.take(),
         [
-            Event::Prepare(frame.viewport),
+            Event::Prepare(frame.scaled_viewport.viewport),
             Event::ImportStreams,
-            Event::BeforePresent(frame.viewport),
+            Event::BeforePresent(frame.scaled_viewport.viewport),
             Event::AfterPresent(FrameOutcome::Shown),
             Event::ReleaseStreams,
         ]
@@ -349,39 +351,36 @@ fn a_frame_at_a_non_square_scale_fills_exactly_the_scaled_buffer() -> Result<(),
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let square = frame(1, &surface_state);
-    let wide = PresentFrame {
-        scale: PixelScale::filling(square.viewport, WIDE_SURFACE.pixel_size())?,
-        ..square
+    let wide = ScaledViewport {
+        scale: PixelScale::filling(square.scaled_viewport.viewport, WIDE_SURFACE.pixel_size())?,
+        ..square.scaled_viewport
     };
     let background = DrawCommand::Fill {
         shape: Rect::from_size(wide.viewport.size).into(),
         brush: Brush::Solid(Color::WHITE),
     };
     let snapshot = SceneTree::with_leaf([background])?.snapshot();
+    let wide_frame = PresentFrame {
+        scaled_viewport: wide,
+        ..square
+    };
     assert_eq!(
-        state.draw(SURFACE, wide, &snapshot)?.outcome,
+        state.draw(SURFACE, wide_frame, &snapshot)?.outcome,
         FrameOutcome::Shown
     );
     let attached = (state.surfaces.get_mut(&SURFACE)).ok_or(TestError::Missing("surface"))?;
     let pixels = (attached.target.painted_pixels()).ok_or(TestError::Missing("painted image"))?;
     assert_eq!(pixels.rows()?.map(<[_]>::len).collect::<Vec<_>>(), [64; 30]);
     assert!(pixels.iter().all(|&pixel| pixel == [255; 4]));
+    assert_eq!(state.contents(SURFACE, wide)?, SurfaceContents::Current);
     assert_eq!(
-        state.contents(SURFACE, wide.viewport, wide.scale)?,
-        SurfaceContents::Current
-    );
-    assert_eq!(
-        state.contents(SURFACE, wide.viewport, PixelScale::SQUARE)?,
-        SurfaceContents::Outdated
-    );
-    let wider = Viewport::new(Size::new(Dp::new(40.1), 30.dp()), Density::ONE);
-    let same_buffer = PixelScale::filling(wider, WIDE_SURFACE.pixel_size())?;
-    assert_eq!(
-        same_buffer.buffer_size(wide.viewport)?,
-        WIDE_SURFACE.pixel_size()
-    );
-    assert_eq!(
-        state.contents(SURFACE, wide.viewport, same_buffer)?,
+        state.contents(
+            SURFACE,
+            ScaledViewport {
+                scale: PixelScale::SQUARE,
+                ..wide
+            }
+        )?,
         SurfaceContents::Outdated
     );
     Ok(())

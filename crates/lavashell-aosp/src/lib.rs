@@ -15,6 +15,7 @@ mod host;
 #[cfg(target_os = "android")]
 mod host_jni;
 mod input;
+mod layout_size;
 #[cfg(target_os = "android")]
 mod motion_jni;
 mod native_window;
@@ -39,6 +40,7 @@ pub use host::{AospError, AospHost, HostLink, RunEnded};
 #[cfg(target_os = "android")]
 pub use host_jni::{configuration_of, display_of};
 pub use input::MotionEvent;
+pub use layout_size::LayoutSize;
 #[cfg(target_os = "android")]
 pub use motion_jni::{MalformedMotion, motion_event_of};
 pub use native_window::NativeWindow;

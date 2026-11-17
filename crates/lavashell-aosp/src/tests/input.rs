@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::motion::{finger, holding, hovering, mouse, pen, press, release, touch};
 use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, ShownSurface, TouchAction};
-use lavashell_core::geometry::{Point, Size};
+use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::{Density, DpExt, NumberError};
@@ -13,10 +13,13 @@ const SCREEN: i64 = 3;
 const VIRTUAL_TABLET: i64 = -1;
 
 fn shown(density: Density) -> ShownSurface {
+    let scaled_viewport = ScaledViewport {
+        viewport: Viewport::new(Size::new(100.dp(), 100.dp()), density),
+        scale: PixelScale::SQUARE,
+    };
     ShownSurface {
         id: SURFACE,
-        size: Size::new(100.dp(), 100.dp()),
-        density,
+        scaled_viewport,
     }
 }
 

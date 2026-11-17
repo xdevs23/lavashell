@@ -12,7 +12,7 @@ use crate::view_actor::ViewError;
 use crate::window::DragRegion;
 use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::frame::FrameTime;
-use lavashell_core::geometry::{Size, Viewport};
+use lavashell_core::geometry::{ScaledViewport, Size, Viewport};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::units::Density;
@@ -152,9 +152,9 @@ impl OpenSurfaces {
         order.into_iter().map(|(_, id)| id).collect()
     }
 
-    pub(super) fn first_configured_viewport(&self) -> Option<(SurfaceId, Viewport)> {
+    pub(super) fn first_configured_scaled_viewport(&self) -> Option<ScaledViewport> {
         let &id = (self.view_surfaces.keys()).find(|&&id| self.records.is_configured(id))?;
-        Some((id, self.records.open_viewport(id)?))
+        self.records.open_scaled_viewport(id)
     }
 
     pub(super) fn wanted_frame(
@@ -181,9 +181,9 @@ impl OpenSurfaces {
     pub(super) fn open_surface(
         &mut self,
         id: SurfaceId,
-    ) -> Result<(&mut ViewSurface, Viewport), ViewError> {
+    ) -> Result<(&mut ViewSurface, ScaledViewport), ViewError> {
         (self.view_surfaces.get_mut(&id))
-            .zip(self.records.open_viewport(id))
+            .zip(self.records.open_scaled_viewport(id))
             .ok_or(ViewError::SurfaceNotOpen(id))
     }
 
@@ -240,7 +240,7 @@ impl OpenSurfaces {
             if self.panels.get(id).is_none() {
                 continue;
             }
-            let Some(viewport) = self.records.open_viewport(id) else {
+            let Some(scaled_viewport) = self.records.open_scaled_viewport(id) else {
                 continue;
             };
             let Some(view) = self.records.open_view_mut(id) else {
@@ -249,7 +249,7 @@ impl OpenSurfaces {
             let content = if surface.needs_visual_frame(view) {
                 ContentState::Stale
             } else {
-                match surface.contents(viewport) {
+                match surface.contents(scaled_viewport) {
                     SurfaceContents::Current => ContentState::Current,
                     SurfaceContents::Outdated => ContentState::Stale,
                 }
@@ -274,19 +274,19 @@ impl OpenSurfaces {
     pub(super) fn rendered(
         &mut self,
         id: SurfaceId,
-        viewport: Viewport,
+        scaled_viewport: ScaledViewport,
         contents: SurfaceContents,
         time: FrameTime,
         outcome: FrameOutcome,
     ) -> Option<FrameStart> {
         let surface = self.open_view_surface(id)?;
-        let (start, panel) = surface.finish_drawing(viewport, contents, time)?;
+        let (start, panel) = surface.finish_drawing(scaled_viewport, contents, time)?;
         let input = surface.accepts_input();
         if outcome == FrameOutcome::Shown
             && let Some(requests) = panel
         {
             let content = PanelContent {
-                size: viewport.size,
+                size: scaled_viewport.viewport.size,
                 input,
             };
             self.panels.shown(id, content, requests);

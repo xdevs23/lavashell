@@ -7,7 +7,7 @@ use lavashell_actor::{
     mailbox_on, spawn,
 };
 use lavashell_core::frame::FrameTime;
-use lavashell_core::geometry::{PixelScale, Viewport};
+use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{Platform, StreamSetup, StreamTask, SurfaceAttachment};
 use lavashell_renderer::skia::Path;
@@ -17,7 +17,6 @@ use lavashell_renderer::{
     CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, RendererStreams,
     StartError, StateError, StreamBackend, SurfaceContents, SurfaceControl,
 };
-use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
@@ -32,17 +31,14 @@ pub enum RendererInput<C: SurfaceControl, S> {
     Render {
         surface: SurfaceId,
         time: FrameTime,
-        viewport: Viewport,
+        scaled_viewport: ScaledViewport,
         built: Arc<BuiltSurface>,
     },
     CommitState {
         surface: SurfaceId,
         built: Arc<BuiltSurface>,
     },
-    AdvanceScene {
-        surface: SurfaceId,
-        viewport: Viewport,
-    },
+    AdvanceScene(ScaledViewport),
     Stop,
 }
 
@@ -62,7 +58,7 @@ impl<C: SurfaceControl, S> Merge for RendererInput<C, S> {
                 MergeEffect::Overwrites(RendererKey::Outline(*surface))
             }
             Self::Render { surface, .. } => MergeEffect::Overwrites(RendererKey::Render(*surface)),
-            Self::AdvanceScene { .. } => MergeEffect::Overwrites(RendererKey::AdvanceScene),
+            Self::AdvanceScene(_) => MergeEffect::Overwrites(RendererKey::AdvanceScene),
             Self::Surface(_) | Self::Streams(_) | Self::CommitState { .. } | Self::Stop => {
                 MergeEffect::Appends
             }
@@ -80,7 +76,7 @@ pub enum RendererOutput {
 pub struct Rendered {
     pub surface: SurfaceId,
     pub time: FrameTime,
-    pub viewport: Viewport,
+    pub scaled_viewport: ScaledViewport,
     pub drawn: Drawn,
     pub contents: SurfaceContents,
     pub next_change: Option<Duration>,
@@ -169,7 +165,6 @@ where
             let _spawner_may_have_left = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
-                scales: BTreeMap::new(),
                 clock,
                 cpu_timing,
                 observer,
@@ -232,7 +227,6 @@ where
 
 struct RendererActor<C: SurfaceControl, S> {
     state: RendererState<C, S>,
-    scales: BTreeMap<SurfaceId, PixelScale>,
     clock: Arc<dyn Clock>,
     cpu_timing: CpuTiming,
     observer: RendererObserver,
@@ -261,19 +255,17 @@ where
             RendererInput::Render {
                 surface,
                 time,
-                viewport,
+                scaled_viewport,
                 built,
-            } => Some(self.render(surface, time, viewport, &built)?),
+            } => Some(self.render(surface, time, scaled_viewport, &built)?),
             RendererInput::CommitState { surface, built } => {
                 (self.state.commit_state(surface, &built.state))
                     .map_err(RendererError::CommitState)?;
                 Some(RendererOutput::Committed(surface))
             }
-            RendererInput::AdvanceScene { surface, viewport } => {
-                if let Some(&scale) = self.scales.get(&surface) {
-                    (self.state.advance_scene(viewport, scale, self.clock.now()))
-                        .map_err(RendererError::AdvanceScene)?;
-                }
+            RendererInput::AdvanceScene(scaled_viewport) => {
+                (self.state.advance_scene(scaled_viewport, self.clock.now()))
+                    .map_err(RendererError::AdvanceScene)?;
                 None
             }
             RendererInput::Stop => return Ok(Flow::Stop),
@@ -294,11 +286,9 @@ where
         attachment: SurfaceAttachment<C>,
     ) -> Result<Option<RendererOutput>, RendererError<C, S>> {
         match attachment {
-            SurfaceAttachment::Attach { attach, scale } => {
-                let surface = attach.surface;
+            SurfaceAttachment::Attach(attach) => {
                 (self.state.attach(*attach))
                     .map_err(|failed| RendererError::Attach(failed.error))?;
-                let _replaced_scale = self.scales.insert(surface, scale);
                 Ok(None)
             }
             SurfaceAttachment::Control { surface, message } => {
@@ -309,7 +299,6 @@ where
             }
             SurfaceAttachment::Detach(surface) => {
                 drop(self.state.retire(surface));
-                let _retired_scale = self.scales.remove(&surface);
                 Ok(Some(RendererOutput::Retired(surface)))
             }
         }
@@ -319,17 +308,14 @@ where
         &mut self,
         surface: SurfaceId,
         time: FrameTime,
-        viewport: Viewport,
+        scaled_viewport: ScaledViewport,
         built: &BuiltSurface,
     ) -> Result<RendererOutput, RendererError<C, S>> {
         let started = Instant::now();
         let cpu_start = self.cpu_timing.stamp();
-        let unknown = || RendererError::Draw(StateError::UnknownSurface(surface).into());
-        let scale = *self.scales.get(&surface).ok_or_else(unknown)?;
         let frame = PresentFrame {
             time,
-            viewport,
-            scale,
+            scaled_viewport,
             present_at: None,
             state: &built.state,
         };
@@ -337,11 +323,11 @@ where
         let cost = started.elapsed();
         let cpu_time = cpu_start.and_then(CpuStamp::elapsed);
         let contents =
-            (self.state.contents(surface, viewport, scale)).map_err(RendererError::ReadContents)?;
+            (self.state.contents(surface, scaled_viewport)).map_err(RendererError::ReadContents)?;
         Ok(RendererOutput::Rendered(Box::new(Rendered {
             surface,
             time,
-            viewport,
+            scaled_viewport,
             drawn,
             contents,
             next_change: built.scene.next_change(time.presentation),

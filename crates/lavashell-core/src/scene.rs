@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::effects::{Backdrop, BlendMode, Shadow, SourceFilter, Stroke};
-use crate::geometry::{Color, PixelScale, PixelSize, Point, Rect, Size, Viewport};
+use crate::geometry::{Color, PixelScale, PixelSize, Point, Rect, ScaledViewport, Size, Viewport};
 use crate::image::{Image, ImageFit, StreamImage};
 use crate::local::Local;
 use crate::preferences::TextScaling;
@@ -270,6 +270,13 @@ impl PixelScale {
     pub fn dp_to_output(self, density: Density) -> Affine {
         let ratios = self.ratios();
         Affine::scale(density.get() * ratios.x, density.get() * ratios.y)
+    }
+}
+
+impl ScaledViewport {
+    #[must_use]
+    pub fn dp_to_output(self) -> Affine {
+        self.scale.dp_to_output(self.viewport.density)
     }
 }
 

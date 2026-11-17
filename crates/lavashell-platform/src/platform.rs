@@ -3,7 +3,6 @@ use crate::{
     Capability, OutputId, PlatformEvent, PlatformRequest, StreamSetup, StreamTask, TimingEvent,
 };
 use lavashell_actor::{Clock, Outlet, Receiver};
-use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{Attach, PresentationBackend, RendererStreams, SurfaceControl};
 use std::collections::BTreeSet;
@@ -69,10 +68,7 @@ impl<C: SurfaceControl, S> Reports<C, S> {
 }
 
 pub enum SurfaceAttachment<C: SurfaceControl> {
-    Attach {
-        attach: Box<Attach<C>>,
-        scale: PixelScale,
-    },
+    Attach(Box<Attach<C>>),
     Control {
         surface: SurfaceId,
         message: C::Message,

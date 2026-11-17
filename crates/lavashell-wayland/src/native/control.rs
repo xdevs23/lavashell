@@ -193,7 +193,7 @@ impl SurfaceControl for Control {
     }
 
     fn prepare(&mut self, frame: &PresentFrame) -> Result<(), ControlError> {
-        let Viewport { size, density } = frame.viewport;
+        let Viewport { size, density } = frame.scaled_viewport.viewport;
         match &self.objects.viewport {
             Some(viewport) => {
                 let (width, height) = crate::logical::to_protocol_surface_size(size)

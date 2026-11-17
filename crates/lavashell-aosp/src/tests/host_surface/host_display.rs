@@ -1,23 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    Host, SURFACE, Sent, added, configured, create, display, displayed, showing, shown, updated,
-    window,
+    Host, SURFACE, Sent, added, create, display, displayed, laid_out, showing, shown, touch_down,
+    touched, two_pixels_per_dp, updated, window,
 };
 use crate::Error;
 use crate::input::TouchAction;
 use crate::output::{DisplayReading, HostDisplay};
 use crate::platform::{DisplaySurface, SIDE, TestError};
 use crate::tests::motion::{finger, touch};
-use lavashell_core::prelude::{Density, DpExt, Point, PxExt};
-use lavashell_core::ui::{PointerKind, TouchId};
+use lavashell_core::prelude::{Density, PixelScale, PxExt};
 use lavashell_core::units::RefreshRate;
-use lavashell_core::view::TouchSample;
-use lavashell_platform::{DeviceEvent, SurfaceEvent, SurfaceRequest};
+use lavashell_platform::{SurfaceEvent, SurfaceRequest};
 use std::time::Duration;
-
-fn two_pixels_per_dp() -> Result<Density, TestError> {
-    Ok(Density::from_ratio(2.0, 1.0)?)
-}
 
 fn reading(density_dpi: f64, refresh_rate_hz: f64) -> DisplayReading {
     DisplayReading {
@@ -52,7 +46,7 @@ fn a_display_reading_without_a_positive_dpi_fails() {
 fn a_display_report_adds_the_output_once_and_updates_it_after() -> Result<(), TestError> {
     let mut host = Host::new(display(two_pixels_per_dp()?));
     assert_eq!(host.sent()?, added(SIDE / 2));
-    host.display_changed(display(Density::ONE));
+    host.display_changed(display(Density::ONE))?;
     assert_eq!(host.sent()?, updated(SIDE));
     Ok(())
 }
@@ -62,7 +56,8 @@ fn a_surface_is_shown_at_the_density_of_the_display() -> Result<(), TestError> {
     let mut host = displayed(display(two_pixels_per_dp()?))?;
     host.execute(create(SURFACE))?;
     host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
-    let shown = showing(SURFACE, SIDE / 2, SIDE / 2, two_pixels_per_dp()?);
+    let square = laid_out(SURFACE, PixelScale::SQUARE, SIDE / 2, SIDE / 2);
+    let shown = showing(SURFACE, two_pixels_per_dp()?, square);
     assert_eq!(host.sent()?, shown);
     Ok(())
 }
@@ -70,22 +65,15 @@ fn a_surface_is_shown_at_the_density_of_the_display() -> Result<(), TestError> {
 #[test]
 fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(), TestError> {
     let mut host = shown()?;
-    host.display_changed(display(two_pixels_per_dp()?));
-    host.motion(touch(0, TouchAction::Down(finger(0, 8.0, 4.0))));
-    let touched = TouchSample {
-        id: TouchId { seat: 0, point: 0 },
-        at: Point::new(4.dp(), 2.dp()),
-        kind: PointerKind::Finger,
-    };
+    host.display_changed(display(two_pixels_per_dp()?))?;
+    host.motion(touch(0, TouchAction::Down(finger(0, 8.0, 4.0))))?;
     let mut reported = Vec::from(updated(SIDE / 2));
-    reported.extend([
-        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(two_pixels_per_dp()?)),
-        configured(SURFACE, SIDE / 2, SIDE / 2),
-        Sent::Device(DeviceEvent::TouchDown {
-            surface: SURFACE,
-            sample: touched,
-        }),
-    ]);
+    reported.push(Sent::Surface(
+        SURFACE,
+        SurfaceEvent::DensityChanged(two_pixels_per_dp()?),
+    ));
+    reported.extend(laid_out(SURFACE, PixelScale::SQUARE, SIDE / 2, SIDE / 2));
+    reported.push(touch_down(touched(4.0, 2.0)));
     assert_eq!(host.sent()?, reported);
     Ok(())
 }
@@ -93,18 +81,18 @@ fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(),
 #[test]
 fn a_display_change_reaches_only_a_shown_surface_at_another_density() -> Result<(), TestError> {
     let mut same = shown()?;
-    same.display_changed(display(Density::ONE));
+    same.display_changed(display(Density::ONE))?;
     assert_eq!(same.sent()?, updated(SIDE));
 
     let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
-    requested.display_changed(display(two_pixels_per_dp()?));
+    requested.display_changed(display(two_pixels_per_dp()?))?;
     assert_eq!(requested.sent()?, updated(SIDE / 2));
 
     let mut closing = shown()?;
     closing.execute(SurfaceRequest::Destroy(SURFACE))?;
     let _detached = closing.sent()?;
-    closing.display_changed(display(two_pixels_per_dp()?));
+    closing.display_changed(display(two_pixels_per_dp()?))?;
     assert_eq!(closing.sent()?, updated(SIDE / 2));
     Ok(())
 }

@@ -13,7 +13,7 @@ use crate::view_actions::ActionBatch;
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
-use lavashell_core::geometry::Viewport;
+use lavashell_core::geometry::{ScaledViewport, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
@@ -26,7 +26,7 @@ pub(super) struct FrameStart {
     wall: Instant,
     view_cpu: Option<Duration>,
     timing: FrameTime,
-    viewport: Viewport,
+    scaled_viewport: ScaledViewport,
 }
 
 #[derive(Clone, Copy)]
@@ -47,7 +47,7 @@ enum ViewChange {
 
 #[derive(Clone, Copy)]
 struct LastFrame {
-    viewport: Viewport,
+    scaled_viewport: ScaledViewport,
     contents: SurfaceContents,
 }
 
@@ -76,9 +76,9 @@ impl ViewSurface {
         view.needs_visual_frame() || self.shape.needs_frame()
     }
 
-    pub(super) fn contents(&self, viewport: Viewport) -> SurfaceContents {
+    pub(super) fn contents(&self, scaled_viewport: ScaledViewport) -> SurfaceContents {
         match self.last_frame {
-            Some(last) if last.viewport == viewport => last.contents,
+            Some(last) if last.scaled_viewport == scaled_viewport => last.contents,
             _ => SurfaceContents::Outdated,
         }
     }
@@ -89,11 +89,14 @@ impl ViewSurface {
 
     pub(super) fn finish_drawing(
         &mut self,
-        viewport: Viewport,
+        scaled_viewport: ScaledViewport,
         contents: SurfaceContents,
         time: FrameTime,
     ) -> Option<(FrameStart, Option<PanelRequests>)> {
-        self.last_frame = Some(LastFrame { viewport, contents });
+        self.last_frame = Some(LastFrame {
+            scaled_viewport,
+            contents,
+        });
         let FrameProgress::Drawing { start, panel } = self.frame else {
             return None;
         };
@@ -150,9 +153,9 @@ impl<P: Platform> ViewActor<P> {
 
     fn advance_scene(&self) -> Result<(), ViewError> {
         if self.pacing.scene_due(self.clock.now())
-            && let Some((surface, viewport)) = self.surfaces.first_configured_viewport()
+            && let Some(scaled_viewport) = self.surfaces.first_configured_scaled_viewport()
         {
-            let advance = RendererInput::AdvanceScene { surface, viewport };
+            let advance = RendererInput::AdvanceScene(scaled_viewport);
             self.actors.renderer.send(advance)?;
         }
         Ok(())
@@ -182,12 +185,12 @@ impl<P: Platform> ViewActor<P> {
         let sequence = Some(FrameSequence(timing.sequence));
         let sink = self.actors.scene.sink(id, sequence);
         let status = send_surface_state(sink, &self.surfaces, id, shape_changes)?;
-        let (surface, viewport) = self.surfaces.open_surface(id)?;
+        let (surface, scaled_viewport) = self.surfaces.open_surface(id)?;
         surface.frame = FrameProgress::Composed(FrameStart {
             wall,
             view_cpu: cpu.and_then(CpuStamp::elapsed),
             timing,
-            viewport,
+            scaled_viewport,
         });
         self.publish_accessibility(id)?;
         if status == FrameStatus::Open {
@@ -239,8 +242,8 @@ impl<P: Platform> ViewActor<P> {
     }
 
     fn update_shape(&mut self, id: SurfaceId) -> Result<Vec<SurfaceChange>, ViewError> {
-        let (surface, viewport) = self.surfaces.open_surface(id)?;
-        let Viewport { size, density } = viewport;
+        let (surface, scaled_viewport) = self.surfaces.open_surface(id)?;
+        let Viewport { size, density } = scaled_viewport.viewport;
         let mut clip = None;
         let shape_changes = surface.shape.update(size, density, |outline| {
             let geometry = ShapeGeometry::new(outline, size)?;
@@ -260,21 +263,21 @@ impl<P: Platform> ViewActor<P> {
     fn render_surface(&mut self, id: SurfaceId, timing: FrameTime) -> Result<(), ViewError> {
         let built = self.actors.scene.built(id);
         let panel = self.surfaces.panel_requests(id, &built.state);
-        let (surface, viewport) = self.surfaces.open_surface(id)?;
+        let (surface, scaled_viewport) = self.surfaces.open_surface(id)?;
         let start = match surface.frame {
             FrameProgress::Composed(composed) => composed,
             FrameProgress::Idle | FrameProgress::Drawing { .. } => FrameStart {
                 wall: Instant::now(),
                 view_cpu: Some(Duration::ZERO),
                 timing,
-                viewport,
+                scaled_viewport,
             },
         };
         surface.frame = FrameProgress::Drawing { start, panel };
         self.actors.renderer.send(RendererInput::Render {
             surface: id,
             time: start.timing,
-            viewport: start.viewport,
+            scaled_viewport: start.scaled_viewport,
             built,
         })?;
         Ok(())
@@ -284,7 +287,7 @@ impl<P: Platform> ViewActor<P> {
         let Rendered {
             surface: id,
             time,
-            viewport,
+            scaled_viewport,
             drawn,
             contents,
             next_change,
@@ -292,7 +295,8 @@ impl<P: Platform> ViewActor<P> {
             cpu_time,
         } = *rendered;
         let outcome = drawn.outcome;
-        if let Some(start) = (self.surfaces).rendered(id, viewport, contents, time, outcome) {
+        let finished = (self.surfaces).rendered(id, scaled_viewport, contents, time, outcome);
+        if let Some(start) = finished {
             self.report_frame(id, drawn, start, cpu_time);
         }
         self.schedule(SchedulerInput::Published {
@@ -400,3 +404,6 @@ pub(super) fn send_surface_state(
     }
     sink.end_state_frame().map_err(stopped)
 }
+
+#[cfg(test)]
+mod tests;

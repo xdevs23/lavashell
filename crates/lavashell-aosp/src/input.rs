@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::native_window::NativeWindow;
 use crate::streams::AospStreams;
-use lavashell_core::geometry::{Point, Rect, Size};
+use lavashell_core::geometry::{Point, Rect, ScaledViewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
-use lavashell_core::units::{Density, Px};
+use lavashell_core::units::Px;
 use lavashell_core::view::TouchSample;
 use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState, Reports};
 
@@ -57,17 +57,18 @@ pub(crate) struct MousePosition {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ShownSurface {
     pub(crate) id: SurfaceId,
-    pub(crate) size: Size,
-    pub(crate) density: Density,
+    pub(crate) scaled_viewport: ScaledViewport,
 }
 
 impl ShownSurface {
     fn point(self, x: Px, y: Px) -> Point {
-        Point::from_px(x, y, self.density)
+        let ScaledViewport { viewport, scale } = self.scaled_viewport;
+        scale.point(viewport, x, y)
     }
 
     fn contains_mouse_at(self, position: MousePosition) -> bool {
-        position.held || Rect::from_size(self.size).contains(self.point(position.x, position.y))
+        let area = Rect::from_size(self.scaled_viewport.viewport.size);
+        position.held || area.contains(self.point(position.x, position.y))
     }
 }
 

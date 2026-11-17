@@ -9,7 +9,7 @@ use crate::accessibility::SurfaceAccessibility;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
 use crate::window::DragRegion;
-use lavashell_core::geometry::{Point, Size, Viewport};
+use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::{SurfaceId, SurfaceIds};
@@ -25,6 +25,7 @@ struct Record {
     supplied: PlatformFacts,
     size: Size,
     density: Density,
+    scale: PixelScale,
     lifecycle: Lifecycle,
     drag_region: Option<DragRegion>,
     accessibility: SurfaceAccessibility,
@@ -46,6 +47,18 @@ impl Record {
     fn change_density(&mut self, density: Density) {
         self.density = density;
         self.view.invalidate();
+    }
+
+    fn change_scale(&mut self, scale: PixelScale) {
+        self.scale = scale;
+        self.view.invalidate();
+    }
+
+    fn scaled_viewport(&self) -> ScaledViewport {
+        ScaledViewport {
+            viewport: Viewport::new(self.size, self.density),
+            scale: self.scale,
+        }
     }
 }
 
@@ -81,6 +94,7 @@ impl SurfaceRecords {
             supplied,
             size,
             density,
+            scale: PixelScale::SQUARE,
             lifecycle: Lifecycle::Waiting,
             drag_region,
             accessibility: SurfaceAccessibility::new(accessible_name),
@@ -103,6 +117,7 @@ impl SurfaceRecords {
                 return Some(SurfaceRequest::Destroy(surface));
             }
             SurfaceEvent::DensityChanged(density) => record.change_density(density),
+            SurfaceEvent::ScaleChanged(scale) => record.change_scale(scale),
         }
         None
     }
@@ -133,7 +148,12 @@ impl SurfaceRecords {
 
     #[must_use]
     pub fn open_viewport(&self, surface: SurfaceId) -> Option<Viewport> {
-        (self.open_record(surface)).map(|record| Viewport::new(record.size, record.density))
+        (self.open_scaled_viewport(surface)).map(|scaled| scaled.viewport)
+    }
+
+    #[must_use]
+    pub fn open_scaled_viewport(&self, surface: SurfaceId) -> Option<ScaledViewport> {
+        self.open_record(surface).map(Record::scaled_viewport)
     }
 
     pub fn view_mut(&mut self, surface: SurfaceId) -> Option<&mut View> {

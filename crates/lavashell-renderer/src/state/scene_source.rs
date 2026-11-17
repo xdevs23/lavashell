@@ -3,7 +3,7 @@ use super::StateError;
 use crate::vulkan::{
     CompletedScene, SceneCompletion, SceneImage, SceneMailbox, SceneSource, VulkanRenderer,
 };
-use lavashell_core::prelude::{PixelScale, Viewport};
+use lavashell_core::prelude::ScaledViewport;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,8 +30,7 @@ impl SceneImages {
         &mut self,
         gpu: &mut VulkanRenderer,
         now: Duration,
-        viewport: Viewport,
-        scale: PixelScale,
+        scaled_viewport: ScaledViewport,
         frames_in_flight: Option<usize>,
     ) -> Result<(), StateError> {
         (gpu.poll_scene_imports()).map_err(StateError::ReleaseSceneImports)?;
@@ -47,7 +46,7 @@ impl SceneImages {
         (mailbox.poll(SceneCompletion::status)).map_err(StateError::SceneCompletion)?;
         if now >= self.source.next_deadline()
             && mailbox.can_publish()
-            && let Some(pending) = (self.source.produce(gpu, now, viewport, scale))
+            && let Some(pending) = (self.source.produce(gpu, now, scaled_viewport))
                 .map_err(StateError::ProduceScene)?
         {
             (mailbox.publish(pending.scene, pending.completion))

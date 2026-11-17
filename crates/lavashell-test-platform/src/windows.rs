@@ -2,7 +2,6 @@
 use crate::capture::{CaptureMode, ShownFrame};
 use crate::{Error, FrameCapture};
 use lavashell_actor::Sender;
-use lavashell_core::geometry::PixelScale;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::{WindowCapabilities, WindowState};
@@ -43,10 +42,7 @@ impl Windows {
     pub(crate) fn create(&mut self, reports: &TestReports, surface: SurfaceId, spec: SurfaceSpec) {
         let control = FrameCapture::new(surface, self.capture, self.shown_by_controls.clone());
         let attach = spec.attach(surface, Arc::new(HeadlessWindow), control);
-        reports.attach(SurfaceAttachment::Attach {
-            attach: Box::new(attach),
-            scale: PixelScale::SQUARE,
-        });
+        reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
         reports.report((surface, SurfaceEvent::DensityChanged(self.density)));
         reports.report((
             surface,

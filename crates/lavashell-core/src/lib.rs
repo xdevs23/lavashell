@@ -73,7 +73,7 @@ pub mod prelude {
     };
     pub use crate::geometry::{
         Axis, Color, Constraints, ContourPoint, FinitePoint, Insets, Length, PixelScale, PixelSize,
-        PlainPoint, Point, Rect, Size, Span, VIEWPORT, Viewport,
+        PlainPoint, Point, Rect, ScaledViewport, Size, Span, VIEWPORT, Viewport,
     };
     pub use crate::gradient::{ColorStop, Gradient, GradientKind, TileMode};
     pub use crate::image::{

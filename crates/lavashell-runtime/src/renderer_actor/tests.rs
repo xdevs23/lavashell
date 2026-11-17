@@ -3,13 +3,17 @@ use super::*;
 use crate::test_error::{TestError, TestResult};
 use crate::test_host::{NoControl, renderer_setup};
 use lavashell_actor::{SystemClock, mailbox};
-use lavashell_core::geometry::Size;
+use lavashell_core::geometry::{PixelScale, PixelSize, Size, Viewport};
+use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_platform::no_streams;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{HeadlessPresentation, NoStreams, Painter, PainterSetup};
+use lavashell_renderer::{
+    Attach, HeadlessPresentation, NoStreams, Painter, PainterSetup, SurfaceAlpha,
+};
+use lavashell_vulkan::HeadlessWindow;
 use std::sync::mpsc;
 
 const SURFACE_3: SurfaceId = SurfaceId::numbered(3);
@@ -28,7 +32,7 @@ fn start(
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
-    let presentation = HeadlessPresentation::without_surfaces();
+    let presentation = HeadlessPresentation::with_surfaces();
     let clock = Arc::new(SystemClock::start());
     let observer = Box::new(observer);
     let renderer = Renderer::start(
@@ -50,16 +54,42 @@ fn empty_scene() -> Arc<BuiltSurface> {
     })
 }
 
-fn render(surface: u64, sequence: u64) -> TestInput {
+fn viewport() -> Viewport {
+    Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE)
+}
+
+fn scaled(scale: PixelScale) -> ScaledViewport {
+    ScaledViewport {
+        viewport: viewport(),
+        scale,
+    }
+}
+
+fn render_at(surface: u64, sequence: u64, scale: PixelScale) -> TestInput {
     RendererInput::Render {
         surface: SurfaceId::numbered(surface),
         time: FrameTime {
             sequence,
             ..FrameTime::default()
         },
-        viewport: Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE),
+        scaled_viewport: scaled(scale),
         built: empty_scene(),
     }
+}
+
+fn render(surface: u64, sequence: u64) -> TestInput {
+    render_at(surface, sequence, PixelScale::SQUARE)
+}
+
+fn attach(surface: u64) -> TestInput {
+    RendererInput::Surface(SurfaceAttachment::Attach(Box::new(Attach {
+        surface: SurfaceId::numbered(surface),
+        window: Arc::new(HeadlessWindow),
+        alpha: SurfaceAlpha::Opaque,
+        output: OutputRequest::default(),
+        hdr_metadata: None,
+        control: NoControl,
+    })))
 }
 
 fn outline(surface: u64) -> TestInput {
@@ -112,7 +142,7 @@ impl Taken {
             RendererInput::Surface(SurfaceAttachment::Detach(surface)) => {
                 Self::Detach(surface.get())
             }
-            RendererInput::Surface(SurfaceAttachment::Attach { .. }) => Self::Attach,
+            RendererInput::Surface(SurfaceAttachment::Attach(_)) => Self::Attach,
             RendererInput::Streams(_) => Self::Streams,
             RendererInput::Stop => Self::Stop,
         }
@@ -181,11 +211,7 @@ fn a_stream_task_keeps_the_frames_on_either_side() -> TestResult {
 
 #[test]
 fn a_later_scene_advance_replaces_one_not_handled_yet() -> TestResult {
-    let viewport = Viewport::new(Size::new(4.dp(), 4.dp()), Density::ONE);
-    let advance = || RendererInput::AdvanceScene {
-        surface: SurfaceId::numbered(1),
-        viewport,
-    };
+    let advance = || RendererInput::AdvanceScene(scaled(PixelScale::SQUARE));
     let inputs = [advance(), render(1, 1), advance()];
     assert_eq!(taken(inputs)?, [Taken::AdvanceScene, Taken::Render(1, 1)]);
     Ok(())
@@ -231,6 +257,23 @@ fn a_detached_surface_is_reported_after_the_inputs_sent_before_it() -> TestResul
         outputs.recv()?,
         RendererOutput::Retired(SURFACE_3)
     ));
+    renderer.stop()?;
+    Ok(())
+}
+
+#[test]
+fn each_frame_is_drawn_at_the_scale_that_it_carries() -> TestResult {
+    let (mut renderer, outputs) = start(None)?;
+    renderer.send(attach(1))?;
+    let wide = PixelScale::filling(viewport(), PixelSize::new(8, 4))?;
+    for (sequence, scale) in [(1, wide), (2, PixelScale::SQUARE)] {
+        renderer.send(render_at(1, sequence, scale))?;
+        assert!(matches!(
+            outputs.recv()?,
+            RendererOutput::Rendered(frame)
+                if frame.scaled_viewport.scale == scale && frame.contents == SurfaceContents::Current
+        ));
+    }
     renderer.stop()?;
     Ok(())
 }

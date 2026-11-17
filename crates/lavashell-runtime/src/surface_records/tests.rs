@@ -6,7 +6,7 @@ use super::*;
 use crate::test_error::TestResult;
 use crate::test_host::empty_view;
 use crate::view_actor::ViewError;
-use lavashell_core::prelude::Modifier;
+use lavashell_core::prelude::{Modifier, PixelSize};
 use lavashell_core::units::DpExt;
 use lavashell_core::window::{WINDOW, WindowHandle};
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
@@ -124,6 +124,22 @@ fn only_a_window_configure_hands_a_window_to_the_view() -> TestResult {
     assert_eq!(records.handle(surface, configure), None);
     frame(&mut records, surface)?;
     assert_eq!(read.get(), Some(Some(maximized)));
+    Ok(())
+}
+
+#[test]
+fn a_new_surface_has_square_pixels_until_a_scale_change_sets_its_scale() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let surface = open(&mut records)?;
+    frame(&mut records, surface)?;
+    let square = (records.open_scaled_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
+    assert_eq!(square.scale, PixelScale::SQUARE);
+    let wide = PixelScale::filling(square.viewport, PixelSize::new(160, 50))?;
+    let changed = SurfaceEvent::ScaleChanged(wide);
+    assert_eq!(records.handle(surface, changed), None);
+    let scale = (records.open_scaled_viewport(surface)).map(|scaled| scaled.scale);
+    assert_eq!(scale, Some(wide));
+    assert!(needs_frame(&records, surface));
     Ok(())
 }
 

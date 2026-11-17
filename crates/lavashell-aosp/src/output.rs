@@ -7,7 +7,6 @@ use lavashell_core::output::MonitorInfo;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Px, RefreshRate};
 use lavashell_platform::{OutputEvent, OutputId, Reports};
-use std::mem;
 use std::time::Duration;
 
 pub(crate) const DISPLAY: OutputId = OutputId(0);
@@ -42,40 +41,16 @@ impl TryFrom<DisplayReading> for HostDisplay {
     }
 }
 
-pub(crate) struct HostOutput {
-    display: HostDisplay,
+pub(crate) fn report_added(display: HostDisplay, reports: &Reports<NativeWindow, AospStreams>) {
+    reports.report(OutputEvent::Added(DISPLAY));
+    report_display(display, reports);
 }
 
-impl HostOutput {
-    pub(crate) fn report_added(
-        display: HostDisplay,
-        reports: &Reports<NativeWindow, AospStreams>,
-    ) -> Self {
-        reports.report(OutputEvent::Added(DISPLAY));
-        report_geometry(display, reports);
-        Self { display }
-    }
-
-    pub(crate) fn report_change(
-        &mut self,
-        display: HostDisplay,
-        reports: &Reports<NativeWindow, AospStreams>,
-    ) -> Option<Density> {
-        report_geometry(display, reports);
-        let previous = mem::replace(&mut self.display, display);
-        (previous.density != display.density).then_some(display.density)
-    }
-
-    pub(crate) fn report_entered(surface: SurfaceId, reports: &Reports<NativeWindow, AospStreams>) {
-        reports.report(OutputEvent::Entered(DISPLAY, surface));
-    }
-
-    pub(crate) fn density(&self) -> Density {
-        self.display.density
-    }
+pub(crate) fn report_entered(surface: SurfaceId, reports: &Reports<NativeWindow, AospStreams>) {
+    reports.report(OutputEvent::Entered(DISPLAY, surface));
 }
 
-fn report_geometry(display: HostDisplay, reports: &Reports<NativeWindow, AospStreams>) {
+pub(crate) fn report_display(display: HostDisplay, reports: &Reports<NativeWindow, AospStreams>) {
     let monitor = MonitorInfo {
         name: None,
         size: Size::from_px(display.width, display.height, display.density),

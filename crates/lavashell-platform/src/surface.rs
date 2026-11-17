@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{KeyboardMode, OutputId};
 use lavashell_actor::{Merge, MergeEffect};
-use lavashell_core::geometry::Size;
+use lavashell_core::geometry::{PixelScale, Size};
 use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
@@ -21,12 +21,14 @@ pub enum SurfaceEvent {
     },
     Closed,
     DensityChanged(Density),
+    ScaleChanged(PixelScale),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SurfaceEventKey {
     Configuration,
     Density,
+    Scale,
 }
 
 impl Merge for SurfaceEvent {
@@ -36,6 +38,7 @@ impl Merge for SurfaceEvent {
         match self {
             Self::Configured { .. } => MergeEffect::Overwrites(SurfaceEventKey::Configuration),
             Self::DensityChanged(_) => MergeEffect::Overwrites(SurfaceEventKey::Density),
+            Self::ScaleChanged(_) => MergeEffect::Overwrites(SurfaceEventKey::Scale),
             Self::Closed => MergeEffect::Appends,
         }
     }

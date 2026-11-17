@@ -20,7 +20,7 @@ use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
 use crate::{Fonts, FrameOutcome, Painter, SurfaceAlpha, SurfaceContents};
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{
-    HdrMetadata, OutputInfo, OutputRequest, PixelScale, PixelSize, Rect, SceneSnapshot, Viewport,
+    HdrMetadata, OutputInfo, OutputRequest, PixelSize, Rect, ScaledViewport, SceneSnapshot,
 };
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_effect_quality::FrameBudget;
@@ -196,14 +196,10 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn contents(
         &self,
         surface: SurfaceId,
-        viewport: Viewport,
-        scale: PixelScale,
+        scaled_viewport: ScaledViewport,
     ) -> Result<SurfaceContents, StateError> {
         let attached = attached(&self.surfaces, surface)?;
-        if !attached.damage.drawn_at(scale) {
-            return Ok(SurfaceContents::Outdated);
-        }
-        let size = physical_size(viewport, scale)?;
+        let size = physical_size(scaled_viewport)?;
         (attached.target.contents(size)).map_err(StateError::ReadContents)
     }
 
@@ -237,13 +233,12 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
 
     pub fn advance_scene(
         &mut self,
-        viewport: Viewport,
-        scale: PixelScale,
+        scaled_viewport: ScaledViewport,
         now: Duration,
     ) -> Result<(), StateError> {
         let frames_in_flight = self.scene_frames_in_flight();
         match &mut self.scene {
-            Some(scene) => scene.tick(&mut self.gpu, now, viewport, scale, frames_in_flight),
+            Some(scene) => scene.tick(&mut self.gpu, now, scaled_viewport, frames_in_flight),
             None => Ok(()),
         }
     }
@@ -254,20 +249,20 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         frame: PresentFrame<'_>,
         snapshot: &SceneSnapshot,
     ) -> Result<Drawn, DrawError<C::Error, S::Error>> {
-        self.advance_scene(frame.viewport, frame.scale, frame.time.now)?;
+        self.advance_scene(frame.scaled_viewport, frame.time.now)?;
         let scene = self.scene.as_ref().and_then(SceneImages::latest);
-        let physical = physical_size(frame.viewport, frame.scale)?;
+        let physical = physical_size(frame.scaled_viewport)?;
         let shown = snapshot.at(frame.time.presentation);
         let scene_generation = scene.as_ref().map_or(0, |scene| scene.generation);
         let attached = attached_mut(&mut self.surfaces, surface)?;
         attached.prepare(&frame)?;
-        attached.damage.draw_at(frame.scale);
+        attached.damage.draw_at(frame.scaled_viewport.scale);
         let budget = FrameBudget {
             surface,
             gpu_time: frame.time.refresh,
         };
         let sequence = frame.time.sequence;
-        let dp_to_output = frame.dp_to_output();
+        let dp_to_output = frame.scaled_viewport.dp_to_output();
         let quality = (self.painter).plan_scene_effects(
             shown,
             budget,
@@ -280,9 +275,10 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
             scene_generation,
             quality,
         };
+        let viewport = frame.scaled_viewport.viewport;
         let damage = match self.damage {
-            DamageMode::Whole => Some(Rect::from_size(frame.viewport.size)),
-            DamageMode::Tracked => attached.damage(shown, frame.viewport, physical, &inputs)?,
+            DamageMode::Whole => Some(Rect::from_size(viewport.size)),
+            DamageMode::Tracked => attached.damage(shown, viewport, physical, &inputs)?,
         };
         let frame_inputs = FrameInputs {
             surface,
@@ -343,6 +339,6 @@ fn attached_mut<C>(
         .ok_or(StateError::UnknownSurface(surface))
 }
 
-fn physical_size(viewport: Viewport, scale: PixelScale) -> Result<PixelSize, StateError> {
-    (scale.buffer_size(viewport)).map_err(StateError::BufferSize)
+fn physical_size(scaled_viewport: ScaledViewport) -> Result<PixelSize, StateError> {
+    (scaled_viewport.buffer_size()).map_err(StateError::BufferSize)
 }

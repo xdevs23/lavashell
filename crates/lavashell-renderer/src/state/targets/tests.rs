@@ -141,6 +141,5 @@ fn a_new_scale_damages_everything_and_an_unchanged_one_nothing() -> Result<(), T
         damage.area(shown, viewport(), &unchanged, current())?,
         Some(whole())
     );
-    assert!(damage.drawn_at(wide) && !damage.drawn_at(PixelScale::SQUARE));
     Ok(())
 }

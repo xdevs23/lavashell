@@ -82,14 +82,10 @@ impl SurfaceDamage {
     }
 
     pub fn draw_at(&mut self, scale: PixelScale) {
-        if !self.drawn_at(scale) {
+        if self.scale != Some(scale) {
             self.invalidate();
             self.scale = Some(scale);
         }
-    }
-
-    pub fn drawn_at(&self, scale: PixelScale) -> bool {
-        self.scale == Some(scale)
     }
 
     pub fn forget_unless_shown(&mut self, outcome: FrameOutcome) {

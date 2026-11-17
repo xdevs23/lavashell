@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::motion::{finger, hovering, mouse, touch};
-use crate::host::surface::HostSurface;
-use crate::host::{AospError, AospHost};
-use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, TouchAction};
+use crate::host::{AospError, AospHost, HostMessage, HostState};
+use crate::input::{MOUSE, MotionEvent, MouseAction, TouchAction};
+use crate::layout_size::LayoutSize;
 use crate::native_window::NativeWindow;
-use crate::output::{DISPLAY, HostDisplay, HostOutput};
+use crate::output::{DISPLAY, HostDisplay, report_added};
 use crate::platform::{DisplaySurface, SIDE, TestError};
 use crate::settings::HostConfiguration;
 use crate::streams::AospStreams;
 use icu_locale_core::langid;
-use lavashell_actor::{Merge, MergeEffect, Receiver, SystemClock, mailbox};
+use lavashell_actor::{Merge, MergeEffect, Receiver, Sender, SystemClock, mailbox};
 use lavashell_core::output::{MonitorInfo, OutputRequest};
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::Appearance;
-use lavashell_core::prelude::{Density, DpExt, Point, PxExt, Size};
+use lavashell_core::prelude::{Density, DpExt, PixelScale, Point, PxExt, Size};
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::Cursor;
+use lavashell_core::ui::{PointerKind, TouchId};
+use lavashell_core::view::{Cursor, TouchSample};
 use lavashell_core::window::{Edge, Edges, WindowCapabilities, WindowState};
 use lavashell_platform::{
     DeviceEvent, InputRequest, OutputEvent, OutputId, PlatformEvent, PlatformLinks,
@@ -26,6 +27,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 mod host_display;
+mod layout_size;
 
 const SURFACE_2: SurfaceId = SurfaceId::numbered(2);
 
@@ -69,7 +71,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
         }),
         renderer: sender.outlet(
             |attachment: SurfaceAttachment<NativeWindow>| match attachment {
-                SurfaceAttachment::Attach { attach, .. } => Sent::Attach(attach.surface),
+                SurfaceAttachment::Attach(attach) => Sent::Attach(attach.surface),
                 SurfaceAttachment::Control { message, .. } => match message {},
                 SurfaceAttachment::Detach(surface) => Sent::Detach(surface),
             },
@@ -81,9 +83,9 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
 }
 
 struct Host {
-    output: HostOutput,
-    surface: HostSurface,
-    translator: MotionTranslator,
+    state: HostState,
+    requests: Sender<PlatformRequest>,
+    received: Receiver<PlatformRequest>,
     reports: Reports<NativeWindow, AospStreams>,
     sent: Receiver<Sent>,
 }
@@ -91,10 +93,12 @@ struct Host {
 impl Host {
     fn new(display: HostDisplay) -> Self {
         let (reports, sent) = reports();
+        let (requests, received) = mailbox();
+        report_added(display, &reports);
         Self {
-            output: HostOutput::report_added(display, &reports),
-            surface: HostSurface::default(),
-            translator: MotionTranslator::default(),
+            state: HostState::new(display.density),
+            requests,
+            received,
             reports,
             sent,
         }
@@ -104,37 +108,49 @@ impl Host {
         Ok(self.sent.take_arrived()?)
     }
 
+    fn handle(&mut self, message: HostMessage) -> Result<(), AospError> {
+        let _requests_open_while_the_host_lives =
+            self.state.handle(message, &self.received, &self.reports)?;
+        Ok(())
+    }
+
+    fn request(&mut self, request: PlatformRequest) -> Result<(), AospError> {
+        let _received_by_this_host = self.requests.push(request);
+        self.handle(HostMessage::Requests)
+    }
+
     fn execute(&mut self, request: SurfaceRequest) -> Result<(), AospError> {
-        let request = PlatformRequest::Surface(request);
-        (self.surface).execute(request, self.output.density(), &self.reports)
+        self.request(PlatformRequest::Surface(request))
     }
 
     fn created(&mut self, window: NativeWindow) -> Result<(), AospError> {
-        (self.surface).created(window, self.output.density(), &self.reports)
+        self.handle(HostMessage::SurfaceCreated(window))
     }
 
     fn changed(&mut self) -> Result<(), AospError> {
-        self.surface.changed(&self.reports)
+        self.handle(HostMessage::SurfaceChanged)
     }
 
-    fn display_changed(&mut self, display: HostDisplay) {
-        if let Some(density) = self.output.report_change(display, &self.reports) {
-            self.surface.change_density(density, &self.reports);
-        }
+    fn set_layout_size(&mut self, size: Option<LayoutSize>) -> Result<(), AospError> {
+        self.handle(HostMessage::LayoutSize(size))
     }
 
-    fn destroyed(&mut self) -> mpsc::Receiver<()> {
+    fn display_changed(&mut self, display: HostDisplay) -> Result<(), AospError> {
+        self.handle(HostMessage::DisplayChanged(display))
+    }
+
+    fn destroyed(&mut self) -> Result<mpsc::Receiver<()>, AospError> {
         let (retired, waiter) = mpsc::sync_channel(1);
-        self.surface.destroyed(retired, &self.reports);
-        waiter
+        self.handle(HostMessage::SurfaceDestroyed(retired))?;
+        Ok(waiter)
     }
 
-    fn frame(&self) {
-        self.surface.frame(&self.reports);
+    fn frame(&mut self) -> Result<(), AospError> {
+        self.handle(HostMessage::Frame)
     }
 
-    fn motion(&mut self, event: MotionEvent) {
-        (self.translator).report(event, self.surface.shown(), &self.reports);
+    fn motion(&mut self, event: MotionEvent) -> Result<(), AospError> {
+        self.handle(HostMessage::Motion(event))
     }
 
     fn destroy_returned(self, waiter: &mpsc::Receiver<()>) -> bool {
@@ -185,6 +201,10 @@ fn display(density: Density) -> HostDisplay {
         density,
         refresh: Some(REFRESH),
     }
+}
+
+fn two_pixels_per_dp() -> Result<Density, TestError> {
+    Ok(Density::from_ratio(2.0, 1.0)?)
 }
 
 fn added(side: i32) -> Vec<Sent> {
@@ -246,13 +266,37 @@ fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
     Sent::Surface(surface, configured)
 }
 
-fn showing(surface: SurfaceId, width: i32, height: i32, density: Density) -> Vec<Sent> {
-    vec![
+fn laid_out(surface: SurfaceId, scale: PixelScale, width: i32, height: i32) -> [Sent; 2] {
+    let scaled = Sent::Surface(surface, SurfaceEvent::ScaleChanged(scale));
+    [scaled, configured(surface, width, height)]
+}
+
+fn showing(
+    surface: SurfaceId,
+    density: Density,
+    layout: impl IntoIterator<Item = Sent>,
+) -> Vec<Sent> {
+    let attached = [
         Sent::Attach(surface),
         Sent::Surface(surface, SurfaceEvent::DensityChanged(density)),
-        configured(surface, width, height),
-        Sent::Output(OutputEvent::Entered(DISPLAY, surface)),
-    ]
+    ];
+    let entered = Sent::Output(OutputEvent::Entered(DISPLAY, surface));
+    (attached.into_iter().chain(layout).chain([entered])).collect()
+}
+
+fn touched(x: f64, y: f64) -> TouchSample {
+    TouchSample {
+        id: TouchId { seat: 0, point: 0 },
+        at: Point::new(x.dp(), y.dp()),
+        kind: PointerKind::Finger,
+    }
+}
+
+fn touch_down(sample: TouchSample) -> Sent {
+    Sent::Device(DeviceEvent::TouchDown {
+        surface: SURFACE,
+        sample,
+    })
 }
 
 fn shown() -> Result<Host, TestError> {
@@ -267,11 +311,12 @@ fn shown() -> Result<Host, TestError> {
 fn a_surface_requested_before_the_host_surface_is_shown_with_it() -> Result<(), TestError> {
     let mut host = displayed(display(Density::ONE))?;
     host.execute(create(SURFACE))?;
-    host.frame();
+    host.frame()?;
     assert_eq!(host.sent()?, []);
     host.created(window(&DisplaySurface::new(SIDE, SIDE / 2)))?;
-    host.frame();
-    let mut shown = showing(SURFACE, SIDE, SIDE / 2, Density::ONE);
+    host.frame()?;
+    let square = laid_out(SURFACE, PixelScale::SQUARE, SIDE, SIDE / 2);
+    let mut shown = showing(SURFACE, Density::ONE, square);
     shown.push(Sent::DisplayReady(SURFACE));
     assert_eq!(host.sent()?, shown);
     Ok(())
@@ -283,7 +328,8 @@ fn a_surface_requested_while_the_host_surface_exists_is_shown_at_once() -> Resul
     host.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     assert_eq!(host.sent()?, []);
     host.execute(create(SURFACE))?;
-    assert_eq!(host.sent()?, showing(SURFACE, SIDE, SIDE, Density::ONE));
+    let square = laid_out(SURFACE, PixelScale::SQUARE, SIDE, SIDE);
+    assert_eq!(host.sent()?, showing(SURFACE, Density::ONE, square));
     Ok(())
 }
 
@@ -301,32 +347,11 @@ fn a_surface_that_is_not_a_window_is_configured_without_a_window_state() -> Resu
         token: None,
         window: None,
     };
-    let shown = [
-        Sent::Attach(SURFACE),
-        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(Density::ONE)),
+    let square = [
+        Sent::Surface(SURFACE, SurfaceEvent::ScaleChanged(PixelScale::SQUARE)),
         Sent::Surface(SURFACE, configured),
-        Sent::Output(OutputEvent::Entered(DISPLAY, SURFACE)),
     ];
-    assert_eq!(host.sent()?, shown);
-    Ok(())
-}
-
-#[test]
-fn a_host_surface_without_a_size_is_configured_once_it_has_one() -> Result<(), TestError> {
-    let mut host = displayed(display(Density::ONE))?;
-    let surface = DisplaySurface::new(0, 0);
-    host.created(window(&surface))?;
-    host.changed()?;
-    host.execute(create(SURFACE))?;
-    let unconfigured = [
-        Sent::Attach(SURFACE),
-        Sent::Surface(SURFACE, SurfaceEvent::DensityChanged(Density::ONE)),
-        Sent::Output(OutputEvent::Entered(DISPLAY, SURFACE)),
-    ];
-    assert_eq!(host.sent()?, unconfigured);
-    surface.resize(SIDE, SIDE / 2);
-    host.changed()?;
-    assert_eq!(host.sent()?, [configured(SURFACE, SIDE, SIDE / 2)]);
+    assert_eq!(host.sent()?, showing(SURFACE, Density::ONE, square));
     Ok(())
 }
 
@@ -334,12 +359,12 @@ fn a_host_surface_without_a_size_is_configured_once_it_has_one() -> Result<(), T
 fn a_destroy_returns_at_once_while_no_surface_is_shown() -> Result<(), TestError> {
     let mut idle = displayed(display(Density::ONE))?;
     idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
-    let waiter = idle.destroyed();
+    let waiter = idle.destroyed()?;
     assert!(idle.destroy_returned(&waiter));
 
     let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
-    let waiter = requested.destroyed();
+    let waiter = requested.destroyed()?;
     assert_eq!(requested.sent()?, []);
     assert!(requested.destroy_returned(&waiter));
     Ok(())
@@ -348,13 +373,13 @@ fn a_destroy_returns_at_once_while_no_surface_is_shown() -> Result<(), TestError
 #[test]
 fn a_destroy_of_a_shown_surface_closes_it_and_returns_after_its_release() -> Result<(), TestError> {
     let mut unreleased = shown()?;
-    let waiter = unreleased.destroyed();
+    let waiter = unreleased.destroyed()?;
     unreleased.execute(SurfaceRequest::Destroy(SURFACE))?;
     assert!(!unreleased.destroy_returned(&waiter));
 
     let mut host = shown()?;
-    let waiter = host.destroyed();
-    host.frame();
+    let waiter = host.destroyed()?;
+    host.frame()?;
     host.execute(SurfaceRequest::Destroy(SURFACE))?;
     host.execute(SurfaceRequest::Release(SURFACE))?;
     let closed = [
@@ -370,12 +395,12 @@ fn a_destroy_of_a_shown_surface_closes_it_and_returns_after_its_release() -> Res
 fn a_destroy_while_the_surface_closes_returns_after_its_release() -> Result<(), TestError> {
     let mut unreleased = shown()?;
     unreleased.execute(SurfaceRequest::Destroy(SURFACE))?;
-    let waiter = unreleased.destroyed();
+    let waiter = unreleased.destroyed()?;
     assert!(!unreleased.destroy_returned(&waiter));
 
     let mut host = shown()?;
     host.execute(SurfaceRequest::Destroy(SURFACE))?;
-    let waiter = host.destroyed();
+    let waiter = host.destroyed()?;
     host.execute(SurfaceRequest::Release(SURFACE))?;
     assert_eq!(host.sent()?, [Sent::Detach(SURFACE)]);
     assert!(host.destroy_returned(&waiter));
@@ -390,7 +415,8 @@ fn a_surface_created_again_while_the_host_surface_lives_is_shown_again() -> Resu
     let again = SurfaceId::numbered(2);
     host.execute(create(again))?;
     let mut shown = vec![Sent::Detach(SURFACE)];
-    shown.extend(showing(again, SIDE, SIDE, Density::ONE));
+    let square = laid_out(again, PixelScale::SQUARE, SIDE, SIDE);
+    shown.extend(showing(again, Density::ONE, square));
     assert_eq!(host.sent()?, shown);
     Ok(())
 }
@@ -400,16 +426,16 @@ fn a_motion_produces_device_events_only_on_a_shown_surface() -> Result<(), TestE
     let corner = || touch(0, TouchAction::Down(finger(0, 0.0, 0.0)));
     let mut idle = displayed(display(Density::ONE))?;
     idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
-    idle.motion(corner());
+    idle.motion(corner())?;
     assert_eq!(idle.sent()?, []);
 
     let mut requested = displayed(display(Density::ONE))?;
     requested.execute(create(SURFACE))?;
-    requested.motion(corner());
+    requested.motion(corner())?;
     assert_eq!(requested.sent()?, []);
 
     let mut host = shown()?;
-    host.motion(corner());
+    host.motion(corner())?;
     let sent = host.sent()?;
     assert!(matches!(
         sent.as_slice(),
@@ -424,11 +450,10 @@ fn a_motion_produces_device_events_only_on_a_shown_surface() -> Result<(), TestE
 #[test]
 fn a_cursor_request_for_a_mouse_over_the_surface_lets_the_run_go_on() -> Result<(), TestError> {
     let mut host = shown()?;
-    host.motion(mouse(MouseAction::Move(hovering(10.0, 10.0))));
+    host.motion(mouse(MouseAction::Move(hovering(10.0, 10.0))))?;
     let cursor = InputRequest::SetCursor(MOUSE, Cursor::Pointer);
-    let request = PlatformRequest::Input(cursor);
-    (host.surface).execute(request, host.output.density(), &host.reports)?;
-    host.frame();
+    host.request(PlatformRequest::Input(cursor))?;
+    host.frame()?;
     let entered = DeviceEvent::PointerEnter {
         pointer: MOUSE,
         surface: SURFACE,
@@ -505,7 +530,8 @@ fn a_run_inside_serve_reports_the_host_and_ends_with_its_requests() -> Result<()
     })??;
     let mut reported = added(SIDE);
     reported.extend(settings(ColorScheme::Light));
-    reported.extend(showing(SURFACE, SIDE, SIDE, Density::ONE));
+    let square = laid_out(SURFACE, PixelScale::SQUARE, SIDE, SIDE);
+    reported.extend(showing(SURFACE, Density::ONE, square));
     assert_eq!(sent.take_arrived()?, reported);
     assert!(matches!(
         host.serve(|_link| ()),

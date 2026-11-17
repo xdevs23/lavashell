@@ -2,7 +2,7 @@
 
 use super::{CompletedScene, Completion, OffscreenSurface, Status, VulkanRenderer};
 use crate::Error;
-use lavashell_core::prelude::{PixelScale, Viewport};
+use lavashell_core::prelude::ScaledViewport;
 use skia_safe::Canvas;
 use skia_safe::gpu::{DirectContext, DirectContextId, SyncCpu};
 use std::time::Duration;
@@ -91,8 +91,7 @@ pub trait SceneSource {
         &mut self,
         gpu: &mut VulkanRenderer,
         now: Duration,
-        viewport: Viewport,
-        scale: PixelScale,
+        scaled_viewport: ScaledViewport,
     ) -> Result<Option<PendingScene>, Error>;
 }
 
