@@ -40,4 +40,3 @@ thiserror.workspace = true
 atspi-common.workspace = true
 lavashell-core = { workspace = true, features = ["test-support"] }
 serde.workspace = true
-zbus = { workspace = true, features = ["async-io", "blocking-api"] }

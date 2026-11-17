@@ -4,11 +4,13 @@ use super::*;
 use crate::accessibility::test_error::AccessibilityTestError;
 use accesskit::{ActionData, ActionRequest, TextPosition, TextSelection};
 use atspi_common::{State, StateSet};
+use futures_lite::StreamExt;
+use futures_lite::future::block_on;
 use lavashell_actor::{Closed, Receiver};
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
-use zbus::blocking::{Connection, MessageIterator, Proxy, connection::Builder};
 use zbus::zvariant::{OwnedObjectPath, Type};
+use zbus::{Connection, MessageStream, Proxy, connection::Builder};
 
 const SURFACE_0: SurfaceId = SurfaceId::numbered(0);
 
@@ -77,10 +79,12 @@ impl Registry {
 
 #[test]
 fn atspi_clients_read_the_tree_and_send_actions_through_the_bridge() -> Result<(), TestError> {
-    crate::test_bus::run(&["DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS"], child)
+    crate::test_bus::run(&["DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS"], || {
+        block_on(child())
+    })
 }
 
-fn proxy<'a>(
+async fn proxy<'a>(
     connection: &'a Connection,
     address: &'a AtspiAddress,
     interface: &'a str,
@@ -90,7 +94,8 @@ fn proxy<'a>(
         address.bus_name.as_str(),
         address.path.as_str(),
         interface,
-    )?)
+    )
+    .await?)
 }
 
 fn wait_event(
@@ -109,67 +114,78 @@ fn wait_event(
     }
 }
 
-fn signals(client: &Connection) -> Result<MessageIterator, TestError> {
+async fn signals(client: &Connection) -> Result<MessageStream, TestError> {
     let rule = zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
         .build();
-    Ok(MessageIterator::for_match_rule(rule, client, None)?)
+    Ok(MessageStream::for_match_rule(rule, client, None).await?)
 }
 
-fn wait_for<T>(
-    signals: &mut MessageIterator,
-    mut read: impl FnMut() -> Result<T, TestError>,
+async fn wait_for<T>(
+    signals: &mut MessageStream,
+    mut read: impl AsyncFnMut() -> Result<T, TestError>,
     holds: impl Fn(&T) -> bool,
 ) -> Result<T, TestError> {
     loop {
-        let value = read()?;
+        let value = read().await?;
         if holds(&value) {
             return Ok(value);
         }
-        let signal = signals.next().ok_or(AccessibilityTestError::BusClosed)?;
+        let signal = signals
+            .next()
+            .await
+            .ok_or(AccessibilityTestError::BusClosed)?;
         assert_eq!(signal?.message_type(), zbus::message::Type::Signal);
     }
 }
 
-fn children(
+async fn children(
     connection: &Connection,
     address: &AtspiAddress,
 ) -> Result<Vec<AtspiAddress>, TestError> {
-    Ok(proxy(connection, address, "org.a11y.atspi.Accessible")?.call("GetChildren", &())?)
+    Ok(proxy(connection, address, "org.a11y.atspi.Accessible")
+        .await?
+        .call("GetChildren", &())
+        .await?)
 }
 
-fn serve_fixture(
+async fn serve_fixture(
     address: &str,
 ) -> Result<(Connection, Connection, mpsc::Receiver<AtspiAddress>), TestError> {
     let (embedded, embeds) = mpsc::channel();
     let status = Builder::address(address)?
         .name("org.a11y.Bus")?
         .serve_at("/org/a11y/bus", Status { enabled: true })?
-        .build()?;
+        .build()
+        .await?;
     let registry = Builder::address(address)?
         .name("org.a11y.atspi.Registry")?
-        .build()?;
+        .build()
+        .await?;
     let name = registry
         .unique_name()
         .ok_or(AccessibilityTestError::NoUniqueName)?
         .to_string();
-    let served = registry.object_server().at(
-        ROOT,
-        Registry {
-            embedded,
-            name,
-            root: OwnedObjectPath::try_from(ROOT)?,
-        },
-    )?;
+    let served = registry
+        .object_server()
+        .at(
+            ROOT,
+            Registry {
+                embedded,
+                name,
+                root: OwnedObjectPath::try_from(ROOT)?,
+            },
+        )
+        .await?;
     assert!(served);
     Ok((status, registry, embeds))
 }
 
-fn child() -> Result<(), TestError> {
+async fn child() -> Result<(), TestError> {
     let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")?;
-    let (_status, _registry, embeds) = serve_fixture(&address)?;
-    let client = Builder::address(address.as_str())?.build()?;
-    let mut signals = signals(&client)?;
+    let (_status, _registry, embeds) = serve_fixture(&address).await?;
+    let client = Builder::address(address.as_str())?.build().await?;
+    let mut signals = signals(&client).await?;
     let (sender, view) = mailbox::<PlatformEvent>();
     let mut bridge = Bridge::new(
         SurfaceId::numbered(0),
@@ -195,19 +211,22 @@ fn child() -> Result<(), TestError> {
         &mut signals,
         || children(&client, &app),
         |windows| !windows.is_empty(),
-    )?;
+    )
+    .await?;
     let window = windows.remove(0);
-    let nodes = children(&client, &window)?;
+    let nodes = children(&client, &window).await?;
     assert_eq!(nodes.len(), 2);
-    check_button(&client, &nodes[0], &mut bridge, &mut reported)?;
+    check_button(&client, &nodes[0], &mut bridge, &mut reported).await?;
     let text = &nodes[1];
-    let text_proxy = proxy(&client, text, "org.a11y.atspi.Text")?;
+    let text_proxy = proxy(&client, text, "org.a11y.atspi.Text").await?;
     assert_eq!(
-        text_proxy.call::<_, _, String>("GetText", &(0i32, -1i32))?,
+        text_proxy
+            .call::<_, _, String>("GetText", &(0i32, -1i32))
+            .await?,
         "a💡é"
     );
-    assert_eq!(text_proxy.get_property::<i32>("CharacterCount")?, 3);
-    let selection: bool = text_proxy.call("SetSelection", &(0i32, 1i32, 3i32))?;
+    assert_eq!(text_proxy.get_property::<i32>("CharacterCount").await?, 3);
+    let selection: bool = text_proxy.call("SetSelection", &(0i32, 1i32, 3i32)).await?;
     assert!(selection);
     let AccessibilityEvent::Action(SURFACE_0, action) = wait_event(&mut reported, |event| {
         matches!(event, AccessibilityEvent::Action(SURFACE_0, _))
@@ -232,36 +251,39 @@ fn child() -> Result<(), TestError> {
             data: Some(ActionData::SetTextSelection(selection)),
         }
     );
-    text_navigation(&text_proxy, &mut signals, &mut bridge)?;
-    lifecycle(&client, &mut reported, &mut bridge, initial)?;
+    text_navigation(&text_proxy, &mut signals, &mut bridge).await?;
+    lifecycle(&client, &mut reported, &mut bridge, initial).await?;
     let app = embeds.recv()?;
     let _shown_window_is_not_checked = wait_for(
         &mut signals,
         || children(&client, &app),
         |windows| windows.len() == 1,
-    )?;
+    )
+    .await?;
     drop(bridge);
     let _empty_children_are_not_checked =
-        wait_for(&mut signals, || children(&client, &app), Vec::is_empty)?;
+        wait_for(&mut signals, || children(&client, &app), Vec::is_empty).await?;
     Ok(())
 }
 
-fn check_button(
+async fn check_button(
     client: &Connection,
     button: &AtspiAddress,
     bridge: &mut Bridge,
     reported: &mut Reported,
 ) -> Result<(), TestError> {
-    let accessible = proxy(client, button, "org.a11y.atspi.Accessible")?;
-    assert_eq!(accessible.get_property::<String>("Name")?, "Start");
-    let states: StateSet = accessible.call("GetState", &())?;
+    let accessible = proxy(client, button, "org.a11y.atspi.Accessible").await?;
+    assert_eq!(accessible.get_property::<String>("Name").await?, "Start");
+    let states: StateSet = accessible.call("GetState", &()).await?;
     assert!(states.contains(State::Focused));
     bridge.window_focus(false);
-    let states: StateSet = accessible.call("GetState", &())?;
+    let states: StateSet = accessible.call("GetState", &()).await?;
     assert!(!states.contains(State::Focused));
     bridge.window_focus(true);
-    let accepted: bool =
-        proxy(client, button, "org.a11y.atspi.Action")?.call("DoAction", &(0i32,))?;
+    let accepted: bool = proxy(client, button, "org.a11y.atspi.Action")
+        .await?
+        .call("DoAction", &(0i32,))
+        .await?;
     assert!(accepted);
     let AccessibilityEvent::Action(SURFACE_0, action) = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Action(SURFACE_0, _))
@@ -287,9 +309,9 @@ fn check_button(
     Ok(())
 }
 
-fn text_navigation(
+async fn text_navigation(
     proxy: &Proxy<'_>,
-    signals: &mut MessageIterator,
+    signals: &mut MessageStream,
     bridge: &mut Bridge,
 ) -> Result<(), TestError> {
     let words = [Run::line("one two three", &[0, 4, 8])];
@@ -308,30 +330,35 @@ fn text_navigation(
         bridge.publish(tree(runs)?);
         let _published_text_is_not_checked = wait_for(
             signals,
-            || Ok(proxy.call::<_, _, String>("GetText", &(0i32, -1i32))?),
+            async || {
+                Ok(proxy
+                    .call::<_, _, String>("GetText", &(0i32, -1i32))
+                    .await?)
+            },
             |text| text == value,
-        )?;
+        )
+        .await?;
         if value == "one two three" {
-            let word: (String, i32, i32) = proxy.call("GetStringAtOffset", &(4i32, 1u32))?;
+            let word: (String, i32, i32) = proxy.call("GetStringAtOffset", &(4i32, 1u32)).await?;
             assert_eq!(word, ("two ".into(), 4, 8));
         } else {
-            let line: (String, i32, i32) = proxy.call("GetStringAtOffset", &(4i32, 3u32))?;
+            let line: (String, i32, i32) = proxy.call("GetStringAtOffset", &(4i32, 3u32)).await?;
             assert_eq!(line, ("abcאבג\n".into(), 0, 7));
-            let line: (String, i32, i32) = proxy.call("GetStringAtOffset", &(7i32, 3u32))?;
+            let line: (String, i32, i32) = proxy.call("GetStringAtOffset", &(7i32, 3u32)).await?;
             assert_eq!(line, ("next".into(), 7, 11));
         }
     }
     Ok(())
 }
 
-fn lifecycle(
+async fn lifecycle(
     client: &Connection,
     reported: &mut Reported,
     bridge: &mut Bridge,
     initial: TreeUpdate,
 ) -> Result<(), TestError> {
-    let status = Proxy::new(client, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Status")?;
-    status.set_property("IsEnabled", false)?;
+    let status = Proxy::new(client, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Status").await?;
+    status.set_property("IsEnabled", false).await?;
     let deactivation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Deactivate(_))
     })?;
@@ -339,7 +366,7 @@ fn lifecycle(
         deactivation,
         AccessibilityEvent::Deactivate(SURFACE_0)
     ));
-    status.set_property("IsEnabled", true)?;
+    status.set_property("IsEnabled", true).await?;
     let activation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Activate(_))
     })?;

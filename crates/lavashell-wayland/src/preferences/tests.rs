@@ -4,13 +4,14 @@ use super::*;
 use crate::Error;
 use crate::PreferencesError;
 use crate::test_error::TestError;
+use futures_lite::future::block_on;
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::{Appearance, ContrastPreference};
 use portal::PortalKey;
 use smithay_client_toolkit::reexports::calloop::{EventLoop, channel};
 use std::collections::HashMap;
-use zbus::blocking::{Connection, connection::Builder};
 use zbus::zvariant::OwnedValue;
+use zbus::{Connection, connection::Builder};
 
 fn appearance_of(setting: PortalKey, preference: u32) -> Appearance {
     let mut settings = portal::AppearanceSettings::default();
@@ -79,7 +80,7 @@ impl Settings {
     async fn read_all(
         &self,
         namespaces: Vec<String>,
-        #[zbus(connection)] connection: &zbus::Connection,
+        #[zbus(connection)] connection: &Connection,
     ) -> zbus::fdo::Result<HashMap<String, HashMap<String, OwnedValue>>> {
         assert_eq!(namespaces, ["org.freedesktop.appearance"]);
         connection
@@ -137,29 +138,29 @@ fn signal(
     key: &str,
     value: u32,
 ) -> Result<(), TestError> {
-    connection.emit_signal(
+    block_on(connection.emit_signal(
         None::<&str>,
         "/org/freedesktop/portal/desktop",
         "org.freedesktop.portal.Settings",
         "SettingChanged",
         &(namespace, key, OwnedValue::from(value)),
-    )?;
+    ))?;
     Ok(())
 }
 
 async fn watch_bus(address: String, events: channel::Sender<Appearance>) -> zbus::Result<()> {
-    let connection = zbus::connection::Builder::address(address.as_str())?
-        .build()
-        .await?;
+    let connection = Builder::address(address.as_str())?.build().await?;
     portal::watch_connection(&connection, events).await
 }
 
 fn child() -> Result<(), TestError> {
     let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")?;
-    let service = Builder::address(address.as_str())?
-        .name("org.freedesktop.portal.Desktop")?
-        .serve_at("/org/freedesktop/portal/desktop", Settings)?
-        .build()?;
+    let service = block_on(
+        Builder::address(address.as_str())?
+            .name("org.freedesktop.portal.Desktop")?
+            .serve_at("/org/freedesktop/portal/desktop", Settings)?
+            .build(),
+    )?;
     let mut loop_: EventLoop<Updates> = EventLoop::try_new()?;
     let (sender, receiver) = channel::channel::<Appearance>();
     let receipt = loop_
@@ -214,6 +215,6 @@ fn child() -> Result<(), TestError> {
     loop_.handle().remove(receipt);
     drop(service);
     let (sender, _receiver) = channel::channel();
-    assert!(futures_lite::future::block_on(portal::watch(sender)).is_err());
+    assert!(block_on(portal::watch(sender)).is_err());
     Ok(())
 }
