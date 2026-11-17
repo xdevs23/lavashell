@@ -274,7 +274,7 @@ fn a_surface_or_frame_error_shows_the_defect_notice_exactly_when_this_build_is_a
         Error::OffscreenSurface(SIZE),
         Error::PngSurface,
         Error::EncodePng,
-        Error::ReadPaintedFrame,
+        Error::ReadPixels,
         Error::PresentationSemaphore,
         Error::SubmitFrame,
         Error::SignalFrame(vulkan()),

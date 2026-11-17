@@ -2,7 +2,8 @@
 use crate::Error;
 use lavashell_core::prelude::*;
 use lavashell_core::surface::SurfaceIds;
-use skia_safe::{Canvas, Data, EncodedImageFormat, ISize, images};
+use skia_safe::png_encoder::{self, FilterFlag};
+use skia_safe::{Canvas, Data, ISize, images};
 use std::sync::Arc;
 
 pub struct Pixels {
@@ -12,7 +13,7 @@ pub struct Pixels {
 
 pub fn decode_image(bytes: impl Into<Arc<[u8]>>) -> Result<Image, Error> {
     let bytes = bytes.into();
-    let decoded = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(&bytes))
+    let decoded = skia_safe::Image::from_encoded(Data::new_copy(&bytes))
         .and_then(|image| image.make_raster_image(None, None))
         .ok_or(Error::DecodeImage)?;
     let width = u32::try_from(decoded.width()).map_err(Error::DecodedImageSize)?;
@@ -22,8 +23,8 @@ pub fn decode_image(bytes: impl Into<Arc<[u8]>>) -> Result<Image, Error> {
 
 pub fn encoded_image(bytes: impl Into<Arc<[u8]>>) -> Result<Image, Error> {
     let bytes = bytes.into();
-    let header = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(&bytes))
-        .ok_or(Error::ReadImageHeader)?;
+    let header =
+        skia_safe::Image::from_encoded(Data::new_copy(&bytes)).ok_or(Error::ReadImageHeader)?;
     let width = u32::try_from(header.width()).map_err(Error::ImageHeaderSize)?;
     let height = u32::try_from(header.height()).map_err(Error::ImageHeaderSize)?;
     Ok(Image::encoded(bytes, width, height))
@@ -52,7 +53,7 @@ pub fn raster_png(
         tree,
         Density::ONE,
     )?;
-    let export_info = png_export_info(skia_safe::ISize::new(width, height));
+    let export_info = png_export_info(ISize::new(width, height));
     let mut export =
         skia_safe::surfaces::raster(&export_info, None, None).ok_or(Error::PngSurface)?;
     let _canvas_returned_for_chaining = export.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -60,15 +61,22 @@ pub fn raster_png(
         export
             .canvas()
             .draw_image(surface.image_snapshot(), (0, 0), None);
-    export
-        .image_snapshot()
-        .encode(None, skia_safe::EncodedImageFormat::PNG, None)
-        .map(|data| data.as_bytes().to_vec())
-        .ok_or(Error::EncodePng)
+    Pixels::read(export.canvas())?.png()
 }
 
-pub(crate) fn png_export_info(dimensions: skia_safe::ISize) -> skia_safe::ImageInfo {
+pub(crate) fn png_export_info(dimensions: ISize) -> skia_safe::ImageInfo {
     skia_safe::ImageInfo::new_n32_premul(dimensions, skia_safe::ColorSpace::new_srgb())
+}
+
+const PNG_ROW_FILTER_FOR_SPEED: FilterFlag = FilterFlag::SUB;
+
+const PNG_ZLIB_LEVEL_FOR_SPEED: i32 = 3;
+
+fn fast_png_options() -> png_encoder::Options {
+    let mut options = png_encoder::Options::default();
+    options.filter_flags = PNG_ROW_FILTER_FOR_SPEED;
+    options.z_lib_level = PNG_ZLIB_LEVEL_FOR_SPEED;
+    options
 }
 
 impl Pixels {
@@ -77,7 +85,7 @@ impl Pixels {
         let info = png_export_info(dimensions);
         let mut bytes = vec![0; info.compute_min_byte_size()];
         if !canvas.read_pixels(&info, &mut bytes, info.min_row_bytes(), (0, 0)) {
-            return Err(Error::ReadPaintedFrame);
+            return Err(Error::ReadPixels);
         }
         Ok(Self { dimensions, bytes })
     }
@@ -87,7 +95,7 @@ impl Pixels {
         let data = Data::new_copy(&self.bytes);
         let image =
             images::raster_from_data(&info, data, info.min_row_bytes()).ok_or(Error::EncodePng)?;
-        (image.encode(None, EncodedImageFormat::PNG, None))
+        png_encoder::encode_image(None, &image, &fast_png_options())
             .map(|encoded| encoded.as_bytes().to_vec())
             .ok_or(Error::EncodePng)
     }
