@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_core::error::message_chain;
 use lavashell_core::view::ComponentFailure;
+use lavashell_error_chain::message_chain;
 use std::error::Error;
 
 pub(crate) fn log_failure(failure: &ComponentFailure) {

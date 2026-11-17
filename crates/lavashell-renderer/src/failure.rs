@@ -3,7 +3,7 @@
 use crate::Error;
 use crate::fault::{DefectNotice, Fault, REPORT_THE_FAILURE};
 use crate::paint::StreamRejection;
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use std::{cell::RefCell, collections::BTreeMap, fmt, rc::Rc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

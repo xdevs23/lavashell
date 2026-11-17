@@ -11,5 +11,5 @@ workspace = true
 
 [dependencies]
 build-rs.workspace = true
-lavashell-core.workspace = true
+lavashell-error-chain.workspace = true
 thiserror.workspace = true

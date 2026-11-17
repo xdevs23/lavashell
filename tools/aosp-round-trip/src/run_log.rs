@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::error::{FileOperation, RoundTripError};
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use std::fs::File;
 use tempfile::NamedTempFile;
 

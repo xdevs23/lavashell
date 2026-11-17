@@ -19,7 +19,7 @@ mod sway;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use error::HarnessError;
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use lavashell_process_scope::{RunOutcome, run_ending_groups_on_termination};
 use next_steps::next_step;
 use run_label::RunLabel;

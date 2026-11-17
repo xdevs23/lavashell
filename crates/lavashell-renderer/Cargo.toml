@@ -16,6 +16,7 @@ backdrop = []
 [dependencies]
 lavashell-effect-quality.workspace = true
 lavashell-core.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-vulkan.workspace = true
 skia-safe.workspace = true
 ash.workspace = true

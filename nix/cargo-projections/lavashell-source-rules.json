@@ -12,21 +12,6 @@
         ]
       },
       {
-        "name": "approx",
-        "version": "0.5.1",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6",
-        "dependencies": [
-          "num-traits"
-        ]
-      },
-      {
-        "name": "autocfg",
-        "version": "1.5.1",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
-      },
-      {
         "name": "bitflags",
         "version": "2.13.2",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
@@ -43,12 +28,6 @@
         ]
       },
       {
-        "name": "by_address",
-        "version": "1.2.1",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "64fa3c856b712db6612c019f14756e64e4bcea13337a6b33b696333a9eaa2d06"
-      },
-      {
         "name": "cc",
         "version": "1.5.1",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
@@ -63,15 +42,6 @@
         "version": "1.0.5",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
-      },
-      {
-        "name": "cobs",
-        "version": "0.3.0",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1",
-        "dependencies": [
-          "thiserror"
-        ]
       },
       {
         "name": "crossbeam-deque",
@@ -127,20 +97,8 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6"
+          "syn"
         ]
-      },
-      {
-        "name": "embedded-io",
-        "version": "0.4.0",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
-      },
-      {
-        "name": "embedded-io",
-        "version": "0.6.1",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
       },
       {
         "name": "equivalent",
@@ -231,7 +189,6 @@
         "dependencies": [
           "displaydoc",
           "litemap",
-          "serde",
           "tinystr",
           "writeable",
           "zerovec"
@@ -347,19 +304,8 @@
         "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
       },
       {
-        "name": "lavashell-core",
-        "version": "0.1.0",
-        "dependencies": [
-          "icu_locale_core",
-          "num-traits",
-          "palette",
-          "postcard",
-          "serde",
-          "serde_json",
-          "thiserror",
-          "toml",
-          "zeroize"
-        ]
+        "name": "lavashell-error-chain",
+        "version": "0.1.0"
       },
       {
         "name": "lavashell-source-rules",
@@ -367,13 +313,13 @@
         "dependencies": [
           "csv",
           "ignore",
-          "lavashell-core",
+          "lavashell-error-chain",
           "proc-macro2",
           "quote",
           "serde",
           "serde_json",
           "spdx",
-          "syn 3.0.6",
+          "syn",
           "tempfile",
           "thiserror",
           "toml",
@@ -423,66 +369,16 @@
         "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
       },
       {
-        "name": "num-traits",
-        "version": "0.2.19",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
-        "dependencies": [
-          "autocfg"
-        ]
-      },
-      {
         "name": "once_cell",
         "version": "1.21.4",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
       },
       {
-        "name": "palette",
-        "version": "0.7.7",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "ddeed8580d347d2abf3dcf06a5f0b3dc020258338526b277847cd4248a70fc64",
-        "dependencies": [
-          "approx",
-          "palette_derive",
-          "palette_math"
-        ]
-      },
-      {
-        "name": "palette_derive",
-        "version": "0.7.7",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "88537020289b719d81be994ccf1bbf4990f477e2f69ee52fe3e45f43a02e56be",
-        "dependencies": [
-          "by_address",
-          "proc-macro2",
-          "quote",
-          "syn 2.0.119"
-        ]
-      },
-      {
-        "name": "palette_math",
-        "version": "0.7.7",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "6e6eb142958d64335fb0e345c5b9ead2ecd6fc438c307e9d7d3c4fd428dbaf12"
-      },
-      {
         "name": "percent-encoding",
         "version": "2.3.2",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
-      },
-      {
-        "name": "postcard",
-        "version": "1.1.3",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24",
-        "dependencies": [
-          "cobs",
-          "embedded-io 0.4.0",
-          "embedded-io 0.6.1",
-          "serde"
-        ]
       },
       {
         "name": "potential_utf",
@@ -601,7 +497,7 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6"
+          "syn"
         ]
       },
       {
@@ -662,17 +558,6 @@
       },
       {
         "name": "syn",
-        "version": "2.0.119",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
-        "dependencies": [
-          "proc-macro2",
-          "quote",
-          "unicode-ident"
-        ]
-      },
-      {
-        "name": "syn",
         "version": "3.0.6",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee",
@@ -690,7 +575,7 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6"
+          "syn"
         ]
       },
       {
@@ -723,7 +608,7 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6"
+          "syn"
         ]
       },
       {
@@ -733,7 +618,6 @@
         "checksum": "b1e27c91459209c2986af3dcf603a5a74a4368754ce37414f59acc971167f643",
         "dependencies": [
           "displaydoc",
-          "serde_core",
           "zerovec"
         ]
       },
@@ -983,7 +867,7 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6",
+          "syn",
           "synstructure"
         ]
       },
@@ -1004,15 +888,9 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6",
+          "syn",
           "synstructure"
         ]
-      },
-      {
-        "name": "zeroize",
-        "version": "1.9.1",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
       },
       {
         "name": "zerotrie",
@@ -1031,7 +909,6 @@
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8",
         "dependencies": [
-          "serde",
           "yoke",
           "zerofrom",
           "zerovec-derive"
@@ -1045,7 +922,7 @@
         "dependencies": [
           "proc-macro2",
           "quote",
-          "syn 3.0.6"
+          "syn"
         ]
       },
       {
@@ -1059,7 +936,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "engine": {
-        "seedHash": "2e5d81234ec70f9e1c0dfa9fce7f7cf8409c2240cb65d306341ae88d2db7247b",
+        "seedHash": "7cbeedea4f6a81b0d9f5b9aabfc0a549c95dedacb176b33bcf623105b05bae83",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1111,28 +988,11 @@
                     "features": [],
                     "version": "=1.4.0"
                   },
-                  "icu_locale_core": {
-                    "package": "icu_locale_core",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "zerovec"
-                    ],
-                    "version": "=2.3.0"
-                  },
                   "ignore": {
                     "package": "ignore",
                     "default-features": false,
                     "features": [],
                     "version": "=0.4.34"
-                  },
-                  "litemap": {
-                    "package": "litemap",
-                    "default-features": false,
-                    "features": [
-                      "alloc"
-                    ],
-                    "version": "=0.8.3"
                   },
                   "proc-macro2": {
                     "package": "proc-macro2",
@@ -1204,15 +1064,6 @@
                       "std"
                     ],
                     "version": "=2.0.21"
-                  },
-                  "tinystr": {
-                    "package": "tinystr",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "zerovec"
-                    ],
-                    "version": "=0.8.4"
                   },
                   "toml": {
                     "package": "toml",
@@ -1309,24 +1160,6 @@
                       "std"
                     ],
                     "version": "=2.5.8"
-                  },
-                  "writeable": {
-                    "package": "writeable",
-                    "default-features": false,
-                    "features": [
-                      "alloc"
-                    ],
-                    "version": "=0.6.4"
-                  },
-                  "zerovec": {
-                    "package": "zerovec",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "derive",
-                      "yoke"
-                    ],
-                    "version": "=0.11.8"
                   }
                 }
               },
@@ -1489,7 +1322,6 @@
                 "dependencies": [
                   "displaydoc",
                   "litemap",
-                  "serde",
                   "tinystr",
                   "writeable",
                   "zerovec"
@@ -1609,9 +1441,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "csv",
-                  "icu_locale_core",
                   "ignore",
-                  "litemap",
                   "proc-macro2",
                   "quote",
                   "serde",
@@ -1619,7 +1449,6 @@
                   "spdx",
                   "syn",
                   "thiserror",
-                  "tinystr",
                   "toml",
                   "tree-sitter",
                   "tree-sitter-bash",
@@ -1633,9 +1462,7 @@
                   "tree-sitter-toml-ng",
                   "tree-sitter-xml",
                   "unidiff",
-                  "url",
-                  "writeable",
-                  "zerovec"
+                  "url"
                 ]
               },
               {
@@ -1868,7 +1695,6 @@
                 "checksum": "b1e27c91459209c2986af3dcf603a5a74a4368754ce37414f59acc971167f643",
                 "dependencies": [
                   "displaydoc",
-                  "serde_core",
                   "zerovec"
                 ]
               },
@@ -2160,7 +1986,6 @@
                 "source": "registry+https://github.com/rust-lang/crates.io-index",
                 "checksum": "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8",
                 "dependencies": [
-                  "serde",
                   "yoke",
                   "zerofrom",
                   "zerovec-derive"
@@ -4250,7 +4075,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -4291,7 +4115,6 @@
                 "platform": "x86_64-unknown-linux-gnu",
                 "mode": "build",
                 "features": [
-                  "alloc",
                   "zerovec"
                 ]
               },
@@ -4362,9 +4185,7 @@
                   },
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
+                  "features": []
                 },
                 {
                   "package": "registry+https://github.com/rust-lang/crates.io-index#tinystr@0.8.4",
@@ -4399,7 +4220,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "zerovec"
                   ]
                 },
@@ -4435,9 +4255,7 @@
                   },
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
+                  "features": []
                 },
                 {
                   "package": "registry+https://github.com/rust-lang/crates.io-index#zerovec@0.11.8",
@@ -4472,7 +4290,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -4690,7 +4507,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -5017,7 +4833,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "zerovec"
                   ]
                 },
@@ -5161,7 +4976,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -5454,7 +5268,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "zerovec"
                   ]
                 },
@@ -5490,9 +5303,7 @@
                   },
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
+                  "features": []
                 },
                 {
                   "package": "registry+https://github.com/rust-lang/crates.io-index#yoke@0.8.3",
@@ -5637,7 +5448,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -6431,9 +6241,7 @@
                 },
                 "platform": "x86_64-unknown-linux-gnu",
                 "mode": "build",
-                "features": [
-                  "alloc"
-                ]
+                "features": []
               },
               "dependencies": []
             },
@@ -6666,7 +6474,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -10869,7 +10676,6 @@
                 "platform": "x86_64-unknown-linux-gnu",
                 "mode": "build",
                 "features": [
-                  "alloc",
                   "zerovec"
                 ]
               },
@@ -10941,7 +10747,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": [
-                    "alloc",
                     "derive",
                     "yoke"
                   ]
@@ -15068,9 +14873,7 @@
                 },
                 "platform": "x86_64-unknown-linux-gnu",
                 "mode": "build",
-                "features": [
-                  "alloc"
-                ]
+                "features": []
               },
               "dependencies": []
             },
@@ -16017,7 +15820,6 @@
                 "platform": "x86_64-unknown-linux-gnu",
                 "mode": "build",
                 "features": [
-                  "alloc",
                   "derive",
                   "yoke"
                 ]
@@ -16652,7 +16454,6 @@
         "dependencies": [
           "displaydoc",
           "litemap",
-          "serde",
           "tinystr",
           "writeable",
           "zerovec"
@@ -16772,9 +16573,7 @@
         "version": "0.0.0",
         "dependencies": [
           "csv",
-          "icu_locale_core",
           "ignore",
-          "litemap",
           "proc-macro2",
           "quote",
           "serde",
@@ -16783,7 +16582,6 @@
           "syn",
           "tempfile",
           "thiserror",
-          "tinystr",
           "toml",
           "tree-sitter",
           "tree-sitter-bash",
@@ -16797,9 +16595,7 @@
           "tree-sitter-toml-ng",
           "tree-sitter-xml",
           "unidiff",
-          "url",
-          "writeable",
-          "zerovec"
+          "url"
         ]
       },
       {
@@ -17082,7 +16878,6 @@
         "checksum": "b1e27c91459209c2986af3dcf603a5a74a4368754ce37414f59acc971167f643",
         "dependencies": [
           "displaydoc",
-          "serde_core",
           "zerovec"
         ]
       },
@@ -17374,7 +17169,6 @@
         "source": "registry+https://github.com/rust-lang/crates.io-index",
         "checksum": "bb0464e17806c1d976d5cba29399c7f08e516e279e2ba493f63123b5fca67dd8",
         "dependencies": [
-          "serde",
           "yoke",
           "zerofrom",
           "zerovec-derive"
@@ -17399,49 +17193,7 @@
       }
     ]
   },
-  "features": {
-    "dependencies": {
-      "icu_locale_core": {
-        "version": "=2.3.0",
-        "default-features": false,
-        "features": [
-          "alloc",
-          "zerovec"
-        ]
-      },
-      "litemap": {
-        "version": "=0.8.3",
-        "default-features": false,
-        "features": [
-          "alloc"
-        ]
-      },
-      "tinystr": {
-        "version": "=0.8.4",
-        "default-features": false,
-        "features": [
-          "alloc",
-          "zerovec"
-        ]
-      },
-      "writeable": {
-        "version": "=0.6.4",
-        "default-features": false,
-        "features": [
-          "alloc"
-        ]
-      },
-      "zerovec": {
-        "version": "=0.11.8",
-        "default-features": false,
-        "features": [
-          "alloc",
-          "derive",
-          "yoke"
-        ]
-      }
-    }
-  },
+  "features": {},
   "externalUnits": [
     {
       "unit": {
@@ -19507,7 +19259,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -19548,7 +19299,6 @@
         "platform": "x86_64-unknown-linux-gnu",
         "mode": "build",
         "features": [
-          "alloc",
           "zerovec"
         ]
       },
@@ -19619,9 +19369,7 @@
           },
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
-          "features": [
-            "alloc"
-          ]
+          "features": []
         },
         {
           "package": "registry+https://github.com/rust-lang/crates.io-index#tinystr@0.8.4",
@@ -19656,7 +19404,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "zerovec"
           ]
         },
@@ -19692,9 +19439,7 @@
           },
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
-          "features": [
-            "alloc"
-          ]
+          "features": []
         },
         {
           "package": "registry+https://github.com/rust-lang/crates.io-index#zerovec@0.11.8",
@@ -19729,7 +19474,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -19947,7 +19691,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -20274,7 +20017,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "zerovec"
           ]
         },
@@ -20418,7 +20160,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -20711,7 +20452,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "zerovec"
           ]
         },
@@ -20747,9 +20487,7 @@
           },
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
-          "features": [
-            "alloc"
-          ]
+          "features": []
         },
         {
           "package": "registry+https://github.com/rust-lang/crates.io-index#yoke@0.8.3",
@@ -20894,7 +20632,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -21688,9 +21425,7 @@
         },
         "platform": "x86_64-unknown-linux-gnu",
         "mode": "build",
-        "features": [
-          "alloc"
-        ]
+        "features": []
       },
       "dependencies": []
     },
@@ -21923,7 +21658,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -26126,7 +25860,6 @@
         "platform": "x86_64-unknown-linux-gnu",
         "mode": "build",
         "features": [
-          "alloc",
           "zerovec"
         ]
       },
@@ -26198,7 +25931,6 @@
           "platform": "x86_64-unknown-linux-gnu",
           "mode": "build",
           "features": [
-            "alloc",
             "derive",
             "yoke"
           ]
@@ -30325,9 +30057,7 @@
         },
         "platform": "x86_64-unknown-linux-gnu",
         "mode": "build",
-        "features": [
-          "alloc"
-        ]
+        "features": []
       },
       "dependencies": []
     },
@@ -31274,7 +31004,6 @@
         "platform": "x86_64-unknown-linux-gnu",
         "mode": "build",
         "features": [
-          "alloc",
           "derive",
           "yoke"
         ]

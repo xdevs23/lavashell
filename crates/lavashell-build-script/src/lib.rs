@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{env, fs, io};
 
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BuildScriptError {

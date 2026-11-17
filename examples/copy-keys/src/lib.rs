@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::quote;
 use std::collections::HashSet;

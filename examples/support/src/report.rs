@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::ExampleError;
-use lavashell::core::error::message_chain;
+use lavashell::error_chain::message_chain;
 use std::{error::Error, process::ExitCode};
 
 pub fn report(operation: &str, error: impl Error) {

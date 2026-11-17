@@ -1029,6 +1029,7 @@
           "lavashell-components",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-error-chain",
           "lavashell-keyboard",
           "lavashell-materials",
           "lavashell-renderer",
@@ -1052,6 +1053,7 @@
           "jni",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
@@ -1070,7 +1072,7 @@
         "version": "0.1.0",
         "dependencies": [
           "build-rs",
-          "lavashell-core",
+          "lavashell-error-chain",
           "thiserror 2.0.21"
         ]
       },
@@ -1106,11 +1108,15 @@
         ]
       },
       {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0"
+      },
+      {
         "name": "lavashell-example-copy-keys",
         "version": "0.1.0",
         "dependencies": [
           "csv",
-          "lavashell-core",
+          "lavashell-error-chain",
           "proc-macro2",
           "quote",
           "thiserror 2.0.21"
@@ -1197,6 +1203,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-error-chain",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
@@ -1217,6 +1224,7 @@
           "inventory",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
@@ -2627,7 +2635,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "4b66c32d42897f4f3a2f305b34fe2f1fee2f2a51208c3f05b9b1418ad15c2817",
+        "seedHash": "5d1772fb6c3f689385c3136301e44b46fea39b1fb4ba3dc2267f805e645d039d",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2669,6 +2677,7 @@
                 "crates/lavashell-components",
                 "crates/lavashell-core",
                 "crates/lavashell-effect-quality",
+                "crates/lavashell-error-chain",
                 "crates/lavashell-keyboard",
                 "crates/lavashell-lucide",
                 "crates/lavashell-materials",
@@ -2722,6 +2731,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
                   },
                   "lavashell-keyboard": {
                     "package": "lavashell-keyboard",
@@ -2825,11 +2840,11 @@
                     "features": [],
                     "version": "=0.3.5"
                   },
-                  "lavashell-core": {
-                    "package": "lavashell-core",
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
                     "default-features": false,
                     "features": [],
-                    "path": "../lavashell-core"
+                    "path": "../lavashell-error-chain"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -3005,6 +3020,31 @@
                     "path": "../lavashell-core"
                   }
                 }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-error-chain",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-error-chain",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
               },
               "targets": [
                 {
@@ -3369,6 +3409,12 @@
                     "features": [],
                     "path": "../lavashell-effect-quality"
                   },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
                   "lavashell-vulkan": {
                     "package": "lavashell-vulkan",
                     "default-features": false,
@@ -3491,6 +3537,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
                   },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
@@ -3961,11 +4013,11 @@
                     "features": [],
                     "version": "=1.4.0"
                   },
-                  "lavashell-core": {
-                    "package": "lavashell-core",
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
                     "default-features": false,
                     "features": [],
-                    "path": "../../crates/lavashell-core"
+                    "path": "../../crates/lavashell-error-chain"
                   },
                   "proc-macro2": {
                     "package": "proc-macro2",
@@ -5153,6 +5205,7 @@
                   "lavashell-components",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-error-chain",
                   "lavashell-keyboard",
                   "lavashell-materials",
                   "lavashell-renderer",
@@ -5172,7 +5225,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "build-rs",
-                  "lavashell-core",
+                  "lavashell-error-chain",
                   "thiserror"
                 ]
               },
@@ -5204,11 +5257,15 @@
                 ]
               },
               {
+                "name": "lavashell-error-chain",
+                "version": "0.0.0"
+              },
+              {
                 "name": "lavashell-example-copy-keys",
                 "version": "0.0.0",
                 "dependencies": [
                   "csv",
-                  "lavashell-core",
+                  "lavashell-error-chain",
                   "proc-macro2",
                   "quote",
                   "thiserror"
@@ -5294,6 +5351,7 @@
                   "inventory",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-error-chain",
                   "lavashell-vulkan",
                   "log",
                   "lru",
@@ -5312,6 +5370,7 @@
                   "inventory",
                   "lavashell-actor",
                   "lavashell-core",
+                  "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
                   "log",
@@ -18822,188 +18881,6 @@
                 },
                 "profile": {
                   "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc"
-                ]
-              },
-              "dependencies": [
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#displaydoc@0.2.7",
-                  "target": {
-                    "name": "displaydoc",
-                    "kind": [
-                      "proc-macro"
-                    ],
-                    "crate_types": [
-                      "proc-macro"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": []
-                },
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#litemap@0.8.3",
-                  "target": {
-                    "name": "litemap",
-                    "kind": [
-                      "lib"
-                    ],
-                    "crate_types": [
-                      "lib"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
-                },
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#tinystr@0.8.4",
-                  "target": {
-                    "name": "tinystr",
-                    "kind": [
-                      "lib"
-                    ],
-                    "crate_types": [
-                      "lib"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
-                },
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#writeable@0.6.4",
-                  "target": {
-                    "name": "writeable",
-                    "kind": [
-                      "lib"
-                    ],
-                    "crate_types": [
-                      "lib"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": [
-                    "alloc"
-                  ]
-                }
-              ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#icu_locale_core@2.3.0",
-                "target": {
-                  "name": "icu_locale_core",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
                   "opt_level": "3",
                   "lto": "false",
                   "codegen_backend": null,
@@ -20497,45 +20374,6 @@
                 },
                 "profile": {
                   "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc"
-                ]
-              },
-              "dependencies": []
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#litemap@0.8.3",
-                "target": {
-                  "name": "litemap",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
                   "opt_level": "3",
                   "lto": "false",
                   "codegen_backend": null,
@@ -21115,84 +20953,6 @@
                 },
                 "profile": {
                   "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "run-custom-build",
-                "features": [
-                  "default",
-                  "std"
-                ]
-              },
-              "dependencies": [
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-                  "target": {
-                    "name": "build-script-build",
-                    "kind": [
-                      "custom-build"
-                    ],
-                    "crate_types": [
-                      "bin"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": [
-                    "default",
-                    "std"
-                  ]
-                }
-              ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-                "target": {
-                  "name": "build-script-build",
-                  "kind": [
-                    "custom-build"
-                  ],
-                  "crate_types": [
-                    "bin"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
                   "opt_level": "3",
                   "lto": "false",
                   "codegen_backend": null,
@@ -21250,84 +21010,6 @@
                   },
                   "platform": null,
                   "mode": "build",
-                  "features": [
-                    "default",
-                    "std"
-                  ]
-                }
-              ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-                "target": {
-                  "name": "num_traits",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "default",
-                  "std"
-                ]
-              },
-              "dependencies": [
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
-                  "target": {
-                    "name": "build-script-build",
-                    "kind": [
-                      "custom-build"
-                    ],
-                    "crate_types": [
-                      "bin"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "run-custom-build",
                   "features": [
                     "default",
                     "std"
@@ -21562,118 +21244,6 @@
                   "platform": "x86_64-unknown-linux-gnu",
                   "mode": "build",
                   "features": []
-                }
-              ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#palette@0.7.7",
-                "target": {
-                  "name": "palette",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc",
-                  "std"
-                ]
-              },
-              "dependencies": [
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#palette_derive@0.7.7",
-                  "target": {
-                    "name": "palette_derive",
-                    "kind": [
-                      "proc-macro"
-                    ],
-                    "crate_types": [
-                      "proc-macro"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": []
-                },
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#palette_math@0.7.7",
-                  "target": {
-                    "name": "palette_math",
-                    "kind": [
-                      "lib"
-                    ],
-                    "crate_types": [
-                      "lib"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": [
-                    "alloc",
-                    "std"
-                  ]
                 }
               ]
             },
@@ -21978,46 +21548,6 @@
                   ]
                 }
               ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#palette_math@0.7.7",
-                "target": {
-                  "name": "palette_math",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc",
-                  "std"
-                ]
-              },
-              "dependencies": []
             },
             {
               "unit": {
@@ -30222,80 +29752,6 @@
                 },
                 "profile": {
                   "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc"
-                ]
-              },
-              "dependencies": [
-                {
-                  "package": "registry+https://github.com/rust-lang/crates.io-index#displaydoc@0.2.7",
-                  "target": {
-                    "name": "displaydoc",
-                    "kind": [
-                      "proc-macro"
-                    ],
-                    "crate_types": [
-                      "proc-macro"
-                    ]
-                  },
-                  "profile": {
-                    "name": "packaged",
-                    "opt_level": "0",
-                    "lto": "false",
-                    "codegen_backend": null,
-                    "codegen_units": null,
-                    "debuginfo": 0,
-                    "debug_assertions": false,
-                    "overflow_checks": false,
-                    "rpath": false,
-                    "incremental": false,
-                    "panic": "unwind",
-                    "split_debuginfo": null,
-                    "strip": {
-                      "resolved": {
-                        "Named": "debuginfo"
-                      }
-                    }
-                  },
-                  "platform": null,
-                  "mode": "build",
-                  "features": []
-                }
-              ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#tinystr@0.8.4",
-                "target": {
-                  "name": "tinystr",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
                   "opt_level": "3",
                   "lto": "false",
                   "codegen_backend": null,
@@ -34596,45 +34052,6 @@
                 },
                 "profile": {
                   "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc"
-                ]
-              },
-              "dependencies": []
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#writeable@0.6.4",
-                "target": {
-                  "name": "writeable",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
                   "opt_level": "3",
                   "lto": "false",
                   "codegen_backend": null,
@@ -37521,46 +36938,6 @@
                   ]
                 }
               ]
-            },
-            {
-              "unit": {
-                "package": "registry+https://github.com/rust-lang/crates.io-index#zeroize@1.9.1",
-                "target": {
-                  "name": "zeroize",
-                  "kind": [
-                    "lib"
-                  ],
-                  "crate_types": [
-                    "lib"
-                  ]
-                },
-                "profile": {
-                  "name": "packaged",
-                  "opt_level": "0",
-                  "lto": "false",
-                  "codegen_backend": null,
-                  "codegen_units": null,
-                  "debuginfo": 0,
-                  "debug_assertions": false,
-                  "overflow_checks": false,
-                  "rpath": false,
-                  "incremental": false,
-                  "panic": "unwind",
-                  "split_debuginfo": null,
-                  "strip": {
-                    "resolved": {
-                      "Named": "debuginfo"
-                    }
-                  }
-                },
-                "platform": null,
-                "mode": "build",
-                "features": [
-                  "alloc",
-                  "default"
-                ]
-              },
-              "dependencies": []
             },
             {
               "unit": {

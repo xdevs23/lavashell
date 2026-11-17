@@ -9,7 +9,7 @@ mod next_steps;
 use clap::Parser;
 use error::SessionError;
 use keymap::Keymap;
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use lavashell_wayland_input::protocol::{Reply, Request};
 use layout::{Extent, LogicalRectangle};
 use next_steps::next_step;

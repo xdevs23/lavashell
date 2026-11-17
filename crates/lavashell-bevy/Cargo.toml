@@ -17,6 +17,7 @@ wgpu = { workspace = true, features = ["vulkan"] }
 ash.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-renderer.workspace = true
 lavashell-runtime.workspace = true
 lavashell-vulkan.workspace = true

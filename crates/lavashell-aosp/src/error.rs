@@ -3,9 +3,9 @@
 use crate::motion_jni::MalformedMotion;
 use crate::platform::ndk::media_error::MediaError;
 use crate::platform::{PropertiesError, ReleaseError};
-use lavashell_core::error::message_chain;
 use lavashell_core::prelude::StreamId;
 use lavashell_core::units::NumberError;
+use lavashell_error_chain::message_chain;
 use lavashell_renderer::{Error as RendererError, FenceCopyError, MultipleFailures};
 
 #[derive(Debug, thiserror::Error)]

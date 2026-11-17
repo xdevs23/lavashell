@@ -396,7 +396,7 @@ pub(super) fn send_frame(
 fn warn_whole_scene_next(error: impl std::error::Error) {
     log::warn!(
         "a frame failed, and the whole scene is sent with the next frame: {}",
-        lavashell_core::error::message_chain(error)
+        lavashell_error_chain::message_chain(error)
     );
 }
 

@@ -2,6 +2,7 @@
 [workspace]
 members = [
     "crates/lavashell-core",
+    "crates/lavashell-error-chain",
     "crates/lavashell-actor",
     "crates/lavashell-effect-quality",
     "crates/lavashell-components",
@@ -72,6 +73,7 @@ lavashell-keyboard = { path = "crates/lavashell-keyboard" }
 lavashell-actor = { path = "crates/lavashell-actor" }
 lavashell-effect-quality = { path = "crates/lavashell-effect-quality" }
 lavashell-core = { path = "crates/lavashell-core" }
+lavashell-error-chain = { path = "crates/lavashell-error-chain" }
 lavashell-components = { path = "crates/lavashell-components" }
 lavashell-vulkan = { path = "crates/lavashell-vulkan" }
 lavashell-renderer = { path = "crates/lavashell-renderer" }

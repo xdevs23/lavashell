@@ -5,10 +5,10 @@ use crate::scheduler::SchedulerInput;
 use crate::surface_records::AccessibilityFailure;
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
-use lavashell_core::error::message_chain;
 use lavashell_core::geometry::Viewport;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::View;
+use lavashell_error_chain::message_chain;
 use lavashell_platform::{
     AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, Platform, PlatformEvent,
     PlatformRequest, SurfaceEvent,

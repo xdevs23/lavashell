@@ -16,6 +16,7 @@ icu_locale_core.workspace = true
 inventory.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 log.workspace = true

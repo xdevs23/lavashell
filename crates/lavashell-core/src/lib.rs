@@ -9,7 +9,6 @@ mod compile_time;
 pub mod effects;
 #[cfg(feature = "serde")]
 pub mod encoding;
-pub mod error;
 mod flag_set;
 pub mod focus_grab;
 pub mod frame;

@@ -25,7 +25,7 @@ mod tests;
 
 use checks::{repository_reports, workspace_reports};
 use error::Error;
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use metadata::Workspace;
 use next_steps::next_step;
 use repository_files::read_repository_files;

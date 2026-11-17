@@ -11,8 +11,8 @@ use ::jni::{Env, EnvUnowned, JValue, jni_mangle, jni_sig, jni_str};
 use lavashell_aosp::{
     BufferSizes, StreamFormat, configuration_of, display_of, motion_event_of, surface_of_window,
 };
-use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
+use lavashell_error_chain::message_chain;
 use lavashell_renderer::{ForeignFormat, skia};
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferRef};
 use ndk::media::image_reader::ImageFormat;

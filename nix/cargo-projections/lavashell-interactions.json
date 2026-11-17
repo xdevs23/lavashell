@@ -1130,6 +1130,7 @@
           "lavashell-components",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-error-chain",
           "lavashell-keyboard",
           "lavashell-materials",
           "lavashell-renderer",
@@ -1153,6 +1154,7 @@
           "jni",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
@@ -1171,7 +1173,7 @@
         "version": "0.1.0",
         "dependencies": [
           "build-rs",
-          "lavashell-core",
+          "lavashell-error-chain",
           "thiserror 2.0.21"
         ]
       },
@@ -1207,11 +1209,15 @@
         ]
       },
       {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0"
+      },
+      {
         "name": "lavashell-example-copy-keys",
         "version": "0.1.0",
         "dependencies": [
           "csv",
-          "lavashell-core",
+          "lavashell-error-chain",
           "proc-macro2",
           "quote",
           "thiserror 2.0.21"
@@ -1302,6 +1308,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-error-chain",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
@@ -1322,6 +1329,7 @@
           "inventory",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",

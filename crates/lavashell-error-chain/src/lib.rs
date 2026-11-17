@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
+
 use std::error::Error;
 
 pub fn message_chain(error: impl Error) -> String {

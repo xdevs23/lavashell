@@ -21,8 +21,8 @@ use bevy::{
     },
 };
 use lavashell_actor::Latest;
-use lavashell_core::error::message_chain;
 use lavashell_core::prelude::PixelSize;
+use lavashell_error_chain::message_chain;
 use lavashell_renderer::{BorrowedImage, EmbeddedVulkanRenderer, Fonts, Painter, ReadySignal};
 use std::{cell::RefCell, sync::Arc, time::Instant};
 

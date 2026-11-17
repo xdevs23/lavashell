@@ -10,7 +10,7 @@ mod state;
 
 use error::SessionError;
 use frame::{CapturedFrame, PendingFrame};
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use next_steps::next_step;
 pub use frame::PixelFormat;
 use protocol::{Reply, Request};

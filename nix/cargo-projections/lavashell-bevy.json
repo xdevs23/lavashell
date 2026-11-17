@@ -2034,6 +2034,7 @@
           "bevy",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-renderer",
           "lavashell-runtime",
           "lavashell-test-fixtures",
@@ -2066,6 +2067,10 @@
         ]
       },
       {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0"
+      },
+      {
         "name": "lavashell-platform",
         "version": "0.1.0",
         "dependencies": [
@@ -2087,6 +2092,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-error-chain",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
           "log",
@@ -2107,6 +2113,7 @@
           "inventory",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",

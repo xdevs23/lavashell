@@ -16,7 +16,7 @@ mod signing_key;
 use clap::Parser;
 use emulation::{RoundTripSettings, run_round_trips};
 use error::NextStep;
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use lavashell_process_scope::{RunOutcome, run_ending_groups_on_termination};
 use package_alignment::{PackageAlignment, PageSize};
 use signed_package::BuildTools;

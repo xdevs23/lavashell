@@ -15,6 +15,7 @@ icu_locale_core.workspace = true
 jni.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 lavashell-vulkan.workspace = true
@@ -33,6 +34,7 @@ ash.workspace = true
 icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core = { workspace = true, features = ["test-support"] }
+lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 lavashell-vulkan.workspace = true

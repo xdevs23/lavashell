@@ -2685,6 +2685,7 @@ dependencies = [
  "lavashell-components",
  "lavashell-core",
  "lavashell-effect-quality",
+ "lavashell-error-chain",
  "lavashell-keyboard",
  "lavashell-materials",
  "lavashell-renderer",
@@ -2708,6 +2709,7 @@ dependencies = [
  "jni",
  "lavashell-actor",
  "lavashell-core",
+ "lavashell-error-chain",
  "lavashell-platform",
  "lavashell-renderer",
  "lavashell-runtime",
@@ -2726,7 +2728,7 @@ name = "lavashell-aosp-round-trip"
 version = "0.1.0"
 dependencies = [
  "clap",
- "lavashell-core",
+ "lavashell-error-chain",
  "lavashell-process-scope",
  "rustix",
  "serde",
@@ -2745,6 +2747,7 @@ dependencies = [
  "bevy",
  "lavashell-actor",
  "lavashell-core",
+ "lavashell-error-chain",
  "lavashell-renderer",
  "lavashell-runtime",
  "lavashell-test-fixtures",
@@ -2759,7 +2762,7 @@ name = "lavashell-build-script"
 version = "0.1.0"
 dependencies = [
  "build-rs",
- "lavashell-core",
+ "lavashell-error-chain",
  "thiserror 2.0.21",
 ]
 
@@ -2804,11 +2807,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-error-chain"
+version = "0.1.0"
+
+[[package]]
 name = "lavashell-example-copy-keys"
 version = "0.1.0"
 dependencies = [
  "csv",
- "lavashell-core",
+ "lavashell-error-chain",
  "proc-macro2",
  "quote",
  "thiserror 2.0.21",
@@ -2916,7 +2923,7 @@ name = "lavashell-native-harness"
 version = "0.1.0"
 dependencies = [
  "clap",
- "lavashell-core",
+ "lavashell-error-chain",
  "lavashell-output-capture",
  "lavashell-process-scope",
  "lavashell-wayland-input",
@@ -2945,7 +2952,7 @@ dependencies = [
 name = "lavashell-output-capture"
 version = "0.1.0"
 dependencies = [
- "lavashell-core",
+ "lavashell-error-chain",
  "png",
  "serde",
  "serde_json",
@@ -2986,6 +2993,7 @@ dependencies = [
  "inventory",
  "lavashell-core",
  "lavashell-effect-quality",
+ "lavashell-error-chain",
  "lavashell-test-fixtures",
  "lavashell-vulkan",
  "log",
@@ -3006,6 +3014,7 @@ dependencies = [
  "inventory",
  "lavashell-actor",
  "lavashell-core",
+ "lavashell-error-chain",
  "lavashell-platform",
  "lavashell-renderer",
  "lavashell-test-fixtures",
@@ -3023,7 +3032,7 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "ignore",
- "lavashell-core",
+ "lavashell-error-chain",
  "proc-macro2",
  "quote",
  "serde",
@@ -3127,7 +3136,7 @@ name = "lavashell-wayland-input"
 version = "0.1.0"
 dependencies = [
  "clap",
- "lavashell-core",
+ "lavashell-error-chain",
  "serde",
  "serde_json",
  "smithay-client-toolkit",

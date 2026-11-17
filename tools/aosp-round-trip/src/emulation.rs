@@ -8,7 +8,7 @@ use crate::instrumentation::{RoundTripResult, json_lines, read_results};
 use crate::package_alignment::PackageAlignment;
 use crate::run_log::RunLog;
 use crate::signed_package::{BuildTools, sign_package};
-use lavashell_core::error::message_chain;
+use lavashell_error_chain::message_chain;
 use lavashell_process_scope::{CommandLine, ScopedChild, first_ready, run_checked_for_stdout};
 use std::fs;
 use std::path::{Path, PathBuf};
