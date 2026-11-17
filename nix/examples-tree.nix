@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
-{ pkgs, root }:
+{
+  pkgs,
+  root,
+  rustPlatform,
+}:
 let
   skia =
     (import ./skia.nix {
@@ -10,5 +14,12 @@ let
 in
 {
   inherit skia;
-  examples = import ./examples.nix { inherit pkgs root skia; };
+  examples = import ./examples.nix {
+    inherit
+      pkgs
+      root
+      skia
+      rustPlatform
+      ;
+  };
 }

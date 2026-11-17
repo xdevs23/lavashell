@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   pkgs,
+  rustPlatform,
   sources,
   rustPackageDefaults,
   requirementsOf,
@@ -68,7 +69,7 @@ let
       ) names;
       checked = testPackages != [ ];
     in
-    pkgs.rustPlatform.buildRustPackage (
+    rustPlatform.buildRustPackage (
       configuration
       // {
         inherit pname;

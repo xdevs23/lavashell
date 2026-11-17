@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   pkgs,
+  rustPlatform,
   root,
   sources,
   rustPackageDefaults,
@@ -9,7 +10,7 @@
 let
   directory = root + "/crates/lavashell-renderer";
 in
-pkgs.rustPlatform.buildRustPackage (
+rustPlatform.buildRustPackage (
   rustPackageDefaults
   // {
     pname = "lavashell-effect-removal";

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   pkgs,
+  rustPlatform,
   advisoryDatabase,
   root,
 }:
@@ -94,12 +95,12 @@ in
         workspace: sources.vendor (root + "/${dirOf workspace.manifest}/Cargo.lock")
       ) workspaces;
     };
-    nativeBuildInputs = with pkgs; [
+    nativeBuildInputs = [
       rustPlatform.cargoSetupHook
-      cargo
-      cargo-deny
-      git
-      rustc
+      rustPlatform.rust.cargo
+      pkgs.cargo-deny
+      pkgs.git
+      rustPlatform.rust.rustc
     ];
     dontConfigure = true;
     dontFixup = true;
@@ -115,11 +116,11 @@ in
   };
   yankedCrates = pkgs.writeShellApplication {
     name = "lavashell-yanked-crates";
-    runtimeInputs = with pkgs; [
-      cargo
-      cargo-deny
-      git
-      rustc
+    runtimeInputs = [
+      rustPlatform.rust.cargo
+      pkgs.cargo-deny
+      pkgs.git
+      rustPlatform.rust.rustc
     ];
     text = denyCommands { disable-yank-checking = false; } "advisories";
     meta.description = "Check the locked crates of the checkout in the working directory for yanked releases";

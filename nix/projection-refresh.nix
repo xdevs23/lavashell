@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
-{ pkgs, buildLayers }:
+{
+  pkgs,
+  rustPlatform,
+  buildLayers,
+}:
 pkgs.writeShellApplication {
   name = "lavashell-refresh-cargo-projections";
-  runtimeInputs = with pkgs; [
-    cargo
-    rustc
+  runtimeInputs = [
+    rustPlatform.rust.cargo
+    rustPlatform.rust.rustc
   ];
   runtimeEnv.LAVASHELL_NIXPKGS = pkgs.path;
   text = ''

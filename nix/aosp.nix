@@ -44,7 +44,14 @@ let
     inherit pkgs root;
     commits = import ./vendored-commits.nix;
   };
-  notices = import ./notices.nix { inherit pkgs sources root; };
+  notices = import ./notices.nix {
+    inherit
+      pkgs
+      rustPlatform
+      sources
+      root
+      ;
+  };
   targetEnvironment =
     target:
     let

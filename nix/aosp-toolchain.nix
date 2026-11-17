@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   nixpkgs,
-  rust-overlay,
+  rustToolchain,
   system,
   root,
 }:
 let
   pkgs = import nixpkgs {
     inherit system;
-    overlays = [ rust-overlay.overlays.default ];
     config = {
       android_sdk.accept_license = true;
       allowUnfree = true;
@@ -40,9 +39,10 @@ let
   emulatorApi = toString (lib.last (lib.sort lib.lessThan imageApis));
   buildToolsVersion = "36.0.0";
   ndkVersion = "28.2.13676358";
-  rust = pkgs.rust-bin.stable."1.99.0".default.override {
-    targets = builtins.attrNames (import ./aosp-targets.nix);
-  };
+  inherit (rustToolchain { targets = builtins.attrNames (import ./aosp-targets.nix); })
+    rust
+    rustPlatform
+    ;
   sdk =
     (pkgs.androidenv.composeAndroidPackages {
       platformVersions = [ platform ];
@@ -73,14 +73,11 @@ in
     zipAlignment
     buildToolsVersion
     rust
+    rustPlatform
     sdk
     sdkRoot
     ndkRoot
     emulatorSdk
     ;
   llvmRoot = "${ndkRoot}/toolchains/llvm/prebuilt/linux-x86_64";
-  rustPlatform = pkgs.makeRustPlatform {
-    cargo = rust;
-    rustc = rust;
-  };
 }

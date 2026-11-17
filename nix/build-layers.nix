@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   pkgs,
+  rustPlatform,
   root,
   vendor,
 }:
@@ -10,7 +11,7 @@ let
   testPackage = "lavashell-nix-tests";
   package =
     attributes:
-    pkgs.rustPlatform.buildRustPackage (
+    rustPlatform.buildRustPackage (
       {
         version = (pkgs.lib.importTOML (directory + "/Cargo.toml")).workspace.package.version;
         cargoDeps = vendor (directory + "/Cargo.lock");

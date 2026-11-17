@@ -21,6 +21,7 @@ let
   tree =
     (import (/. + input.nix + "/examples-tree.nix") {
       inherit pkgs;
+      inherit (original) rustPlatform;
       root = /. + input.root;
     }).examples;
   inherit (tree) reference;

@@ -26,17 +26,19 @@
       inherit (pkgs) lib;
       types = import ./nix/types.nix;
       runtime = import ./nix/runtime.nix { inherit pkgs; };
+      rustToolchain = import ./nix/rust-toolchain.nix { inherit pkgs rust-overlay; };
+      inherit (rustToolchain { targets = [ ]; }) rust rustPlatform;
       toolchain = import ./nix/aosp-toolchain.nix {
         inherit
           nixpkgs
-          rust-overlay
+          rustToolchain
           system
           root
           ;
       };
-      inherit (import ./nix/examples-tree.nix { inherit pkgs root; }) skia examples;
+      inherit (import ./nix/examples-tree.nix { inherit pkgs root rustPlatform; }) skia examples;
       projectionRefresh = import ./nix/projection-refresh.nix {
-        inherit pkgs;
+        inherit pkgs rustPlatform;
         inherit (examples) buildLayers;
       };
       aospSkia =
@@ -65,27 +67,25 @@
           // runtime.environment
           // environment
           // {
-            packages =
-              (with pkgs; [
-                cargo
-                rustc
-                rustfmt
-                clippy
-                clang
-                pkg-config
-                fontconfig
-                wayland
-                libxkbcommon
-                vulkan-loader
-                nixfmt
-                nix-prefetch-git
-                ruff
-                (python3.withPackages (python: [
-                  python.psutil
-                  python.tomli-w
-                ]))
-              ])
-              ++ packages;
+            packages = [
+              rust
+            ]
+            ++ (with pkgs; [
+              clang
+              pkg-config
+              fontconfig
+              wayland
+              libxkbcommon
+              vulkan-loader
+              nixfmt
+              nix-prefetch-git
+              ruff
+              (python3.withPackages (python: [
+                python.psutil
+                python.tomli-w
+              ]))
+            ])
+            ++ packages;
             LD_LIBRARY_PATH = lib.makeLibraryPath runtime.libraries;
             LAVASHELL_NIXPKGS = pkgs.path;
             FONTCONFIG_FILE = "${pkgs.fontconfig.out}/etc/fonts/fonts.conf";
@@ -98,7 +98,7 @@
         skia = aospSkia;
       };
       dependencies = import ./nix/dependency-check.nix {
-        inherit pkgs root;
+        inherit pkgs root rustPlatform;
         advisoryDatabase = advisory-db;
       };
     in

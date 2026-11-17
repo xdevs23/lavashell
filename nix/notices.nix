@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 {
   pkgs,
+  rustPlatform,
   sources,
   root,
 }:
@@ -30,11 +31,11 @@ pkgs.stdenv.mkDerivation {
   name = "lavashell-notices-${baseNameOf member}";
   src = sources.sourceFor directory;
   cargoDeps = sources.vendor (sources.project directory).lockFile;
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     rustPlatform.cargoSetupHook
-    cargo
-    cargo-about
-    rustc
+    rustPlatform.rust.cargo
+    pkgs.cargo-about
+    rustPlatform.rust.rustc
   ];
   dontConfigure = true;
   dontBuild = true;

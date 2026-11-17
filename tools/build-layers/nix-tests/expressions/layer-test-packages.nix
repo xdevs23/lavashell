@@ -5,7 +5,11 @@ let
   pkgs = import input.nixpkgs { };
   inherit (pkgs) lib;
   root = /. + input.root;
-  tree = (import (/. + input.nix + "/examples-tree.nix") { inherit pkgs root; }).examples;
+  tree =
+    (import (/. + input.nix + "/examples-tree.nix") {
+      inherit pkgs root;
+      inherit (pkgs) rustPlatform;
+    }).examples;
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
   examples = removeAttrs tree.packages [ "examples" ] // {
     aosp-round-trip = tree.aospRoundTrip;

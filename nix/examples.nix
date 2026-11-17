@@ -3,6 +3,7 @@
   pkgs,
   root,
   skia,
+  rustPlatform,
 }:
 let
   inherit (pkgs) lib;
@@ -29,20 +30,28 @@ let
     inherit pkgs root;
     commits = import ./vendored-commits.nix;
   };
-  notices = import ./notices.nix { inherit pkgs sources root; };
+  notices = import ./notices.nix {
+    inherit
+      pkgs
+      sources
+      root
+      rustPlatform
+      ;
+  };
   rustPackageDefaults = import ./rust-package.nix {
     inherit pkgs;
     inherit (sources) version;
   };
   requirementsOf = import ./crate-requirements.nix { inherit pkgs skia assets; };
   layerTools = import ./build-layers.nix {
-    inherit pkgs root;
+    inherit pkgs root rustPlatform;
     inherit (sources) vendor;
   };
   buildLayers = layerTools.tools;
   artifacts = import ./artifacts.nix {
     inherit
       pkgs
+      rustPlatform
       sources
       rustPackageDefaults
       requirementsOf
@@ -82,7 +91,7 @@ let
         local
       ]) closure;
     in
-    pkgs.rustPlatform.buildRustPackage (
+    rustPlatform.buildRustPackage (
       rustPackageDefaults
       // {
         pname = "lavashell-${name}";
@@ -164,6 +173,7 @@ in
       effect-removal = import ./effect-removal.nix {
         inherit
           pkgs
+          rustPlatform
           root
           sources
           rustPackageDefaults
@@ -176,7 +186,7 @@ in
             nativeBuildInputs = [
               toolPython
               pkgs.ruff
-              pkgs.cargo
+              rustPlatform.rust.cargo
               sourceRules
             ];
           }
