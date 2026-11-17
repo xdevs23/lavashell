@@ -299,9 +299,8 @@ impl InputRouting {
                     .iter()
                     .find(|h| h.focusable && h.input.is_some())
                     .or_else(|| {
-                        self.hits
-                            .iter()
-                            .find(|h| h.focusable && h.id != modal && h.action.is_some())
+                        (self.hits.iter())
+                            .find(|h| h.focusable && h.id != modal && h.gestures.click().is_some())
                     })
                     .map(|h| h.id)
             }

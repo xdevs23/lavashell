@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
     AccessibilityHandler, Action, ActivateAction, Activation, Align, ContentSizes,
-    ContentSizesAction, DragHandler, DragInput, Draggable, Flow, KeyAction, MeasureAction,
+    ContentSizesAction, DragHandler, DragInput, Draggable, Flow, Gesture, KeyAction, MeasureAction,
     Modifier, ModifierElement, ModifierValue, Node, NodeKind, NodeRef, NodeTag, PointerAction,
     PointerInput, ScrollAction, SemanticsProvider, Tooltip, TransformHandler, TransformInput, Ui,
     ViewTag, Weight,
@@ -27,9 +27,7 @@ pub(super) enum NodeSetting {
     OutOfFlow,
     Transition(Transition),
     VisualScale(Positive),
-    Click(Action),
-    Activate(ActivateAction),
-    Context(ActivateAction),
+    Gesture(Gesture),
     Key(KeyAction),
     Modal,
     Enabled(bool),
@@ -37,9 +35,6 @@ pub(super) enum NodeSetting {
     TrackInteraction(State<InteractionState>),
     StateStyles(StateStyles),
     UserSelect(bool),
-    Pointer(PointerAction),
-    Drag(Draggable),
-    Transform(TransformHandler),
     Scroll(ScrollAction),
     Weight(Result<Weight, NumberError>),
     Tag(NodeTag),
@@ -68,9 +63,7 @@ impl NodeSetting {
             Self::OutOfFlow => node.flow = Flow::Out,
             Self::Transition(transition) => node.transition = Some(*transition),
             Self::VisualScale(scale) => node.visual_scale = *scale,
-            Self::Click(action) => node.action = Some(action.clone()),
-            Self::Activate(action) => node.activate = Some(action.clone()),
-            Self::Context(action) => node.context = Some(action.clone()),
+            Self::Gesture(gesture) => node.gestures.set(gesture.clone()),
             Self::Key(action) => node.key_action = Some(action.clone()),
             Self::Modal => node.modal = true,
             Self::Enabled(enabled) => node.enabled = *enabled,
@@ -78,9 +71,6 @@ impl NodeSetting {
             Self::TrackInteraction(state) => node.interaction_observer = Some(state.clone()),
             Self::StateStyles(styles) => node.interaction.states = Some(styles.clone()),
             Self::UserSelect(enabled) => node.user_select = Some(*enabled),
-            Self::Pointer(action) => node.pointer = Some(action.clone()),
-            Self::Drag(draggable) => node.drag = Some(draggable.clone()),
-            Self::Transform(action) => node.transform = Some(action.clone()),
             Self::Scroll(action) => node.scroll_action = Some(action.clone()),
             Self::Weight(Ok(weight)) => {
                 node.invalid_weight = None;
@@ -166,17 +156,17 @@ impl Modifier {
 
     pub fn on_click(self, action: impl FnMut() + 'static) -> Self {
         let action: Action = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Click(action))
+        self.set(NodeSetting::Gesture(Gesture::Click(action)))
     }
 
     pub fn on_activate(self, action: impl FnMut(Activation) + 'static) -> Self {
         let action: ActivateAction = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Activate(action))
+        self.set(NodeSetting::Gesture(Gesture::Activate(action)))
     }
 
     pub fn on_context(self, action: impl FnMut(Activation) + 'static) -> Self {
         let action: ActivateAction = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Context(action))
+        self.set(NodeSetting::Gesture(Gesture::Context(action)))
     }
 
     pub fn on_key(self, action: impl FnMut(Shortcut) -> bool + 'static) -> Self {
@@ -210,17 +200,20 @@ impl Modifier {
 
     pub fn on_pointer(self, action: impl FnMut(PointerInput) + 'static) -> Self {
         let action: PointerAction = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Pointer(action))
+        self.set(NodeSetting::Gesture(Gesture::Pointer(action)))
     }
 
     pub fn on_drag(self, axis: Axis, action: impl FnMut(DragInput) + 'static) -> Self {
         let handler: DragHandler = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Drag(Draggable { axis, handler }))
+        self.set(NodeSetting::Gesture(Gesture::Drag(Draggable {
+            axis,
+            handler,
+        })))
     }
 
     pub fn on_transform(self, action: impl FnMut(TransformInput) + 'static) -> Self {
         let action: TransformHandler = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Transform(action))
+        self.set(NodeSetting::Gesture(Gesture::Transform(action)))
     }
 
     pub fn on_scroll(self, action: impl FnMut(Dp) + 'static) -> Self {

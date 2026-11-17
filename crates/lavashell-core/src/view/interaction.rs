@@ -8,7 +8,9 @@ use crate::keyboard::Key;
 use crate::scene::{DrawCommand, MaterialCommands, Transform};
 use crate::shape::{RoundedRect, Shape};
 use crate::style::{AnimatedAppearance, FocusState, InteractionState, PointerState, StateStyles};
-use crate::ui::{Action, ActivateAction, Activation, NodeId, NodeKind, PointerId, ViewTag};
+use crate::ui::{
+    Action, ActivateAction, Activation, Gestures, NodeId, NodeKind, PointerId, ViewTag,
+};
 use std::collections::BTreeSet;
 use std::collections::btree_map::Entry;
 
@@ -218,11 +220,11 @@ impl View {
     }
 
     pub(super) fn activate_hit(&mut self, node: NodeId, at: Point) {
-        let activate = self.handler(node, |hit| hit.activate.clone());
-        let action = self.handler(node, |hit| hit.action.clone());
+        let activate = self.handler(node, Gestures::activate);
+        let click = self.handler(node, Gestures::click);
         self.run_activation(
             activate.map(|(activate, _)| activate),
-            action.map(|(action, _)| action),
+            click.map(|(click, _)| click),
             at,
         );
     }
@@ -230,7 +232,7 @@ impl View {
     pub(super) fn run_activation(
         &mut self,
         activate: Option<ActivateAction>,
-        action: Option<Action>,
+        click: Option<Action>,
         at: Point,
     ) {
         if let Some(activate) = activate {
@@ -240,8 +242,8 @@ impl View {
             });
             self.redraw = true;
         }
-        if let Some(action) = action {
-            action.borrow_mut()();
+        if let Some(click) = click {
+            click.borrow_mut()();
             self.redraw = true;
         }
     }

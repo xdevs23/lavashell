@@ -302,7 +302,7 @@ impl View {
 
     pub(super) fn has_activation(&self, index: usize) -> bool {
         let node = &self.nodes[index];
-        node.action.is_some() || node.activate.is_some()
+        node.gestures.activates()
     }
 
     pub(super) fn accessibility_capabilities(&self, index: usize, disabled: bool) -> ActionKinds {

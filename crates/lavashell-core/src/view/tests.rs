@@ -279,6 +279,8 @@ mod wheel;
 #[path = "tests/pointers.rs"]
 mod pointers;
 
+#[path = "tests/gesture_handlers.rs"]
+mod gesture_handlers;
 #[path = "tests/gestures.rs"]
 mod gestures;
 #[path = "tests/touch_slop.rs"]

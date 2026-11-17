@@ -99,9 +99,9 @@ impl View {
                 Ok(())
             }
             AccessibilityAction::Activate => {
-                let node = &self.nodes[index];
-                let (activate, action) = (node.activate.clone(), node.action.clone());
-                self.run_activation(activate, action, Point::default());
+                let gestures = &self.nodes[index].gestures;
+                let (activate, click) = (gestures.activate().cloned(), gestures.click().cloned());
+                self.run_activation(activate, click, Point::default());
                 Ok(())
             }
             AccessibilityAction::Scroll(_, delta) => {

@@ -73,8 +73,7 @@ use crate::reactive::{Derived, Phase, Scope};
 use crate::scene::Transform;
 use crate::shape::{Corners, DrawnRoundedRect, Radius};
 use crate::ui::{
-    Action, ActivateAction, Draggable, InputModifiers, Memory, Node, NodeId, PointerAction,
-    PointerKind, TouchId, TransformHandler, Ui, ViewTag,
+    Gestures, InputModifiers, Memory, Node, NodeId, PointerKind, TouchId, Ui, ViewTag,
 };
 use crate::units::{Density, Dp};
 use std::collections::BTreeMap;
@@ -136,13 +135,8 @@ struct Hit {
     rect: Rect,
     clips: Vec<HitClip>,
     group: Option<output::GroupId>,
-    action: Option<Action>,
-    pointer: Option<PointerAction>,
-    drag: Option<Draggable>,
-    transform: Option<TransformHandler>,
+    gestures: Gestures,
     input: Option<TextTarget>,
-    activate: Option<ActivateAction>,
-    context: Option<ActivateAction>,
 }
 
 impl Hit {
@@ -153,23 +147,13 @@ impl Hit {
             rect,
             clips,
             group: None,
-            action: None,
-            pointer: None,
-            drag: None,
-            transform: None,
+            gestures: Gestures::default(),
             input: None,
-            activate: None,
-            context: None,
         }
     }
 
-    fn use_handlers_of(&mut self, node: &Node) {
-        self.action.clone_from(&node.action);
-        self.activate.clone_from(&node.activate);
-        self.context.clone_from(&node.context);
-        self.pointer.clone_from(&node.pointer);
-        self.drag.clone_from(&node.drag);
-        self.transform.clone_from(&node.transform);
+    fn use_gestures_of(&mut self, node: &Node) {
+        self.gestures.clone_from(&node.gestures);
     }
 
     fn contains(&self, p: Point, moving: &Moving) -> bool {
@@ -178,7 +162,7 @@ impl Hit {
     }
 
     fn activates(&self) -> bool {
-        self.action.is_some() || self.activate.is_some()
+        self.gestures.activates()
     }
 }
 

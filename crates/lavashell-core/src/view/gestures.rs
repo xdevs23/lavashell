@@ -12,7 +12,7 @@ use super::input::InputRouting;
 use super::pointers::PointerSample;
 use super::{Hit, View};
 use crate::geometry::{Axis, Point, Rect};
-use crate::ui::{NodeId, PointerId};
+use crate::ui::{Gestures, NodeId, PointerId};
 use crate::units::Dp;
 use crate::view::component::index_of;
 pub(super) use arena::{Arena, Outcome};
@@ -228,14 +228,15 @@ impl View {
         self.redraw = true;
     }
 
-    pub(super) fn handler<T>(
+    pub(super) fn handler<T: Clone>(
         &self,
         node: NodeId,
-        pick: impl Fn(&Hit) -> Option<T>,
+        pick: fn(&Gestures) -> Option<&T>,
     ) -> Option<(T, Rect)> {
-        self.routing
-            .hits_of(node)
-            .find_map(|hit| Some((pick(hit)?, self.routing.moving.shown(hit.group, hit.rect))))
+        self.routing.hits_of(node).find_map(|hit| {
+            let handler = pick(&hit.gestures)?.clone();
+            Some((handler, self.routing.moving.shown(hit.group, hit.rect)))
+        })
     }
 }
 

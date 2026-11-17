@@ -364,7 +364,7 @@ impl View {
             if let Some(target) = hit.input {
                 hit.input = index.map(|index| TextTarget { index, ..target });
             } else if let Some(index) = index {
-                hit.use_handlers_of(&self.nodes[index]);
+                hit.use_gestures_of(&self.nodes[index]);
             }
         }
         for (node, rect) in &painting.geometry {

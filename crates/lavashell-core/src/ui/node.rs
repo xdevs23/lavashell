@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{
-    Component, Draggable, ModifierElement, NodeRef, NodeTag, PointerAction, Scroller,
-    TransformHandler, ViewTag,
-};
+use super::{Component, Gestures, ModifierElement, NodeRef, NodeTag, Scroller, ViewTag};
 use crate::accessibility::{AccessibilityAction, ActionError};
 use crate::animation::AnimationError;
 use crate::geometry::{Axis, Color, Point, Size};
@@ -255,8 +252,7 @@ pub struct Node {
     pub(crate) invalid_weight: Option<NumberError>,
     pub visual_scale: Positive,
     pub(super) scroll: Option<Scroller>,
-    pub activate: Option<ActivateAction>,
-    pub context: Option<ActivateAction>,
+    pub(crate) gestures: Gestures,
     pub key_action: Option<KeyAction>,
     pub measured: Option<MeasureAction>,
     pub content_sizes: Option<ContentSizesAction>,
@@ -269,10 +265,6 @@ pub struct Node {
     pub interaction: InteractionStyle,
     pub interaction_observer: Option<State<crate::style::InteractionState>>,
     pub user_select: Option<bool>,
-    pub action: Option<Action>,
-    pub pointer: Option<PointerAction>,
-    pub drag: Option<Draggable>,
-    pub transform: Option<TransformHandler>,
     pub scroll_action: Option<ScrollAction>,
     pub enabled: bool,
     pub selected: Option<bool>,
@@ -313,8 +305,7 @@ impl Node {
             invalid_weight: None,
             visual_scale: crate::constant!(Positive::try_new(1.0)),
             scroll: None,
-            activate: None,
-            context: None,
+            gestures: Gestures::default(),
             key_action: None,
             measured: None,
             content_sizes: None,
@@ -327,10 +318,6 @@ impl Node {
             interaction,
             interaction_observer: None,
             user_select: None,
-            action: None,
-            pointer: None,
-            drag: None,
-            transform: None,
             scroll_action: None,
             enabled: true,
             selected: None,
@@ -346,12 +333,7 @@ impl Node {
     }
 
     pub(crate) fn handles_input(&self) -> bool {
-        self.action.is_some()
-            || self.activate.is_some()
-            || self.context.is_some()
-            || self.pointer.is_some()
-            || self.drag.is_some()
-            || self.transform.is_some()
+        !self.gestures.is_empty()
             || self.scroll_action.is_some()
             || self.key_action.is_some()
             || self.scroll_axis().is_some()

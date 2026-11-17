@@ -411,7 +411,7 @@ impl View {
                 group: self.routing.moving.current,
                 ..Hit::new(node.id, node.focusable && !node.modal, rect, clips.to_vec())
             };
-            hit.use_handlers_of(node);
+            hit.use_gestures_of(node);
             self.routing.hits.push(hit);
         }
     }

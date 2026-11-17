@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Contender, Effect, Event, Press, Recognizer, Verdict, relative};
 use crate::geometry::Point;
-use crate::ui::{NodeId, PointerId, PointerInput, PointerPhase};
+use crate::ui::{Gestures, NodeId, PointerId, PointerInput, PointerPhase};
 use crate::view::View;
 use crate::view::pointers::PointerSample;
 
@@ -13,7 +13,7 @@ pub(super) struct Raw {
 
 pub(super) fn declared(view: &View, press: &Press) -> Option<Box<dyn Recognizer>> {
     let node = press.node;
-    let handles = view.routing.hits_of(node).any(|hit| hit.pointer.is_some());
+    let handles = (view.routing.hits_of(node)).any(|hit| hit.gestures.pointer().is_some());
     let raw = Raw {
         node,
         pointer: press.pointer(),
@@ -72,7 +72,7 @@ impl View {
         at: Point,
         phase: PointerPhase,
     ) {
-        if let Some((callback, rect)) = self.handler(node, |hit| hit.pointer.clone()) {
+        if let Some((callback, rect)) = self.handler(node, Gestures::pointer) {
             callback.borrow_mut()(PointerInput {
                 position: relative(at, rect),
                 size: rect.size(),

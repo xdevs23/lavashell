@@ -237,7 +237,7 @@ impl View {
                     if hit.focusable {
                         self.routing.focus.move_to(Some(hit.id));
                     }
-                    if let Some(action) = hit.context {
+                    if let Some(action) = hit.gestures.context() {
                         action.borrow_mut()(Activation {
                             position: p,
                             modifiers: self.routing.modifiers,

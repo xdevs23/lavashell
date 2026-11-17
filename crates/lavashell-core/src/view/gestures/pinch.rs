@@ -3,7 +3,7 @@ use super::{
     Contender, Effect, Event, Press, Recognizer, Verdict, euclidean_distance, midpoint, relative,
 };
 use crate::geometry::Point;
-use crate::ui::{DragPhase, NodeId, PointerId, TransformInput};
+use crate::ui::{DragPhase, Gestures, NodeId, PointerId, TransformInput};
 use crate::units::Dp;
 use crate::view::View;
 use crate::view::pointers::PointerSample;
@@ -68,7 +68,7 @@ pub(super) fn declared(view: &View, press: &Press) -> Option<Box<dyn Recognizer>
 fn transformable(view: &View, node: NodeId) -> bool {
     view.routing
         .hits_of(node)
-        .any(|hit| hit.transform.is_some())
+        .any(|hit| hit.gestures.transform().is_some())
 }
 
 impl Recognizer for PinchPoint {
@@ -247,7 +247,7 @@ fn contact<'a>(
 
 impl View {
     fn send_transform(&mut self, node: NodeId, focal: Point, scale: f64, phase: DragPhase) {
-        if let Some((callback, rect)) = self.handler(node, |hit| hit.transform.clone()) {
+        if let Some((callback, rect)) = self.handler(node, Gestures::transform) {
             callback.borrow_mut()(TransformInput {
                 focal: relative(focal, rect),
                 scale,
