@@ -65,6 +65,21 @@ fn a_frame_into_another_sink_restarts_that_sink_and_sends_the_whole_scene() -> T
 }
 
 #[test]
+fn a_probed_scene_leaves_the_view_needing_a_frame_only_if_it_needed_one_before() -> TestResult {
+    let count = State::new(1);
+    let mut view = squares(count.clone());
+    (view.frame_into(AREA, &mut Metrics, &mut TestSink::default())).without_failures()?;
+    view.probe_scene(AREA, &mut Metrics)?.1.without_failures()?;
+    assert!(!view.needs_visual_frame());
+    count.set(2);
+    let (scene, failures) = view.probe_scene(AREA, &mut Metrics)?;
+    failures.without_failures()?;
+    assert!(view.needs_visual_frame());
+    assert_eq!(scene.at(Duration::ZERO).leaf_commands().count(), 2);
+    Ok(())
+}
+
+#[test]
 fn a_change_that_the_sink_rejects_restarts_the_sink_and_the_next_frame_sends_all() -> TestResult {
     let count = State::new(1);
     let mut view = squares(count.clone());

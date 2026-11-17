@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::cpu_time::CpuTiming;
+use crate::failures::log_failure;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::view::View;
+use lavashell_core::view::{ComponentFailure, Failures, View};
 use std::time::Duration;
 
 pub use lavashell_platform::KeyAction;
@@ -22,7 +23,7 @@ pub struct KeyboardFocus {
     pub focused: bool,
 }
 
-type ViewObserver = Box<dyn FnMut(SurfaceId, Viewport, &View)>;
+type ViewObserver = Box<dyn FnMut(SurfaceId, FrameTime, Viewport, &View)>;
 
 #[derive(Default)]
 pub struct Observers {
@@ -33,6 +34,7 @@ pub struct Observers {
     pub keyboard_focus: Option<Box<dyn FnMut(KeyboardFocus)>>,
     pub view: Option<ViewObserver>,
     pub output: Option<Box<dyn FnMut(SurfaceId, OutputInfo)>>,
+    pub failure: Option<Box<dyn FnMut(SurfaceId, ComponentFailure)>>,
 }
 
 impl Observers {
@@ -40,6 +42,15 @@ impl Observers {
         match self.frame_report {
             Some(_) => CpuTiming::Measured,
             None => CpuTiming::Skipped,
+        }
+    }
+
+    pub(crate) fn report_failures(&mut self, surface: SurfaceId, failures: Failures) {
+        for failure in failures {
+            log_failure(&failure);
+            if let Some(observer) = &mut self.failure {
+                observer(surface, failure);
+            }
         }
     }
 }

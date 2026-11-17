@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Error, FONT_DIRECTORY};
+use lavashell::PlatformRunError;
+use lavashell::renderer::{StartError, StateError};
+use lavashell_actor::SpawnError;
+use lavashell_runtime::RendererError;
 use std::fmt;
 
 pub enum NextStep {
@@ -7,7 +11,6 @@ pub enum NextStep {
     ProvideVulkanDriver,
     StartInWaylandSession,
     CorrectOptions,
-    ChooseSmallerSize,
     ChooseWritableCapture,
     ChooseWritableFrameLog,
     SetHome,
@@ -35,8 +38,6 @@ impl fmt::Display for NextStep {
             Self::CorrectOptions => {
                 formatter.write_str("Correct the options of the example, then run it again.")
             }
-            Self::ChooseSmallerSize => formatter
-                .write_str("Choose a smaller --width and --height, then run the example again."),
             Self::ChooseWritableCapture => formatter.write_str(
                 "Choose a capture path in a writable directory with free space, then run the \
                  example again.",
@@ -63,36 +64,36 @@ impl ExampleError for Error {
     fn next_step(&self) -> NextStep {
         match self {
             Self::FontDirectory | Self::Fonts(_) => NextStep::EnterDevelopmentShell,
-            Self::Renderer(_) => NextStep::ProvideVulkanDriver,
+            Self::Record(PlatformRunError::StartRenderer(SpawnError::Start(
+                RendererError::Start(StartError::State(StateError::CreateRenderer(_))),
+            ))) => NextStep::ProvideVulkanDriver,
             Self::App(_) => NextStep::StartInWaylandSession,
             Self::Number(_)
             | Self::TextScale
             | Self::Seconds(_)
             | Self::Length(_)
             | Self::FrameRate => NextStep::CorrectOptions,
-            Self::BufferSize(_) | Self::Offscreen(_) => NextStep::ChooseSmallerSize,
             Self::CreateDirectory { .. } | Self::WriteCapture { .. } => {
                 NextStep::ChooseWritableCapture
             }
             Self::CreateFrameLog(_) | Self::WriteFrameReport(_) | Self::FlushFrameLog(_) => {
                 NextStep::ChooseWritableFrameLog
             }
-            Self::Painter(_)
-            | Self::NumberSurface(_)
-            | Self::Paint(_)
-            | Self::EncodePng(_)
+            Self::Shaper(_)
             | Self::Frame(_)
             | Self::ComponentsFailed(_)
-            | Self::Measure(_)
-            | Self::NothingMoves
-            | Self::NoRest
             | Self::MissingControl(_)
             | Self::MissingNode { .. }
             | Self::Setup(_)
             | Self::Record(_)
             | Self::NotServed(_)
+            | Self::Press(_)
             | Self::UnplayedSteps(_)
+            | Self::NothingShown { .. }
             | Self::Icon(_) => NextStep::ReportDefect,
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

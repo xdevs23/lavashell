@@ -40,6 +40,22 @@ fn the_exit_predicate_runs_only_while_nothing_else_ends_the_run() {
 }
 
 #[test]
+fn each_exit_predicate_ends_the_run() {
+    let flags = [Rc::new(Cell::new(false)), Rc::new(Cell::new(false))];
+    let mut end = RunEnd::default();
+    for flag in &flags {
+        let flag = Rc::clone(flag);
+        end.exit_when(move || flag.get());
+    }
+    assert!(!end.finished(SECOND, true));
+    flags[1].set(true);
+    assert!(end.finished(SECOND, true));
+    flags[1].set(false);
+    flags[0].set(true);
+    assert!(end.finished(SECOND, true));
+}
+
+#[test]
 fn an_ended_run_ends_while_something_is_open_without_the_exit_predicate() {
     let calls = Rc::new(Cell::new(0));
     let counted = calls.clone();

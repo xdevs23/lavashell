@@ -1224,9 +1224,11 @@
           "clap",
           "csv",
           "lavashell",
+          "lavashell-actor",
           "lavashell-core",
           "lavashell-example-copy-keys",
           "lavashell-lucide",
+          "lavashell-runtime",
           "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"

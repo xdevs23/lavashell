@@ -81,9 +81,8 @@ impl ExampleArguments {
     }
 
     pub fn app(&self) -> Result<App, Error> {
-        let mut app = App::new(crate::platform())
+        let mut app = crate::default_app()?
             .text_transfers()
-            .fonts(crate::fonts()?)
             .preference_overrides(self.preference_overrides());
         if self.inherited.full_redraw {
             app = app.damage(DamageMode::Whole).configure_painter(|painter| {
@@ -109,14 +108,6 @@ impl SizeArguments {
     #[must_use]
     pub fn size(self) -> Option<Size> {
         Some(Size::new(self.width?.get(), self.height?.get()))
-    }
-
-    #[must_use]
-    pub fn window(self, window: Window) -> Window {
-        match self.size() {
-            Some(size) => window.size(size.width, size.height),
-            None => window,
-        }
     }
 }
 

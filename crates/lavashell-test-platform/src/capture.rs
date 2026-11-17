@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::Error;
+use crate::{Error, RecordedFrame};
 use lavashell_actor::{Merge, MergeEffect, Sender};
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::SurfaceId;
-use lavashell_renderer::{FrameOutcome, PresentFrame, Snapshot, SurfaceControl};
+use lavashell_renderer::skia::Canvas;
+use lavashell_renderer::{FrameOutcome, Pixels, PresentFrame, SurfaceControl};
+use std::cell::OnceCell;
 
 pub struct FrameCapture {
     surface: SurfaceId,
@@ -21,7 +23,8 @@ pub enum CaptureMode {
 pub(crate) struct ShownFrame {
     pub(crate) surface: SurfaceId,
     pub(crate) time: FrameTime,
-    pub(crate) png: Option<Vec<u8>>,
+    pub(crate) pixels: Option<Pixels>,
+    pub(crate) png: OnceCell<Vec<u8>>,
 }
 
 impl FrameCapture {
@@ -35,14 +38,35 @@ impl FrameCapture {
     }
 }
 
+impl ShownFrame {
+    pub(crate) fn recorded(&self) -> Result<Option<RecordedFrame>, Error> {
+        let Some(pixels) = &self.pixels else {
+            return Ok(None);
+        };
+        let surface = self.surface;
+        let png = if let Some(png) = self.png.get() {
+            png
+        } else {
+            let encoded =
+                (pixels.png()).map_err(|source| Error::EncodeFrame { surface, source })?;
+            self.png.get_or_init(|| encoded)
+        };
+        Ok(Some(RecordedFrame {
+            surface,
+            time: self.time,
+            png: png.clone(),
+        }))
+    }
+}
+
 impl CaptureMode {
-    fn encode_png_if_wanted(
+    fn read_pixels_if_wanted(
         self,
-        snapshot: &Snapshot<'_>,
-    ) -> Result<Option<Vec<u8>>, lavashell_renderer::Error> {
+        canvas: &Canvas,
+    ) -> Result<Option<Pixels>, lavashell_renderer::Error> {
         match self {
             Self::WithoutPixels => Ok(None),
-            Self::WithPixels => snapshot.png().map(Some),
+            Self::WithPixels => Pixels::read(canvas).map(Some),
         }
     }
 }
@@ -55,14 +79,15 @@ impl SurfaceControl for FrameCapture {
         self.mode = mode;
     }
 
-    fn painted(&mut self, frame: &PresentFrame, snapshot: Snapshot<'_>) -> Result<(), Error> {
+    fn painted(&mut self, frame: &PresentFrame, canvas: &Canvas) -> Result<(), Error> {
         let surface = self.surface;
-        let png = (self.mode.encode_png_if_wanted(&snapshot))
-            .map_err(|source| Error::EncodeFrame { surface, source })?;
+        let pixels = (self.mode.read_pixels_if_wanted(canvas))
+            .map_err(|source| Error::ReadFrame { surface, source })?;
         self.painted = Some(ShownFrame {
             surface,
             time: frame.time,
-            png,
+            pixels,
+            png: OnceCell::new(),
         });
         Ok(())
     }

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
+use crate::error::reject_failures;
 use lavashell::renderer::FrameTiming;
 use lavashell::{core::frame::PresentationFlag, prelude::*};
-use lavashell_test_platform::{HostScript, RecordedFrames, TestPlatform};
+use lavashell_test_platform::{HostScript, RecordedFrames, ScriptedHost, TestPlatform};
 use serde::Serialize;
 use std::{cell::RefCell, ffi::OsStr, rc::Rc};
 
@@ -15,13 +16,40 @@ pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Re
 }
 
 pub(crate) fn record(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
-    let (ran, frames) = script.serve(|host| {
-        let on_test_platform =
-            |app| lavashell::run::<TestPlatform>(app, host).map_err(Error::Record);
-        logged(app, None, on_test_platform)
-    });
+    serve(script, |host| {
+        reject_component_failures(app, |app| {
+            logged(app, None, |app| on_test_platform(app, host))
+        })
+    })
+}
+
+pub(crate) fn record_unlogged(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
+    serve(script, |host| {
+        reject_component_failures(app, |app| on_test_platform(app, host))
+    })
+}
+
+fn serve(
+    script: HostScript,
+    run: impl FnOnce(ScriptedHost) -> Result<(), Error>,
+) -> Result<RecordedFrames, Error> {
+    let (ran, frames) = script.serve(run);
     ran?;
     frames.map_err(Error::NotServed)
+}
+
+fn on_test_platform(app: App, host: ScriptedHost) -> Result<(), Error> {
+    lavashell::run::<TestPlatform>(app, host).map_err(Error::Record)
+}
+
+fn reject_component_failures(
+    app: App,
+    run: impl FnOnce(App) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let failures = Rc::new(RefCell::new(Vec::new()));
+    let observed = Rc::clone(&failures);
+    run(app.failure_observer(move |_, failure| observed.borrow_mut().push(failure)))?;
+    reject_failures(failures.take())
 }
 
 fn on_platform(app: App) -> Result<(), Error> {

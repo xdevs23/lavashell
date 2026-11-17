@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::platform::ScriptedHost;
-use crate::{Error, FrameInterval, RecordedFrames};
+use crate::{Error, FrameInterval, PacedLinks, RecordedFrames};
 use lavashell_core::units::Density;
 use lavashell_platform::{KeyboardDevice, PlatformEvent};
 use std::sync::mpsc;
@@ -19,6 +19,7 @@ pub(crate) enum Step {
     },
     PlayUntil(Duration),
     RecordUntilRest(FrameInterval),
+    RecordPaced(PacedLinks),
 }
 
 impl HostScript {
@@ -57,6 +58,12 @@ impl HostScript {
         self
     }
 
+    #[must_use]
+    pub fn record_paced(mut self, links: PacedLinks) -> Self {
+        self.steps.push(Step::RecordPaced(links));
+        self
+    }
+
     pub fn serve<T>(
         self,
         run: impl FnOnce(ScriptedHost) -> T,
@@ -72,6 +79,6 @@ impl HostScript {
 
 impl Step {
     pub(crate) fn records(&self) -> bool {
-        matches!(self, Self::RecordUntilRest(_))
+        matches!(self, Self::RecordUntilRest(_) | Self::RecordPaced(_))
     }
 }

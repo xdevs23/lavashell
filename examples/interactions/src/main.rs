@@ -16,7 +16,7 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use copy::{CopyKey, copy};
 use error::Error;
 use lavashell::prelude::*;
-use lavashell_example_support::{ExampleArguments, SizeArguments};
+use lavashell_example_support::{ExampleArguments, SizeArguments, size_window};
 use std::{path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
@@ -57,15 +57,16 @@ fn run() -> Result<(), Error> {
     let observer = demo.clone();
     let quit = demo.quit.clone();
     let mut app = transfers::install(app, &demo)
-        .view_observer(move |surface, _, view| observer.observe(surface, view))
+        .view_observer(move |surface, _, _, view| observer.observe(surface, view))
         .exit_when(move || quit.get());
 
     let window = if shaped {
         shape::window(hole)
     } else {
-        (arguments.size).window(
+        size_window(
             Window::new(copy(CopyKey::Title), "lavashell.interactions")
                 .fullscreen(arguments.fullscreen),
+            arguments.size.size(),
         )
     };
     app.window(window, move |ui| {

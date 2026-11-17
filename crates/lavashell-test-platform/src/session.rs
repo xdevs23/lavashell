@@ -16,6 +16,8 @@ use lavashell_renderer::NoStreams;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
+mod paced;
+
 pub(crate) struct Session {
     clock: VirtualClock,
     links: PlatformLinks<FrameCapture, NoStreams>,
@@ -50,7 +52,7 @@ impl Session {
     }
 
     pub(crate) fn into_frames(self) -> RecordedFrames {
-        self.screen.into_frames()
+        RecordedFrames::new(self.screen.into_recorded(), self.windows.into_app_ids())
     }
 
     pub(crate) fn play(&mut self, steps: Vec<Step>) -> Result<(), Error> {
@@ -79,6 +81,7 @@ impl Session {
     }
 
     fn play_step(&mut self, step: Step) -> Result<(), Stop> {
+        self.screen.start_step();
         match step {
             Step::Report(event) => self.report_settled(|_| Ok(event)),
             Step::FocusKeyboard { keyboard, app_id } => self.report_settled(|session| {
@@ -87,6 +90,7 @@ impl Session {
             }),
             Step::PlayUntil(time) => self.play_until(time).map(drop),
             Step::RecordUntilRest(every) => self.record_until_rest(every),
+            Step::RecordPaced(links) => self.record_paced(&links),
         }
     }
 
@@ -151,7 +155,7 @@ impl Session {
     fn record_until_rest(&mut self, every: FrameInterval) -> Result<(), Stop> {
         self.settle()?;
         loop {
-            self.screen.record();
+            self.screen.record_new()?;
             let recorded = self.screen.newest_frames();
             let deadline = self.play_until(self.clock.now() + every.get())?;
             if is_at_rest(self.screen.newest_frames() != recorded, deadline) {

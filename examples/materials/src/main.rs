@@ -3,9 +3,8 @@
 mod profile;
 
 use clap::Parser;
-use lavashell::prelude::*;
-use lavashell_example_support::{Capture, ExampleArguments};
-use lavashell_materials_example::{CopyKey, Error, copy, model::Demo, ui};
+use lavashell_example_support::ExampleArguments;
+use lavashell_materials_example::{APP_ID, Error, model::Demo};
 use profile::Profile;
 use std::{path::PathBuf, process::ExitCode};
 
@@ -29,28 +28,16 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
-    let demo = Demo::new(arguments.autoplay, arguments.example.theme())?;
-    let request = arguments.profile.request();
-    demo.request.set(request);
+    let autoplay = arguments.autoplay && arguments.screenshot.is_none();
+    let demo = Demo::new(autoplay, arguments.example.theme())?;
+    demo.request.set(arguments.profile.request());
 
+    let app = arguments.example.app()?;
+    let app = lavashell_materials_example::app(app, &demo, None, arguments.fullscreen)?;
     if let Some(path) = &arguments.screenshot {
-        let state = demo.clone();
-        let mut view = View::new(lavashell_example_support::platform(), move |u| {
-            ui::compose(u, &state);
-        });
-        return Ok(Capture::new()?.screenshot(&mut view, None, path)?);
+        return Ok(lavashell_example_support::write_screenshot(
+            app, APP_ID, path,
+        )?);
     }
-
-    let state = demo.clone();
-    let mut app = arguments
-        .example
-        .app()?
-        .output_observer(move |_, info| state.output.set(Some(info)));
-    app.window(
-        Window::new(copy(CopyKey::Title), "lavashell.materials")
-            .fullscreen(arguments.fullscreen)
-            .output(request),
-        move |u| ui::compose(u, &demo),
-    )?;
     Ok(lavashell_example_support::run(app)?)
 }

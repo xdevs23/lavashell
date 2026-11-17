@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{FrameOutcome, Snapshot};
+use crate::FrameOutcome;
 use lavashell_core::prelude::{FrameTime, ScaledViewport};
 use lavashell_core::surface::SurfaceState;
 use std::time::Duration;
@@ -27,7 +27,7 @@ pub trait SurfaceControl {
     fn painted(
         &mut self,
         _frame: &PresentFrame,
-        _snapshot: Snapshot<'_>,
+        _canvas: &skia_safe::Canvas,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::targets::AttachedSurface;
-use super::{Drawn, FrameError, PresentFrame, Snapshot, SurfaceControl};
+use super::{Drawn, FrameError, PresentFrame, SurfaceControl};
 use crate::stream::FrameDevice;
 use crate::vulkan::{CompletedScene, DrawnFrame, SceneImage, VulkanRenderer};
 use crate::{FrameOutcome, SurfaceFrame};
@@ -59,7 +59,7 @@ impl<C: SurfaceControl> AttachedSurface<C> {
                 )
                 .map_err(FrameError::Paint)?;
             (self.control)
-                .painted(&frame, Snapshot::new(canvas))
+                .painted(&frame, canvas)
                 .map_err(FrameError::Control)
         };
         let outcome = gpu

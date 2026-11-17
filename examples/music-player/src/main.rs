@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 use clap::Parser;
 use lavashell::prelude::*;
-use lavashell_example_support::{Capture, ExampleArguments, SizeArguments, Theme};
-use lavashell_music_player::{Error, music};
+use lavashell_example_support::{ExampleArguments, SizeArguments, Theme};
+use lavashell_music_player::{APP_ID, Error, music};
 use std::{path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
@@ -42,35 +42,27 @@ fn main() -> ExitCode {
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
     let model = State::new(music::Model::default());
-    let icons = music::Icons::decode()?;
     let theme = Theme::new(arguments.example.theme())?;
+    let size = arguments.size.size();
 
+    let mut app = arguments.example.app()?;
     if let Some(path) = &arguments.screenshot {
-        let mut view = View::new(lavashell_example_support::platform(), move |ui| {
-            music::music(ui, &model, &theme, icons);
-        });
-        return Ok(Capture::new()?.screenshot(&mut view, arguments.size.size(), path)?);
+        let app = lavashell_music_player::app(app, &model, &theme, size)?;
+        return Ok(lavashell_example_support::write_screenshot(
+            app, APP_ID, path,
+        )?);
     }
-
+    if arguments.surfaces.has_window() {
+        app = lavashell_music_player::app(app, &model, &theme, size)?;
+    }
     let tick = model.clone();
-    let mut app = arguments.example.app()?.on_tick(move |elapsed| {
+    app = app.on_tick(move |elapsed| {
         if tick.with(|m| m.playing) {
             tick.update(|m| m.advance(elapsed));
         }
     });
-    if arguments.surfaces.has_window() {
-        let state = model.clone();
-        let theme = theme.clone();
-        app.window(
-            (arguments.size).window(Window::new(
-                music::copy(music::CopyKey::Title),
-                "lavashell.music",
-            )),
-            move |ui| music::music(ui, &state, &theme, icons),
-        )?;
-    }
     if arguments.surfaces.has_layer() {
-        let state = model.clone();
+        let (state, icons) = (model.clone(), music::Icons::decode()?);
         app.layer(LayerSurface::new("lavashell-music"), move |ui| {
             music::panel(ui, &state, &theme, icons);
         });

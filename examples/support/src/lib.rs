@@ -12,15 +12,15 @@ mod platform;
 mod report;
 mod samples;
 mod steps;
-#[cfg(feature = "testing")]
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod theme;
 
 pub use arguments::{ExampleArguments, Recording, RecordingArguments, SizeArguments};
 pub use breakpoint::{Breakpoint, Layout};
-pub use capture::{Capture, OffscreenView, write_capture};
+pub use capture::{write_capture, write_screenshot};
 pub use cover::cover;
-pub use error::{Error, without_failures};
+pub use error::Error;
 pub use frame_log::{run, run_observed};
 pub use lavashell_lucide as lucide;
 pub use lavashell_test_platform::FrameInterval;
@@ -29,9 +29,10 @@ pub use palette::{TEAL_PALETTE, TealPalette};
 pub use platform::platform;
 pub use report::{exit_code, report, report_failure};
 pub use samples::{HARBOR_LIGHTS, SampleTrack, UNDERTOW};
-pub use steps::Steps;
+pub use steps::{Start, Steps, at_rest};
 pub use theme::{Theme, ThemeChoice, ThemeSwitchColors};
 
+use lavashell::core::accessibility::AccessibleNode;
 use lavashell::prelude::*;
 use std::path::PathBuf;
 
@@ -41,6 +42,27 @@ pub const MONO: &str = "mono";
 
 pub fn icon(encoded: &'static lucide::EncodedIcon) -> Result<&'static Icon, Error> {
     encoded.icon().map_err(Error::Icon)
+}
+
+pub fn node<'a>(view: &'a View, role: &Role, name: &str) -> Result<&'a AccessibleNode, Error> {
+    (view.accessibility().nodes.values())
+        .find(|node| node.role == *role && node.name.as_deref() == Some(name))
+        .ok_or_else(|| Error::MissingNode {
+            role: role.clone(),
+            name: name.to_owned(),
+        })
+}
+
+#[must_use]
+pub fn size_window(window: Window, size: Option<Size>) -> Window {
+    match size {
+        Some(size) => window.size(size.width, size.height),
+        None => window,
+    }
+}
+
+pub fn default_app() -> Result<App, Error> {
+    Ok(App::new(platform()).fonts(fonts()?))
 }
 
 pub const FONT_DIRECTORY: &str = "LAVASHELL_EXAMPLE_NODE_MODULES";

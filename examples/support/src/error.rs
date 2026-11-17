@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::core::ui::NodeTag;
-use lavashell::core::view::{ComponentFailure, Failures, FrameError};
+use lavashell::core::view::{ComponentFailure, FrameError};
 use lavashell::prelude::{NumberError, Role};
 use lavashell::renderer::Error as RendererError;
 use std::{num::ParseFloatError, path::PathBuf, time::TryFromFloatSecsError};
@@ -14,20 +14,8 @@ pub enum Error {
     FontDirectory,
     #[error("cannot load the example fonts")]
     Fonts(#[source] RendererError),
-    #[error("cannot create the headless Vulkan renderer")]
-    Renderer(#[source] RendererError),
-    #[error("cannot create the painter of the capture")]
-    Painter(#[source] RendererError),
-    #[error("the surface of the capture could not get an id")]
-    NumberSurface(#[source] lavashell::core::id_counter::IdsExhausted),
-    #[error("no buffer of whole pixels covers the size of the capture")]
-    BufferSize(#[source] NumberError),
-    #[error("cannot create the offscreen surface of the capture")]
-    Offscreen(#[source] RendererError),
-    #[error("cannot paint the scene of the capture")]
-    Paint(#[source] RendererError),
-    #[error("cannot encode the capture as PNG")]
-    EncodePng(#[source] RendererError),
+    #[error("cannot create the shaper that measures the text of a view")]
+    Shaper(#[source] RendererError),
     #[error("cannot create the directory {}", path.display())]
     CreateDirectory {
         path: PathBuf,
@@ -44,12 +32,6 @@ pub enum Error {
     Frame(#[source] FrameError),
     #[error("a component of the view failed in a frame")]
     ComponentsFailed(Vec<ComponentFailure>),
-    #[error("cannot measure the content of the view")]
-    Measure(#[source] NumberError),
-    #[error("nothing is left that could move the view on")]
-    NothingMoves,
-    #[error("the view asks for another frame after a frame that changed nothing")]
-    NoRest,
     #[error("the view has no control tagged {0:?}")]
     MissingControl(NodeTag),
     #[error("the view shows no {role} named {name}")]
@@ -64,6 +46,10 @@ pub enum Error {
     NotServed(#[source] lavashell_test_platform::Error),
     #[error("the recording came to rest with {0} steps left to play")]
     UnplayedSteps(usize),
+    #[error("the test platform cannot press the keys of a step")]
+    Press(#[source] lavashell_test_platform::Error),
+    #[error("the window {app_id} did not show a frame")]
+    NothingShown { app_id: String },
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]
@@ -84,8 +70,10 @@ pub enum Error {
     Icon(#[source] lavashell_lucide::Error),
 }
 
-pub fn without_failures(shown: Result<Failures, FrameError>) -> Result<(), Error> {
-    let failures: Vec<_> = shown.map_err(Error::Frame)?.into_iter().collect();
+pub(crate) fn reject_failures(
+    failures: impl IntoIterator<Item = ComponentFailure>,
+) -> Result<(), Error> {
+    let failures: Vec<_> = failures.into_iter().collect();
     if failures.is_empty() {
         Ok(())
     } else {

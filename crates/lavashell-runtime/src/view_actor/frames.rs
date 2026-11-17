@@ -2,7 +2,6 @@
 use super::open_surfaces::OpenSurfaces;
 use super::{ViewActor, send_request};
 use crate::cpu_time::CpuStamp;
-use crate::failures::log_failures;
 use crate::panels::PanelRequests;
 use crate::renderer_actor::{Rendered, RendererInput};
 use crate::scene_pipeline::{FrameStatus, SceneSink};
@@ -209,6 +208,7 @@ impl<P: Platform> ViewActor<P> {
         actions: &mut ActionBatch,
     ) -> Result<ViewChange, ViewError> {
         let (view, viewport) = self.surfaces.open_view(id)?;
+        let mut failed = |failures| self.observers.report_failures(id, failures);
         let mut frame = |view: &mut View, sink: &mut SceneSink<'_>| {
             view.frame_into_at(viewport, &mut self.shaper, timing, sink)
         };
@@ -217,11 +217,21 @@ impl<P: Platform> ViewActor<P> {
         } else {
             ViewChange::Unchanged
         };
-        send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+        send_frame(
+            view,
+            self.actors.scene.sink(id, None),
+            &mut failed,
+            &mut frame,
+        )?;
         actions.run(id, view);
         if view.needs_visual_frame() {
             change = ViewChange::Changed;
-            send_frame(view, self.actors.scene.sink(id, None), &mut frame)?;
+            send_frame(
+                view,
+                self.actors.scene.sink(id, None),
+                &mut failed,
+                &mut frame,
+            )?;
         }
         Ok(change)
     }
@@ -322,7 +332,7 @@ impl<P: Platform> ViewActor<P> {
             return;
         };
         if let Some(observer) = &mut self.observers.view {
-            observer(id, viewport, view);
+            observer(id, start.timing, viewport, view);
         }
         if let Some(info) = drawn.output
             && surface.output != Some(info)
@@ -365,12 +375,13 @@ impl<P: Platform> ViewActor<P> {
 pub(super) fn send_frame(
     view: &mut View,
     mut sink: SceneSink<'_>,
+    failed: impl FnOnce(Failures),
     frame: impl FnOnce(&mut View, &mut SceneSink<'_>) -> Result<Failures, FrameError<Closed>>,
 ) -> Result<(), ViewError> {
     let shows_scene = sink.any_frame_ended();
     match frame(view, &mut sink) {
         Ok(failures) => {
-            log_failures(failures);
+            failed(failures);
             Ok(())
         }
         Err(FrameError::Sink(Closed)) => Err(ViewError::Stopped(Stopped::Scene)),

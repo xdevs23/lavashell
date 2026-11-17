@@ -8,6 +8,7 @@ use lavashell_core::window::{WindowCapabilities, WindowState};
 use lavashell_platform::{Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec};
 use lavashell_renderer::NoStreams;
 use lavashell_vulkan::HeadlessWindow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 type TestReports = Reports<FrameCapture, NoStreams>;
@@ -17,6 +18,7 @@ pub(crate) struct Windows {
     capture: CaptureMode,
     shown_by_controls: Sender<ShownFrame>,
     open: Vec<(SurfaceId, Role)>,
+    app_ids: BTreeMap<SurfaceId, String>,
 }
 
 impl Windows {
@@ -26,6 +28,7 @@ impl Windows {
             capture: CaptureMode::WithoutPixels,
             shown_by_controls,
             open: Vec::new(),
+            app_ids: BTreeMap::new(),
         }
     }
 
@@ -53,12 +56,19 @@ impl Windows {
                 window: opened_window_state(&spec.role),
             },
         ));
+        if let Role::Window(window) = &spec.role {
+            let _created_once = self.app_ids.insert(surface, window.app_id.clone());
+        }
         self.open.push((surface, spec.role));
     }
 
     pub(crate) fn destroy(&mut self, reports: &TestReports, surface: SurfaceId) {
         self.open.retain(|&(window, _)| window != surface);
         reports.attach(SurfaceAttachment::Detach(surface));
+    }
+
+    pub(crate) fn into_app_ids(self) -> BTreeMap<SurfaceId, String> {
+        self.app_ids
     }
 
     pub(crate) fn surfaces(&self) -> impl Iterator<Item = SurfaceId> {

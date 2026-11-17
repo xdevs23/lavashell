@@ -3,14 +3,12 @@ mod control;
 mod error;
 mod present;
 mod scene_source;
-mod snapshot;
 mod targets;
 #[cfg(test)]
 mod tests;
 
 pub use control::{PresentFrame, SurfaceControl};
 pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
-pub use snapshot::Snapshot;
 pub use targets::DamageMode;
 
 use crate::gpu_timing::FrameTiming;

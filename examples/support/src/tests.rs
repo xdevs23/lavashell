@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use lavashell::renderer::text::{Shaper, TextRendering};
 
 #[test]
 fn dependency_fonts_decode_and_resolve_variable_weights() -> Result<(), Error> {
-    let mut painter = Painter::new(
-        &fonts()?,
-        lavashell::renderer::UniformRange::VULKAN_REQUIRED,
-    )
-    .map_err(Error::Painter)?;
-    let shaper = painter.shaper();
+    let mut shaper =
+        Shaper::with_rendering(&fonts()?, TextRendering::default()).map_err(Error::Shaper)?;
     for alias in [BODY, DISPLAY, MONO] {
         let style = TextStyle::new(alias, 32.sp(), Color::WHITE);
         let bold = style.clone().weight(FontWeight::BOLD).resolve_unscaled();

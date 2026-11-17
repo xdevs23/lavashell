@@ -12,7 +12,8 @@ use crate::geometry::{Constraints, Point, VIEWPORT, Viewport};
 use crate::keyboard::Shortcut;
 use crate::local::{LocalReader, LocalScope};
 use crate::reactive::Phase;
-use crate::scene::{ChangeSink, Transform};
+use crate::scene::tree::SceneSnapshot;
+use crate::scene::{ChangeSink, SceneBuilder, Transform};
 use crate::ui::{Action, NodeId, Ui, ViewHandles};
 use crate::view::layout::{Layout, Visibility};
 use crate::view::moving::Moving;
@@ -29,6 +30,18 @@ impl View {
             view.sync_motion(viewport);
             view.frame_presenting(viewport, text, Presentation::New, sink)
         })
+    }
+
+    pub fn probe_scene(
+        &mut self,
+        viewport: Viewport,
+        text: &mut impl TextMeasurer,
+    ) -> Result<(SceneSnapshot, Failures), FrameError> {
+        let needed_frame = self.needs_visual_frame();
+        let mut builder = SceneBuilder::default();
+        let framed = self.frame_into(viewport, text, &mut builder);
+        self.redraw |= needed_frame;
+        Ok((builder.snapshot(), framed?))
     }
 
     pub fn frame_into_at<S: ChangeSink>(

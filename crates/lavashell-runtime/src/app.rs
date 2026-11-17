@@ -19,7 +19,7 @@ use lavashell_core::reactive::State;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
-use lavashell_core::view::{InputEvent, View};
+use lavashell_core::view::{ComponentFailure, InputEvent, View};
 use lavashell_renderer::vulkan::SceneSource;
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter, RendererSetup};
 use std::time::Duration;
@@ -115,7 +115,7 @@ impl App {
     #[must_use]
     pub fn view_observer(
         mut self,
-        callback: impl FnMut(SurfaceId, Viewport, &View) + 'static,
+        callback: impl FnMut(SurfaceId, FrameTime, Viewport, &View) + 'static,
     ) -> Self {
         self.setup.observers.view = Some(Box::new(callback));
         self
@@ -230,6 +230,15 @@ impl App {
         observer: impl FnMut(SurfaceId, OutputInfo) + 'static,
     ) -> Self {
         self.setup.observers.output = Some(Box::new(observer));
+        self
+    }
+
+    #[must_use]
+    pub fn failure_observer(
+        mut self,
+        observer: impl FnMut(SurfaceId, ComponentFailure) + 'static,
+    ) -> Self {
+        self.setup.observers.failure = Some(Box::new(observer));
         self
     }
 

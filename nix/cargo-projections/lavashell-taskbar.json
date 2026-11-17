@@ -1123,9 +1123,11 @@
           "clap",
           "csv",
           "lavashell",
+          "lavashell-actor",
           "lavashell-core",
           "lavashell-example-copy-keys",
           "lavashell-lucide",
+          "lavashell-runtime",
           "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"
@@ -2626,7 +2628,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "2a420a3e1f491ee2bd6a96e85e947e8b08028f685fd2a8ebf7c552a886a3e64d",
+        "seedHash": "1dd04bfd7184b5e3fe6bbc5fb1574e4112deca70dd2be54c8cc844fcda627ef3",
         "plan": {
           "schema": 1,
           "selection": {
@@ -4047,6 +4049,12 @@
                     "features": [],
                     "path": "../../crates/lavashell"
                   },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-actor"
+                  },
                   "lavashell-core": {
                     "package": "lavashell-core",
                     "default-features": false,
@@ -4060,6 +4068,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../../crates/lavashell-lucide"
+                  },
+                  "lavashell-runtime": {
+                    "package": "lavashell-runtime",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-runtime"
                   },
                   "lavashell-test-platform": {
                     "package": "lavashell-test-platform",
@@ -5214,9 +5228,11 @@
                   "clap",
                   "csv",
                   "lavashell",
+                  "lavashell-actor",
                   "lavashell-core",
                   "lavashell-example-copy-keys",
                   "lavashell-lucide",
+                  "lavashell-runtime",
                   "lavashell-test-platform",
                   "serde",
                   "thiserror"

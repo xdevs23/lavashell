@@ -1,297 +1,323 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
-use lavashell_example_support::{
-    Capture, Theme, ThemeChoice,
-    testing::{click, control, node, scene},
-    without_failures,
+use lavashell_example_support::testing::{
+    Shaping, capture_path, click, control, write_first_frames,
 };
+use lavashell_example_support::{Start, Steps, Theme, ThemeChoice, at_rest, default_app, node};
 use lavashell_music_player::{
-    Error,
+    Error, app,
     music::{self, AlbumId, CopyKey, PLAYER_HEIGHT, Tag, TrackId, copy},
 };
-use std::{path::Path, time::Duration};
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use std::{cell::Cell, rc::Rc};
 
 const WINDOW: Size = Size::new(Dp::new(1400.0), Dp::new(1000.0));
 
-fn show(
+type Play = Steps<State<music::Model>, PathBuf, Error>;
+
+fn tracks() -> Vec<TrackId> {
+    TrackId::all().collect()
+}
+
+fn capture(name: &str) -> PathBuf {
+    capture_path(
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("music-player"),
+        name,
+    )
+}
+
+fn shot(
+    play: &mut Play,
+    name: &str,
+    action: impl FnOnce(&mut View, Viewport, &State<music::Model>) -> Result<(), Error> + 'static,
+) {
+    play.push_at_rest_and_mark(capture(name), action);
+}
+
+fn record(play: Play, app: App) -> Result<(), Error> {
+    let frames = play.play(app, Density::ONE)?;
+    Ok(write_first_frames(frames)?)
+}
+
+fn library(model: &State<music::Model>, size: Size) -> Result<App, Error> {
+    let theme = Theme::new(ThemeChoice::System)?;
+    app(default_app()?, model, &theme, Some(size))
+}
+
+fn painted_texts(
+    shaping: &Shaping,
     view: &mut View,
-    builder: &mut SceneBuilder,
     viewport: Viewport,
-    capture: &mut Capture,
-) -> Result<(), Error> {
-    without_failures(view.frame_into(viewport, capture.painter.shaper(), builder))
-        .map_err(Error::Example)
+) -> Result<BTreeSet<String>, Error> {
+    let tree = shaping.scene(view, viewport)?;
+    let now = view.motion().now();
+    Ok((tree.at(now).leaf_commands())
+        .filter_map(|command| match command {
+            DrawCommand::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect())
 }
 
 #[test]
 fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Error> {
-    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("music-player");
     let model = State::new(music::Model::default());
+    let shaping = Shaping::new()?;
+    let mut play = Play::new(model.clone());
+    play.mark(Start::at_rest(), capture("music"));
+    controls(&mut play);
+    shot(&mut play, "music-search", |view, _, model| {
+        click(view, Tag::SearchInput)?;
+        view.input(InputEvent::Text("glass".into()));
+        assert_eq!(model.get().query, "glass");
+        Ok(())
+    });
+    play.check(Start::at_rest(), |view, _, _| {
+        assert!(view.bounds_of(&Tag::Track(tracks()[4])).is_some());
+        assert!(view.bounds_of(&Tag::Track(tracks()[0])).is_none());
+        Ok(())
+    });
+    play.push(Start::at_rest(), |_, _, model| {
+        model.update(|m| m.query.clear());
+        Ok(())
+    });
+    shot(&mut play, "music-favorites", |view, _, _| {
+        Ok(click(view, Tag::Navigation(CopyKey::NavFavorites))?)
+    });
+    play.check(Start::at_rest(), |view, _, _| {
+        assert!(view.bounds_of(&Tag::Track(tracks()[3])).is_some());
+        assert!(view.bounds_of(&Tag::Track(tracks()[6])).is_none());
+        Ok(())
+    });
+    empty_states(&mut play, &shaping);
+    play.push(Start::at_rest(), |_, _, model| {
+        model.set(music::Model::default());
+        Ok(())
+    });
+    shot(&mut play, "music-album", |view, _, model| {
+        assert!(model.get().recent.is_empty());
+        click(view, Tag::PlayAlbum)?;
+        assert_eq!(model.get().current, tracks()[0]);
+        assert_eq!(model.get().album, AlbumId::all().next());
+        assert!(model.get().playing);
+        Ok(())
+    });
+    play.push(Start::at_rest(), |view, _, model| {
+        click(view, Tag::Next)?;
+        assert_eq!(model.get().current, tracks()[1]);
+        Ok(())
+    });
+    shot(&mut play, "music-recent", |view, _, model| {
+        click(view, Tag::Navigation(CopyKey::NavRecent))?;
+        assert_eq!(model.get().recent, vec![tracks()[1], tracks()[0]]);
+        Ok(())
+    });
+    record(play, library(&model, WINDOW)?)?;
+
+    panel_reaches_the_library()?;
+    compact()?;
+    scrolled(shaping)
+}
+
+type ModelChanged = fn(&music::Model) -> bool;
+
+fn controls(play: &mut Play) {
+    let clicks: [(Tag, ModelChanged); 6] = [
+        (Tag::PlayToggle, |m| m.playing),
+        (Tag::Next, |m| m.current == tracks()[3]),
+        (Tag::SaveCurrent, |m| m.favorites.contains(&tracks()[3])),
+        (Tag::Shuffle, |m| m.shuffle),
+        (Tag::Repeat, |m| m.repeat),
+        (Tag::Seek, |m| (m.position.as_secs_f64() - 91.5).abs() < 1.0),
+    ];
+    for (tag, changed) in clicks {
+        play.push(Start::at_rest(), move |view, _, model| {
+            click(view, tag)?;
+            assert!(changed(&model.get()), "{tag:?}");
+            Ok(())
+        });
+    }
+    play.push(Start::at_rest(), |view, _, model| {
+        let r = control(view, Tag::Volume)?;
+        let p = Point::new(r.x + r.width * 0.3, r.y + r.height / 2.0);
+        view.input(InputEvent::Press(p));
+        view.input(InputEvent::Release(p));
+        assert!((model.get().volume - 0.3).abs() < 0.01);
+        Ok(())
+    });
+    play.push(Start::at_rest(), |view, _, model| {
+        let volume = node(view, &Role::Slider, copy(CopyKey::Volume))?.id;
+        assert_eq!(
+            view.accessibility_action(ActionRequest {
+                target: volume,
+                action: AccessibilityAction::Focus
+            }),
+            Ok(ActionOutcome::Performed)
+        );
+        view.input(InputEvent::Key {
+            key: Key::End,
+            shift: false,
+        });
+        assert_eq!(
+            model.get().volume.to_bits(),
+            1.0_f64.to_bits(),
+            "keyboard volume must use the same model callback"
+        );
+        assert_eq!(
+            view.accessibility_action(ActionRequest {
+                target: volume,
+                action: AccessibilityAction::SetValue(AccessibleValue::Number(0.3)),
+            }),
+            Ok(ActionOutcome::Performed)
+        );
+        assert!((model.get().volume - 0.3).abs() < 0.01);
+        Ok(())
+    });
+}
+
+fn empty_states(play: &mut Play, shaping: &Shaping) {
+    shot(play, "music-empty-favorites", |_, _, model| {
+        model.update(|m| {
+            m.favorites.clear();
+            m.query.clear();
+            m.section = music::Section::Favorites;
+        });
+        Ok(())
+    });
+    let favorites = shaping.clone();
+    play.push(Start::at_rest(), move |view, viewport, _| {
+        let texts = painted_texts(&favorites, view, viewport)?;
+        assert!(texts.contains(copy(CopyKey::CollectionEmpty)));
+        assert!(!texts.contains(copy(CopyKey::SearchEmpty)));
+        Ok(())
+    });
+    shot(play, "music-empty-search", |_, _, model| {
+        model.set(music::Model::default());
+        model.update(|m| m.query = "not-in-the-sample-collection".into());
+        Ok(())
+    });
+    let search = shaping.clone();
+    play.push(Start::at_rest(), move |view, viewport, _| {
+        let texts = painted_texts(&search, view, viewport)?;
+        assert!(texts.contains(copy(CopyKey::SearchEmpty)));
+        Ok(())
+    });
+}
+
+fn panel_reaches_the_library() -> Result<(), Error> {
+    let model = State::new(music::Model::default());
+    let mut app = library(&model, WINDOW)?;
+    let (shown, theme) = (model.clone(), Theme::new(ThemeChoice::System)?);
     let icons = music::Icons::decode()?;
-    let theme = Theme::new(ThemeChoice::System)?;
-    let mut capture = Capture::new()?;
-    let state = model.clone();
-    let shown_theme = theme.clone();
-    let mut view = View::new(lavashell_example_support::platform(), move |ui| {
-        music::music(ui, &state, &shown_theme, icons);
-    });
-    let mut shown = SceneBuilder::default();
-    let tracks: Vec<_> = TrackId::all().collect();
-    let albums: Vec<_> = AlbumId::all().collect();
-    let size = WINDOW;
-    let window = Viewport::new(size, Density::ONE);
-    capture.save(&mut view, window, directory.join("music.png"))?;
-
-    click(&mut view, Tag::PlayToggle)?;
-    assert!(model.get().playing);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Next)?;
-    assert_eq!(model.get().current, tracks[3]);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::SaveCurrent)?;
-    assert!(model.get().favorites.contains(&tracks[3]));
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Shuffle)?;
-    assert!(model.get().shuffle);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Repeat)?;
-    assert!(model.get().repeat);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Seek)?;
-    assert!((model.get().position.as_secs_f64() - 91.5).abs() < 1.0);
-    show(&mut view, &mut shown, window, &mut capture)?;
-
-    let r = control(&view, Tag::Volume)?;
-    let p = Point::new(r.x + r.width * 0.3, r.y + r.height / 2.0);
-    view.input(InputEvent::Press(p));
-    view.input(InputEvent::Release(p));
-    assert!((model.get().volume - 0.3).abs() < 0.01);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    let volume = node(&view, &Role::Slider, copy(CopyKey::Volume))?.id;
-    assert_eq!(
-        view.accessibility_action(ActionRequest {
-            target: volume,
-            action: AccessibilityAction::Focus
-        }),
-        Ok(ActionOutcome::Performed)
-    );
-    view.input(InputEvent::Key {
-        key: Key::End,
-        shift: false,
-    });
-    assert_eq!(
-        model.get().volume.to_bits(),
-        1.0_f64.to_bits(),
-        "keyboard volume must use the same model callback"
-    );
-    assert_eq!(
-        view.accessibility_action(ActionRequest {
-            target: volume,
-            action: AccessibilityAction::SetValue(AccessibleValue::Number(0.3)),
-        }),
-        Ok(ActionOutcome::Performed)
-    );
-    assert!((model.get().volume - 0.3).abs() < 0.01);
-    show(&mut view, &mut shown, window, &mut capture)?;
-
-    click(&mut view, Tag::SearchInput)?;
-    view.input(InputEvent::Text("glass".into()));
-    assert_eq!(model.get().query, "glass");
-    capture.save(&mut view, window, directory.join("music-search.png"))?;
-    assert!(view.bounds_of(&Tag::Track(tracks[4])).is_some());
-    assert!(view.bounds_of(&Tag::Track(tracks[0])).is_none());
-    model.update(|m| m.query.clear());
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Navigation(CopyKey::NavFavorites))?;
-    capture.save(&mut view, window, directory.join("music-favorites.png"))?;
-    assert!(view.bounds_of(&Tag::Track(tracks[3])).is_some());
-    assert!(view.bounds_of(&Tag::Track(tracks[6])).is_none());
-
-    panel_reaches_the_library(&view, &model, &theme, icons, &mut capture)?;
-
-    empty_states(&mut view, &model, &mut capture, &directory)?;
-
-    model.set(music::Model::default());
-    show(&mut view, &mut shown, window, &mut capture)?;
-    assert!(model.get().recent.is_empty());
-    click(&mut view, Tag::PlayAlbum)?;
-    assert_eq!(model.get().current, tracks[0]);
-    assert_eq!(model.get().album, Some(albums[0]));
-    assert!(model.get().playing);
-    capture.save(&mut view, window, directory.join("music-album.png"))?;
-    click(&mut view, Tag::Next)?;
-    assert_eq!(model.get().current, tracks[1]);
-    show(&mut view, &mut shown, window, &mut capture)?;
-    click(&mut view, Tag::Navigation(CopyKey::NavRecent))?;
-    capture.save(&mut view, window, directory.join("music-recent.png"))?;
-    assert_eq!(model.get().recent, vec![tracks[1], tracks[0]]);
-
-    compact_and_scrolled(&model, &theme, icons, &mut capture, &directory)?;
-    hero_is_shown_only_where_it_fits(&model, &theme, icons, &mut capture)?;
-    the_theme_switch_repaints_the_screen(&model, &theme, icons, &mut capture)
-}
-
-fn settled_view(
-    model: &State<music::Model>,
-    theme: &Theme,
-    icons: music::Icons,
-    size: Size,
-    capture: &mut Capture,
-) -> Result<View, Error> {
-    let state = model.clone();
-    let theme = theme.clone();
-    let mut view = View::new(lavashell_example_support::platform(), move |ui| {
-        music::music(ui, &state, &theme, icons);
-    });
-    let window = Viewport::new(size, Density::ONE);
-    let mut shown = SceneBuilder::default();
-    show(&mut view, &mut shown, window, capture)?;
-    while view.needs_frame() {
-        show(&mut view, &mut shown, window, capture)?;
-    }
-    Ok(view)
-}
-
-fn hero_is_shown_only_where_it_fits(
-    model: &State<music::Model>,
-    theme: &Theme,
-    icons: music::Icons,
-    capture: &mut Capture,
-) -> Result<(), Error> {
-    model.set(music::Model::default());
-    let tall = settled_view(model, theme, icons, WINDOW, capture)?;
-    let hero = control(&tall, Tag::Hero)?;
-    let chrome = WINDOW.height - control(&tall, Tag::CollectionScroll)?.height;
-    for (hero_fits, height) in [
-        (true, chrome + hero.height),
-        (false, chrome + hero.height - 1.dp()),
-    ] {
-        let size = Size::new(WINDOW.width, height);
-        let view = settled_view(model, theme, icons, size, capture)?;
-        assert_eq!(view.bounds_of(&Tag::Hero).is_some(), hero_fits);
-    }
-    Ok(())
-}
-
-fn compact_and_scrolled(
-    model: &State<music::Model>,
-    theme: &Theme,
-    icons: music::Icons,
-    capture: &mut Capture,
-    directory: &Path,
-) -> Result<(), Error> {
-    let window = Viewport::new(WINDOW, Density::ONE);
-    let mut shown = SceneBuilder::default();
-    model.set(music::Model::default());
-    let state = model.clone();
-    let shown_theme = theme.clone();
-    let mut compact = View::new(lavashell_example_support::platform(), move |ui| {
-        music::music(ui, &state, &shown_theme, icons);
-    });
-    capture.save(
-        &mut compact,
-        Viewport::new(Size::new(900.dp(), 850.dp()), Density::ONE),
-        directory.join("music-compact.png"),
+    app.window(
+        Window::new(copy(CopyKey::Title), "lavashell.music.panel")
+            .size(WINDOW.width, PLAYER_HEIGHT),
+        move |ui| music::panel(ui, &shown, &theme, icons),
     )?;
+    let is_library =
+        |view: &View| (view.bounds_of(&Tag::Navigation(CopyKey::NavFavorites))).is_some();
+    let mut play = Play::new(model);
+    let composed = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&composed);
+    let library_at_rest = Start::when(move |view| is_library(view) && at_rest(view));
+    play.check(library_at_rest, move |view, _, _| {
+        counted.set(view.stats().root_compositions);
+        Ok(())
+    });
+    let panel_at_rest = Start::when(move |view| !is_library(view) && at_rest(view));
+    play.push(panel_at_rest, |view, _, model| {
+        let previous = model.get().current;
+        click(view, Tag::Next)?;
+        assert_ne!(model.get().current, previous);
+        Ok(())
+    });
+    play.check(Start::when(is_library), move |view, _, _| {
+        assert!(
+            view.stats().root_compositions > composed.get(),
+            "a panel action must invalidate the other view"
+        );
+        Ok(())
+    });
+    record(play, app)
+}
 
-    let state = model.clone();
-    let shown_theme = theme.clone();
-    let mut scrolled = View::new(lavashell_example_support::platform(), move |ui| {
-        music::music(ui, &state, &shown_theme, icons);
+fn compact() -> Result<(), Error> {
+    let model = State::new(music::Model::default());
+    let mut play = Play::new(model.clone());
+    play.mark(Start::at_rest(), capture("music-compact"));
+    record(play, library(&model, Size::new(900.dp(), 850.dp()))?)
+}
+
+fn scrolled(shaping: Shaping) -> Result<(), Error> {
+    let model = State::new(music::Model::default());
+    let mut play = Play::new(model.clone());
+    shot(&mut play, "music-scrolled", |view, _, _| {
+        let area = control(view, Tag::CollectionScroll)?;
+        view.input(InputEvent::Scroll {
+            at: Point::new(area.x + 20.dp(), area.y + 40.dp()),
+            delta: Point::new(Dp::ZERO, 360.dp()),
+        });
+        Ok(())
     });
-    show(&mut scrolled, &mut shown, window, capture)?;
-    let area = control(&scrolled, Tag::CollectionScroll)?;
-    scrolled.input(InputEvent::Scroll {
-        at: Point::new(area.x + 20.dp(), area.y + 40.dp()),
-        delta: Point::new(Dp::ZERO, 360.dp()),
+    play.check(Start::at_rest(), |view, _, model| {
+        let area = control(view, Tag::CollectionScroll)?;
+        let current = control(view, Tag::Track(model.get().current))?;
+        assert!(current.y >= area.y && current.y + current.height < WINDOW.height - PLAYER_HEIGHT);
+        Ok(())
     });
-    capture.save(&mut scrolled, window, directory.join("music-scrolled.png"))?;
-    let current = control(&scrolled, Tag::Track(model.get().current))?;
-    assert!(current.y >= area.y && current.y + current.height < WINDOW.height - PLAYER_HEIGHT);
-    let r = control(&scrolled, Tag::PlayToggle)?;
-    scrolled.input(InputEvent::Move(Point::new(r.x + 10.dp(), r.y + 10.dp())));
-    let tree = scene(&mut scrolled, window, capture.painter.shaper())?;
-    assert!(
-        (tree.at(Duration::ZERO).leaf_commands())
-            .any(|c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::Play)))
-    );
+    play.push(Start::at_rest(), move |view, viewport, _| {
+        let r = control(view, Tag::PlayToggle)?;
+        view.input(InputEvent::Move(Point::new(r.x + 10.dp(), r.y + 10.dp())));
+        assert!(painted_texts(&shaping, view, viewport)?.contains(copy(CopyKey::Play)));
+        Ok(())
+    });
+    record(play, library(&model, WINDOW)?)
+}
+
+#[test]
+fn the_hero_is_shown_only_where_it_fits() -> Result<(), Error> {
+    let model = State::new(music::Model::default());
+    let fitting = Rc::new(Cell::new(Dp::ZERO));
+    let mut tall = Play::new(model.clone());
+    let measured = Rc::clone(&fitting);
+    tall.check(Start::at_rest(), move |view, _, _| {
+        let hero = control(view, Tag::Hero)?;
+        let chrome = WINDOW.height - control(view, Tag::CollectionScroll)?.height;
+        measured.set(chrome + hero.height);
+        Ok(())
+    });
+    record(tall, library(&model, WINDOW)?)?;
+    let height = fitting.get();
+    for (hero_fits, height) in [(true, height), (false, height - 1.dp())] {
+        let mut play = Play::new(model.clone());
+        play.check(Start::at_rest(), move |view, _, _| {
+            assert_eq!(view.bounds_of(&Tag::Hero).is_some(), hero_fits);
+            Ok(())
+        });
+        record(play, library(&model, Size::new(WINDOW.width, height))?)?;
+    }
     Ok(())
 }
 
-fn empty_states(
-    view: &mut View,
-    model: &State<music::Model>,
-    capture: &mut Capture,
-    directory: &Path,
-) -> Result<(), Error> {
-    let window = Viewport::new(WINDOW, Density::ONE);
-    model.update(|m| {
-        m.favorites.clear();
-        m.query.clear();
-        m.section = music::Section::Favorites;
-    });
-    capture.save(view, window, directory.join("music-empty-favorites.png"))?;
-    let tree = scene(view, window, capture.painter.shaper())?;
-    let commands: Vec<_> = tree.at(Duration::ZERO).leaf_commands().collect();
-    assert!(commands.iter().any(
-        |c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::CollectionEmpty))
-    ));
-    assert!(!commands.iter().any(
-        |c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::SearchEmpty))
-    ));
-
-    model.set(music::Model::default());
-    model.update(|m| m.query = "not-in-the-sample-collection".into());
-    capture.save(view, window, directory.join("music-empty-search.png"))?;
-    let tree = scene(view, window, capture.painter.shaper())?;
-    assert!(tree.at(Duration::ZERO).leaf_commands().any(
-        |c| matches!(c, DrawCommand::Text { text, .. } if text == copy(CopyKey::SearchEmpty))
-    ));
-    Ok(())
-}
-
-fn panel_reaches_the_library(
-    library: &View,
-    model: &State<music::Model>,
-    theme: &Theme,
-    icons: music::Icons,
-    capture: &mut Capture,
-) -> Result<(), Error> {
-    let state = model.clone();
-    let theme = theme.clone();
-    let mut panel = View::new(lavashell_example_support::platform(), move |ui| {
-        music::panel(ui, &state, &theme, icons);
-    });
-    let bar = Viewport::new(Size::new(WINDOW.width, PLAYER_HEIGHT), Density::ONE);
-    show(&mut panel, &mut SceneBuilder::default(), bar, capture)?;
-    let previous = model.get().current;
-    click(&mut panel, Tag::Next)?;
-    assert_ne!(model.get().current, previous);
-    assert!(
-        library.needs_frame(),
-        "a panel action must invalidate the other view"
-    );
-    Ok(())
-}
-
-fn the_theme_switch_repaints_the_screen(
-    model: &State<music::Model>,
-    theme: &Theme,
-    icons: music::Icons,
-    capture: &mut Capture,
-) -> Result<(), Error> {
-    model.set(music::Model::default());
-    let window = Viewport::new(WINDOW, Density::ONE);
-    let mut view = settled_view(model, theme, icons, WINDOW, capture)?;
-    let mut page_fill = |view: &mut View| -> Result<Option<DrawCommand>, Error> {
-        let tree = scene(view, window, capture.painter.shaper())?;
-        Ok(tree.at(Duration::ZERO).leaf_commands().next().cloned())
+#[test]
+fn the_theme_switch_repaints_the_screen() -> Result<(), Error> {
+    let model = State::new(music::Model::default());
+    let shaping = Shaping::new()?;
+    let page_fill = move |view: &mut View, viewport| -> Result<Option<DrawCommand>, Error> {
+        let tree = shaping.scene(view, viewport)?;
+        let now = view.motion().now();
+        Ok(tree.at(now).leaf_commands().next().cloned())
     };
-    let by_system = page_fill(&mut view)?;
-    click(&mut view, ThemeChoice::Light)?;
-    assert_ne!(page_fill(&mut view)?, by_system);
-    click(&mut view, ThemeChoice::Dark)?;
-    assert_eq!(page_fill(&mut view)?, by_system);
-    Ok(())
+    let mut play = Play::new(model.clone());
+    play.push(Start::at_rest(), move |view, viewport, _| {
+        let by_system = page_fill(view, viewport)?;
+        click(view, ThemeChoice::Light)?;
+        assert_ne!(page_fill(view, viewport)?, by_system);
+        click(view, ThemeChoice::Dark)?;
+        assert_eq!(page_fill(view, viewport)?, by_system);
+        Ok(())
+    });
+    record(play, library(&model, WINDOW)?)
 }

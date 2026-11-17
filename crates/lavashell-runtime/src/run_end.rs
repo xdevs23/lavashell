@@ -5,7 +5,7 @@ use std::time::Duration;
 pub struct RunEnd {
     ended: bool,
     exit_after: Option<Duration>,
-    exit_when: Option<Box<dyn FnMut() -> bool>>,
+    exit_when: Vec<Box<dyn FnMut() -> bool>>,
 }
 
 impl RunEnd {
@@ -14,7 +14,7 @@ impl RunEnd {
     }
 
     pub fn exit_when(&mut self, predicate: impl FnMut() -> bool + 'static) {
-        self.exit_when = Some(Box::new(predicate));
+        self.exit_when.push(Box::new(predicate));
     }
 
     pub fn end(&mut self) {
@@ -25,7 +25,7 @@ impl RunEnd {
         self.ended
             || !anything_open
             || self.exit_after.is_some_and(|limit| elapsed >= limit)
-            || self.exit_when.as_mut().is_some_and(|predicate| predicate())
+            || self.exit_when.iter_mut().any(|predicate| predicate())
     }
 
     #[must_use]
