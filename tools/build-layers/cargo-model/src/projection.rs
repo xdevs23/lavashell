@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::lock::CargoLock;
+use crate::lock::{CargoLock, LockedPackage};
 use crate::manifest::{FeatureActivations, StubManifest};
 use crate::unit_graph::UnitRecord;
 use serde::{Deserialize, Serialize};
@@ -147,6 +147,13 @@ impl ProjectionFile {
             },
         }
     }
+
+    #[must_use]
+    pub fn find_crate_unresolved_in(&self, lock: &CargoLock) -> Option<&LockedPackage> {
+        std::iter::once(&self.normal_lock)
+            .chain(&self.engine_lock)
+            .find_map(|stored| stored.find_crate_unresolved_in(lock))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -158,6 +165,19 @@ pub struct NativeProjection {
 }
 
 impl NativeProjection {
+    #[must_use]
+    pub fn new(lock: CargoLock) -> Self {
+        Self {
+            lock,
+            dependency_plans: DependencyPlans::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn find_crate_unresolved_in(&self, lock: &CargoLock) -> Option<&LockedPackage> {
+        self.lock.find_crate_unresolved_in(lock)
+    }
+
     #[must_use]
     pub fn prepared(&self, lock: CargoLock, target: &str) -> Self {
         Self {
@@ -175,4 +195,25 @@ impl NativeProjection {
 #[serde(rename_all = "camelCase")]
 pub struct EngineProjection {
     pub external_units: BTreeSet<UnitRecord>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProjectionFile;
+    use crate::lock::tests::registry_lock;
+
+    #[test]
+    fn finds_a_crate_unresolved_in_the_engine_lock() {
+        let cargo_lock = registry_lock(&[("serde", "1.0.0")]);
+        let projection = ProjectionFile {
+            engine_lock: Some(registry_lock(&[("toml", "1.0.0")])),
+            ..ProjectionFile::new(cargo_lock.clone())
+        };
+        assert_eq!(
+            projection
+                .find_crate_unresolved_in(&cargo_lock)
+                .map(|package| package.name.as_str()),
+            Some("toml")
+        );
+    }
 }

@@ -7,6 +7,7 @@ mod cargo;
 mod concurrency;
 mod error;
 mod files;
+mod projection_start;
 mod refresh;
 mod seed;
 
@@ -116,6 +117,12 @@ fn run(packages: &[String]) -> Result<(), Error> {
         root: &root,
     };
     for refreshed in refresh_projections(&toolkit, &entries)? {
+        if let Some(unresolved) = refreshed.unresolved_stored_crate {
+            println!(
+                "{}: the stored projection lists {} {}, which Cargo.lock no longer resolves, so the refresh started from Cargo.lock",
+                refreshed.package, unresolved.name, unresolved.version
+            );
+        }
         if let Some(units) = refreshed.external_units {
             println!("{}: {units} matching external units", refreshed.package);
         }

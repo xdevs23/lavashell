@@ -36,6 +36,12 @@ pub fn read_json<Document: DeserializeOwned>(path: &Path) -> Result<Document, Er
     })
 }
 
+pub fn read_json_if_present<Document: DeserializeOwned>(
+    path: &Path,
+) -> Result<Option<Document>, Error> {
+    path.exists().then(|| read_json(path)).transpose()
+}
+
 pub fn write_json<Document: Serialize>(path: &Path, document: &Document) -> Result<(), Error> {
     let text = serde_json::to_string_pretty(document).map_err(|source| Error::WriteJson {
         path: path.to_owned(),

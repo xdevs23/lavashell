@@ -4,14 +4,13 @@ use crate::canonical::{Seed, canonical_plan, materialize, verify_units};
 use crate::cargo::{Cargo, LockMode, ResolvedGraph};
 use crate::concurrency::run_concurrently;
 use crate::error::Error;
-use crate::files::{create_directory, read_json, read_toml, write_json, write_toml};
+use crate::files::{create_directory, read_toml, write_json, write_toml};
+use crate::projection_start::{ProjectionStart, start_native_projection, start_package_projection};
 use crate::seed::{SeedWorkspace, Seeds};
 use lavashell_cargo_model::contract::ProjectionContract;
 use lavashell_cargo_model::lock::{CargoLock, LockedPackage};
 use lavashell_cargo_model::manifest::PackageManifest;
-use lavashell_cargo_model::projection::{
-    Layer, LayerPlan, LockedPlan, NativeProjection, ProjectionFile, Selection,
-};
+use lavashell_cargo_model::projection::{Layer, LayerPlan, LockedPlan, ProjectionFile, Selection};
 use lavashell_cargo_model::unit_graph::UnitGraph;
 use lavashell_plan_check::{external_records, verify};
 use serde::{Deserialize, Serialize};
@@ -174,27 +173,19 @@ fn engine_seed_lock(
     baseline: &CargoLock,
     native_names: &[String],
 ) -> CargoLock {
-    let registry = baseline
-        .package
-        .iter()
-        .filter(|package| package.source.is_some())
-        .cloned();
-    let local = original
-        .package
-        .iter()
-        .filter(|package| package.source.is_none())
-        .map(|package| LockedPackage {
-            dependencies: package
-                .dependencies
-                .iter()
-                .filter(|reference| !native_names.contains(&reference.name))
-                .cloned()
-                .collect(),
-            ..package.clone()
-        });
+    let external = baseline.external_packages().cloned();
+    let local = original.local_packages().map(|package| LockedPackage {
+        dependencies: package
+            .dependencies
+            .iter()
+            .filter(|reference| !native_names.contains(&reference.name))
+            .cloned()
+            .collect(),
+        ..package.clone()
+    });
     CargoLock {
         version: baseline.version,
-        package: registry.chain(local).collect(),
+        package: external.chain(local).collect(),
     }
 }
 
@@ -321,18 +312,25 @@ impl LayerRefresh<'_> {
         Ok(Some(count))
     }
 
-    fn refresh(&self, package: &LayeredPackage) -> Result<Option<usize>, Error> {
-        let path = self.projection_path(&package.entry);
-        let stored = if path.exists() {
-            read_json(&path)?
-        } else {
-            ProjectionFile::new(self.original.clone())
-        };
-        let prepared = stored.prepared(package.layer, &self.toolkit.cargo.target);
+    fn refresh(&self, package: &LayeredPackage) -> Result<RefreshedPackage, Error> {
+        let ProjectionStart {
+            projection,
+            unresolved_stored_crate,
+        } = start_package_projection(
+            &self.projection_path(&package.entry),
+            package.layer,
+            &self.toolkit.cargo.target,
+            self.original,
+        )?;
         match package.layer {
-            Layer::Engine => self.refresh_engine_layer(package, prepared),
-            Layer::Registry => self.refresh_registry_layer(package, prepared),
+            Layer::Engine => self.refresh_engine_layer(package, projection),
+            Layer::Registry => self.refresh_registry_layer(package, projection),
         }
+        .map(|external_units| RefreshedPackage {
+            package: package.entry.package.clone(),
+            external_units,
+            unresolved_stored_crate,
+        })
         .map_err(|source| Error::Refresh {
             package: package.entry.package.clone(),
             source: Box::new(source),
@@ -343,6 +341,7 @@ impl LayerRefresh<'_> {
 pub struct RefreshedPackage {
     pub package: String,
     pub external_units: Option<usize>,
+    pub unresolved_stored_crate: Option<LockedPackage>,
 }
 
 pub fn refresh_projections(
@@ -354,21 +353,16 @@ pub fn refresh_projections(
     let output = toolkit.root.join(&contract.projection_directory);
     create_directory(&output)?;
     let native_path = output.join("native.json");
-    let stored_native = if native_path.exists() {
-        read_json(&native_path)?
-    } else {
-        NativeProjection {
-            lock: original.clone(),
-            dependency_plans: BTreeMap::new(),
-        }
-    };
+    let native_start = start_native_projection(&native_path, &original)?;
     let scratch = tempfile::tempdir().map_err(Error::TemporaryDirectory)?;
     let native_graph = toolkit.seed_graph(
         &contract.native_directory,
         Layer::Registry,
         &scratch.path().join("native"),
     )?;
-    let mut native = stored_native.prepared(native_graph.lock, &toolkit.cargo.target);
+    let mut native = native_start
+        .projection
+        .prepared(native_graph.lock, &toolkit.cargo.target);
     write_json(&native_path, &native)?;
     let (packages, native_names) = toolkit.catalog(entries)?;
     let native_plan = toolkit.dependency_plan(
@@ -389,18 +383,16 @@ pub fn refresh_projections(
         output: &output,
         scratch: scratch.path(),
     };
-    let counts = run_concurrently(
+    let native_refresh = RefreshedPackage {
+        package: package_name(&toolkit.root.join(&contract.native_directory))?,
+        external_units: None,
+        unresolved_stored_crate: native_start.unresolved_stored_crate,
+    };
+    let refreshed = run_concurrently(
         packages
             .iter()
             .map(|package| || refresh.refresh(package))
             .collect(),
     )?;
-    Ok(packages
-        .into_iter()
-        .zip(counts)
-        .map(|(package, external_units)| RefreshedPackage {
-            package: package.entry.package,
-            external_units,
-        })
-        .collect())
+    Ok(std::iter::once(native_refresh).chain(refreshed).collect())
 }
