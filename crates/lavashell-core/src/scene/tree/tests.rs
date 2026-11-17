@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::show_all;
 use super::test_changes::{fill, fill_content, insert, square, white_fill};
 use super::*;
 use crate::geometry::Point;
@@ -62,7 +63,7 @@ fn nested() -> Result<SceneTree, ApplyError> {
         insert(4, Some(3), 0, fill(square())?),
         insert(5, None, 1, fill(square())?),
     ];
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     Ok(tree)
 }
 
@@ -75,20 +76,15 @@ fn inserts_moves_and_removals_preserve_the_paint_order_of_the_tree() -> TestResu
         parent: Some(SceneNodeId(3)),
         index: 0,
     };
-    tree.show(SceneUpdate::from_iter([moved]))?;
+    tree.show_change(moved)?;
     assert_eq!(seen(&tree), [Gr(1), L(2), Gr(3), L(5), L(4), Exit, Exit]);
     let removed = Change::Remove { id: SceneNodeId(3) };
-    tree.show(SceneUpdate::from_iter([removed]))?;
+    tree.show_change(removed)?;
     assert_eq!(seen(&tree), [Gr(1), L(2), Exit]);
     let under_removed = insert(6, Some(3), 0, fill(square())?);
-    let error = tree.apply(SceneTree::ROOT, SceneUpdate::from_iter([under_removed]));
+    let error = tree.show_change(under_removed);
     assert_eq!(error, Err(ApplyError::UnknownNode(SceneNodeId(3))));
-    tree.show(SceneUpdate::from_iter([insert(
-        4,
-        None,
-        1,
-        fill(square())?,
-    )]))?;
+    tree.show_change(insert(4, None, 1, fill(square())?))?;
     assert_eq!(seen(&tree), [Gr(1), L(2), Exit, L(4)]);
     Ok(())
 }
@@ -147,10 +143,7 @@ fn changes_that_would_break_the_structure_fail_and_leave_the_tree_as_it_was() ->
         ),
     ];
     for (change, error) in invalid {
-        assert_eq!(
-            tree.apply(SceneTree::ROOT, SceneUpdate::from_iter([change])),
-            Err(error)
-        );
+        assert_eq!(tree.show_change(change), Err(error));
     }
     assert_eq!(seen(&tree), [Gr(1), L(2), Gr(3), L(4), Exit, Exit, L(5)]);
     Ok(())
@@ -161,12 +154,40 @@ fn a_parent_in_another_namespace_fails() -> TestResult {
     let mut tree = SceneTree::default();
     let other = tree.create_namespace();
     let group = insert(7, None, 0, Node::Group(Group::default()));
-    tree.apply(other, SceneUpdate::from_iter([group]))?;
-    let error = tree.apply(
-        SceneTree::ROOT,
-        SceneUpdate::from_iter([insert(8, Some(7), 0, fill(square())?)]),
-    );
+    tree.apply_change(other, group)?;
+    let error = tree.show_change(insert(8, Some(7), 0, fill(square())?));
     assert_eq!(error, Err(ApplyError::UnknownNode(SceneNodeId(7))));
+    Ok(())
+}
+
+#[test]
+fn a_change_to_an_unknown_namespace_fails_and_leaves_the_tree_as_it_was() -> TestResult {
+    let mut tree = nested()?;
+    let mut elsewhere = SceneTree::default();
+    let _known_in_both_trees = elsewhere.create_namespace();
+    let unknown = elsewhere.create_namespace();
+    let changes = [
+        insert(9, None, 0, fill(square())?),
+        Change::Remove { id: SceneNodeId(1) },
+        Change::Move {
+            id: SceneNodeId(1),
+            parent: None,
+            index: 0,
+        },
+        Change::SetContent {
+            id: SceneNodeId(2),
+            content: fill_content(square())?,
+        },
+        Change::SetSlot {
+            id: SceneNodeId(1),
+            slot: SlotChange::Opacity(Slot::Value(0.5)),
+        },
+    ];
+    for change in changes {
+        let error = tree.apply_change(unknown, change);
+        assert_eq!(error, Err(ApplyError::UnknownNamespace(unknown)));
+    }
+    assert_eq!(seen(&tree), [Gr(1), L(2), Gr(3), L(4), Exit, Exit, L(5)]);
     Ok(())
 }
 
@@ -174,28 +195,24 @@ fn a_parent_in_another_namespace_fails() -> TestResult {
 fn a_graft_paints_its_namespace_in_place_once_and_never_inside_itself() -> TestResult {
     let mut tree = SceneTree::default();
     let grafted = tree.create_namespace();
-    tree.apply(
-        grafted,
-        SceneUpdate::from_iter([insert(1, None, 0, fill(square())?)]),
-    )?;
+    tree.apply_change(grafted, insert(1, None, 0, fill(square())?))?;
     let graft = |id| insert(id, None, 0, Node::Leaf(Content::Graft(grafted)));
-    tree.show(SceneUpdate::from_iter([graft(9)]))?;
+    tree.show_change(graft(9))?;
     assert_eq!(seen(&tree), [G(9), L(1), Exit]);
-    let error = tree.apply(SceneTree::ROOT, SceneUpdate::from_iter([graft(10)]));
+    let error = tree.show_change(graft(10));
     assert_eq!(error, Err(ApplyError::AlreadyGrafted(grafted)));
     let back = insert(2, None, 0, Node::Leaf(Content::Graft(SceneTree::ROOT)));
-    let error = tree.apply(grafted, SceneUpdate::from_iter([back]));
+    let error = tree.apply_change(grafted, back);
     assert_eq!(error, Err(ApplyError::GraftCycle(SceneTree::ROOT)));
     let inner = tree.create_namespace();
     let graft_inner = insert(3, None, 0, Node::Leaf(Content::Graft(inner)));
-    tree.apply(grafted, SceneUpdate::from_iter([graft_inner]))?;
-    let graft_outer =
-        || SceneUpdate::from_iter([insert(1, None, 0, Node::Leaf(Content::Graft(grafted)))]);
-    let error = tree.apply(inner, graft_outer());
+    tree.apply_change(grafted, graft_inner)?;
+    let graft_outer = || insert(1, None, 0, Node::Leaf(Content::Graft(grafted)));
+    let error = tree.apply_change(inner, graft_outer());
     assert_eq!(error, Err(ApplyError::AlreadyGrafted(grafted)));
     let ungraft = Change::Remove { id: SceneNodeId(9) };
-    tree.show(SceneUpdate::from_iter([ungraft]))?;
-    let error = tree.apply(inner, graft_outer());
+    tree.show_change(ungraft)?;
+    let error = tree.apply_change(inner, graft_outer());
     assert_eq!(error, Err(ApplyError::GraftCycle(grafted)));
     Ok(())
 }
@@ -219,7 +236,7 @@ fn the_world_transform_of_a_leaf_applies_the_innermost_group_first() -> TestResu
         insert(2, Some(1), 0, group(Affine::scale(2.0, 2.0))),
         insert(3, Some(2), 0, fill(square())?),
     ];
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     let world = tree
         .at(Duration::ZERO)
         .paint_order()
@@ -235,14 +252,14 @@ fn the_world_transform_of_a_leaf_applies_the_innermost_group_first() -> TestResu
 }
 
 #[test]
-fn a_tree_with_one_leaf_shows_it_and_applies_updates_of_that_leaf() -> TestResult {
+fn a_tree_with_one_leaf_shows_it_and_applies_changes_of_that_leaf() -> TestResult {
     let mut tree = SceneTree::with_leaf([white_fill(square())])?;
     assert_eq!(seen(&tree), [L(SceneTree::LEAF.node.0)]);
-    let changes = [Change::SetContent {
+    let replaced = Change::SetContent {
         id: SceneTree::LEAF.node,
         content: fill_content(square())?,
-    }];
-    tree.show(SceneUpdate::from_iter(changes))?;
+    };
+    tree.show_change(replaced)?;
     assert_eq!(seen(&tree), [L(SceneTree::LEAF.node.0)]);
     Ok(())
 }
@@ -272,7 +289,7 @@ fn a_snapshot_keeps_showing_its_moment_while_the_tree_changes() -> TestResult {
             slot: SlotChange::Opacity(Slot::Value(0.5)),
         },
     ];
-    tree.show(SceneUpdate::from_iter(changes))?;
+    show_all(&mut tree, changes)?;
     assert_eq!(seen(&tree), [Gr(1), L(6), Gr(3), L(5), L(4), Exit, Exit]);
     let shown = seen_in(snapshot.at(Duration::ZERO));
     assert_eq!(shown, [Gr(1), L(2), Gr(3), L(4), Exit, Exit, L(5)]);
@@ -290,7 +307,7 @@ fn snapshots_share_the_nodes_that_the_tree_did_not_change_between_them() -> Test
         id: SceneNodeId(4),
         content: fill_content(square())?,
     };
-    tree.show(SceneUpdate::from_iter([replaced]))?;
+    tree.show_change(replaced)?;
     let after = tree.snapshot();
     let packets = |snapshot: &SceneSnapshot| -> Vec<*const Packet> {
         (snapshot.at(Duration::ZERO).paint_order().leaves())

@@ -8,16 +8,6 @@ use crate::scene::Affine;
 use crate::shape::RoundedRect;
 use std::sync::Arc;
 
-#[derive(Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SceneUpdate {
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "crate::encoding::sequence")
-    )]
-    pub changes: Vec<Change>,
-}
-
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Change {
@@ -77,26 +67,8 @@ pub enum ApplyError {
     Packet(#[from] UnbalancedRestore),
 }
 
-impl FromIterator<Change> for SceneUpdate {
-    fn from_iter<I: IntoIterator<Item = Change>>(changes: I) -> Self {
-        Self {
-            changes: changes.into_iter().collect(),
-        }
-    }
-}
-
 impl SceneTree {
-    pub fn apply(&mut self, namespace: NamespaceId, update: SceneUpdate) -> Result<(), ApplyError> {
-        if !self.namespaces.0.contains_key(&namespace) {
-            return Err(ApplyError::UnknownNamespace(namespace));
-        }
-        update
-            .changes
-            .into_iter()
-            .try_for_each(|change| self.change(namespace, change))
-    }
-
-    pub(super) fn change(
+    pub fn apply_change(
         &mut self,
         namespace: NamespaceId,
         change: Change,

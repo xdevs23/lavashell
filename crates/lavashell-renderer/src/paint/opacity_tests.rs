@@ -6,8 +6,9 @@ use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{
-    Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, SceneUpdate, Slot,
+    Change, Content, Group, Node, Packet, SceneNodeId, SceneTree, Slot,
 };
+use lavashell_test_fixtures::show_all;
 use skia_safe::{AlphaType, Surface};
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -60,13 +61,13 @@ fn faded(
         index,
         node,
     };
-    let changes = vec![
+    let changes = [
         insert(1, None, 0, leaf(below)?),
         insert(2, None, 1, Node::Group(group)),
         insert(3, Some(2), 0, leaf(inside)?),
     ];
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     Ok(tree.snapshot())
 }
 

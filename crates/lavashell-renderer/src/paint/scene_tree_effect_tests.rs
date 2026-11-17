@@ -11,6 +11,7 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::*;
 use lavashell_core::surface::{PerSurface, SurfaceId};
 use lavashell_effect_quality::*;
+use lavashell_test_fixtures::show_all;
 use skia_safe::Canvas;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -56,15 +57,12 @@ fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> R
     painter.effect_quality(planned.clone());
     let mut scene = SceneTree::default();
     let guest = scene.create_namespace();
-    scene.apply(
-        guest,
-        SceneUpdate::from_iter([insert(1, None, 0, leaf(shapes())?)]),
-    )?;
+    scene.apply_change(guest, insert(1, None, 0, leaf(shapes())?))?;
     let root = [
         insert(1, None, 0, leaf(shapes())?),
         insert(2, None, 1, Node::Leaf(Content::Graft(guest))),
     ];
-    scene.show(SceneUpdate::from_iter(root))?;
+    show_all(&mut scene, root)?;
     let budget = FrameBudget {
         surface: SurfaceId::numbered(3),
         gpu_time: Some(Duration::from_millis(1)),

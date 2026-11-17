@@ -8,8 +8,9 @@ use crate::test_surfaces::TestSurface;
 use crate::test_variants::only_variant;
 use crate::{Fonts, Painter};
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::{Content, Group, Node, Packet, SceneTree, SceneUpdate};
+use lavashell_core::scene::tree::{Content, Group, Node, Packet, SceneTree};
 use lavashell_effect_quality::*;
+use lavashell_test_fixtures::show_all;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 type Recorded = Rc<RefCell<Vec<(DrawId, Option<u64>)>>>;
@@ -230,14 +231,14 @@ fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), Tes
     drawing.circle(Point::new(0.dp(), 0.dp()), 3.dp(), Color::WHITE);
     let packet = |commands: Vec<DrawCommand>| Packet::new(Arc::from(commands));
     let leaf = |packet| Node::Leaf(Content::Packet(packet));
-    let changes = vec![
+    let changes = [
         insert(1, None, 0, leaf(packet(vec![leaves[0].clone()])?)),
         insert(2, None, 1, Node::Group(Group::default())),
         insert(3, Some(2), 0, leaf(packet(leaves.clone())?)),
         insert(4, None, 2, leaf(packet(vec![leaves[1].clone()])?)),
     ];
     let mut tree = SceneTree::default();
-    tree.show(SceneUpdate { changes })?;
+    show_all(&mut tree, changes)?;
     assert_eq!(
         painter.plan_scene_effects(
             tree.at(Duration::ZERO),
