@@ -9,7 +9,7 @@ use crate::units::NonNegativeDp;
 use crate::view::test_scene::replay;
 
 fn tap(view: &mut View, tag: &'static str) -> TestResult {
-    let at = center(view.tagged_bounds(&tag)?);
+    let at = view.tagged_bounds(&tag)?.center();
     view.input(InputEvent::Press(at));
     view.input(InputEvent::Release(at));
     Ok(())
@@ -87,7 +87,7 @@ fn a_context_press_after_keys_hides_focus_again() -> TestResult {
     let mut view = buttons();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.input(TAB);
-    view.input(InputEvent::Context(center(view.tagged_bounds(&"second")?)));
+    view.input(InputEvent::Context(view.tagged_bounds(&"second")?.center()));
     let state = view.tagged_state(&"second")?;
     assert!(state.focus.focused);
     assert!(!state.focus.visible);

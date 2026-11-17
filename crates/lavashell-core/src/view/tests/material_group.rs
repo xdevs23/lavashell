@@ -178,10 +178,7 @@ fn a_pressed_island_shrinks_the_glass_of_its_group_with_its_content() -> TestRes
     });
     paint(&mut view, &mut scene, 0)?;
     let second = view.tagged_bounds(&"second")?;
-    let center = Point::new(
-        second.x + second.width / 2.0,
-        second.y + second.height / 2.0,
-    );
+    let center = second.center();
     view.input(InputEvent::Move(center));
     view.input(InputEvent::Press(center));
     let commands = frame(&mut view, &mut scene, 0)?;

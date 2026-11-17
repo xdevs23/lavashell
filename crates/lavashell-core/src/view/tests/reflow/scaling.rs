@@ -15,7 +15,7 @@ fn a_scaled_reflowing_node_scales_about_the_centre_of_its_glass() -> TestResult 
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     halfway(&mut view, &mut scene, &wide, true)?;
     let glass = glass(&scene)?;
-    assert_eq!(center(glass), Point::new(105.dp(), 30.dp()));
+    assert_eq!(glass.center(), Point::new(105.dp(), 30.dp()));
     assert_eq!(glass.width, 85.dp());
     Ok(())
 }
@@ -45,6 +45,6 @@ fn a_reflowing_node_leaves_scaling_about_the_centre_of_its_glass() -> TestResult
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1000)?;
     let glass = fills(&scene, ISLAND)?.remove(0);
     assert_eq!((glass.rect.width / glass.scale.0), 195.dp());
-    assert_eq!(center(glass.rect), Point::new(117.5.dp(), 30.dp()));
+    assert_eq!(glass.rect.center(), Point::new(117.5.dp(), 30.dp()));
     Ok(())
 }

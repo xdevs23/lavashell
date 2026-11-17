@@ -103,10 +103,6 @@ fn text_tag(name: &NodeName) -> Option<&'static str> {
         .copied()
 }
 
-fn center(rect: Rect) -> Point {
-    Point::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
-}
-
 fn sized() -> Modifier {
     Modifier::new().size(200.dp(), 40.dp())
 }
@@ -127,7 +123,7 @@ fn tap_at(view: &mut View, at: Point) {
 }
 
 fn tap<T: ViewTag + Clone>(view: &mut View, tag: &T) -> Result<(), TestError> {
-    tap_at(view, center(view.tagged_bounds(tag)?));
+    tap_at(view, view.tagged_bounds(tag)?.center());
     Ok(())
 }
 

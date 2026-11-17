@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::accessibility::AccessibilityAction;
-use crate::geometry::{Axis, Point};
+use crate::geometry::Axis;
 use crate::reactive::State;
 use crate::ui::Ui;
 
@@ -48,10 +48,7 @@ fn disabled_button_clears_focus_without_capturing_global_shortcuts_in_an_editor(
         frame(&mut scene, &mut view)?;
         let button = target(&view, "Delete")?;
         let bounds = view.accessibility.tree.nodes[&button].bounds;
-        let point = Point::new(
-            bounds.x + bounds.width / 2.0,
-            bounds.y + bounds.height / 2.0,
-        );
+        let point = bounds.center();
         view.input(InputEvent::Press(point));
         view.input(InputEvent::Release(point));
         assert_eq!(view.focus(), Some(button));
@@ -80,8 +77,7 @@ fn the_accessibility_focus_action_makes_focus_visible_after_a_tap() -> TestResul
         });
     });
     frame(&mut scene, &mut view)?;
-    let play = view.tagged_bounds(&"play")?;
-    let at = Point::new(play.x + play.width / 2.0, play.y + play.height / 2.0);
+    let at = view.tagged_bounds(&"play")?.center();
     view.input(InputEvent::Press(at));
     view.input(InputEvent::Release(at));
     assert!(!view.tagged_state(&"play")?.focus.visible);
