@@ -3,7 +3,7 @@ use crate::accessibility::{
     AccessibilityAction, AccessibleNode, AccessibleValue, ActionError, ActionOutcome,
     ActionRequest, CollectionInfo, IgnoredBecause,
 };
-use crate::geometry::{Axis, Point};
+use crate::geometry::Axis;
 use crate::text_edit::TextEdit;
 use crate::ui::{FieldContent, NodeKind};
 use crate::units::Dp;
@@ -99,9 +99,7 @@ impl View {
                 Ok(())
             }
             AccessibilityAction::Activate => {
-                let gestures = &self.nodes[index].gestures;
-                let (activate, click) = (gestures.activate().cloned(), gestures.click().cloned());
-                self.run_activation(activate, click, Point::default());
+                self.activate_node(id, None);
                 Ok(())
             }
             AccessibilityAction::Scroll(_, delta) => {

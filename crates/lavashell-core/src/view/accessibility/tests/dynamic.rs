@@ -135,16 +135,16 @@ fn metadata_updates_preserve_visual_dirtiness_and_dynamic_actions_use_latest_val
 fn dynamic_disabled_metadata_gates_real_input_and_reenables_without_composition() -> TestResult {
     let disabled = crate::reactive::State::new(false);
     let state = disabled.clone();
-    let clicks = crate::reactive::State::new(0);
-    let clicked = clicks.clone();
+    let activations = crate::reactive::State::new(0);
+    let activated = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let state = state.clone();
-        let clicked = clicked.clone();
+        let activated = activated.clone();
         ui.text(
             "Existing action copy",
             Modifier::new()
-                .on_click(move || clicked.set(clicked.get() + 1))
+                .on_activate(move |_| activated.set(activated.get() + 1))
                 .semantics_dynamic(move |semantics| semantics.state.disabled = state.get()),
         );
     });
@@ -165,12 +165,12 @@ fn dynamic_disabled_metadata_gates_real_input_and_reenables_without_composition(
         key: Key::Enter,
         shift: false,
     });
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     disabled.set(false);
     view.update_accessibility();
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     assert_eq!(view.stats().root_compositions, compositions);
     Ok(())
 }

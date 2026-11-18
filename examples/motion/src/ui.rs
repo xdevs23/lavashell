@@ -266,7 +266,7 @@ fn automatic(ui: &mut Ui, demo: &Demo, width: Dp, layout: Layout) {
                 .clip(radius)
                 .background(colors.blue)
                 .transition(spring)
-                .on_click(move || d.expanded.update(|v| *v = !*v))
+                .on_activate(move |_| d.expanded.update(|v| *v = !*v))
                 .accessible_name(UNDERTOW.title)
                 .semantics_with(move |s| s.state.expanded = Some(expanded))
                 .tag(Tag::Card),

@@ -237,8 +237,8 @@ fn a_presence_animation_at_the_root_of_a_recomposed_scoped_component_moves_to_it
 
 #[test]
 fn a_leaving_node_is_skipped_by_input_focus_and_accessibility_while_it_paints() -> TestResult {
-    let (shown, clicks) = (State::new(true), State::new(0));
-    let (present, count) = (shown.clone(), clicks.clone());
+    let (shown, activations) = (State::new(true), State::new(0));
+    let (present, count) = (shown.clone(), activations.clone());
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         if present.get() {
@@ -247,7 +247,7 @@ fn a_leaving_node_is_skipped_by_input_focus_and_accessibility_while_it_paints() 
                 "button",
                 Modifier::new()
                     .background(PIECE)
-                    .on_click(move || count.update(|taps| *taps += 1))
+                    .on_activate(move |_| count.update(|count| *count += 1))
                     .accessible_name("leaving")
                     .transition(fading_out(1000)),
                 |ui| {
@@ -267,8 +267,8 @@ fn a_leaving_node_is_skipped_by_input_focus_and_accessibility_while_it_paints() 
     assert_eq!(fills(&scene, PIECE)?.len(), 1);
     assert_ne!(view.focus(), Some(button));
     assert!(!view.accessibility().nodes.contains_key(&button));
-    tap_at(&mut view, Point::new(20.dp(), 20.dp()));
-    assert_eq!(clicks.get(), 0);
+    press_and_release_at(&mut view, Point::new(20.dp(), 20.dp()));
+    assert_eq!(activations.get(), 0);
     Ok(())
 }
 

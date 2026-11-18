@@ -8,29 +8,26 @@ use crate::style::{
 use crate::units::NonNegativeDp;
 use crate::view::test_scene::replay;
 
-fn tap(view: &mut View, tag: &'static str) -> TestResult {
-    let at = view.tagged_bounds(&tag)?.center();
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
-    Ok(())
-}
-
 fn buttons() -> View {
     View::new(crate::platform::fixture::facts(), |ui| {
         ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
             for tag in ["first", "second"] {
-                ui.spacer(100.dp(), 40.dp(), Modifier::new().tag(tag).on_click(|| {}));
+                ui.spacer(
+                    100.dp(),
+                    40.dp(),
+                    Modifier::new().tag(tag).on_activate(|_| {}),
+                );
             }
         });
     })
 }
 
 #[test]
-fn a_tap_focuses_a_node_without_making_its_focus_visible() -> TestResult {
+fn a_press_focuses_a_node_without_making_its_focus_visible() -> TestResult {
     let mut scene = Scene::default();
     let mut view = buttons();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, "second")?;
+    press_and_release(&mut view, &"second")?;
     let state = view.tagged_state(&"second")?;
     assert!(state.focus.focused);
     assert!(!state.focus.visible);
@@ -56,7 +53,7 @@ fn tab_arrows_and_other_keys_make_focus_visible() -> TestResult {
         let mut scene = Scene::default();
         let mut view = buttons();
         show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-        tap(&mut view, "first")?;
+        press_and_release(&mut view, &"first")?;
         view.input(key);
         let focused = [view.tagged_state(&"first")?, view.tagged_state(&"second")?];
         assert!(focused.iter().any(|state| state.focus.focused));
@@ -68,13 +65,13 @@ fn tab_arrows_and_other_keys_make_focus_visible() -> TestResult {
 }
 
 #[test]
-fn a_tap_after_keys_hides_focus_again() -> TestResult {
+fn a_press_after_keys_hides_focus_again() -> TestResult {
     let mut scene = Scene::default();
     let mut view = buttons();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.input(TAB);
     assert!(view.tagged_state(&"first")?.focus.visible);
-    tap(&mut view, "first")?;
+    press_and_release(&mut view, &"first")?;
     let state = view.tagged_state(&"first")?;
     assert!(state.focus.focused);
     assert!(!state.focus.visible);
@@ -103,13 +100,13 @@ fn focus_that_falls_back_to_an_ancestor_keeps_the_answer_of_the_last_input() -> 
         let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
             ui.layout(
                 Axis::Vertical,
-                Modifier::new().tag("parent").on_click(|| {}),
+                Modifier::new().tag("parent").on_activate(|_| {}),
                 |ui| {
                     if child.get() {
                         ui.spacer(
                             100.dp(),
                             40.dp(),
-                            Modifier::new().tag("child").on_click(|| {}),
+                            Modifier::new().tag("child").on_activate(|_| {}),
                         );
                     }
                 },
@@ -120,7 +117,7 @@ fn focus_that_falls_back_to_an_ancestor_keeps_the_answer_of_the_last_input() -> 
             view.input(TAB);
             view.input(TAB);
         } else {
-            tap(&mut view, "child")?;
+            press_and_release(&mut view, &"child")?;
         }
         assert!(view.tagged_state(&"child")?.focus.focused);
         shown.set(false);
@@ -143,14 +140,14 @@ fn a_modal_that_opens_keeps_the_answer_of_the_last_input() -> TestResult {
                 ui.spacer(
                     100.dp(),
                     40.dp(),
-                    Modifier::new().tag("background").on_click(|| {}),
+                    Modifier::new().tag("background").on_activate(|_| {}),
                 );
                 if modal.get() {
                     ui.layout(Axis::Vertical, Modifier::new().modal(), |ui| {
                         ui.spacer(
                             100.dp(),
                             40.dp(),
-                            Modifier::new().tag("dialog").on_click(|| {}),
+                            Modifier::new().tag("dialog").on_activate(|_| {}),
                         );
                     });
                 }
@@ -160,7 +157,7 @@ fn a_modal_that_opens_keeps_the_answer_of_the_last_input() -> TestResult {
         if keys {
             view.input(TAB);
         } else {
-            tap(&mut view, "background")?;
+            press_and_release(&mut view, &"background")?;
         }
         open.set(true);
         show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
@@ -179,7 +176,7 @@ fn a_modal_open_before_any_input_shows_its_focus() -> TestResult {
             ui.spacer(
                 100.dp(),
                 40.dp(),
-                Modifier::new().tag("dialog").on_click(|| {}),
+                Modifier::new().tag("dialog").on_activate(|_| {}),
             );
         });
     });
@@ -191,7 +188,7 @@ fn a_modal_open_before_any_input_shows_its_focus() -> TestResult {
 }
 
 #[test]
-fn a_text_field_and_a_text_area_show_visible_focus_after_a_tap() -> TestResult {
+fn a_text_field_and_a_text_area_show_visible_focus_after_a_press() -> TestResult {
     for multiline in [false, true] {
         let mut scene = Scene::default();
         let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
@@ -203,7 +200,7 @@ fn a_text_field_and_a_text_area_show_visible_focus_after_a_tap() -> TestResult {
             }
         });
         show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-        tap(&mut view, "field")?;
+        press_and_release(&mut view, &"field")?;
         let state = view.tagged_state(&"field")?;
         assert!(state.focus.focused);
         assert!(state.focus.visible);
@@ -227,12 +224,12 @@ fn the_focus_ring_of_the_theme_paints_only_where_focus_is_visible() -> TestResul
             ui.spacer(
                 100.dp(),
                 40.dp(),
-                Modifier::new().tag("button").on_click(|| {}),
+                Modifier::new().tag("button").on_activate(|_| {}),
             );
         });
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, "button")?;
+    press_and_release(&mut view, &"button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), []);
     view.input(TAB);
@@ -256,13 +253,13 @@ fn a_focus_within_border_paints_only_where_focus_inside_is_visible() -> TestResu
                 ui.spacer(
                     100.dp(),
                     40.dp(),
-                    Modifier::new().tag("button").on_click(|| {}),
+                    Modifier::new().tag("button").on_activate(|_| {}),
                 );
             },
         );
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, "button")?;
+    press_and_release(&mut view, &"button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), []);
     view.input(TAB);
@@ -294,12 +291,12 @@ fn a_state_style_reading_focus_visible_changes_without_composing_again() -> Test
                 Modifier::new()
                     .tag("button")
                     .state_styles(styles.clone())
-                    .on_click(|| {}),
+                    .on_activate(|_| {}),
             );
         });
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, "button")?;
+    press_and_release(&mut view, &"button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), []);
     let compositions = view.stats().root_compositions;
@@ -355,7 +352,10 @@ fn the_focus_ring_follows_an_animated_offset_once() -> TestResult {
                 ui.spacer(
                     100.dp(),
                     40.dp(),
-                    Modifier::new().tag("button").on_click(|| {}).then(modifier),
+                    Modifier::new()
+                        .tag("button")
+                        .on_activate(|_| {})
+                        .then(modifier),
                 );
             });
         });
@@ -364,7 +364,7 @@ fn the_focus_ring_follows_an_animated_offset_once() -> TestResult {
             Point::new(30.dp(), 0.dp()),
             crate::spring!(Duration::from_millis(450), 0.85),
         )?;
-        tap(&mut view, "button")?;
+        press_and_release(&mut view, &"button")?;
         view.input(TAB);
         show_frame(&mut scene, &mut view, WINDOW_SIZE, 5000)?;
         stroke_rects(&scene.at(5000).commands())

@@ -6,29 +6,30 @@ use crate::scene::tree::{Change, Slot, SlotChange};
 use crate::scroll::ScrollState;
 use std::time::Duration;
 
-fn scoped_list(scroll: &ScrollState, taps: &[State<u32>]) -> View {
+fn scoped_list(scroll: &ScrollState, activations: &[State<u32>]) -> View {
     let list = scroll.clone();
-    let taps = taps.to_vec();
+    let activations = activations.to_vec();
     View::new(crate::platform::fixture::facts(), move |ui| {
-        let (list, taps) = (list.clone(), taps.clone());
+        let (list, activations) = (list.clone(), activations.clone());
         ui.scoped("list", Modifier::new(), move |ui| {
             let spring = crate::spring!(Duration::from_millis(300), 1.0);
             if let Err(error) = list.smooth(ui.motion(), spring) {
                 ui.fail(error);
             }
-            let taps = taps.clone();
+            let activations = activations.clone();
             ui.scroll(
                 list.clone(),
                 Modifier::new().size(100.dp(), 100.dp()),
                 move |ui| {
-                    for (row, taps) in taps.iter().enumerate() {
-                        let taps = taps.clone();
+                    for (row, activations) in activations.iter().enumerate() {
+                        let activations = activations.clone();
                         ui.scoped(row, Modifier::new(), move |ui| {
-                            let taps = taps.clone();
+                            let activations = activations.clone();
                             ui.spacer(
                                 100.dp(),
                                 40.dp(),
-                                Modifier::new().on_click(move || taps.update(|count| *count += 1)),
+                                Modifier::new()
+                                    .on_activate(move |_| activations.update(|count| *count += 1)),
                             );
                         });
                     }
@@ -56,10 +57,10 @@ fn transforms(changes: &[Change]) -> Vec<Slot<Affine>> {
 
 #[test]
 fn jumping_a_scroll_on_every_frame_changes_only_the_content_slot() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = scoped_list(&scroll, &taps);
+    let mut view = scoped_list(&scroll, &activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let before = view.stats();
     for (ms, offset) in [(10, 30.dp()), (20, 60.dp()), (30, 90.dp())] {
@@ -72,9 +73,9 @@ fn jumping_a_scroll_on_every_frame_changes_only_the_content_slot() -> TestResult
     let after = view.stats();
     assert_eq!(after.painted_components, before.painted_components);
     assert_eq!(after.component_compositions, before.component_compositions);
-    tap_at(&mut view, Point::new(50.dp(), 30.dp()));
+    press_and_release_at(&mut view, Point::new(50.dp(), 30.dp()));
     assert_eq!(
-        taps.iter().map(State::get).collect::<Vec<_>>(),
+        activations.iter().map(State::get).collect::<Vec<_>>(),
         [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
     );
     Ok(())
@@ -82,10 +83,10 @@ fn jumping_a_scroll_on_every_frame_changes_only_the_content_slot() -> TestResult
 
 #[test]
 fn a_scroll_that_stops_jumping_paints_its_component_once() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = scoped_list(&scroll, &taps);
+    let mut view = scoped_list(&scroll, &activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     scroll.jump_to(30.dp());
     advance(&mut scene, &mut view, WINDOW_SIZE, 10)?;
@@ -99,10 +100,10 @@ fn a_scroll_that_stops_jumping_paints_its_component_once() -> TestResult {
 
 #[test]
 fn a_second_frame_at_the_same_time_does_not_settle_a_jumping_scroll() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = scoped_list(&scroll, &taps);
+    let mut view = scoped_list(&scroll, &activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let painted = view.stats().painted_components;
     for (ms, offset) in [(10, 30.dp()), (20, 60.dp()), (30, 90.dp())] {
@@ -116,10 +117,10 @@ fn a_second_frame_at_the_same_time_does_not_settle_a_jumping_scroll() -> TestRes
 
 #[test]
 fn a_jumped_scroll_settles_without_presentation_times() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = scoped_list(&scroll, &taps);
+    let mut view = scoped_list(&scroll, &activations);
     let viewport = Viewport::new(WINDOW_SIZE, Density::ONE);
     advance_with(&mut scene, &mut view, viewport, &mut Metrics)?;
     scroll.jump_to(30.dp());

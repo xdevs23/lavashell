@@ -153,7 +153,7 @@ fn sidebar(ui: &mut Ui, model: &State<Model>, screen: Screen) {
                     Modifier::new()
                         .gap(12.dp())
                         .align_items(Align::Center)
-                        .on_click(model.action(move |m| {
+                        .on_activate(model.handler(move |m, _| {
                             m.section = Section::Playlist(playlist);
                             m.album = None;
                         }))
@@ -320,7 +320,7 @@ fn hero(ui: &mut Ui, model: &State<Model>, screen: Screen, heights: &Breakpoint)
                         .gap(8.dp())
                         .align_items(Align::Center)
                         .tag(Tag::PlayAlbum)
-                        .on_click(model.action(move |m| {
+                        .on_activate(model.handler(move |m, _| {
                             m.album = Some(id);
                             m.select(first_track);
                         }))
@@ -386,7 +386,7 @@ fn album_card(ui: &mut Ui, model: &State<Model>, id: AlbumId) {
         ui.column(
             Modifier::new()
                 .gap(6.dp())
-                .on_click(model.action(move |m| m.album = Some(id)))
+                .on_activate(model.handler(move |m, _| m.album = Some(id)))
                 .accessible_name(album.title)
                 .selected(model.get().album == Some(id))
                 .fill_max_width(),

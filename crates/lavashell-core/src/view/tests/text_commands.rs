@@ -94,15 +94,15 @@ fn keys_composed_in_the_view_type_into_its_focused_field() -> TestResult {
         searches,
         shortcuts,
     } = keyboard(&mut scene)?;
-    tap(&mut view, &"a")?;
+    press_and_release(&mut view, &"a")?;
     assert_eq!((text.get(), shortcuts.get()), (String::new(), 0));
-    tap(&mut view, &"field")?;
+    press_and_release(&mut view, &"field")?;
     for _ in 0..4 {
-        tap(&mut view, &"a")?;
+        press_and_release(&mut view, &"a")?;
     }
     assert_eq!(text.get(), "aaaa");
     assert!(view.tagged_state(&"field")?.focus.focused);
-    tap(&mut view, &"search")?;
+    press_and_release(&mut view, &"search")?;
     assert_eq!(searches.get(), 1);
     assert!(view.tagged_state(&"field")?.focus.focused);
     assert_eq!(shortcuts.get(), 0);
@@ -113,9 +113,9 @@ fn keys_composed_in_the_view_type_into_its_focused_field() -> TestResult {
 fn a_held_key_repeats_through_a_timer_until_it_is_released() -> TestResult {
     let mut scene = Scene::default();
     let KeyboardFixture { mut view, text, .. } = keyboard(&mut scene)?;
-    tap(&mut view, &"field")?;
+    press_and_release(&mut view, &"field")?;
     for _ in 0..5 {
-        tap(&mut view, &"a")?;
+        press_and_release(&mut view, &"a")?;
     }
     let backspace = view.tagged_bounds(&"backspace")?.center();
     view.input(InputEvent::Press(backspace));
@@ -150,7 +150,7 @@ fn a_sender_returns_the_session_with_the_commands_applied_by_the_view() -> TestR
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let sender = senders.borrow()[0].clone();
     assert_eq!(sender.session(), None);
-    tap(&mut view, &"field")?;
+    press_and_release(&mut view, &"field")?;
     sender.send(TextCommand::Commit("ab".into()));
     view.input(InputEvent::Leave);
     let text = sender.session().map(|session| session.text);
@@ -205,7 +205,7 @@ fn a_host_applies_edits_and_actions_to_the_focused_field() -> TestResult {
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.apply_text(TextCommand::Commit("ignored".into()));
-    tap(&mut view, &"name")?;
+    press_and_release(&mut view, &"name")?;
     let commands = [
         TextCommand::Commit("hi".into()),
         TextCommand::DeleteBackward,

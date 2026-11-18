@@ -24,11 +24,11 @@ fn wheel_bubbles_from_child_and_respects_visual_clip_overlay_and_disabled_state(
                     .size(100.dp(), 100.dp())
                     .clip(Corners::all(50.dp())),
                 |ui| {
-                    ui.spacer(100.dp(), 100.dp(), Modifier::new().on_click(|| {}));
+                    ui.spacer(100.dp(), 100.dp(), Modifier::new().on_activate(|_| {}));
                 },
             );
             if shown.get() {
-                ui.spacer(100.dp(), 100.dp(), Modifier::new().on_click(|| {}));
+                ui.spacer(100.dp(), 100.dp(), Modifier::new().on_activate(|_| {}));
             }
         });
     });
@@ -77,7 +77,7 @@ fn a_child_wheel_control_consumes_without_scrolling_its_parent() -> TestResult {
                 30.dp(),
                 Modifier::new().on_scroll(move |delta| value.update(|v| *v += delta)),
             );
-            ui.spacer(80.dp(), 120.dp(), Modifier::new().on_click(|| {}));
+            ui.spacer(80.dp(), 120.dp(), Modifier::new().on_activate(|_| {}));
         });
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;

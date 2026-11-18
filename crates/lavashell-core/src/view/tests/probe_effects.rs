@@ -11,7 +11,7 @@ struct Traced {
     scene: Scene,
     scroll: ScrollState,
     measured: Rc<Cell<u32>>,
-    clicks: Rc<Cell<u32>>,
+    activations: Rc<Cell<u32>>,
     stripe: State<Dp>,
 }
 
@@ -19,18 +19,19 @@ impl Traced {
     fn new() -> Result<Self, TestError> {
         let scroll = ScrollState::new(Axis::Vertical);
         let measured = Rc::new(Cell::new(0));
-        let clicks = Rc::new(Cell::new(0));
+        let activations = Rc::new(Cell::new(0));
         let stripe = State::new(10.dp());
-        let (list, counted, clicked) = (scroll.clone(), measured.clone(), clicks.clone());
+        let (list, counted, activated) = (scroll.clone(), measured.clone(), activations.clone());
         let painted = stripe.clone();
         let view = View::new(crate::platform::fixture::facts(), move |ui| {
             let list = list.clone();
-            let (counted, clicked, painted) = (counted.clone(), clicked.clone(), painted.clone());
+            let (counted, activated, painted) =
+                (counted.clone(), activated.clone(), painted.clone());
             ui.layout(Axis::Vertical, Modifier::new(), |ui| {
                 ui.scoped("list", Modifier::new(), move |ui| {
                     ui.scroll(list.clone(), Modifier::new().height(100.dp()), |ui| {
                         for _ in 0..10 {
-                            ui.spacer(80.dp(), 30.dp(), Modifier::new().on_click(|| {}));
+                            ui.spacer(80.dp(), 30.dp(), Modifier::new().on_activate(|_| {}));
                         }
                     });
                 });
@@ -40,7 +41,7 @@ impl Traced {
                     Modifier::new()
                         .tag("button")
                         .on_measure(move |_| counted.set(counted.get() + 1))
-                        .on_click(move || clicked.set(clicked.get() + 1))
+                        .on_activate(move |_| activated.set(activated.get() + 1))
                         .background(Color::WHITE),
                 );
                 ui.canvas(
@@ -58,7 +59,7 @@ impl Traced {
             scene: Scene::default(),
             scroll,
             measured,
-            clicks,
+            activations,
             stripe,
         };
         traced.frame()?;
@@ -74,11 +75,12 @@ impl Traced {
         advance_with(&mut self.scene, &mut self.view, WINDOW, &mut Wrapping)
     }
 
-    fn click_button(&mut self) -> TestResult {
+    fn press_and_release_button(&mut self) -> TestResult {
         let button = self.view.tagged_bounds(&"button")?;
-        let at = Point::new(button.x + 5.dp(), button.y + 5.dp());
-        self.view.input(InputEvent::Press(at));
-        self.view.input(InputEvent::Release(at));
+        press_and_release_at(
+            &mut self.view,
+            Point::new(button.x + 5.dp(), button.y + 5.dp()),
+        );
         Ok(())
     }
 
@@ -103,7 +105,7 @@ impl Traced {
         assert_eq!(self.scroll.viewport(), other.scroll.viewport());
         assert_eq!(self.scroll.content(), other.scroll.content());
         assert_eq!(self.measured.get(), other.measured.get());
-        assert_eq!(self.clicks.get(), other.clicks.get());
+        assert_eq!(self.activations.get(), other.activations.get());
         assert_eq!(self.view.needs_frame(), other.view.needs_frame());
     }
 
@@ -144,14 +146,14 @@ fn a_probe_leaves_layout_paint_input_scrolling_and_measure_callbacks_as_they_wer
     assert_eq!(probed.view.stats().reused_layouts, reused + 1);
 
     for traced in [&mut probed, &mut plain] {
-        traced.click_button()?;
+        traced.press_and_release_button()?;
         traced.view.input(InputEvent::Scroll {
             at: Point::new(10.dp(), 10.dp()),
             delta: Point::new(Dp::ZERO, -50.dp()),
         });
     }
     probed.assert_same(&plain);
-    assert_eq!(probed.clicks.get(), 1);
+    assert_eq!(probed.activations.get(), 1);
     assert_eq!(probed.scroll.offset(), 100.dp());
 
     probed.frame_again()?;

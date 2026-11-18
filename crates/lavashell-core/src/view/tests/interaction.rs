@@ -16,14 +16,14 @@ const FOCUSED: NonNegativeDp = crate::constant!(NonNegativeDp::try_new(Dp::new(2
 struct ControlFixture {
     view: View,
     enabled: State<bool>,
-    clicks: State<u32>,
+    activations: State<u32>,
 }
 
 fn setup(scene: &mut Scene) -> Result<ControlFixture, TestError> {
     let enabled = State::new(true);
-    let clicks = State::new(0);
+    let activations = State::new(0);
     let flag = enabled.clone();
-    let count = clicks.clone();
+    let count = activations.clone();
     let styles = StateStyles::new(|state| {
         let alpha = if state.disabled {
             0.0
@@ -60,7 +60,7 @@ fn setup(scene: &mut Scene) -> Result<ControlFixture, TestError> {
                     .tag("button")
                     .enabled(enabled)
                     .state_styles(styles.clone())
-                    .on_click(move || count.update(|count| *count += 1)),
+                    .on_activate(move |_| count.update(|count| *count += 1)),
             );
         });
     });
@@ -68,7 +68,7 @@ fn setup(scene: &mut Scene) -> Result<ControlFixture, TestError> {
     Ok(ControlFixture {
         view,
         enabled,
-        clicks,
+        activations,
     })
 }
 
@@ -85,8 +85,8 @@ pub(super) fn tint(view: &View, tag: &'static str) -> Result<Color, TestError> {
 
 #[test]
 fn focused_button_space_activates_without_scrolling_its_parent() -> TestResult {
-    let clicks = State::new(0);
-    let count = clicks.clone();
+    let activations = State::new(0);
+    let count = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         ui.scroll(
@@ -102,7 +102,7 @@ fn focused_button_space_activates_without_scrolling_its_parent() -> TestResult {
                     40.dp(),
                     Modifier::new()
                         .tag("button")
-                        .on_click(move || count.update(|value| *value += 1)),
+                        .on_activate(move |_| count.update(|value| *value += 1)),
                 );
                 ui.spacer(100.dp(), 500.dp(), Modifier::new());
             },
@@ -120,7 +120,7 @@ fn focused_button_space_activates_without_scrolling_its_parent() -> TestResult {
     });
     view.input(InputEvent::KeyRelease(Key::Space));
     advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     assert_eq!(view.tagged_bounds(&"button")?, before);
     Ok(())
 }
@@ -129,7 +129,9 @@ fn focused_button_space_activates_without_scrolling_its_parent() -> TestResult {
 fn pointer_active_follows_capture_inside_and_window_focus_cancels() -> TestResult {
     let mut scene = Scene::default();
     let ControlFixture {
-        mut view, clicks, ..
+        mut view,
+        activations,
+        ..
     } = setup(&mut scene)?;
     let point = Point::new(20.dp(), 20.dp());
     view.input(InputEvent::Press(point));
@@ -141,14 +143,14 @@ fn pointer_active_follows_capture_inside_and_window_focus_cancels() -> TestResul
     view.input(InputEvent::WindowFocus(false));
     assert!(!view.tagged_state(&"button")?.pointer.active);
     view.input(InputEvent::Release(point));
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     view.input(InputEvent::Move(point));
     assert!(view.tagged_state(&"button")?.pointer.hovered);
     assert!(!view.tagged_state(&"button")?.focus.focused);
     view.input(InputEvent::WindowFocus(true));
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
@@ -158,7 +160,7 @@ fn keyboard_release_repeat_focus_loss_and_disabled_controls_retire_active_state(
     let ControlFixture {
         mut view,
         enabled,
-        clicks,
+        activations,
     } = setup(&mut scene)?;
     view.input(InputEvent::Key {
         key: Key::Tab,
@@ -170,7 +172,7 @@ fn keyboard_release_repeat_focus_loss_and_disabled_controls_retire_active_state(
             shift: false,
         });
     }
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     assert!(view.tagged_state(&"button")?.pointer.active);
     view.input(InputEvent::KeyRelease(Key::Enter));
     assert!(view.tagged_state(&"button")?.pointer.active);
@@ -191,25 +193,25 @@ fn keyboard_release_repeat_focus_loss_and_disabled_controls_retire_active_state(
         key: Key::Enter,
         shift: false,
     });
-    assert_eq!(clicks.get(), 2);
+    assert_eq!(activations.get(), 2);
     Ok(())
 }
 
 fn two_buttons(
     scene: &mut Scene,
     first_shown: State<bool>,
-    clicks: State<u32>,
+    activations: State<u32>,
 ) -> Result<View, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
-        let (shown, clicks) = (first_shown.get(), clicks.clone());
+        let (shown, activations) = (first_shown.get(), activations.clone());
         ui.layout(Axis::Vertical, Modifier::new(), move |ui| {
             let button = |ui: &mut Ui, tag: &'static str| {
-                let clicks = clicks.clone();
+                let activations = activations.clone();
                 ui.key(tag, Modifier::new(), move |ui| {
-                    let click = Modifier::new()
+                    let activate = Modifier::new()
                         .tag(tag)
-                        .on_click(move || clicks.update(|count| *count += 1));
-                    ui.spacer(100.dp(), 40.dp(), click);
+                        .on_activate(move |_| activations.update(|count| *count += 1));
+                    ui.spacer(100.dp(), 40.dp(), activate);
                 });
             };
             if shown {
@@ -234,10 +236,10 @@ fn hold_space_on_the_first_button(view: &mut View) {
 }
 
 #[test]
-fn tab_away_from_a_held_key_leaves_both_buttons_inactive_and_the_release_does_not_click()
+fn tab_away_from_a_held_key_leaves_both_buttons_inactive_and_the_release_does_not_activate()
 -> TestResult {
-    let (mut scene, clicks) = (Scene::default(), State::new(0));
-    let mut view = two_buttons(&mut scene, State::new(true), clicks.clone())?;
+    let (mut scene, activations) = (Scene::default(), State::new(0));
+    let mut view = two_buttons(&mut scene, State::new(true), activations.clone())?;
     hold_space_on_the_first_button(&mut view);
     assert!(view.tagged_state(&"first")?.pointer.active);
     view.input(InputEvent::Key {
@@ -249,21 +251,21 @@ fn tab_away_from_a_held_key_leaves_both_buttons_inactive_and_the_release_does_no
     assert!(!view.tagged_state(&"second")?.pointer.active);
     view.input(InputEvent::KeyRelease(Key::Space));
     assert!(!view.tagged_state(&"second")?.pointer.active);
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
 #[test]
 fn removing_the_button_with_a_held_key_drops_the_key() -> TestResult {
-    let (mut scene, shown, clicks) = (Scene::default(), State::new(true), State::new(0));
-    let mut view = two_buttons(&mut scene, shown.clone(), clicks.clone())?;
+    let (mut scene, shown, activations) = (Scene::default(), State::new(true), State::new(0));
+    let mut view = two_buttons(&mut scene, shown.clone(), activations.clone())?;
     hold_space_on_the_first_button(&mut view);
     shown.set(false);
     advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
     assert!(view.routing.focus.pressed_key().is_none());
     assert!(!view.tagged_state(&"second")?.pointer.active);
     view.input(InputEvent::KeyRelease(Key::Space));
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
@@ -299,7 +301,9 @@ fn pointer_cancellation_preserves_keyboard_focus_without_activating_the_old_capt
 {
     let mut scene = Scene::default();
     let ControlFixture {
-        mut view, clicks, ..
+        mut view,
+        activations,
+        ..
     } = setup(&mut scene)?;
     let point = Point::new(20.dp(), 20.dp());
     view.input(InputEvent::Press(point));
@@ -310,12 +314,12 @@ fn pointer_cancellation_preserves_keyboard_focus_without_activating_the_old_capt
     assert!(state.focus.focused);
     assert!(!state.pointer.hovered && !state.pointer.active);
     view.input(InputEvent::Release(point));
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     view.input(InputEvent::Key {
         key: Key::Enter,
         shift: false,
     });
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
@@ -338,7 +342,7 @@ fn state_style_color_interpolation_chooses_the_hue_path_of_the_tint() -> TestRes
             Modifier::new()
                 .tag("button")
                 .state_styles(styles.clone())
-                .on_click(|| {}),
+                .on_activate(|_| {}),
         );
     });
     advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
@@ -371,7 +375,7 @@ fn a_resting_tint_that_only_changes_its_interpolation_keeps_its_color() -> TestR
             Modifier::new()
                 .tag("button")
                 .state_styles(styles)
-                .on_click(|| {}),
+                .on_activate(|_| {}),
         );
     });
     advance(&mut scene, &mut view, SMALL_WINDOW_SIZE, 0)?;
@@ -415,7 +419,7 @@ fn modal_changes_repaint_retained_appearance_in_the_first_frame_with_unchanged_f
                     Modifier::new()
                         .tag("button")
                         .state_styles(styles.clone())
-                        .on_click(|| {})
+                        .on_activate(|_| {})
                         .focusable(false),
                 );
             });

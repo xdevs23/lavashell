@@ -2,6 +2,7 @@
 use crate::error::reject_failures;
 use crate::{Error, fonts};
 use lavashell::core::ui::{NodeTag, ViewTag};
+use lavashell::core::view::fixture::press_and_release_at;
 use lavashell::prelude::*;
 use lavashell::renderer::text::{Shaper, TextRendering};
 use std::{cell::RefCell, rc::Rc};
@@ -35,8 +36,7 @@ pub fn interaction(view: &View, tag: impl ViewTag) -> Result<InteractionState, E
 
 pub fn click(view: &mut View, tag: impl ViewTag) -> Result<(), Error> {
     let at = control(view, tag)?.center();
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
+    press_and_release_at(view, at);
     Ok(())
 }
 

@@ -34,29 +34,29 @@ fn a_key_that_comes_back_during_an_exit_has_the_state_remembered_for_it() -> Tes
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         if present.get() {
             ui.key("item", Modifier::new().transition(fading_out(1000)), |ui| {
-                *record.borrow_mut() = Some(ui.state("taps", || 0));
+                *record.borrow_mut() = Some(ui.state("counter", || 0));
                 ui.spacer(20.dp(), 20.dp(), Modifier::new());
             });
         }
     });
-    let taps = || -> Result<State<u32>, TestError> {
+    let counter = || -> Result<State<u32>, TestError> {
         let remembered = remembered.borrow().clone();
         remembered.required("the state remembered for the item")
     };
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    taps()?.set(3);
+    counter()?.set(3);
     shown.set(false);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
     shown.set(true);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
-    assert_eq!(taps()?.get(), 3);
+    assert_eq!(counter()?.get(), 3);
     shown.set(false);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;
     shown.set(true);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;
-    assert_eq!(taps()?.get(), 0);
+    assert_eq!(counter()?.get(), 0);
     Ok(())
 }
 
@@ -75,7 +75,7 @@ fn a_component_painted_in_a_leaving_subtree_paints_the_live_appearance_when_its_
                         ui.key(
                             "face",
                             Modifier::new()
-                                .on_click(|| {})
+                                .on_activate(|_| {})
                                 .state_styles(half_opaque_on_hover(100)),
                             |ui| {
                                 ui.spacer(40.dp(), 40.dp(), Modifier::new());

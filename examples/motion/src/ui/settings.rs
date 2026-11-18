@@ -109,7 +109,7 @@ fn settings_list(ui: &mut Ui, demo: &Demo, motion: BackMotion, open: bool, color
     let opens_display = Modifier::new()
         .tag(Tag::DisplayRow)
         .enabled(!open)
-        .on_click(move || {
+        .on_activate(move |_| {
             report_failure("open display", back.go_to(Page::Display, motion));
         });
     ui.column(

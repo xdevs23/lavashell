@@ -5,7 +5,7 @@ mod pinch;
 mod raw;
 mod scroll;
 mod select;
-mod tap;
+mod still_press;
 
 use super::focus::FocusSource;
 use super::input::InputRouting;
@@ -75,7 +75,7 @@ enum_with_values! {
     pub(super) enum Contender {
         Select = 0,
         Raw = 1,
-        Click = 2,
+        Activate = 2,
         Drag = 3,
         Scroll = 4,
         Pinch = 5,
@@ -92,7 +92,7 @@ impl Contender {
 
     fn contest(self) -> Contest {
         match self {
-            Self::Select | Self::Raw | Self::Click | Self::Drag | Self::Scroll | Self::Pinch => {
+            Self::Select | Self::Raw | Self::Activate | Self::Drag | Self::Scroll | Self::Pinch => {
                 Contest::Competing
             }
             Self::Focus => Contest::Fallback,
@@ -103,11 +103,11 @@ impl Contender {
         let declared = match self {
             Self::Select => select::declared(view, press),
             Self::Raw => raw::declared(view, press),
-            Self::Click => tap::clicking(view, press),
+            Self::Activate => still_press::activating(view, press),
             Self::Drag => drag::declared(view, press),
             Self::Scroll => scroll::declared(view, press),
             Self::Pinch => pinch::declared(view, press),
-            Self::Focus => tap::focusing(view, press),
+            Self::Focus => still_press::focusing(view, press),
         }?;
         let joined = (view.routing.pressed_recognizers())
             .filter(|pressed| pressed.contender() == self)
@@ -231,6 +231,10 @@ impl View {
 impl InputRouting {
     pub(super) fn hits_of(&self, node: NodeId) -> impl Iterator<Item = &Hit> {
         self.hits.iter().filter(move |hit| hit.id == node)
+    }
+
+    pub(super) fn node_activates(&self, node: NodeId) -> bool {
+        self.hits_of(node).any(|hit| hit.gestures.activates())
     }
 }
 

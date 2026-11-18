@@ -38,7 +38,7 @@ fn modal_scrims_take_pointer_events_without_stealing_keyboard_focus() -> Result<
         1,
         "the first real menu control receives initial focus"
     );
-    click(&mut view, 150.dp(), 150.dp());
+    press_and_release_at(&mut view, Point::new(150.dp(), 150.dp()));
     assert_eq!(outside.get(), 1, "the scrim remains pointer interactive");
     view.input(InputEvent::Key {
         key: Key::Tab,
@@ -96,14 +96,14 @@ fn modal_blocks_background_autofocuses_field_and_restores_keyboard_focus() -> Re
     let size = Size::new(200.dp(), 150.dp());
     let viewport = Viewport::new(size, Density::ONE);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    click(&mut view, 20.dp(), 20.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 20.dp()));
     open.set(true);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
     view.input(InputEvent::Text("native".into()));
     assert_eq!(value.get(), "native");
-    click(&mut view, 20.dp(), 20.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 20.dp()));
     assert_eq!(clicks.get(), 1);
-    click(&mut view, 10.dp(), 55.dp());
+    press_and_release_at(&mut view, Point::new(10.dp(), 55.dp()));
     view.input(InputEvent::Key {
         key: Key::Enter,
         shift: false,

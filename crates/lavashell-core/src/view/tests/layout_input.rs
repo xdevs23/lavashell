@@ -92,18 +92,18 @@ fn modifier_order_changes_background_bounds() -> TestResult {
 }
 
 #[test]
-fn padding_of_a_parent_is_outside_the_click_area_of_the_child() -> TestResult {
+fn padding_of_a_parent_is_outside_the_hit_area_of_the_child() -> TestResult {
     let count = State::new(0);
     let c = count.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let c = c.clone();
-        let click = Modifier::new().on_click(move || c.update(|n| *n += 1));
+        let activate = Modifier::new().on_activate(move |_| c.update(|n| *n += 1));
         ui.layout(
             Arrangement::Overlay,
             Modifier::new().padding(5.dp()),
             |ui| {
-                ui.spacer(20.dp(), 10.dp(), click);
+                ui.spacer(20.dp(), 10.dp(), activate);
             },
         );
     });
@@ -151,7 +151,7 @@ fn clip_excludes_input_and_keyboard_activates() -> TestResult {
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let c = c.clone();
-        let modifier = Modifier::new().on_click(move || c.update(|n| *n += 1));
+        let modifier = Modifier::new().on_activate(move |_| c.update(|n| *n += 1));
         ui.spacer(30.dp(), 30.dp(), modifier.clip(Corners::all(15.dp())));
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
@@ -185,7 +185,7 @@ fn keyed_focus_survives_reordering() -> TestResult {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
             for key in o.get() {
                 ui.key(key, Modifier::new(), |ui| {
-                    ui.spacer(20.dp(), 20.dp(), Modifier::new().on_click(|| {}));
+                    ui.spacer(20.dp(), 20.dp(), Modifier::new().on_activate(|_| {}));
                 });
             }
         });
@@ -270,7 +270,7 @@ fn local_clip_viewport_preserves_natural_measurement_and_updates_paint_and_input
             .clip_rect(clip, Corners::all(8.dp()));
         let content = Modifier::new()
             .on_measure(move |size| observed.set(size))
-            .on_click(move || activated.update(|n| *n += 1));
+            .on_activate(move |_| activated.update(|n| *n += 1));
         ui.layout(Arrangement::Overlay, viewport, |ui| {
             ui.spacer(100.dp(), 100.dp(), content);
         });
@@ -279,13 +279,9 @@ fn local_clip_viewport_preserves_natural_measurement_and_updates_paint_and_input
     let window = Viewport::new(Size::new(200.dp(), 200.dp()), Density::ONE);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert_eq!(measured.get(), Size::new(100.dp(), 100.dp()));
-    let click = |view: &mut View, point| {
-        view.input(InputEvent::Press(point));
-        view.input(InputEvent::Release(point));
-    };
-    click(&mut view, Point::new(30.dp(), 60.dp()));
+    press_and_release_at(&mut view, Point::new(30.dp(), 60.dp()));
     assert_eq!(count.get(), 0);
-    click(&mut view, Point::new(30.dp(), 20.dp()));
+    press_and_release_at(&mut view, Point::new(30.dp(), 20.dp()));
     assert_eq!(count.get(), 1);
     extent.set(80.dp());
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
@@ -294,7 +290,7 @@ fn local_clip_viewport_preserves_natural_measurement_and_updates_paint_and_input
         DrawCommand::Clip { rect, corners } if *rect == Rect::new(20.dp(), 10.dp(), 100.dp(), 80.dp())
             && *corners == Corners::all(8.dp()).into())));
     assert_eq!(measured.get(), Size::new(100.dp(), 100.dp()));
-    click(&mut view, Point::new(30.dp(), 60.dp()));
+    press_and_release_at(&mut view, Point::new(30.dp(), 60.dp()));
     assert_eq!(count.get(), 2);
     Ok(())
 }
@@ -370,8 +366,8 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
 -> TestResult {
     let measured = State::new(Size::ZERO);
     let observed = measured.clone();
-    let clicked = State::new(false);
-    let hit = clicked.clone();
+    let activated = State::new(false);
+    let hit = activated.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let viewport = ui.viewport();
@@ -400,7 +396,7 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
                             200.dp(),
                             Modifier::new()
                                 .tag("natural-child")
-                                .on_click(move || hit.set(true)),
+                                .on_activate(move |_| hit.set(true)),
                         );
                     },
                 );
@@ -419,7 +415,7 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
     let point = Point::new(20.dp(), 120.dp());
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
-    assert!(!clicked.get());
+    assert!(!activated.get());
     advance_with(
         &mut scene,
         &mut view,
@@ -429,7 +425,7 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
     assert_eq!(view.tagged_bounds(&"allocated")?.height, 224.dp());
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
-    assert!(clicked.get());
+    assert!(activated.get());
     Ok(())
 }
 

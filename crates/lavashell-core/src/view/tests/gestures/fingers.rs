@@ -42,12 +42,12 @@ fn two_fingers_moving_together_on_a_list_scroll_it_as_far_as_one_finger() -> Tes
 
 #[test]
 fn a_tab_removed_before_the_finger_moves_leaves_the_finger_to_the_list() -> TestResult {
-    let (scroll, clicks, shown) = (
+    let (scroll, activations, shown) = (
         ScrollState::new(Axis::Vertical),
         State::new(0),
         State::new(true),
     );
-    let (state, counter, show) = (scroll.clone(), clicks.clone(), shown.clone());
+    let (state, counter, show) = (scroll.clone(), activations.clone(), shown.clone());
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let (counter, first) = (counter.clone(), show.get());
@@ -55,7 +55,7 @@ fn a_tab_removed_before_the_finger_moves_leaves_the_finger_to_the_list() -> Test
             for index in i32::from(!first)..6 {
                 let counter = counter.clone();
                 let tab = Modifier::new().tag(("tab", index));
-                let tab = tab.on_click(move || counter.update(|count| *count += 1));
+                let tab = tab.on_activate(move |_| counter.update(|count| *count += 1));
                 ui.spacer(200.dp(), 40.dp(), tab);
             }
         });
@@ -74,6 +74,6 @@ fn a_tab_removed_before_the_finger_moves_leaves_the_finger_to_the_list() -> Test
         start.offset(Dp::ZERO, -30.dp()),
     )));
     assert_eq!(scroll.offset(), 22.dp());
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     Ok(())
 }

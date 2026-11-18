@@ -97,7 +97,7 @@ pub(super) fn track_list(ui: &mut Ui, model: &State<Model>, screen: Screen) {
                     .tag(Tag::Track(id))
                     .accessible_name(track.title)
                     .selected(current)
-                    .on_click(model.action(move |m| m.select(id)))
+                    .on_activate(model.handler(move |m, _| m.select(id)))
                     .fill_max_width()
                     .clip(8.dp())
                     .background(if current {

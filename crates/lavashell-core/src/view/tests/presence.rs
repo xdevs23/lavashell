@@ -396,7 +396,7 @@ fn nested_nodes_at_the_ends_of_the_scale_range_paint_finite_transforms_and_hits(
     const DEPTH: usize = 4;
     fn nest(ui: &mut Ui, presence: Presence, depth: usize) {
         let entering = Modifier::new()
-            .on_click(|| {})
+            .on_activate(|_| {})
             .transition(linear(1000).enter(presence));
         if depth == 0 {
             ui.spacer(20.dp(), 20.dp(), entering.clone());

@@ -170,7 +170,7 @@ fn a_pressed_island_shrinks_the_glass_of_its_group_with_its_content() -> TestRes
                     Modifier::new()
                         .island(Corners::all(20.dp()))
                         .tag("second")
-                        .on_click(|| {})
+                        .on_activate(|_| {})
                         .state_styles(pressed),
                 );
             },

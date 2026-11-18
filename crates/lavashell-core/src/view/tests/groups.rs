@@ -11,23 +11,23 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-fn rows(scroll: &ScrollState, tapped: &Rc<Cell<Option<u32>>>) -> View {
-    let (list, tapped) = (scroll.clone(), tapped.clone());
+fn rows(scroll: &ScrollState, activated: &Rc<Cell<Option<u32>>>) -> View {
+    let (list, activated) = (scroll.clone(), activated.clone());
     View::new(crate::platform::fixture::facts(), move |ui| {
-        let tapped = tapped.clone();
+        let activated = activated.clone();
         ui.scroll(
             list.clone(),
             Modifier::new().size(100.dp(), 120.dp()),
             move |ui| {
                 for row in 0..6 {
-                    let tapped = tapped.clone();
+                    let activated = activated.clone();
                     ui.scoped(row, Modifier::new(), move |ui| {
-                        let tapped = tapped.clone();
+                        let activated = activated.clone();
                         ui.spacer(
                             100.dp(),
                             40.dp(),
                             Modifier::new()
-                                .on_click(move || tapped.set(Some(row)))
+                                .on_activate(move |_| activated.set(Some(row)))
                                 .background(Color::WHITE),
                         );
                     });
@@ -40,8 +40,8 @@ fn rows(scroll: &ScrollState, tapped: &Rc<Cell<Option<u32>>>) -> View {
 #[test]
 fn a_scroll_step_changes_one_slot() -> TestResult {
     let scroll = ScrollState::new(Axis::Vertical);
-    let tapped = Rc::new(Cell::new(None));
-    let mut view = rows(&scroll, &tapped);
+    let activated = Rc::new(Cell::new(None));
+    let mut view = rows(&scroll, &activated);
     let mut scene = Scene::default();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let before = view.stats();
@@ -54,8 +54,8 @@ fn a_scroll_step_changes_one_slot() -> TestResult {
     assert!(matches!(changes[0], Change::SetSlot { .. }));
     assert_eq!(view.stats().painted_components, before.painted_components);
     assert_eq!(view.stats().reused_components, before.reused_components + 6);
-    tap_at(&mut view, Point::new(10.dp(), 55.dp()));
-    assert_eq!(tapped.get(), Some(2));
+    press_and_release_at(&mut view, Point::new(10.dp(), 55.dp()));
+    assert_eq!(activated.get(), Some(2));
     Ok(())
 }
 

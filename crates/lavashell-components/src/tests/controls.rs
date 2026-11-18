@@ -26,9 +26,9 @@ fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> R
     let size = Size::new(100.dp(), 100.dp());
     let viewport = Viewport::new(size, Density::ONE);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    click(&mut view, 1.dp(), 1.dp());
+    press_and_release_at(&mut view, Point::new(1.dp(), 1.dp()));
     assert_eq!(clicks.get(), 0, "rounded clipping excludes the corner");
-    click(&mut view, 20.dp(), 5.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 5.dp()));
     assert_eq!(clicks.get(), 1, "the component includes styled padding");
     view.input(InputEvent::Key {
         key: Key::Space,
@@ -37,7 +37,7 @@ fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> R
     assert_eq!(clicks.get(), 2);
     enabled.set(false);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    click(&mut view, 20.dp(), 20.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 20.dp()));
     view.input(InputEvent::Key {
         key: Key::Enter,
         shift: false,
@@ -241,9 +241,9 @@ fn component_activation_follows_its_visual_offset() -> Result<(), TestError> {
         view.bounds_of(&"shifted"),
         Some(Rect::new(40.dp(), 30.dp(), 20.dp(), 20.dp()))
     );
-    click(&mut view, 5.dp(), 5.dp());
+    press_and_release_at(&mut view, Point::new(5.dp(), 5.dp()));
     assert_eq!(clicks.get(), 0);
-    click(&mut view, 45.dp(), 35.dp());
+    press_and_release_at(&mut view, Point::new(45.dp(), 35.dp()));
     assert_eq!(clicks.get(), 1);
     Ok(())
 }
@@ -342,7 +342,7 @@ fn an_arrow_key_moves_a_slider_by_one_pixel_of_its_track_and_page_keys_do_nothin
     for _ in 0..2 {
         render(&mut view, viewport, &mut HalfEmMetrics)?;
     }
-    click(&mut view, 10.dp(), 10.dp());
+    press_and_release_at(&mut view, Point::new(10.dp(), 10.dp()));
     assert_close(value.get(), 0.05);
     view.input(InputEvent::Key {
         key: Key::Right,
@@ -379,7 +379,7 @@ fn a_page_key_moves_a_slider_by_the_page_that_the_caller_gives() -> Result<(), T
     for _ in 0..2 {
         render(&mut view, viewport, &mut HalfEmMetrics)?;
     }
-    click(&mut view, 10.dp(), 10.dp());
+    press_and_release_at(&mut view, Point::new(10.dp(), 10.dp()));
     assert_close(value.get(), 0.05);
     for (key, expected) in [(Key::PageUp, 0.3), (Key::PageDown, 0.05)] {
         view.input(InputEvent::Key { key, shift: false });

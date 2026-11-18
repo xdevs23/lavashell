@@ -22,30 +22,31 @@ fn slide(by: FinitePoint) -> Transition {
     Transition::new(linear(1000)).enter(Presence::default().slide(by))
 }
 
-fn counts(taps: &[State<u32>]) -> Vec<u32> {
-    taps.iter().map(State::get).collect()
+fn counts(activations: &[State<u32>]) -> Vec<u32> {
+    activations.iter().map(State::get).collect()
 }
 
-fn counted_rows(scroll: &ScrollState, taps: &[State<u32>]) -> View {
+fn counted_rows(scroll: &ScrollState, activations: &[State<u32>]) -> View {
     let list = scroll.clone();
-    let taps = taps.to_vec();
+    let activations = activations.to_vec();
     View::new(crate::platform::fixture::facts(), move |ui| {
         if let Err(error) = list.smooth(ui.motion(), linear(1000)) {
             ui.fail(error);
         }
-        let taps = taps.clone();
+        let activations = activations.clone();
         ui.scroll(
             list.clone(),
             Modifier::new().size(100.dp(), 100.dp()),
             move |ui| {
-                for (row, taps) in taps.iter().enumerate() {
-                    let taps = taps.clone();
+                for (row, activations) in activations.iter().enumerate() {
+                    let activations = activations.clone();
                     ui.scoped(row, Modifier::new(), move |ui| {
-                        let taps = taps.clone();
+                        let activations = activations.clone();
                         ui.spacer(
                             100.dp(),
                             40.dp(),
-                            Modifier::new().on_click(move || taps.update(|count| *count += 1)),
+                            Modifier::new()
+                                .on_activate(move |_| activations.update(|count| *count += 1)),
                         );
                     });
                 }
@@ -63,42 +64,42 @@ fn scroll_by(scene: &mut Scene, view: &mut View, by: Dp) -> TestResult {
 }
 
 #[test]
-fn a_tap_during_a_smooth_scroll_finds_the_reused_row_where_it_was_shown() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+fn a_press_during_a_smooth_scroll_finds_the_reused_row_where_it_was_shown() -> TestResult {
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = counted_rows(&scroll, &taps);
+    let mut view = counted_rows(&scroll, &activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let reused = view.stats().reused_components;
     scroll_by(&mut scene, &mut view, 120.dp())?;
     assert_eq!(view.stats().reused_components, reused + 10);
     view.record_presentation(Duration::from_millis(500));
-    tap_at(&mut view, Point::new(50.dp(), 50.dp()));
-    assert_eq!(counts(&taps), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+    press_and_release_at(&mut view, Point::new(50.dp(), 50.dp()));
+    assert_eq!(counts(&activations), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
     Ok(())
 }
 
 #[test]
-fn a_tap_during_a_smooth_scroll_lands_only_inside_the_viewport_as_shown() -> TestResult {
-    let taps: Vec<_> = (0..10).map(|_| State::new(0)).collect();
+fn a_press_during_a_smooth_scroll_lands_only_inside_the_viewport_as_shown() -> TestResult {
+    let activations: Vec<_> = (0..10).map(|_| State::new(0)).collect();
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
-    let mut view = counted_rows(&scroll, &taps);
+    let mut view = counted_rows(&scroll, &activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     scroll.jump_to(100.dp());
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     scroll_by(&mut scene, &mut view, -80.dp())?;
     view.record_presentation(Duration::from_millis(500));
-    tap_at(&mut view, Point::new(50.dp(), 30.dp()));
-    tap_at(&mut view, Point::new(50.dp(), 120.dp()));
-    assert_eq!(counts(&taps), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+    press_and_release_at(&mut view, Point::new(50.dp(), 30.dp()));
+    press_and_release_at(&mut view, Point::new(50.dp(), 120.dp()));
+    assert_eq!(counts(&activations), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
     Ok(())
 }
 
 #[test]
-fn a_tap_during_nested_slides_hits_the_card_where_both_show_it() -> TestResult {
-    let taps = State::new(0);
-    let counted = taps.clone();
+fn a_press_during_nested_slides_hits_the_card_where_both_show_it() -> TestResult {
+    let activations = State::new(0);
+    let counted = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let counted = counted.clone();
@@ -115,7 +116,8 @@ fn a_tap_during_nested_slides_hits_the_card_where_both_show_it() -> TestResult {
                         ui.spacer(
                             100.dp(),
                             60.dp(),
-                            Modifier::new().on_click(move || counted.update(|count| *count += 1)),
+                            Modifier::new()
+                                .on_activate(move |_| counted.update(|count| *count += 1)),
                         );
                     },
                 );
@@ -125,11 +127,11 @@ fn a_tap_during_nested_slides_hits_the_card_where_both_show_it() -> TestResult {
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.record_presentation(Duration::from_millis(500));
     for missed in [Point::new(150.dp(), 30.dp()), Point::new(50.dp(), 80.dp())] {
-        tap_at(&mut view, missed);
+        press_and_release_at(&mut view, missed);
     }
-    assert_eq!(taps.get(), 0);
-    tap_at(&mut view, Point::new(150.dp(), 80.dp()));
-    assert_eq!(taps.get(), 1);
+    assert_eq!(activations.get(), 0);
+    press_and_release_at(&mut view, Point::new(150.dp(), 80.dp()));
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
@@ -186,14 +188,14 @@ fn focus_on_a_row_scrolled_out_of_a_smooth_list_falls_back_to_the_list() -> Test
                     ui.spacer(
                         100.dp(),
                         40.dp(),
-                        Modifier::new().tag(("row", row)).on_click(|| {}),
+                        Modifier::new().tag(("row", row)).on_activate(|_| {}),
                     );
                 }
             },
         );
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, &("row", 0))?;
+    press_and_release(&mut view, &("row", 0))?;
     assert!(view.tagged_state(&("row", 0))?.focus.focused);
     scroll.jump_to(300.dp());
     for ms in [10, 20, 30] {
@@ -204,7 +206,7 @@ fn focus_on_a_row_scrolled_out_of_a_smooth_list_falls_back_to_the_list() -> Test
 }
 
 #[test]
-fn a_tap_on_a_padded_field_in_a_reused_row_finds_the_text_where_it_is_shown() -> TestResult {
+fn a_press_on_a_padded_field_in_a_reused_row_finds_the_text_where_it_is_shown() -> TestResult {
     let scroll = ScrollState::new(Axis::Horizontal);
     let row = scroll.clone();
     let mut scene = Scene::default();
@@ -223,16 +225,16 @@ fn a_tap_on_a_padded_field_in_a_reused_row_finds_the_text_where_it_is_shown() ->
     advance_with(&mut scene, &mut view, window, &mut Shaped)?;
     assert!(view.stats().reused_components > reused);
     let id = field_id(&view)?;
-    tap_at(&mut view, Point::new(114.dp(), 26.dp()));
+    press_and_release_at(&mut view, Point::new(114.dp(), 26.dp()));
     assert_eq!(view.focus(), Some(id));
     assert_eq!(view.editing.edits[&id].selection(), 0..0);
-    tap_at(&mut view, Point::new(137.dp(), 26.dp()));
+    press_and_release_at(&mut view, Point::new(137.dp(), 26.dp()));
     assert_eq!(view.editing.edits[&id].selection(), 1..1);
     Ok(())
 }
 
 #[test]
-fn a_tap_on_a_field_that_follows_a_scroll_lands_where_the_field_is_shown() -> TestResult {
+fn a_press_on_a_field_that_follows_a_scroll_lands_where_the_field_is_shown() -> TestResult {
     let scroll = ScrollState::new(Axis::Vertical);
     let list = scroll.clone();
     let mut scene = Scene::default();
@@ -254,9 +256,9 @@ fn a_tap_on_a_field_that_follows_a_scroll_lands_where_the_field_is_shown() -> Te
     scroll.jump_to(100.dp());
     advance_with(&mut scene, &mut view, window, &mut Shaped)?;
     let id = field_id(&view)?;
-    tap_at(&mut view, Point::new(60.dp(), 126.dp()));
+    press_and_release_at(&mut view, Point::new(60.dp(), 126.dp()));
     assert_eq!(view.focus(), None);
-    tap_at(&mut view, Point::new(4.dp(), 176.dp()));
+    press_and_release_at(&mut view, Point::new(4.dp(), 176.dp()));
     assert_eq!(view.focus(), Some(id));
     assert_eq!(view.editing.edits[&id].selection(), 0..0);
     Ok(())

@@ -42,7 +42,7 @@ fn selected_view(
                 .track_interaction(tracked.clone())
                 .selected(selected.get())
                 .enabled(enabled.get())
-                .on_click(|| {}),
+                .on_activate(|_| {}),
         );
     });
     advance(scene, &mut view, SMALL_WINDOW_SIZE, 0)?;

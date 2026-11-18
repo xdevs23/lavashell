@@ -4,7 +4,7 @@ use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::animation::SpringError;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::ui::{NodeTag, ViewTag};
-use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
+use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures, press_and_release_at};
 use std::iter::repeat_n;
 use std::time::Duration;
 use std::{cell::RefCell, rc::Rc};
@@ -99,11 +99,6 @@ fn is_close(actual: f64, expected: f64) -> bool {
 
 pub(crate) fn assert_close(actual: f64, expected: f64) {
     assert!(is_close(actual, expected), "{actual} is not {expected}");
-}
-
-fn click(view: &mut View, x: Dp, y: Dp) {
-    view.input(InputEvent::Press(Point { x, y }));
-    view.input(InputEvent::Release(Point { x, y }));
 }
 
 const PERFORMED: Result<ActionOutcome, ActionError> = Ok(ActionOutcome::Performed);

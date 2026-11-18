@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{
-    AccessibilityHandler, Action, ActivateAction, Activation, Align, ContentSizes,
-    ContentSizesAction, DragHandler, DragInput, Draggable, Flow, Gesture, KeyAction, MeasureAction,
-    Modifier, ModifierElement, ModifierValue, Node, NodeKind, NodeRef, NodeTag, PointerAction,
-    PointerInput, ScrollAction, SemanticsProvider, Tooltip, TransformHandler, TransformInput, Ui,
-    ViewTag, Weight,
+    AccessibilityHandler, ActivateAction, Activation, Align, ContentSizes, ContentSizesAction,
+    ContextAction, ContextRequest, DragHandler, DragInput, Draggable, Flow, Gesture, KeyAction,
+    MeasureAction, Modifier, ModifierElement, ModifierValue, Node, NodeKind, NodeRef, NodeTag,
+    PointerAction, PointerInput, ScrollAction, SemanticsProvider, Tooltip, TransformHandler,
+    TransformInput, Ui, ViewTag, Weight,
 };
 use crate::accessibility::{ActionKind, Semantics};
 use crate::geometry::{Axis, Color, Size};
@@ -157,18 +157,13 @@ impl Modifier {
         self.set(NodeSetting::VisualScale(scale))
     }
 
-    pub fn on_click(self, action: impl FnMut() + 'static) -> Self {
-        let action: Action = Rc::new(RefCell::new(action));
-        self.set(NodeSetting::Gesture(Gesture::Click(action)))
-    }
-
     pub fn on_activate(self, action: impl FnMut(Activation) + 'static) -> Self {
         let action: ActivateAction = Rc::new(RefCell::new(action));
         self.set(NodeSetting::Gesture(Gesture::Activate(action)))
     }
 
-    pub fn on_context(self, action: impl FnMut(Activation) + 'static) -> Self {
-        let action: ActivateAction = Rc::new(RefCell::new(action));
+    pub fn on_context(self, action: impl FnMut(ContextRequest) + 'static) -> Self {
+        let action: ContextAction = Rc::new(RefCell::new(action));
         self.set(NodeSetting::Gesture(Gesture::Context(action)))
     }
 

@@ -10,7 +10,7 @@ publish = false
 workspace = true
 
 [features]
-testing = []
+testing = ["lavashell-core/test-support"]
 
 [dependencies]
 clap.workspace = true

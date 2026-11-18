@@ -11,6 +11,7 @@ use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};
 use crate::units::{Density, DpExt, NumberError, Positive, SpExt};
+use fixture::press_and_release_at;
 use test_scene::{Scene, advance_with, advance_with_timing};
 use test_tags::Tagged;
 use test_text::repeated;
@@ -118,13 +119,8 @@ fn acting(action: TextAction) -> TextFieldOptions {
     }
 }
 
-fn tap_at(view: &mut View, at: Point) {
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
-}
-
-fn tap<T: ViewTag + Clone>(view: &mut View, tag: &T) -> Result<(), TestError> {
-    tap_at(view, view.tagged_bounds(tag)?.center());
+fn press_and_release<T: ViewTag + Clone>(view: &mut View, tag: &T) -> Result<(), TestError> {
+    press_and_release_at(view, view.tagged_bounds(tag)?.center());
     Ok(())
 }
 

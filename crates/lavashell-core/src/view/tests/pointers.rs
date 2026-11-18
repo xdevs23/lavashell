@@ -25,7 +25,7 @@ fn keys(scene: &mut Scene) -> Result<KeysFixture, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
             for tag in ["a", "b"] {
-                let (pointer, click) = (events.clone(), events.clone());
+                let (pointer, activation) = (events.clone(), events.clone());
                 ui.spacer(
                     100.dp(),
                     40.dp(),
@@ -42,7 +42,9 @@ fn keys(scene: &mut Scene) -> Result<KeysFixture, TestError> {
                                 .borrow_mut()
                                 .push(format!("{tag} {} {phase}", describe(input.pointer)));
                         })
-                        .on_click(move || click.borrow_mut().push(format!("{tag} click"))),
+                        .on_activate(move |_| {
+                            activation.borrow_mut().push(format!("{tag} activated"));
+                        }),
                 );
             }
         });
@@ -79,11 +81,11 @@ fn each_touch_point_captures_the_node_it_pressed_and_releases_it_alone() -> Test
             "a touch 0.1 down",
             "b touch 0.2 down",
             "a touch 0.1 up",
-            "a click",
+            "a activated",
             "b touch 0.2 move",
             "b touch 0.2 move",
             "b touch 0.2 up",
-            "b click",
+            "b activated",
         ]
     );
     Ok(())
@@ -192,9 +194,9 @@ fn a_touch_press_leaves_the_press_of_the_primary_pointer_running() -> TestResult
             "a primary down",
             "b touch 0.1 down",
             "b touch 0.1 up",
-            "b click",
+            "b activated",
             "a primary up",
-            "a click",
+            "a activated",
         ]
     );
     Ok(())
@@ -217,9 +219,9 @@ fn touch_points_of_two_seats_with_one_id_press_apart() -> TestResult {
             "a touch 0.0 down",
             "b touch 1.0 down",
             "b touch 1.0 up",
-            "b click",
+            "b activated",
             "a touch 0.0 up",
-            "a click",
+            "a activated",
         ]
     );
     Ok(())
@@ -247,7 +249,7 @@ fn a_cancel_ends_the_press_of_one_pointer_and_leaves_the_others_held() -> TestRe
             "b touch 0.1 down",
             "a primary cancel",
             "b touch 0.1 up",
-            "b click",
+            "b activated",
         ]
     );
     Ok(())

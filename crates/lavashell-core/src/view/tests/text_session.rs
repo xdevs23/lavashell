@@ -70,7 +70,7 @@ fn a_field_starts_a_session_when_it_gains_focus_and_counts_the_presses_on_it() -
     let search = view.tagged_bounds(&"search")?.center();
     let plain = view.tagged_bounds(&"plain")?.center();
     assert_eq!(view.text_session(), None);
-    tap_at(&mut view, search);
+    press_and_release_at(&mut view, search);
     let session = TextSession {
         id: SessionId(1),
         presses: FieldPresses(0),
@@ -85,21 +85,21 @@ fn a_field_starts_a_session_when_it_gains_focus_and_counts_the_presses_on_it() -
     assert_eq!(view.text_session(), Some(session.clone()));
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(seen.get(), Some(session));
-    tap_at(&mut view, search);
+    press_and_release_at(&mut view, search);
     let pressed = view.text_session().required("a text session")?;
     assert_eq!(
         (pressed.id, pressed.presses),
         (SessionId(1), FieldPresses(1))
     );
-    tap_at(&mut view, plain);
+    press_and_release_at(&mut view, plain);
     let plain_session = view.text_session().required("a text session")?;
     assert_eq!(
         (plain_session.id, plain_session.presses, plain_session.hints),
         (SessionId(2), FieldPresses(0), TextHints::default())
     );
-    tap_at(&mut view, Point::new(450.dp(), 280.dp()));
+    press_and_release_at(&mut view, Point::new(450.dp(), 280.dp()));
     assert_eq!(view.text_session(), None);
-    tap_at(&mut view, plain);
+    press_and_release_at(&mut view, plain);
     assert_eq!(
         view.text_session().required("a text session")?.id,
         SessionId(3)
@@ -120,7 +120,7 @@ fn a_session_has_the_text_before_the_cursor_or_the_selection() -> TestResult {
     let mut scene = Scene::default();
     let FieldsFixture { mut view, .. } = fields(&mut scene)?;
     let search = view.tagged_bounds(&"search")?.center();
-    tap_at(&mut view, search);
+    press_and_release_at(&mut view, search);
     view.input(InputEvent::Text("hello".into()));
     let before = |view: &View| view.text_session().map(|session| session.text);
     let text = |text: &str| FieldText::BeforeCursor(text.into());

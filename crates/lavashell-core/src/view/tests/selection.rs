@@ -154,7 +154,7 @@ fn copy_leaves_the_selected_text_in_the_field_and_a_move_removes_it() -> TestRes
 }
 
 #[test]
-fn selected_text_press_is_pending_until_threshold_and_click_collapses_on_release() -> TestResult {
+fn selected_text_press_is_pending_until_threshold_and_collapses_on_release() -> TestResult {
     let mut scene = Scene::default();
     let Editor {
         mut view,
@@ -473,20 +473,20 @@ fn disabled_drag_source_clears_its_insertion_marker_on_release() -> TestResult {
 }
 
 #[test]
-fn a_tap_on_the_padding_of_a_field_places_the_caret_at_the_nearest_position() -> TestResult {
+fn a_press_on_the_padding_of_a_field_places_the_caret_at_the_nearest_position() -> TestResult {
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), |ui| {
         padded_field(ui, Modifier::new());
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Shaped)?;
     let id = field_id(&view)?;
-    let selection_after_tap = |view: &mut View, x: Dp| {
-        tap_at(view, Point::new(x, 26.dp()));
+    let selection_after_press = |view: &mut View, x: Dp| {
+        press_and_release_at(view, Point::new(x, 26.dp()));
         view.editing.edits[&id].selection()
     };
-    assert_eq!(selection_after_tap(&mut view, 4.dp()), 0..0);
+    assert_eq!(selection_after_press(&mut view, 4.dp()), 0..0);
     assert_eq!(view.focus(), Some(id));
-    assert_eq!(selection_after_tap(&mut view, 110.dp()), 3..3);
-    assert_eq!(selection_after_tap(&mut view, 27.dp()), 1..1);
+    assert_eq!(selection_after_press(&mut view, 110.dp()), 3..3);
+    assert_eq!(selection_after_press(&mut view, 27.dp()), 1..1);
     Ok(())
 }

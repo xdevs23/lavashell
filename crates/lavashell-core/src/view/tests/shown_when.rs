@@ -49,23 +49,25 @@ fn a_hidden_child_takes_no_room_no_gap_and_no_share_in_a_row() -> TestResult {
 }
 
 #[test]
-fn only_the_shown_form_paints_and_takes_a_click() -> TestResult {
-    let clicks = State::new(Vec::new());
-    let counted = clicks.clone();
+fn only_the_shown_form_paints_and_activates() -> TestResult {
+    let activations = State::new(Vec::new());
+    let counted = activations.clone();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         ui.layout(Arrangement::Overlay, Modifier::new(), |ui| {
             for (form, shown, width) in [("wide", true, 100.dp()), ("narrow", false, 60.dp())] {
                 let counted = counted.clone();
-                let click = move || counted.update(|clicks| clicks.push(form));
-                let filled = Modifier::new().background(Color::WHITE).on_click(click);
+                let activate = move |_| counted.update(|activations| activations.push(form));
+                let filled = Modifier::new()
+                    .background(Color::WHITE)
+                    .on_activate(activate);
                 ui.spacer(width, 40.dp(), filled.shown_when(shown));
             }
         });
     });
     let fills = fill_bounds(&mut Scene::default(), &mut view, WINDOW_SIZE)?;
     assert_eq!(fills, [Rect::new(0.dp(), 0.dp(), 100.dp(), 40.dp())]);
-    tap_at(&mut view, Point::new(30.dp(), 20.dp()));
-    assert_eq!(clicks.get(), ["wide"]);
+    press_and_release_at(&mut view, Point::new(30.dp(), 20.dp()));
+    assert_eq!(activations.get(), ["wide"]);
     Ok(())
 }
 
@@ -293,8 +295,11 @@ fn assistive_technology_and_the_tab_key_skip_a_hidden_button() -> TestResult {
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
-            ui.text("shown", Modifier::new().on_click(|| {}).tag("shown"));
-            ui.text("hidden", Modifier::new().on_click(|| {}).shown_when(false));
+            ui.text("shown", Modifier::new().on_activate(|_| {}).tag("shown"));
+            ui.text(
+                "hidden",
+                Modifier::new().on_activate(|_| {}).shown_when(false),
+            );
         });
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;

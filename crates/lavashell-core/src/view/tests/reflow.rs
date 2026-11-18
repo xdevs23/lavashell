@@ -142,11 +142,6 @@ fn border(scene: &Scene) -> Result<Rect, TestError> {
         .required("a border on the island")
 }
 
-fn click(view: &mut View, at: Point) {
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
-}
-
 #[test]
 fn a_reflowing_node_resizes_its_surfaces_around_content_laid_out_at_the_new_size() -> TestResult {
     let wide = State::new(false);
@@ -284,28 +279,30 @@ fn a_reflow_retargeted_before_it_settles_moves_its_content_with_it() -> TestResu
 #[test]
 fn a_reflowing_node_takes_input_on_its_live_surface() -> TestResult {
     let wide = State::new(false);
-    let (target, clicked) = (wide.clone(), State::new(0));
-    let count = clicked.clone();
+    let (target, activated) = (wide.clone(), State::new(0));
+    let count = activated.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let count = count.clone();
-        let click = Modifier::new().on_click(move || count.update(|value| *value += 1));
-        island(ui, "island", 20.dp(), click, |ui| pieces(ui, target.get()));
+        let activate = Modifier::new().on_activate(move |_| count.update(|value| *value += 1));
+        island(ui, "island", 20.dp(), activate, |ui| {
+            pieces(ui, target.get());
+        });
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     halfway(&mut view, &mut scene, &wide, true)?;
-    click(&mut view, Point::new(200.dp(), 30.dp()));
-    assert_eq!(clicked.get(), 0);
-    click(&mut view, Point::new(180.dp(), 30.dp()));
-    assert_eq!(clicked.get(), 1);
+    press_and_release_at(&mut view, Point::new(200.dp(), 30.dp()));
+    assert_eq!(activated.get(), 0);
+    press_and_release_at(&mut view, Point::new(180.dp(), 30.dp()));
+    assert_eq!(activated.get(), 1);
     Ok(())
 }
 
 #[test]
 fn an_entering_child_takes_input_only_inside_the_growing_clip() -> TestResult {
     let wide = State::new(false);
-    let (target, clicked) = (wide.clone(), State::new(0));
-    let count = clicked.clone();
+    let (target, activated) = (wide.clone(), State::new(0));
+    let count = activated.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let wide = target.get();
@@ -313,17 +310,18 @@ fn an_entering_child_takes_input_only_inside_the_growing_clip() -> TestResult {
         island(ui, "island", 20.dp(), Modifier::new(), |ui| {
             piece(ui, "first", Modifier::new());
             if wide {
-                let click = Modifier::new().on_click(move || count.update(|value| *value += 1));
-                piece(ui, "second", click);
+                let activate =
+                    Modifier::new().on_activate(move |_| count.update(|value| *value += 1));
+                piece(ui, "second", activate);
             }
         });
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     halfway(&mut view, &mut scene, &wide, true)?;
-    click(&mut view, Point::new(210.dp(), 30.dp()));
-    assert_eq!(clicked.get(), 0);
-    click(&mut view, Point::new(150.dp(), 30.dp()));
-    assert_eq!(clicked.get(), 1);
+    press_and_release_at(&mut view, Point::new(210.dp(), 30.dp()));
+    assert_eq!(activated.get(), 0);
+    press_and_release_at(&mut view, Point::new(150.dp(), 30.dp()));
+    assert_eq!(activated.get(), 1);
     Ok(())
 }
 

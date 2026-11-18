@@ -207,7 +207,7 @@ fn layout_entry(
     let row = Modifier::new()
         .gap(NAME_GAP)
         .then(on_press(scene.keyboard, Keyboard::type_held))
-        .on_click(move || picker.pick(index));
+        .on_activate(move |_| picker.pick(index));
     ui.layout(
         Axis::Horizontal,
         row.then(entry_content(modifier, semantics)),

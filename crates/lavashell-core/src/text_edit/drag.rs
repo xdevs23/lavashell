@@ -6,7 +6,7 @@ pub(super) struct SelectionDrag {
     source: String,
     range: Range<usize>,
     press: Point,
-    click: TextCaret,
+    pressed_caret: TextCaret,
     destination: TextCaret,
     moving: bool,
 }
@@ -20,7 +20,7 @@ impl TextEdit {
 
     pub fn press(&mut self, value: &str, geometry: &TextGeometry, at: Point, extend: bool) {
         self.clamp_shaped(value, geometry);
-        let click = geometry.hit_caret(at);
+        let pressed_caret = geometry.hit_caret(at);
         let range = self.selection();
         if !extend
             && geometry
@@ -32,15 +32,15 @@ impl TextEdit {
                 source: value.to_string(),
                 range,
                 press: at,
-                click,
-                destination: click,
+                pressed_caret,
+                destination: pressed_caret,
                 moving: false,
             });
             return;
         }
         self.drag = None;
-        self.move_to(click.index, extend);
-        self.line = Some(click.line);
+        self.move_to(pressed_caret.index, extend);
+        self.line = Some(pressed_caret.line);
         self.goal_x = None;
     }
 
@@ -70,8 +70,8 @@ impl TextEdit {
             return;
         }
         if !drag.moving {
-            self.move_to(drag.click.index, false);
-            self.line = Some(drag.click.line);
+            self.move_to(drag.pressed_caret.index, false);
+            self.line = Some(drag.pressed_caret.line);
         } else if allow_move {
             self.move_range(value, drag.range, drag.destination.index);
         }

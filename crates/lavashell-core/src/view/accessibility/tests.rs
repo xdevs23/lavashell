@@ -10,6 +10,7 @@ use crate::scene::TextStyle;
 use crate::test_error::{Required, TestError, TestResult};
 use crate::ui::{Modifier, NodeId, TextFieldOptions};
 use crate::units::{Density, Dp, DpExt};
+use crate::view::fixture::press_and_release_at;
 use crate::view::test_scene::{Scene, advance_with};
 use crate::view::test_tags::Tagged;
 use crate::view::test_text::repeated;
@@ -57,14 +58,14 @@ fn request(
 
 #[test]
 fn passive_button_text_merges_and_actions_share_callback_without_recomposition() -> TestResult {
-    let clicks = crate::reactive::State::new(0);
-    let called = clicks.clone();
+    let activations = crate::reactive::State::new(0);
+    let called = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let called = called.clone();
         ui.layout(
             Axis::Horizontal,
-            Modifier::new().on_click(move || called.set(called.get() + 1)),
+            Modifier::new().on_activate(move |_| called.set(called.get() + 1)),
             |ui| {
                 ui.text("Run", Modifier::new());
             },
@@ -81,7 +82,7 @@ fn passive_button_text_merges_and_actions_share_callback_without_recomposition()
         request(&mut view, button, AccessibilityAction::Activate),
         PERFORMED
     );
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     assert_eq!(
         request(&mut view, button, AccessibilityAction::Focus),
         PERFORMED
@@ -129,21 +130,21 @@ fn a_keyed_node_has_one_identity_through_an_update_and_leaves_on_removal() -> Te
 fn disabled_inheritance_and_modal_filtering_reject_requests() -> TestResult {
     let modal = crate::reactive::State::new(false);
     let show = modal.clone();
-    let clicks = crate::reactive::State::new(0);
-    let calls = clicks.clone();
+    let activations = crate::reactive::State::new(0);
+    let calls = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let calls = calls.clone();
         ui.layout(Axis::Vertical, Modifier::new().enabled(false), |ui| {
             ui.text(
                 "Disabled",
-                Modifier::new().on_click(move || calls.set(calls.get() + 1)),
+                Modifier::new().on_activate(move |_| calls.set(calls.get() + 1)),
             );
         });
-        ui.text("Outside", Modifier::new().on_click(|| {}));
+        ui.text("Outside", Modifier::new().on_activate(|_| {}));
         if show.get() {
             ui.layout(Axis::Vertical, Modifier::new().modal(), |ui| {
-                ui.text("Inside", Modifier::new().on_click(|| {}));
+                ui.text("Inside", Modifier::new().on_activate(|_| {}));
             });
         }
     });
@@ -161,7 +162,7 @@ fn disabled_inheritance_and_modal_filtering_reject_requests() -> TestResult {
         request(&mut view, disabled, AccessibilityAction::Activate),
         Ok(ActionOutcome::Ignored(IgnoredBecause::Disabled))
     );
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     modal.set(true);
     frame(&mut scene, &mut view)?;
     assert!(!view.accessibility.tree.nodes.contains_key(&outside));
@@ -211,7 +212,7 @@ fn decorative_hidden_and_clear_have_distinct_meanings() -> TestResult {
                 ..Default::default()
             }),
             |ui| {
-                ui.text("Replaced", Modifier::new().on_click(|| {}));
+                ui.text("Replaced", Modifier::new().on_activate(|_| {}));
             },
         );
     });
@@ -322,8 +323,8 @@ fn snapshots_can_cross_threads() {
 fn modal_filters_later_painted_controls_and_direct_wheel_paths() -> TestResult {
     let scroll = crate::scroll::ScrollState::new(Axis::Vertical);
     let state = scroll.clone();
-    let clicks = crate::reactive::State::new(0);
-    let called = clicks.clone();
+    let activations = crate::reactive::State::new(0);
+    let called = activations.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         ui.scroll(state.clone(), Modifier::new().height(80.dp()), |ui| {
@@ -343,15 +344,14 @@ fn modal_filters_later_painted_controls_and_direct_wheel_paths() -> TestResult {
             "Later",
             Modifier::new()
                 .tag("late")
-                .on_click(move || called.set(called.get() + 1)),
+                .on_activate(move |_| called.set(called.get() + 1)),
         );
     });
     frame(&mut scene, &mut view)?;
     let later = view.tagged_bounds(&"late")?;
     let point = Point::new(later.x + 1.dp(), later.y + 1.dp());
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
-    assert_eq!(clicks.get(), 0);
+    press_and_release_at(&mut view, point);
+    assert_eq!(activations.get(), 0);
     view.input(InputEvent::Scroll {
         at: Point::new(10.dp(), 60.dp()),
         delta: Point::new(Dp::ZERO, 40.dp()),
@@ -391,7 +391,7 @@ fn tags_never_become_spoken_names_and_relations_use_existing_text() -> TestResul
         );
         ui.text(
             "Existing button copy",
-            Modifier::new().tag("debug-button").on_click(|| {}),
+            Modifier::new().tag("debug-button").on_activate(|_| {}),
         );
     });
     frame(&mut scene, &mut view)?;

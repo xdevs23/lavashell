@@ -222,7 +222,7 @@ fn styled_view(selected: &State<bool>) -> Result<CountedView, TestError> {
             100.dp(),
             40.dp(),
             Modifier::new()
-                .on_click(|| {})
+                .on_activate(|_| {})
                 .selected(selected.get())
                 .state_styles(styles.clone())
                 .background(Color::rgb(0x0000_ff00)),
@@ -299,7 +299,9 @@ fn a_state_style_resolves_a_state_once_while_its_appearance_moves() -> TestResul
         ui.spacer(
             100.dp(),
             40.dp(),
-            Modifier::new().on_click(|| {}).state_styles(styles.clone()),
+            Modifier::new()
+                .on_activate(|_| {})
+                .state_styles(styles.clone()),
         );
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;

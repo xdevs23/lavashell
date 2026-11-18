@@ -5,11 +5,10 @@ use super::navigation::FocusDirection;
 use super::pointers::Pointer;
 use super::pointers::PointerSample;
 use super::{Hit, InputEvent, PaintedHit, View, WindowRegionHit};
-use crate::geometry::Point;
 use crate::input_method::TextAction;
 use crate::keyboard::{Key, Shortcut};
 use crate::ui::{
-    Action, Activation, ComposedShortcut, InputModifiers, Lines, NodeId, NodeKind, PointerId,
+    Action, ComposedShortcut, ContextRequest, InputModifiers, Lines, NodeId, NodeKind, PointerId,
 };
 use std::collections::BTreeMap;
 
@@ -239,7 +238,7 @@ impl View {
                         self.routing.focus.move_to(Some(hit.id));
                     }
                     if let Some(action) = hit.gestures.context() {
-                        action.borrow_mut()(Activation {
+                        action.borrow_mut()(ContextRequest {
                             position: p,
                             modifiers: self.routing.modifiers,
                         });
@@ -279,7 +278,7 @@ impl View {
                 if self.begin_keyboard_activation(key)
                     && let Some(focus) = self.routing.focus.node()
                 {
-                    self.activate_hit(focus, Point::default());
+                    self.activate_node(focus, None);
                 }
             }
             _ => {}
@@ -307,8 +306,7 @@ impl View {
                 && matches!(shortcut.key, Key::Enter | Key::Space)
                 && !shortcut.control
                 && !shortcut.alt
-                && (self.routing.hits.iter())
-                    .any(|hit| Some(hit.id) == self.routing.focus.node() && hit.activates())
+                && self.routing.node_activates(self.nodes[index].id)
             {
                 return false;
             }

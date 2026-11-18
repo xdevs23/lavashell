@@ -72,7 +72,7 @@ fn a_drag_region_is_where_its_node_was_laid_out_except_under_nodes_painted_above
             .window_region(WindowRegion::Drag);
         ui.layout(Axis::Horizontal, bar, |ui| {
             ui.spacer(40.dp(), 40.dp(), Modifier::new());
-            ui.spacer(40.dp(), 40.dp(), Modifier::new().on_click(|| {}));
+            ui.spacer(40.dp(), 40.dp(), Modifier::new().on_activate(|_| {}));
         });
     });
     let mut scene = Scene::default();
@@ -91,11 +91,11 @@ fn a_drag_region_is_where_its_node_was_laid_out_except_under_nodes_painted_above
 
 #[test]
 fn the_view_routes_pointer_input_past_a_window_region() -> TestResult {
-    let clicks = Rc::new(Cell::new(0));
-    let clicked = clicks.clone();
+    let activations = Rc::new(Cell::new(0));
+    let activated = activations.clone();
     let mut view = movable_view(move |ui| {
-        let clicked = clicked.clone();
-        let button = Modifier::new().on_click(move || clicked.set(clicked.get() + 1));
+        let activated = activated.clone();
+        let button = Modifier::new().on_activate(move |_| activated.set(activated.get() + 1));
         ui.spacer(40.dp(), 40.dp(), button);
         let region = Modifier::new().window_region(WindowRegion::Drag);
         ui.spacer(80.dp(), 40.dp(), region);
@@ -106,10 +106,10 @@ fn the_view_routes_pointer_input_past_a_window_region() -> TestResult {
     assert_eq!(view.window_region_at(over_button), Some(WindowRegion::Drag));
     view.input(InputEvent::Move(beside_button));
     assert_eq!(view.cursor(), Cursor::Default);
-    tap_at(&mut view, beside_button);
+    press_and_release_at(&mut view, beside_button);
     assert_eq!(view.focus(), None);
-    tap_at(&mut view, over_button);
-    assert_eq!(clicks.get(), 1);
+    press_and_release_at(&mut view, over_button);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 
@@ -202,13 +202,13 @@ fn a_drag_region_ends_at_the_edge_of_the_scroll_viewport_that_clips_it() -> Test
 }
 
 #[test]
-fn a_clickable_node_tagged_as_a_drag_region_is_a_region_and_clicks_on_a_press_sent_to_the_view()
+fn an_activatable_node_tagged_as_a_drag_region_is_a_region_and_activates_on_a_press_sent_to_the_view()
 -> TestResult {
-    let clicks = Rc::new(Cell::new(0));
-    let clicked = clicks.clone();
+    let activations = Rc::new(Cell::new(0));
+    let activated = activations.clone();
     let mut view = movable_view(move |ui| {
-        let clicked = clicked.clone();
-        let button = Modifier::new().on_click(move || clicked.set(clicked.get() + 1));
+        let activated = activated.clone();
+        let button = Modifier::new().on_activate(move |_| activated.set(activated.get() + 1));
         ui.spacer(40.dp(), 40.dp(), button.window_region(WindowRegion::Drag));
     });
     advance(&mut Scene::default(), &mut view, WINDOW_SIZE, 0)?;
@@ -216,8 +216,8 @@ fn a_clickable_node_tagged_as_a_drag_region_is_a_region_and_clicks_on_a_press_se
     assert_eq!(view.window_region_at(on_node), Some(WindowRegion::Drag));
     view.input(InputEvent::Move(on_node));
     assert_eq!(view.cursor(), Cursor::Pointer);
-    tap_at(&mut view, on_node);
-    assert_eq!(clicks.get(), 1);
+    press_and_release_at(&mut view, on_node);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 

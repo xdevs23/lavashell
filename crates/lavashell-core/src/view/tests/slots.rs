@@ -72,22 +72,22 @@ fn the_parts_of_the_vector_of_a_visual_are_the_vectors_of_its_parts() {
     assert_eq!(*parts.appearance, visual.appearance.vector());
 }
 
-fn sliding_card(taps: &State<u32>) -> View {
-    let taps = taps.clone();
+fn sliding_card(activations: &State<u32>) -> View {
+    let activations = activations.clone();
     View::new(crate::platform::fixture::facts(), move |ui| {
-        let taps = taps.clone();
+        let activations = activations.clone();
         let slide = Presence::default().slide(crate::constant!(slide_offset(200.0, 0.0)));
         ui.scoped(
             "card",
             Modifier::new().transition(Transition::new(linear(1000)).enter(slide)),
             move |ui| {
-                let taps = taps.clone();
+                let activations = activations.clone();
                 ui.spacer(
                     100.dp(),
                     60.dp(),
                     Modifier::new()
                         .background(Color::WHITE)
-                        .on_click(move || taps.update(|count| *count += 1)),
+                        .on_activate(move |_| activations.update(|count| *count += 1)),
                 );
             },
         );
@@ -116,16 +116,16 @@ fn a_sliding_card_emits_one_motion_and_repaints_nothing_until_it_ends() -> TestR
 }
 
 #[test]
-fn a_tap_during_the_slide_hits_the_card_where_it_was_shown() -> TestResult {
-    let taps = State::new(0);
+fn a_press_during_the_slide_hits_the_card_where_it_was_shown() -> TestResult {
+    let activations = State::new(0);
     let mut scene = Scene::default();
-    let mut view = sliding_card(&taps);
+    let mut view = sliding_card(&activations);
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.record_presentation(Duration::from_millis(500));
-    tap_at(&mut view, Point::new(250.dp(), 30.dp()));
-    assert_eq!(taps.get(), 0);
-    tap_at(&mut view, Point::new(150.dp(), 30.dp()));
-    assert_eq!(taps.get(), 1);
+    press_and_release_at(&mut view, Point::new(250.dp(), 30.dp()));
+    assert_eq!(activations.get(), 0);
+    press_and_release_at(&mut view, Point::new(150.dp(), 30.dp()));
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 

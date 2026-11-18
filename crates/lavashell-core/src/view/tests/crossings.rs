@@ -265,32 +265,31 @@ fn the_text_inside_a_paired_element_blends_its_weight_by_the_progress() -> TestR
     Ok(())
 }
 
-fn clicks_at(
+fn activations_at(
     view: &mut View,
     progress: &Animation<f64>,
     at: f64,
-    clicks: &State<u32>,
+    activations: &State<u32>,
 ) -> Result<u32, TestError> {
     frame_at(view, progress, at)?;
-    let before = clicks.get();
+    let before = activations.get();
     for point in [ROW.center(), QUARTER.center()] {
-        view.input(InputEvent::Press(point));
-        view.input(InputEvent::Release(point));
+        press_and_release_at(view, point);
     }
-    Ok(clicks.get() - before)
+    Ok(activations.get() - before)
 }
 
 #[test]
-fn a_click_on_a_paired_element_counts_only_outside_its_flight() -> TestResult {
+fn a_press_on_a_paired_element_counts_only_outside_its_flight() -> TestResult {
     let progress = Animation::new(0.0)?;
-    let clicks = State::new(0);
-    let counted = clicks.clone();
+    let activations = State::new(0);
+    let counted = activations.clone();
     let mut view = crossing(&progress, settings_page, move |ui| {
         let counted = counted.clone();
-        let click = Modifier::new().on_click(move || counted.update(|count| *count += 1));
-        shared_with(ui, ("list", "title"), ROW, click, |_| {});
+        let activate = Modifier::new().on_activate(move |_| counted.update(|count| *count += 1));
+        shared_with(ui, ("list", "title"), ROW, activate, |_| {});
     });
-    assert_eq!(clicks_at(&mut view, &progress, 0.25, &clicks)?, 0);
-    assert_eq!(clicks_at(&mut view, &progress, 1.0, &clicks)?, 1);
+    assert_eq!(activations_at(&mut view, &progress, 0.25, &activations)?, 0);
+    assert_eq!(activations_at(&mut view, &progress, 1.0, &activations)?, 1);
     Ok(())
 }

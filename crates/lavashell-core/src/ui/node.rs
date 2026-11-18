@@ -68,11 +68,18 @@ pub struct InputModifiers {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Activation {
+    pub position: Option<Point>,
+    pub modifiers: InputModifiers,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContextRequest {
     pub position: Point,
     pub modifiers: InputModifiers,
 }
 
 pub type ActivateAction = Rc<RefCell<dyn FnMut(Activation)>>;
+pub type ContextAction = Rc<RefCell<dyn FnMut(ContextRequest)>>;
 pub type KeyAction = Rc<RefCell<dyn FnMut(Shortcut) -> bool>>;
 pub type MeasureAction = Rc<RefCell<dyn FnMut(Size)>>;
 pub type ContentSizesAction = Rc<RefCell<dyn FnMut(ContentSizes)>>;

@@ -25,7 +25,7 @@ fn enter_runs_the_action_of_a_single_line_field_that_no_handler_takes() -> TestR
             ui.spacer(
                 100.dp(),
                 20.dp(),
-                Modifier::new().tag("button").on_click(|| {}),
+                Modifier::new().tag("button").on_activate(|_| {}),
             );
             ui.text_input(
                 "",
@@ -45,12 +45,12 @@ fn enter_runs_the_action_of_a_single_line_field_that_no_handler_takes() -> TestR
         });
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, &"name")?;
+    press_and_release(&mut view, &"name")?;
     view.input(ENTER);
     assert!(view.tagged_state(&"city")?.focus.focused);
     view.input(ENTER);
     assert_eq!(view.focus(), None);
-    tap(&mut view, &"query")?;
+    press_and_release(&mut view, &"query")?;
     view.input(ENTER);
     assert_eq!(searches.get(), 1);
     assert!(view.tagged_state(&"query")?.focus.focused);
@@ -86,10 +86,10 @@ fn next_wraps_to_the_first_field_and_enter_means_the_same_elsewhere() -> TestRes
         });
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, &"plain")?;
+    press_and_release(&mut view, &"plain")?;
     view.input(ENTER);
     assert!(view.tagged_state(&"plain")?.focus.focused);
-    tap(&mut view, &"last")?;
+    press_and_release(&mut view, &"last")?;
     view.input(ENTER);
     assert!(view.tagged_state(&"notes")?.focus.focused);
     view.input(ENTER);
@@ -121,7 +121,7 @@ fn an_action_command_runs_in_a_multiline_field_where_enter_adds_a_line() -> Test
         });
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    tap(&mut view, &"notes")?;
+    press_and_release(&mut view, &"notes")?;
     view.input(ENTER);
     assert_eq!(notes.get(), "\n");
     view.apply_text(TextCommand::Action(TextAction::Next));

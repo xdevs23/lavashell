@@ -106,9 +106,9 @@ fn a_single_finger_on_a_pinch_in_a_list_scrolls_the_list() -> TestResult {
 }
 
 #[test]
-fn a_node_with_pinch_and_click_handlers_is_not_clicked_after_a_pinch() -> TestResult {
-    let (clicks, transforms) = (State::new(0), Transforms::default());
-    let (counter, log) = (clicks.clone(), transforms.clone());
+fn a_node_with_pinch_and_activate_handlers_is_not_activated_after_a_pinch() -> TestResult {
+    let (activations, transforms) = (State::new(0), Transforms::default());
+    let (counter, log) = (activations.clone(), transforms.clone());
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let (counter, log) = (counter.clone(), log.clone());
@@ -118,7 +118,7 @@ fn a_node_with_pinch_and_click_handlers_is_not_clicked_after_a_pinch() -> TestRe
             Modifier::new()
                 .tag("map")
                 .on_transform(move |input| log.borrow_mut().push(input))
-                .on_click(move || counter.update(|count| *count += 1)),
+                .on_activate(move |_| counter.update(|count| *count += 1)),
         );
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
@@ -139,14 +139,14 @@ fn a_node_with_pinch_and_click_handlers_is_not_clicked_after_a_pinch() -> TestRe
         Point::new(140.dp(), 50.dp()),
     )));
     view.input(InputEvent::TouchUp(finger(1, Point::new(60.dp(), 50.dp()))));
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     assert_eq!(transforms.borrow().len(), 2);
     view.input(InputEvent::TouchDown(finger(
         3,
         Point::new(60.dp(), 50.dp()),
     )));
     view.input(InputEvent::TouchUp(finger(3, Point::new(60.dp(), 50.dp()))));
-    assert_eq!(clicks.get(), 1);
+    assert_eq!(activations.get(), 1);
     Ok(())
 }
 

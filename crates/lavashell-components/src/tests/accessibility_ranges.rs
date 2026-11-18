@@ -95,7 +95,7 @@ fn slider_keyboard_pointer_and_assistive_actions_share_one_bounded_value() -> Re
         Ok(ActionOutcome::Ignored(IgnoredBecause::TextIntoRange))
     );
     assert_eq!(changed.borrow().len(), count);
-    click(&mut view, 25.dp(), 10.dp());
+    press_and_release_at(&mut view, Point::new(25.dp(), 10.dp()));
     assert_close(value.get(), 0.25);
     assert!(
         changed
@@ -140,7 +140,7 @@ fn disabled_ancestry_disables_ranges_without_hiding_their_state() -> Result<(), 
         act(&mut view, id, AccessibilityAction::Focus),
         Ok(ActionOutcome::Ignored(IgnoredBecause::Disabled))
     );
-    click(&mut view, 5.dp(), 5.dp());
+    press_and_release_at(&mut view, Point::new(5.dp(), 5.dp()));
     key(&mut view, Key::Tab);
     key(&mut view, Key::Right);
     assert_eq!(calls.get(), 0);

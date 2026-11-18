@@ -2,7 +2,7 @@
 use super::{APP_ID, KEYBOARD, SIXTY_HERTZ, TestResult, app, key_a};
 use crate::{HostScript, TestPlatform};
 use lavashell_core::geometry::Point;
-use lavashell_core::prelude::{Activation, Density, DpExt, Modifier};
+use lavashell_core::prelude::{ContextRequest, Density, DpExt, Modifier};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::window::{ResizeEdge, WINDOW, WindowHandle, WindowRegion, WindowRequest};
 use lavashell_platform::{
@@ -99,9 +99,9 @@ fn a_right_click_opens_the_window_menu_with_the_serial_of_its_press() -> TestRes
     let at = Point::new(21.dp(), 23.dp());
     let app = app(|ui| {
         let window = ui.local(&WINDOW);
-        let open_menu = move |activation: Activation| {
+        let open_menu = move |request: ContextRequest| {
             if let Some(window) = &window {
-                let menu = WindowRequest::ShowMenu(activation.position);
+                let menu = WindowRequest::ShowMenu(request.position);
                 assert_eq!(window.request(menu), Ok(()));
             }
         };

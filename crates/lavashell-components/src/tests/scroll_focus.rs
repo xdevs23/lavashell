@@ -36,7 +36,7 @@ fn focused_keys_bubble_and_modifiers_reach_recycled_items() -> Result<(), TestEr
         shift: true,
         alt: false,
     }));
-    click(&mut view, 20.dp(), 20.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 20.dp()));
     let modifiers = selected
         .get()
         .ok_or(TestError::NothingRecorded("activation"))?;
@@ -223,7 +223,7 @@ fn focus_after_rebinding(scoped: bool) -> Result<(), TestError> {
                         ui.spacer(
                             item.size.width,
                             item.size.height,
-                            Modifier::new().on_click(|| {}),
+                            Modifier::new().on_activate(|_| {}),
                         );
                     },
                 );
@@ -238,7 +238,7 @@ fn focus_after_rebinding(scoped: bool) -> Result<(), TestError> {
     let size = Size::new(500.dp(), 400.dp());
     let viewport = Viewport::new(size, Density::ONE);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    click(&mut view, 20.dp(), 50.dp());
+    press_and_release_at(&mut view, Point::new(20.dp(), 50.dp()));
     for key in [
         Shortcut::key(Key::End),
         Shortcut::key(Key::Home),

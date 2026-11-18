@@ -30,7 +30,7 @@ fn keyed_state_survives_reorder_and_drops_after_removal() -> TestResult {
                         20.dp(),
                         Modifier::new()
                             .tag(("increment", key))
-                            .on_click(move || count.update(|n| *n += 1)),
+                            .on_activate(move |_| count.update(|n| *n += 1)),
                     );
                 });
             }
@@ -226,7 +226,7 @@ fn scrolling_clamps_offset_and_clips_activation() -> TestResult {
                     30.dp(),
                     Modifier::new()
                         .tag(("item", i))
-                        .on_click(move || counter.update(|n| *n += 1)),
+                        .on_activate(move |_| counter.update(|n| *n += 1)),
                 );
             }
         });

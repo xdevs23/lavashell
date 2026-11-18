@@ -116,7 +116,7 @@ fn the_hover_appearance_of_a_leaving_node_continues_toward_the_last_appearance_s
             ui.key(
                 "button",
                 Modifier::new()
-                    .on_click(|| {})
+                    .on_activate(|_| {})
                     .state_styles(half_opaque_on_hover(1000))
                     .transition(fading_out(1000)),
                 |ui| {

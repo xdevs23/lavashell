@@ -34,7 +34,7 @@ fn disabled_button_clears_focus_without_capturing_global_shortcuts_in_an_editor(
                     ui.text(
                         "Delete",
                         Modifier::new()
-                            .on_click(move || disable.set(false))
+                            .on_activate(move |_| disable.set(false))
                             .enabled(active.get()),
                     );
                 };
@@ -49,8 +49,7 @@ fn disabled_button_clears_focus_without_capturing_global_shortcuts_in_an_editor(
         let button = target(&view, "Delete")?;
         let bounds = view.accessibility.tree.nodes[&button].bounds;
         let point = bounds.center();
-        view.input(InputEvent::Press(point));
-        view.input(InputEvent::Release(point));
+        press_and_release_at(&mut view, point);
         assert_eq!(view.focus(), Some(button));
         assert!(!enabled.get());
         frame(&mut scene, &mut view)?;
@@ -68,18 +67,17 @@ fn disabled_button_clears_focus_without_capturing_global_shortcuts_in_an_editor(
 }
 
 #[test]
-fn the_accessibility_focus_action_makes_focus_visible_after_a_tap() -> TestResult {
+fn the_accessibility_focus_action_makes_focus_visible_after_a_press() -> TestResult {
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
-            ui.text("Play", Modifier::new().tag("play").on_click(|| {}));
-            ui.text("Next", Modifier::new().tag("next").on_click(|| {}));
+            ui.text("Play", Modifier::new().tag("play").on_activate(|_| {}));
+            ui.text("Next", Modifier::new().tag("next").on_activate(|_| {}));
         });
     });
     frame(&mut scene, &mut view)?;
     let at = view.tagged_bounds(&"play")?.center();
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
+    press_and_release_at(&mut view, at);
     assert!(!view.tagged_state(&"play")?.focus.visible);
     let next = target(&view, "Next")?;
     assert_eq!(

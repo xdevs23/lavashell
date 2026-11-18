@@ -95,7 +95,7 @@ fn button_view(styles: StateStyles) -> Result<(View, Scene), TestError> {
                 Axis::Horizontal,
                 Modifier::new()
                     .tag("button")
-                    .on_click(|| {})
+                    .on_activate(|_| {})
                     .state_styles(styles.clone())
                     .size(200.dp(), 40.dp()),
                 |ui| {
@@ -173,7 +173,7 @@ fn pressed_halfway_to_violet() -> Result<(View, Scene), TestError> {
         ui.layout(
             Axis::Horizontal,
             Modifier::new()
-                .on_click(|| {})
+                .on_activate(|_| {})
                 .state_styles(styles.clone())
                 .size(200.dp(), 40.dp()),
             |ui| {
@@ -230,12 +230,14 @@ fn the_content_color_reaches_down_to_the_next_node_that_sets_its_own() -> TestRe
         let inner = inner.clone();
         ui.layout(
             Axis::Vertical,
-            Modifier::new().on_click(|| {}).state_styles(outer.clone()),
+            Modifier::new()
+                .on_activate(|_| {})
+                .state_styles(outer.clone()),
             |ui| {
                 ui.text("outer", Modifier::new().color(Color::WHITE));
                 ui.layout(
                     Axis::Horizontal,
-                    Modifier::new().on_click(|| {}).state_styles(inner),
+                    Modifier::new().on_activate(|_| {}).state_styles(inner),
                     |ui| {
                         ui.text("inner", Modifier::new().color(Color::WHITE));
                     },
@@ -279,12 +281,14 @@ fn an_inner_content_color_fades_in_from_the_content_color_around_it() -> TestRes
         let inner = inner.clone();
         ui.layout(
             Axis::Vertical,
-            Modifier::new().on_click(|| {}).state_styles(outer.clone()),
+            Modifier::new()
+                .on_activate(|_| {})
+                .state_styles(outer.clone()),
             |ui| {
                 ui.layout(
                     Axis::Horizontal,
                     Modifier::new()
-                        .on_click(|| {})
+                        .on_activate(|_| {})
                         .state_styles(inner)
                         .size(200.dp(), 40.dp()),
                     |ui| {

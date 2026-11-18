@@ -116,7 +116,7 @@ pub(super) fn nav(
             .tag(Tag::Navigation(key))
             .accessible_name(copy(key))
             .selected(selected)
-            .on_click(model.action(move |m| {
+            .on_activate(model.handler(move |m, _| {
                 m.section = section;
                 m.album = None;
             }))

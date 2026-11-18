@@ -9,26 +9,26 @@ use crate::ui::DragPhase;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-fn tab_row(ui: &mut Ui, scroll: ScrollState, clicks: &State<u32>) {
+fn tab_row(ui: &mut Ui, scroll: ScrollState, activations: &State<u32>) {
     ui.scroll(scroll, Modifier::new().width(100.dp()), |ui| {
         for index in 0..5 {
-            let clicks = clicks.clone();
+            let activations = activations.clone();
             ui.spacer(
                 60.dp(),
                 40.dp(),
                 Modifier::new()
                     .tag(("tab", index))
                     .accessible_name(format!("tab {index}"))
-                    .on_click(move || clicks.update(|count| *count += 1)),
+                    .on_activate(move |_| activations.update(|count| *count += 1)),
             );
         }
     });
 }
 
 fn tabs(scene: &mut Scene, scroll: ScrollState) -> Result<View, TestError> {
-    let clicks = State::new(0);
+    let activations = State::new(0);
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
-        tab_row(ui, scroll.clone(), &clicks);
+        tab_row(ui, scroll.clone(), &activations);
     });
     advance(scene, &mut view, WINDOW_SIZE, 0)?;
     Ok(view)
@@ -38,13 +38,13 @@ fn page(
     scene: &mut Scene,
     list: ScrollState,
     row: ScrollState,
-    clicks: State<u32>,
+    activations: State<u32>,
     drags: Rc<RefCell<Vec<DragPhase>>>,
 ) -> Result<View, TestError> {
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let drags = drags.clone();
         ui.scroll(list.clone(), Modifier::new().height(100.dp()), |ui| {
-            tab_row(ui, row.clone(), &clicks);
+            tab_row(ui, row.clone(), &activations);
             ui.spacer(
                 100.dp(),
                 40.dp(),
@@ -191,7 +191,7 @@ fn left_and_right_scroll_a_row_and_up_and_down_scroll_the_list_around_it() -> Te
         Rc::default(),
     )?;
     let line = default_line_height(&view);
-    tap(&mut view, &("tab", 0))?;
+    press_and_release(&mut view, &("tab", 0))?;
     key(&mut view, Key::Right);
     assert_eq!(row.offset(), line);
     key(&mut view, Key::Left);
@@ -242,7 +242,7 @@ fn assistive_technology_scrolls_a_row_sideways_and_reveals_a_tab_along_it() -> T
 #[test]
 fn a_sideways_swipe_on_a_tab_scrolls_the_row_containing_it_and_an_upright_swipe_scrolls_the_list()
 -> TestResult {
-    let (list, row, clicks) = (
+    let (list, row, activations) = (
         ScrollState::new(Axis::Vertical),
         ScrollState::new(Axis::Horizontal),
         State::new(0),
@@ -252,7 +252,7 @@ fn a_sideways_swipe_on_a_tab_scrolls_the_row_containing_it_and_an_upright_swipe_
         &mut scene,
         list.clone(),
         row.clone(),
-        clicks.clone(),
+        activations.clone(),
         Rc::default(),
     )?;
     let start = view.tagged_bounds(&("tab", 0))?.center();
@@ -260,7 +260,7 @@ fn a_sideways_swipe_on_a_tab_scrolls_the_row_containing_it_and_an_upright_swipe_
     assert_eq!((row.offset(), list.offset()), (22.dp(), Dp::ZERO));
     swipe(&mut view, 2, start, start.offset(2.dp(), -30.dp()));
     assert_eq!((row.offset(), list.offset()), (22.dp(), 22.dp()));
-    assert_eq!(clicks.get(), 0);
+    assert_eq!(activations.get(), 0);
     Ok(())
 }
 

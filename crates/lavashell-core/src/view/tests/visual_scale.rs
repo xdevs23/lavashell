@@ -7,11 +7,11 @@ fn centered_visual_scale_keeps_layout_but_transforms_input_and_accessibility() -
     let scale = State::new(crate::constant!(Positive::try_new(0.5)));
     let value = scale.clone();
     let hits = State::new(0);
-    let clicked = hits.clone();
+    let activated = hits.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         ui.layout(Axis::Horizontal, Modifier::new(), |ui| {
-            let clicked = clicked.clone();
+            let activated = activated.clone();
             ui.layout(
                 Axis::Vertical,
                 Modifier::new()
@@ -24,7 +24,7 @@ fn centered_visual_scale_keeps_layout_but_transforms_input_and_accessibility() -
                         40.dp(),
                         Modifier::new()
                             .tag("scaled-child")
-                            .on_click(move || clicked.set(clicked.get() + 1)),
+                            .on_activate(move |_| activated.set(activated.get() + 1)),
                     );
                 },
             );

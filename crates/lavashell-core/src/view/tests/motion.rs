@@ -8,9 +8,9 @@ use crate::scene::{Brush, DrawCommand};
 fn automatic_geometry_transitions_keep_hit_testing_at_visible_bounds() -> TestResult {
     use crate::animation::Tween;
     let moved = State::new(false);
-    let clicked = State::new(0);
+    let activated = State::new(0);
     let target = moved.clone();
-    let count = clicked.clone();
+    let count = activated.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let x = if target.get() { 200.dp() } else { 20.dp() };
@@ -23,7 +23,7 @@ fn automatic_geometry_transitions_keep_hit_testing_at_visible_bounds() -> TestRe
                 .clip(Corners::all(10.dp()))
                 .background(Color::WHITE)
                 .transition(Tween::new(std::time::Duration::from_secs(1)))
-                .on_click(move || count.update(|value| *value += 1))
+                .on_activate(move |_| count.update(|value| *value += 1))
                 .tag("moving"),
         );
     });
@@ -37,10 +37,10 @@ fn automatic_geometry_transitions_keep_hit_testing_at_visible_bounds() -> TestRe
     let at = Point::new(rect.x + 20.dp(), rect.y + 20.dp());
     view.input(InputEvent::Press(at));
     view.input(InputEvent::Release(at));
-    assert_eq!(clicked.get(), 1);
+    assert_eq!(activated.get(), 1);
     view.input(InputEvent::Press(Point::new(240.dp(), 40.dp())));
     view.input(InputEvent::Release(Point::new(240.dp(), 40.dp())));
-    assert_eq!(clicked.get(), 1);
+    assert_eq!(activated.get(), 1);
     moved.set(false);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
     assert_eq!(view.tagged_bounds(&"moving")?.x, 110.dp());
@@ -285,7 +285,7 @@ fn automatic_corner_radius_is_not_scaled_twice_when_bounds_change() -> TestResul
             if expanded { 100.dp() } else { 60.dp() },
             Modifier::new()
                 .clip(Corners::all(if expanded { 30.dp() } else { 20.dp() }))
-                .on_click(|| {})
+                .on_activate(|_| {})
                 .transition(Tween::new(std::time::Duration::from_secs(1))),
         );
     });
@@ -305,8 +305,8 @@ fn interrupted_entering_fades_keep_velocity_and_ancestor_clipping_on_exit() -> T
     use std::time::Duration;
     let shown = State::new(true);
     let state = shown.clone();
-    let clicked = State::new(0);
-    let count = clicked.clone();
+    let activated = State::new(0);
+    let count = activated.clone();
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
         let count = count.clone();
@@ -321,7 +321,7 @@ fn interrupted_entering_fades_keep_velocity_and_ancestor_clipping_on_exit() -> T
                         "fade",
                         Modifier::new()
                             .background(Color::WHITE)
-                            .on_click(move || count.update(|value| *value += 1))
+                            .on_activate(move |_| count.update(|value| *value += 1))
                             .transition(
                                 Transition::new(crate::spring!(Duration::from_millis(450), 0.85))
                                     .enter(Presence::fade())
@@ -362,7 +362,7 @@ fn interrupted_entering_fades_keep_velocity_and_ancestor_clipping_on_exit() -> T
     assert!(view.routing.hits.is_empty());
     view.input(InputEvent::Press(Point::new(30.dp(), 30.dp())));
     view.input(InputEvent::Release(Point::new(30.dp(), 30.dp())));
-    assert_eq!(clicked.get(), 0, "removed nodes cannot receive input");
+    assert_eq!(activated.get(), 0, "removed nodes cannot receive input");
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 3000)?;
     assert_eq!(view.transitions.count(), 0);
     Ok(())

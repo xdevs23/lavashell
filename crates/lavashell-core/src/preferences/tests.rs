@@ -157,7 +157,7 @@ fn tooltips_and_canvas_text_follow_the_text_size_setting() -> TestResult {
             ui.spacer(
                 40.dp(),
                 20.dp(),
-                Modifier::new().on_click(|| {}).tooltip("hint"),
+                Modifier::new().on_activate(|_| {}).tooltip("hint"),
             );
         });
         ui.canvas(Size::new(40.dp(), 20.dp()), Modifier::new(), |drawing| {

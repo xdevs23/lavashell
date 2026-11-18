@@ -55,6 +55,8 @@ pub use transition::{BoundsMotion, Exit, Transition};
 
 #[cfg(test)]
 mod component_tests;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
 #[cfg(test)]
 pub(crate) mod test_scene;
 #[cfg(test)]
@@ -170,10 +172,6 @@ impl Hit {
 
     fn contains(&self, p: Point, moving: &Moving) -> bool {
         self.area.contains(p, moving)
-    }
-
-    fn activates(&self) -> bool {
-        self.gestures.activates()
     }
 }
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::component::index_of;
 use super::focus::FocusSource;
 use super::paint::PaintOutput;
 use super::{InputEvent, View, paint};
@@ -8,9 +9,7 @@ use crate::keyboard::Key;
 use crate::scene::{DrawCommand, MaterialCommands, Transform};
 use crate::shape::{RoundedRect, Shape};
 use crate::style::{AnimatedAppearance, FocusState, InteractionState, PointerState, StateStyles};
-use crate::ui::{
-    Action, ActivateAction, Activation, Gestures, NodeId, NodeKind, PointerId, ViewTag,
-};
+use crate::ui::{Activation, NodeId, NodeKind, PointerId, ViewTag};
 use std::collections::BTreeSet;
 use std::collections::btree_map::Entry;
 
@@ -217,31 +216,14 @@ impl View {
         ) || matches!(self.nodes[index].kind, NodeKind::TextInput { .. })
     }
 
-    pub(super) fn activate_hit(&mut self, node: NodeId, at: Point) {
-        let activate = self.handler(node, Gestures::activate);
-        let click = self.handler(node, Gestures::click);
-        self.run_activation(
-            activate.map(|(activate, _)| activate),
-            click.map(|(click, _)| click),
-            at,
-        );
-    }
-
-    pub(super) fn run_activation(
-        &mut self,
-        activate: Option<ActivateAction>,
-        click: Option<Action>,
-        at: Point,
-    ) {
+    pub(super) fn activate_node(&mut self, node: NodeId, at: Option<Point>) {
+        let activate = index_of(&self.nodes, node)
+            .and_then(|index| self.nodes[index].gestures.activate().cloned());
         if let Some(activate) = activate {
             activate.borrow_mut()(Activation {
                 position: at,
                 modifiers: self.routing.modifiers,
             });
-            self.redraw = true;
-        }
-        if let Some(click) = click {
-            click.borrow_mut()();
             self.redraw = true;
         }
     }
@@ -253,12 +235,7 @@ impl View {
         if self.routing.focus.pressed_key() == Some(key) {
             return false;
         }
-        if !self
-            .routing
-            .hits
-            .iter()
-            .any(|hit| hit.id == id && hit.activates())
-        {
+        if !self.routing.node_activates(id) {
             return false;
         }
         self.routing.focus.set_pressed_key(Some(key));

@@ -147,14 +147,16 @@ impl UiExt for Ui {
     fn button(
         &mut self,
         modifier: Modifier,
-        action: impl FnMut() + 'static,
+        mut action: impl FnMut() + 'static,
         content: impl FnOnce(&mut Ui),
     ) {
-        let button = Modifier::new().on_click(action).semantics(Semantics {
-            role: Some(Role::Button),
-            mode: SemanticsMode::MergeDescendants,
-            ..Semantics::default()
-        });
+        let button = Modifier::new()
+            .on_activate(move |_| action())
+            .semantics(Semantics {
+                role: Some(Role::Button),
+                mode: SemanticsMode::MergeDescendants,
+                ..Semantics::default()
+            });
         self.stack(button.then(modifier), content);
     }
 
@@ -163,12 +165,14 @@ impl UiExt for Ui {
         icon: &'static Icon,
         options: IconOptions,
         modifier: Modifier,
-        action: impl FnMut() + 'static,
+        mut action: impl FnMut() + 'static,
     ) {
-        let button = Modifier::new().on_click(action).semantics(Semantics {
-            role: Some(Role::Button),
-            ..Semantics::default()
-        });
+        let button = Modifier::new()
+            .on_activate(move |_| action())
+            .semantics(Semantics {
+                role: Some(Role::Button),
+                ..Semantics::default()
+            });
         self.icon(icon, options, button.then(modifier));
     }
 
