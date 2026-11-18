@@ -7,6 +7,12 @@ pub struct Outlet<U> {
 }
 
 impl<U> Outlet<U> {
+    pub fn new(push: impl Fn(U) -> Result<(), Closed> + Send + Sync + 'static) -> Self {
+        Self {
+            push: Arc::new(push),
+        }
+    }
+
     pub fn push(&self, item: U) -> Result<(), Closed> {
         (self.push)(item)
     }
@@ -31,9 +37,7 @@ where
         convert: impl Fn(U) -> T + Send + Sync + 'static,
     ) -> Outlet<U> {
         let sender = self.clone();
-        Outlet {
-            push: Arc::new(move |item| sender.push(convert(item))),
-        }
+        Outlet::new(move |item| sender.push(convert(item)))
     }
 }
 
