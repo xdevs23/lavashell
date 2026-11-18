@@ -16,6 +16,7 @@ use crate::ui::{Gestures, NodeId, PointerId};
 use crate::units::Dp;
 use crate::view::component::index_of;
 pub(super) use arena::{Arena, Outcome};
+use lavashell_enum_values::enum_with_values;
 
 pub(super) type Effect = Box<dyn FnOnce(&mut View)>;
 
@@ -69,38 +70,24 @@ enum Contest {
     Fallback,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Contender {
-    Select,
-    Raw,
-    Click,
-    Drag,
-    Scroll,
-    Pinch,
-    Focus,
+enum_with_values! {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) enum Contender {
+        Select = 0,
+        Raw = 1,
+        Click = 2,
+        Drag = 3,
+        Scroll = 4,
+        Pinch = 5,
+        Focus = 6,
+    }
+
+    const ALL;
 }
 
 impl Contender {
-    const ALL: [Self; 7] = [
-        Self::Select,
-        Self::Raw,
-        Self::Click,
-        Self::Drag,
-        Self::Scroll,
-        Self::Pinch,
-        Self::Focus,
-    ];
-
     fn rank(self) -> u8 {
-        match self {
-            Self::Select => 0,
-            Self::Raw => 1,
-            Self::Click => 2,
-            Self::Drag => 3,
-            Self::Scroll => 4,
-            Self::Pinch => 5,
-            Self::Focus => 6,
-        }
+        self as u8
     }
 
     fn contest(self) -> Contest {
@@ -270,19 +257,4 @@ fn euclidean_distance(from: Point, to: Point) -> Dp {
 
 fn midpoint(a: Point, b: Point) -> Point {
     Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeSet;
-
-    #[test]
-    fn each_contender_has_its_own_rank() {
-        let ranks: BTreeSet<u8> = Contender::ALL
-            .iter()
-            .map(|contender| contender.rank())
-            .collect();
-        assert_eq!(ranks.len(), Contender::ALL.len());
-    }
 }

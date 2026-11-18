@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::geometry::Size;
+use lavashell_enum_values::enum_with_values;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OutputProfile {
@@ -12,18 +13,20 @@ pub enum OutputProfile {
     ScRgb,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Precision {
-    #[default]
-    Eight,
-    Ten,
-    Twelve,
-    Float16,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum Precision {
+        #[default]
+        Eight,
+        Ten,
+        Twelve,
+        Float16,
+    }
+
+    pub const ALL;
 }
 
 impl Precision {
-    pub const ALL: [Self; 4] = [Self::Eight, Self::Ten, Self::Twelve, Self::Float16];
-
     const fn significand_bits(self) -> u8 {
         match self {
             Self::Eight => 8,

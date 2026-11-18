@@ -3,6 +3,7 @@ use crate::flag_set::flag_set;
 use crate::geometry::Point;
 use crate::local::Local;
 use crate::view::Cursor;
+use lavashell_enum_values::enum_with_values;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
@@ -42,30 +43,21 @@ impl WindowState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ResizeEdge {
-    Top,
-    TopRight,
-    Right,
-    BottomRight,
-    Bottom,
-    BottomLeft,
-    Left,
-    TopLeft,
-}
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub enum ResizeEdge {
+        Top,
+        TopRight,
+        Right,
+        BottomRight,
+        Bottom,
+        BottomLeft,
+        Left,
+        TopLeft,
+    }
 
-impl ResizeEdge {
-    pub const ALL: [Self; 8] = [
-        Self::Top,
-        Self::TopRight,
-        Self::Right,
-        Self::BottomRight,
-        Self::Bottom,
-        Self::BottomLeft,
-        Self::Left,
-        Self::TopLeft,
-    ];
+    pub const ALL;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

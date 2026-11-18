@@ -2,14 +2,16 @@
 
 macro_rules! flag_set {
     (pub enum $flag:ident in $set:ident { $($variant:ident),+ $(,)? }) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-        pub enum $flag {
-            $($variant),+
+        ::lavashell_enum_values::enum_with_values! {
+            #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+            pub enum $flag {
+                $($variant),+
+            }
+
+            pub const ALL;
         }
 
         impl $flag {
-            pub const ALL: [Self; [$(Self::$variant),+].len()] = [$(Self::$variant),+];
-
             const fn bit(self) -> u8 {
                 1 << self as u8
             }

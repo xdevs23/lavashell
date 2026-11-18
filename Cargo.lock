@@ -2783,6 +2783,7 @@ name = "lavashell-core"
 version = "0.1.0"
 dependencies = [
  "icu_locale_core",
+ "lavashell-enum-values",
  "num-traits",
  "palette",
  "postcard",
@@ -2808,6 +2809,10 @@ version = "0.1.0"
 dependencies = [
  "lavashell-core",
 ]
+
+[[package]]
+name = "lavashell-enum-values"
+version = "0.1.0"
 
 [[package]]
 name = "lavashell-error-chain"
@@ -2991,6 +2996,7 @@ dependencies = [
  "icu_locale_core",
  "lavashell-actor",
  "lavashell-core",
+ "lavashell-enum-values",
  "lavashell-renderer",
  "thiserror 2.0.21",
 ]

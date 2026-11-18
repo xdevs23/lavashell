@@ -3,13 +3,18 @@
 use crate::flag_set::flag_set;
 use crate::geometry::Point;
 use crate::surface::SurfaceId;
+use lavashell_enum_values::enum_with_values;
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TextFormat {
-    Utf8,
-    Plain,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum TextFormat {
+        Utf8,
+        Plain,
+    }
+
+    const ALL;
 }
 
 impl TextFormat {
@@ -29,7 +34,7 @@ impl TextFormat {
     }
 
     pub fn by_preference() -> impl Iterator<Item = Self> {
-        let mut formats = [Self::Utf8, Self::Plain];
+        let mut formats = Self::ALL;
         formats.sort_unstable_by_key(|format| Reverse(format.preference()));
         formats.into_iter()
     }

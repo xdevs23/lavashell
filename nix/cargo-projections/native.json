@@ -1092,6 +1092,7 @@
         "version": "0.1.0",
         "dependencies": [
           "icu_locale_core",
+          "lavashell-enum-values",
           "num-traits",
           "palette",
           "postcard",
@@ -1108,6 +1109,10 @@
         "dependencies": [
           "lavashell-core"
         ]
+      },
+      {
+        "name": "lavashell-enum-values",
+        "version": "0.1.0"
       },
       {
         "name": "lavashell-error-chain",
@@ -1177,6 +1182,7 @@
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-renderer",
           "thiserror 2.0.21"
         ]
@@ -2624,7 +2630,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "8348cc0d013179ad5313a9d5753d5cf86ec7ec737e678495a8066419213f2dc5",
+        "seedHash": "7a8ffe83b25a805587ad4711bc79512f84ca119577eccf95d5e2db2ba1be7de4",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2667,6 +2673,7 @@
                 "crates/lavashell-components",
                 "crates/lavashell-core",
                 "crates/lavashell-effect-quality",
+                "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
                 "crates/lavashell-keyboard",
                 "crates/lavashell-lucide",
@@ -2931,6 +2938,12 @@
                     ],
                     "version": "=2.3.0"
                   },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
                   "num-traits": {
                     "package": "num-traits",
                     "default-features": false,
@@ -3015,6 +3028,31 @@
                     "path": "../lavashell-core"
                   }
                 }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-enum-values",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-enum-values",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
               },
               "targets": [
                 {
@@ -3311,6 +3349,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   },
                   "lavashell-renderer": {
                     "package": "lavashell-renderer",
@@ -5165,6 +5209,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "icu_locale_core",
+                  "lavashell-enum-values",
                   "num-traits",
                   "palette",
                   "serde",
@@ -5178,6 +5223,10 @@
                 "dependencies": [
                   "lavashell-core"
                 ]
+              },
+              {
+                "name": "lavashell-enum-values",
+                "version": "0.0.0"
               },
               {
                 "name": "lavashell-error-chain",
@@ -5246,6 +5295,7 @@
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-core",
+                  "lavashell-enum-values",
                   "lavashell-renderer",
                   "thiserror"
                 ]

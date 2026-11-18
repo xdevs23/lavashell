@@ -2050,6 +2050,7 @@
         "version": "0.1.0",
         "dependencies": [
           "icu_locale_core",
+          "lavashell-enum-values",
           "num-traits",
           "palette",
           "postcard",
@@ -2068,6 +2069,10 @@
         ]
       },
       {
+        "name": "lavashell-enum-values",
+        "version": "0.1.0"
+      },
+      {
         "name": "lavashell-error-chain",
         "version": "0.1.0"
       },
@@ -2079,6 +2084,7 @@
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-renderer",
           "thiserror 2.0.21"
         ]
