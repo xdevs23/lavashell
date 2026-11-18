@@ -6,7 +6,6 @@ pub type StreamSetup<S> =
 
 pub type StreamTask<S> = Box<dyn FnOnce(&mut S, &Painter) + Send>;
 
-#[must_use]
 pub fn no_streams() -> StreamSetup<NoStreams> {
     Box::new(|_: &VulkanRenderer| Ok(NoStreams::default()))
 }
