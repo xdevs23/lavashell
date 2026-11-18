@@ -50,10 +50,11 @@ fn reference_source(directory: &Path) -> PathBuf {
 }
 
 #[test]
-fn changed_gui_tools_do_not_reach_the_engine() -> Result<(), LayerTestError> {
+fn changed_gui_tools_leave_every_engine_layer() -> Result<(), LayerTestError> {
     let tools = Fixture::new()?.layers(Variant::GuiTools, &base()?.all())?;
-    assert_unchanged(&tools, &[Derivation::Engine])?;
-    assert_changed(&tools, &base()?.above_engine())
+    let engines = base()?.engines();
+    assert_unchanged(&tools, &engines)?;
+    assert_changed(&tools, &base()?.all_except(&engines))
 }
 
 #[test]
@@ -61,13 +62,41 @@ fn an_edit_of_the_reference_source_reaches_only_the_reference() -> Result<(), La
     let fixture = Fixture::new()?;
     append_newline(&reference_source(&fixture.root().join(&base()?.reference)))?;
     let current = fixture.all_layers()?;
-    let others: Vec<_> = base()?
-        .all()
-        .into_iter()
-        .filter(|layer| *layer != Derivation::Reference)
-        .collect();
-    assert_unchanged(&current, &others)?;
+    assert_unchanged(&current, &base()?.all_except(&[Derivation::Reference]))?;
     assert_changed(&current, &[Derivation::Reference])
+}
+
+#[test]
+fn an_edit_of_the_recordings_source_changes_only_the_recordings_package()
+-> Result<(), LayerTestError> {
+    let fixture = Fixture::new()?;
+    append_newline(&fixture.root().join("examples/recordings/src/lib.rs"))?;
+    let current = fixture.all_layers()?;
+    let recordings =
+        std::slice::from_ref(&base()?.packages.crate_with_engine("recordings")?.package);
+    assert_unchanged(&current, &base()?.all_except(recordings))?;
+    assert_changed(&current, recordings)
+}
+
+#[test]
+fn an_edit_of_the_test_platform_source_changes_only_the_packages_built_on_it()
+-> Result<(), LayerTestError> {
+    let fixture = Fixture::new()?;
+    append_newline(
+        &fixture
+            .root()
+            .join("crates/lavashell-test-platform/src/lib.rs"),
+    )?;
+    let current = fixture.all_layers()?;
+    let packages = &base()?.packages;
+    let recordings = packages.crate_with_engine("recordings")?;
+    let built_on_it = [
+        packages.framework_crate("test-platform")?.clone(),
+        recordings.framework.clone(),
+        recordings.package.clone(),
+    ];
+    assert_unchanged(&current, &base()?.all_except(&built_on_it))?;
+    assert_changed(&current, &built_on_it)
 }
 
 #[test]
@@ -76,8 +105,9 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
     let fixture = Fixture::new()?;
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
-    assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
-    assert_unchanged(&current, &base()?.tools)?;
+    assert_unchanged(&current, &[Derivation::Registry])?;
+    assert_unchanged(&current, &base()?.engines())?;
+    assert_unchanged(&current, &base()?.packages.registry_only)?;
     assert_changed(
         &current,
         &[
@@ -90,8 +120,20 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
 }
 
 #[test]
-fn an_edit_of_the_error_chain_changes_the_packages_off_the_framework() -> Result<(), LayerTestError>
-{
+fn an_edit_of_the_framework_source_changes_the_packaged_crates_on_the_framework()
+-> Result<(), LayerTestError> {
+    let fixture = Fixture::new()?;
+    append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
+    let on_framework = base()?.packages.built_on_framework();
+    assert_changed(
+        &fixture.layers(Variant::Plain, &on_framework)?,
+        &on_framework,
+    )
+}
+
+#[test]
+fn an_edit_of_the_error_chain_changes_the_packages_on_and_off_the_framework()
+-> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     append_newline(
         &fixture
@@ -100,7 +142,8 @@ fn an_edit_of_the_error_chain_changes_the_packages_off_the_framework() -> Result
     )?;
     let current = fixture.all_layers()?;
     assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
-    assert_changed(&current, &base()?.tools)
+    assert_changed(&current, &base()?.packages.registry_only)?;
+    assert_changed(&current, &base()?.packages.built_on_framework())
 }
 
 #[test]
@@ -158,11 +201,9 @@ fn a_registry_update_of_gui_crates_makes_the_projections_stale_and_leaves_the_en
 -> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     fixture.bump_workspace_dependency("zbus")?;
-    assert_eq!(fixture.stale_layers()?, base()?.above_engine());
-    assert_unchanged(
-        &fixture.layers(Variant::Plain, &[Derivation::Engine])?,
-        &[Derivation::Engine],
-    )
+    let engines = base()?.engines();
+    assert_eq!(fixture.stale_layers()?, base()?.all_except(&engines));
+    assert_unchanged(&fixture.layers(Variant::Plain, &engines)?, &engines)
 }
 
 #[test]
@@ -181,10 +222,8 @@ fn an_added_engine_feature_makes_the_projections_stale_and_leaves_the_other_laye
         Ok(())
     })?;
     assert_eq!(fixture.stale_layers()?, Derivation::ON_ENGINE);
-    assert_unchanged(
-        &fixture.layers(Variant::Plain, &Derivation::OFF_ENGINE)?,
-        &Derivation::OFF_ENGINE,
-    )
+    let off_engine = base()?.all_except(&Derivation::ON_ENGINE);
+    assert_unchanged(&fixture.layers(Variant::Plain, &off_engine)?, &off_engine)
 }
 
 #[test]
@@ -202,19 +241,9 @@ fn a_version_change_of_the_adapter_reaches_only_the_reference_layers() -> Result
     })?;
     fixture.edit_lock(|lock| bump_locked_package(lock, &adapter, &old, &new))?;
     let current = fixture.all_layers()?;
-    assert_unchanged(
-        &current,
-        &[
-            Derivation::Registry,
-            Derivation::Framework,
-            Derivation::Engine,
-            Derivation::Native,
-        ],
-    )?;
-    assert_changed(
-        &current,
-        &[Derivation::ReferenceFramework, Derivation::Reference],
-    )
+    let reference_layers = [Derivation::ReferenceFramework, Derivation::Reference];
+    assert_unchanged(&current, &base()?.all_except(&reference_layers))?;
+    assert_changed(&current, &reference_layers)
 }
 
 #[test]
@@ -223,8 +252,6 @@ fn a_version_change_of_the_engine_makes_the_projections_stale_and_leaves_the_oth
     let fixture = Fixture::new()?;
     fixture.bump_workspace_dependency("bevy")?;
     assert_eq!(fixture.stale_layers()?, Derivation::ON_ENGINE);
-    assert_unchanged(
-        &fixture.layers(Variant::Plain, &Derivation::OFF_ENGINE)?,
-        &Derivation::OFF_ENGINE,
-    )
+    let off_engine = base()?.all_except(&Derivation::ON_ENGINE);
+    assert_unchanged(&fixture.layers(Variant::Plain, &off_engine)?, &off_engine)
 }

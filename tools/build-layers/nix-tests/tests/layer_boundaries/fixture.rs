@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::manifests::{Dependency, MemberManifest, WorkspaceManifest};
 use lavashell_cargo_model::lock::CargoLock;
-use lavashell_command_output::json::CommandError;
-use lavashell_command_output::nix::NixError;
 use lavashell_nix_tests::evaluation::evaluate;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use lavashell_nix_tests::repository::copy_repository;
 use lavashell_nix_tests::toml_files::edit_toml;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -14,6 +13,7 @@ use std::sync::{Arc, OnceLock};
 use tempfile::TempDir;
 
 const EXPRESSION: &str = "layer-derivations.nix";
+const STALE_EXPRESSION: &str = "stale-layer-derivations.nix";
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +25,7 @@ pub enum Derivation {
     Reference,
     Native,
     #[serde(untagged)]
-    Tool(String),
+    OfPackagedCrate(String),
 }
 
 impl Derivation {
@@ -38,14 +38,63 @@ impl Derivation {
         Self::Native,
     ];
     pub const ON_ENGINE: [Self; 3] = [Self::Engine, Self::ReferenceFramework, Self::Reference];
-    pub const OFF_ENGINE: [Self; 3] = [Self::Registry, Self::Framework, Self::Native];
+}
 
-    fn all(tools: &[Self]) -> Vec<Self> {
-        Self::LAYERS
-            .into_iter()
-            .chain(tools.iter().cloned())
+#[derive(Deserialize)]
+pub struct CrateWithEngine {
+    pub engine: Derivation,
+    pub framework: Derivation,
+    pub package: Derivation,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackagesByRoute {
+    pub registry_only: Vec<Derivation>,
+    pub framework: Vec<Derivation>,
+    pub framework_with_engine: Vec<CrateWithEngine>,
+}
+
+impl PackagesByRoute {
+    fn engines(&self) -> impl Iterator<Item = &Derivation> {
+        self.framework_with_engine
+            .iter()
+            .map(|with_engine| &with_engine.engine)
+    }
+
+    pub fn built_on_framework(&self) -> Vec<Derivation> {
+        self.framework
+            .iter()
+            .chain(
+                self.framework_with_engine
+                    .iter()
+                    .flat_map(|with_engine| [&with_engine.framework, &with_engine.package]),
+            )
+            .cloned()
             .collect()
     }
+
+    pub fn framework_crate(&self, name: &str) -> Result<&Derivation, LayerTestError> {
+        self.framework
+            .iter()
+            .find(|package| is_package_named(package, name))
+            .ok_or_else(|| LayerTestError::MissingFrameworkCrate {
+                name: name.to_owned(),
+            })
+    }
+
+    pub fn crate_with_engine(&self, name: &str) -> Result<&CrateWithEngine, LayerTestError> {
+        self.framework_with_engine
+            .iter()
+            .find(|with_engine| is_package_named(&with_engine.package, name))
+            .ok_or_else(|| LayerTestError::MissingCrateWithEngine {
+                name: name.to_owned(),
+            })
+    }
+}
+
+fn is_package_named(package: &Derivation, name: &str) -> bool {
+    matches!(package, Derivation::OfPackagedCrate(packaged) if packaged == name)
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -59,7 +108,7 @@ pub enum Variant {
 #[serde(rename_all = "camelCase")]
 enum TreeKey {
     Directory,
-    ToolNames,
+    PackagesByRoute,
 }
 
 #[derive(Serialize)]
@@ -73,7 +122,7 @@ struct DerivationArguments<'arguments, Key> {
 #[serde(rename_all = "camelCase")]
 struct Tree {
     directory: PathBuf,
-    tool_names: Vec<String>,
+    packages_by_route: PackagesByRoute,
 }
 
 pub type Layers = BTreeMap<Derivation, String>;
@@ -86,6 +135,10 @@ pub enum LayerTestError {
     Base(Arc<LayerTestError>),
     #[error("the reference directory {directory} is outside the repository")]
     ReferenceOutside { directory: PathBuf },
+    #[error("{name} is not a packaged crate on the framework route")]
+    MissingFrameworkCrate { name: String },
+    #[error("{name} is not a packaged crate on the route with an engine layer")]
+    MissingCrateWithEngine { name: String },
     #[error("{version} does not end in a patch number")]
     UnbumpableVersion { version: String },
     #[error("the workspace has no dependency {name} with a version")]
@@ -107,18 +160,26 @@ impl From<std::io::Error> for LayerTestError {
 pub struct Base {
     pub layers: Layers,
     pub reference: PathBuf,
-    pub tools: Vec<Derivation>,
+    pub packages: PackagesByRoute,
 }
 
 impl Base {
     pub fn all(&self) -> Vec<Derivation> {
-        Derivation::all(&self.tools)
+        self.all_except(&[])
     }
 
-    pub fn above_engine(&self) -> Vec<Derivation> {
-        self.all()
-            .into_iter()
-            .filter(|layer| *layer != Derivation::Engine)
+    pub fn all_except(&self, excluded: &[Derivation]) -> Vec<Derivation> {
+        self.layers
+            .keys()
+            .filter(|layer| !excluded.contains(layer))
+            .cloned()
+            .collect()
+    }
+
+    pub fn engines(&self) -> Vec<Derivation> {
+        std::iter::once(&Derivation::Engine)
+            .chain(self.packages.engines())
+            .cloned()
             .collect()
     }
 }
@@ -136,9 +197,14 @@ impl Fixture {
         self.0.path().join("repository")
     }
 
-    pub fn layers(&self, variant: Variant, keys: &[Derivation]) -> Result<Layers, FixtureError> {
+    fn evaluate_keys<Value: DeserializeOwned>(
+        &self,
+        expression: &str,
+        variant: Variant,
+        keys: &[impl Serialize],
+    ) -> Result<Value, FixtureError> {
         evaluate(
-            EXPRESSION,
+            expression,
             &DerivationArguments {
                 root: &self.root(),
                 variant,
@@ -147,32 +213,26 @@ impl Fixture {
         )
     }
 
+    pub fn layers(&self, variant: Variant, keys: &[Derivation]) -> Result<Layers, FixtureError> {
+        self.evaluate_keys(EXPRESSION, variant, keys)
+    }
+
     pub fn all_layers(&self) -> Result<Layers, LayerTestError> {
         Ok(self.layers(Variant::Plain, &base()?.all())?)
     }
 
     fn tree(&self) -> Result<Tree, FixtureError> {
-        evaluate(
+        self.evaluate_keys(
             EXPRESSION,
-            &DerivationArguments {
-                root: &self.root(),
-                variant: Variant::Plain,
-                keys: &[TreeKey::Directory, TreeKey::ToolNames],
-            },
+            Variant::Plain,
+            &[TreeKey::Directory, TreeKey::PackagesByRoute],
         )
     }
 
     pub fn stale_layers(&self) -> Result<Vec<Derivation>, LayerTestError> {
-        let mut stale = Vec::new();
-        for layer in base()?.all() {
-            match self.layers(Variant::Plain, std::slice::from_ref(&layer)) {
-                Ok(_) => {}
-                Err(FixtureError::Nix(NixError::Command(CommandError::Failed { .. }))) => {
-                    stale.push(layer);
-                }
-                Err(error) => return Err(error.into()),
-            }
-        }
+        let mut stale: Vec<Derivation> =
+            self.evaluate_keys(STALE_EXPRESSION, Variant::Plain, &base()?.all())?;
+        stale.sort();
         Ok(stale)
     }
 
@@ -227,11 +287,17 @@ fn evaluate_base() -> Result<Base, LayerTestError> {
         .map_err(|_outside| LayerTestError::ReferenceOutside {
             directory: tree.directory.clone(),
         })?;
-    let tools: Vec<_> = tree.tool_names.into_iter().map(Derivation::Tool).collect();
+    let packages = tree.packages_by_route;
+    let all: Vec<_> = Derivation::LAYERS
+        .into_iter()
+        .chain(packages.registry_only.iter().cloned())
+        .chain(packages.engines().cloned())
+        .chain(packages.built_on_framework())
+        .collect();
     Ok(Base {
-        layers: fixture.layers(Variant::Plain, &Derivation::all(&tools))?,
+        layers: fixture.layers(Variant::Plain, &all)?,
         reference,
-        tools,
+        packages,
     })
 }
 

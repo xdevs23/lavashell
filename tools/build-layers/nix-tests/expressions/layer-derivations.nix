@@ -26,9 +26,17 @@ let
     }).examples;
   inherit (tree) reference;
   types = import (/. + input.nix + "/types.nix");
-  tools = original.lib.filterAttrs (
-    _: package: (package.route or null) == types.layerRoutes.registryOnly
+  packagedCrates = original.lib.filterAttrs (
+    _: package: package.directory != reference.directory
   ) tree.packagedCrates;
+  namesByRoute = original.lib.groupBy (name: packagedCrates.${name}.route) (
+    builtins.attrNames packagedCrates
+  );
+  cratesWithEngine = map (name: {
+    engine = "${name}-engine";
+    framework = "${name}-framework";
+    package = name;
+  }) namesByRoute.${types.layerRoutes.frameworkWithEngine};
 in
 original.lib.getAttrs input.keys (
   {
@@ -39,7 +47,15 @@ original.lib.getAttrs input.keys (
     reference = reference.drvPath;
     native = tree.packages.interactions.drvPath;
     directory = toString reference.directory;
-    toolNames = builtins.attrNames tools;
+    packagesByRoute = namesByRoute // {
+      ${types.layerRoutes.frameworkWithEngine} = cratesWithEngine;
+    };
   }
-  // builtins.mapAttrs (_: tool: tool.drvPath) tools
+  // builtins.mapAttrs (_: package: package.drvPath) packagedCrates
+  // original.lib.mergeAttrsList (
+    map (layers: {
+      ${layers.engine} = packagedCrates.${layers.package}.engineArtifacts.drvPath;
+      ${layers.framework} = packagedCrates.${layers.package}.frameworkArtifacts.drvPath;
+    }) cratesWithEngine
+  )
 )
