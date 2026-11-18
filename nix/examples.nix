@@ -100,6 +100,8 @@ let
     in
     rustPlatform.buildRustPackage (
       rustPackageDefaults
+      // artifacts.tests testPackages
+      // artifacts.lint testPackages
       // {
         pname = "lavashell-${name}";
         src = sources.sourceFor directory;
@@ -118,8 +120,6 @@ let
             program
           ]
           ++ rustPackageDefaults.cargoBuildFlags;
-        cargoTestFlags = artifacts.flags testPackages ++ [ "--frozen" ];
-        doCheck = testPackages != [ ];
         postInstall =
           rustPackageDefaults.postInstall
           + ''

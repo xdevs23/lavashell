@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 const EXPRESSION: &str = "layer-test-packages.nix";
 const PACKAGE_FLAG: &str = "--package";
+const WORKSPACE_FLAG: &str = "--workspace";
 
 #[derive(Serialize)]
 struct TreeArguments {
@@ -22,6 +23,17 @@ struct CheckPhase {
     drv_path: String,
     do_check: bool,
     cargo_test_flags: Vec<String>,
+    cargo_clippy_flags: Vec<String>,
+}
+
+fn packages_selected_by(flags: &[String]) -> Vec<&str> {
+    flags
+        .windows(2)
+        .filter_map(|pair| match pair {
+            [flag, package] if flag == PACKAGE_FLAG => Some(package.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 impl CheckPhase {
@@ -29,13 +41,14 @@ impl CheckPhase {
         if !self.do_check {
             return Vec::new();
         }
-        self.cargo_test_flags
-            .windows(2)
-            .filter_map(|pair| match pair {
-                [flag, package] if flag == PACKAGE_FLAG => Some(package.as_str()),
-                _ => None,
-            })
-            .collect()
+        packages_selected_by(&self.cargo_test_flags)
+    }
+
+    fn lints(&self, package: &str) -> bool {
+        self.cargo_clippy_flags
+            .iter()
+            .any(|flag| flag == WORKSPACE_FLAG)
+            || packages_selected_by(&self.cargo_clippy_flags).contains(&package)
     }
 }
 
@@ -103,6 +116,19 @@ fn every_local_crate_of_an_example_is_tested_once_in_the_whole_build() -> Result
             })
             .collect();
         assert!(runs.values().all(|count| *count == 1), "{name}: {runs:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_flake_check_lints_each_crate_it_tests() -> Result<(), FixtureError> {
+    for check in check_phases()?.checks {
+        let unlinted: Vec<&str> = check
+            .tested_packages()
+            .into_iter()
+            .filter(|package| !check.lints(package))
+            .collect();
+        assert_eq!(unlinted, Vec::<&str>::new(), "{}", check.drv_path);
     }
     Ok(())
 }

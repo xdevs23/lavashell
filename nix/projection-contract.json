@@ -19,7 +19,7 @@
     "recordings": "examples/recordings"
   },
   "sourceFiles": {
-    "everyPackage": ["COPYING"],
+    "everyPackage": ["COPYING", "clippy.toml"],
     "byMember": {
       "tools/native-harness": ["nix/app-declarations.json"]
     }

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use syn::visit::Visit;
 
 const EXPRESSION: &str = "package-sources.nix";
+const CLIPPY_CONFIGURATION: &str = "clippy.toml";
 const INCLUDE_MACROS: [&str; 2] = ["include_str", "include_bytes"];
 const RUST_EXTENSION: &str = "rs";
 
@@ -80,13 +81,29 @@ fn included_paths(file: &Path) -> Result<Vec<String>, SourceTestError> {
     Ok(included.0)
 }
 
-#[test]
-fn every_file_included_by_a_packaged_crate_is_in_its_source() -> Result<(), SourceTestError> {
+fn packaged_sources() -> Result<BTreeMap<String, PackageSource>, FixtureError> {
     let directory = tempfile::tempdir()?;
     let root = directory.path().join("repository");
     copy_repository(&root)?;
-    let packages: BTreeMap<String, PackageSource> = evaluate(EXPRESSION, &TreeArguments { root })?;
-    for (name, package) in &packages {
+    evaluate(EXPRESSION, &TreeArguments { root })
+}
+
+#[test]
+fn every_packaged_source_has_the_clippy_configuration() -> Result<(), FixtureError> {
+    for (name, package) in packaged_sources()? {
+        let configuration = package.source.join(CLIPPY_CONFIGURATION);
+        assert!(
+            configuration.exists(),
+            "{name}: {}",
+            configuration.display()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn every_file_included_by_a_packaged_crate_is_in_its_source() -> Result<(), SourceTestError> {
+    for (name, package) in &packaged_sources()? {
         for member in &package.members {
             for file in rust_files(&package.source.join(member))? {
                 for path in included_paths(&file)? {

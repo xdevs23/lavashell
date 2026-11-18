@@ -14,6 +14,7 @@ let
   examples = removeAttrs tree.packages [ "examples" ] // tree.packagedCrates;
   checkOf = built: {
     inherit (built) drvPath doCheck cargoTestFlags;
+    cargoClippyFlags = built.cargoClippyFlags or [ ];
   };
   layersThrough = layer: [ layer ] ++ lib.concatMap layersThrough layer.previous;
   withLayers =

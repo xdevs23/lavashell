@@ -17,6 +17,8 @@ let
       name
     ]) names;
   copy = import ./cache-copy.nix { inherit lib; };
+  buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
+  clippy = import ./cargo-clippy.nix { inherit pkgs; };
   selectedPackages =
     directory:
     [ (sources.packageName directory) ]
@@ -25,6 +27,11 @@ let
     ) contract.companions;
   packagesTestedThrough =
     layer: layer.testPackages ++ lib.concatMap packagesTestedThrough layer.previous;
+  tests = packages: {
+    cargoTestFlags = flags packages ++ [ "--frozen" ];
+    doCheck = packages != [ ];
+  };
+  lint = packages: clippy (flags packages);
   engineDefaults = rustPackageDefaults // {
     nativeBuildInputs = [ pkgs.pkg-config ];
     buildInputs = [ pkgs.wayland ];
@@ -44,8 +51,7 @@ let
       file = builtins.toFile "engine-projection.json" (builtins.toJSON metadata);
     in
     ''
-      RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options --offline --frozen \
-        --profile ${contract.profile} --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} \
+      RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options ${buildScope} \
         ${lib.escapeShellArgs (flags selected)} > consumer-cargo-plan.json
       ${lib.getExe' buildLayers "lavashell-plan-check"} --contract ${./projection-contract.json} \
         --engine ${file} --consumer consumer-cargo-plan.json
@@ -68,10 +74,14 @@ let
       testPackages = lib.subtractLists (
         dummyPackages ++ testedByOtherPackages ++ lib.concatMap packagesTestedThrough previous
       ) names;
-      checked = testPackages != [ ];
+      realCrates = lib.subtractLists dummyPackages names;
+      stubsLintedToCheckTheirDependencies = lib.optionals (realCrates == [ ]) dummyPackages;
+      testPhase = tests testPackages;
     in
     rustPlatform.buildRustPackage (
       configuration
+      // testPhase
+      // lint (testPackages ++ stubsLintedToCheckTheirDependencies)
       // {
         inherit pname;
         src = source;
@@ -80,18 +90,15 @@ let
           configuration.buildInputs
           ++ lib.concatMap (requirement: requirement.buildInputs) (requirementsOf names);
         cargoBuildFlags = flags selected ++ [ "--frozen" ] ++ rustPackageDefaults.cargoBuildFlags;
-        cargoTestFlags = flags testPackages ++ [ "--frozen" ];
-        doCheck = checked;
         preBuild =
           configuration.preBuild
-          + lib.optionalString checked (import ./vendor-directory-times.nix)
+          + lib.optionalString testPhase.doCheck (import ./vendor-directory-times.nix)
           + copy previous
           + lib.optionalString validateEngine (planCheck directory selected);
         installPhase = ''
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) ''
-            cargo clean --offline --frozen --profile ${contract.profile} \
-              --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} ${lib.escapeShellArgs (flags dummyPackages)}
+            cargo clean ${buildScope} ${lib.escapeShellArgs (flags dummyPackages)}
           ''}
           mkdir -p "$out"
           cp -a --reflink=auto target "$out/target"
@@ -151,8 +158,10 @@ in
   inherit
     copy
     flags
+    lint
     packagesTestedThrough
     planCheck
     selectedPackages
+    tests
     ;
 }
