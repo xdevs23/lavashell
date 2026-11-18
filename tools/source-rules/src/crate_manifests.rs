@@ -4,7 +4,9 @@ use crate::error::Error;
 use crate::findings::{Finding, Report, Rule};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+mod vulkan_free;
 
 const MANIFEST: &str = "Cargo.toml";
 const EXACT_VERSION_PREFIX: char = '=';
@@ -58,6 +60,7 @@ struct MemberManifest {
 
 #[derive(Deserialize)]
 struct MemberPackage {
+    name: String,
     version: Option<Inheritable>,
     edition: Option<Inheritable>,
 }
@@ -116,6 +119,12 @@ impl DependencyTables {
             .chain(&self.dev_dependencies)
             .chain(&self.build_dependencies)
     }
+
+    fn build_names(&self) -> impl Iterator<Item = &str> {
+        (self.dependencies.keys())
+            .chain(self.build_dependencies.keys())
+            .map(String::as_str)
+    }
 }
 
 impl Inheritable {
@@ -125,6 +134,12 @@ impl Inheritable {
 }
 
 impl MemberManifest {
+    fn build_dependencies(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(&self.tables)
+            .chain(self.target.values())
+            .flat_map(DependencyTables::build_names)
+    }
+
     fn rules(&self) -> Vec<Rule> {
         let mut rules: Vec<Rule> = std::iter::once(&self.tables)
             .chain(self.target.values())
@@ -189,15 +204,20 @@ pub fn crate_report(root: &Path) -> Result<Report, Error> {
             rule,
         })
         .collect();
-    for member in &workspace.members {
-        let path = root.join(member).join(MANIFEST);
-        let manifest: MemberManifest = read_manifest(&path)?;
+    let members = (workspace.members.iter())
+        .map(|member| {
+            let path = root.join(member).join(MANIFEST);
+            read_manifest(&path).map(|manifest: MemberManifest| (path, manifest))
+        })
+        .collect::<Result<Vec<(PathBuf, MemberManifest)>, Error>>()?;
+    for (path, manifest) in &members {
         findings.extend(manifest.rules().into_iter().map(|rule| Finding {
             path: path.clone(),
             line: None,
             rule,
         }));
     }
+    findings.extend(vulkan_free::vulkan_findings(root, &members)?);
     Ok(Report {
         findings,
         checked: workspace.members.len() + 1,

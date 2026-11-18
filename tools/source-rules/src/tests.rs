@@ -9,6 +9,7 @@ mod copy_catalogs;
 mod crate_manifests;
 mod renderer_test_fixtures;
 mod repository_files;
+mod vulkan_free_crates;
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum Failure {

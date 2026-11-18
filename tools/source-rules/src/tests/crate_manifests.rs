@@ -25,10 +25,19 @@ workspace = true
 exact.workspace = true
 ";
 
+const LOCKFILE: &str = r#"
+version = 4
+
+[[package]]
+name = "member"
+version = "0.1.0"
+"#;
+
 fn findings(workspace: &str, member: &str) -> Result<Vec<(String, Rule)>, Failure> {
     Ok(findings_of(
         &[
             ("Cargo.toml", workspace),
+            ("Cargo.lock", LOCKFILE),
             ("crates/member/Cargo.toml", member),
         ],
         crate_report,

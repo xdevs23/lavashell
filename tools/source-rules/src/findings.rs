@@ -23,6 +23,7 @@ pub enum Rule {
     OwnVersion,
     OwnEdition,
     OwnLints,
+    VulkanDependency { vulkan: String, through: String },
     NoCopyCatalogs,
     CopyColumns,
     DuplicateCopyKey { key: String },
@@ -95,6 +96,10 @@ impl fmt::Display for Rule {
                 .write_str("take package.edition from the workspace with `edition.workspace = true`"),
             Self::OwnLints => formatter
                 .write_str("take the lints from the workspace with `[lints]` and `workspace = true`"),
+            Self::VulkanDependency { vulkan, through } => write!(
+                formatter,
+                "remove the dependency {through}, which brings {vulkan} into a crate that builds without Vulkan",
+            ),
             Self::NoCopyCatalogs => formatter.write_str(
                 "the copy rules found no catalog at examples/<example>/copy/<area>.en.tsv",
             ),

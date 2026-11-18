@@ -16,7 +16,7 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    #[error("{path} is not the expected Cargo manifest")]
+    #[error("{path} is not the expected Cargo file")]
     ReadManifest {
         path: PathBuf,
         #[source]
