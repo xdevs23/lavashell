@@ -70,7 +70,8 @@ mod tests {
         let all = ["de-qwertz", "en-qwerty"];
         assert_eq!(ids(offered(&candidates, &[langid!("ja-JP")])), all);
         assert_eq!(ids(offered(&candidates, &[])), all);
-        assert!(offered(&[], &[langid!("ja-JP")]).is_empty());
+        let no_layouts: [&Layout; 0] = [];
+        assert_eq!(offered(&[], &[langid!("ja-JP")]), no_layouts);
         Ok(())
     }
 }

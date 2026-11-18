@@ -373,7 +373,7 @@ fn unchanged_live_regions_produce_no_nodes_in_incremental_update()
     let mut ids = ids::Ids::default();
     let before = mapping::tree(&tree, &mut ids, None)?;
     let after = mapping::tree(&tree, &mut ids, None)?;
-    assert!(tree_difference(&after, Some(&before)).nodes.is_empty());
+    assert_eq!(tree_difference(&after, Some(&before)).nodes, []);
     node_mut(&mut tree, NodeId(1))?.name = Some("Changed".into());
     let after = mapping::tree(&tree, &mut ids, None)?;
     let delta = tree_difference(&after, Some(&before));

@@ -101,7 +101,7 @@ fn take_fails_once_every_sender_is_gone_and_no_item_waits() -> TestResult {
 #[test]
 fn take_arrived_returns_the_waiting_items_without_waiting_for_one() -> TestResult {
     let (sender, receiver) = mailbox();
-    assert!(receiver.take_arrived()?.is_empty());
+    assert_eq!(receiver.take_arrived()?, []);
     sender.push(step(1.0))?;
     assert_eq!(receiver.take_arrived()?, [step(1.0)]);
     drop(sender);

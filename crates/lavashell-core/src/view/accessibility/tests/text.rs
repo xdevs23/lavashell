@@ -280,13 +280,13 @@ fn static_geometry_is_lazy_retained_and_uses_visible_text_origin() -> TestResult
     view.set_accessibility_text_geometry(false);
     advance_with(&mut scene, &mut view, WINDOW, &mut metrics)?;
     assert_eq!(shapes.get(), 1);
-    assert!(
+    assert_eq!(
         view.accessibility.tree.nodes[&id]
             .text
             .as_ref()
             .required("the text of the node")?
-            .runs
-            .is_empty()
+            .runs,
+        []
     );
     Ok(())
 }

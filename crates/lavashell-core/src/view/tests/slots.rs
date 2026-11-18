@@ -174,7 +174,7 @@ fn a_node_removed_during_a_move_moves_on_while_it_fades() -> TestResult {
         (200.dp(), 0.5)
     );
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;
-    assert!(scene.commands().is_empty());
+    assert_eq!(scene.commands(), []);
     Ok(())
 }
 

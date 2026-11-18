@@ -16,7 +16,7 @@ fn a_shape_receives_input_in_its_cells_unless_it_passes_input_through() -> Resul
             SurfaceChange::BlurRegion(Some(vec![square])),
         ]
     );
-    assert!(receiving.update(size, Density::ONE, cells)?.is_empty());
+    assert_eq!(receiving.update(size, Density::ONE, cells)?, []);
     assert!(receiving.accepts_input());
     let mut passthrough = SurfaceShape::new(Some(shape.input_passthrough()));
     assert_eq!(
@@ -39,7 +39,7 @@ fn without_a_window_shape_only_the_blur_region_follows_the_size() -> Result<(), 
         whole.update(size, Density::ONE, cells)?,
         [SurfaceChange::BlurRegion(Some(vec![Rect::from_size(size)]))]
     );
-    assert!(whole.update(size, Density::ONE, cells)?.is_empty());
+    assert_eq!(whole.update(size, Density::ONE, cells)?, []);
     assert!(whole.accepts_input() && !whole.clips_paint());
     Ok(())
 }

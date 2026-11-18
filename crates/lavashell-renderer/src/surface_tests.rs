@@ -380,9 +380,6 @@ fn assert_partial_repaints_match(
             changed.push((*name, pixels));
         }
     }
-    assert!(
-        changed.is_empty(),
-        "changed pixels of each tree: {changed:?}"
-    );
+    assert_eq!(changed, [], "changed pixels of each tree");
     Ok(())
 }

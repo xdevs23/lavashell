@@ -137,7 +137,7 @@ fn a_node_removed_in_the_middle_of_a_move_finishes_the_move_while_it_fades() -> 
     assert_eq!(fills(&scene, PIECE)?, piece(200.dp()));
     assert_f64s_eq(&presences(&scene), &[0.5, 1.0]);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, []);
     assert_eq!(view.transitions.count(), 0);
     Ok(())
 }
@@ -383,7 +383,7 @@ fn reduced_motion_ends_an_exit_at_once() -> TestResult {
     assert_eq!(fills(&scene, PIECE)?.len(), 1);
     shown.set(false);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, []);
     assert_eq!(view.transitions.count(), 0);
     assert!(!view.needs_frame());
     Ok(())
@@ -419,7 +419,7 @@ fn a_node_leaving_inside_a_parent_whose_exit_ends_stops_painting_with_it() -> Te
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 250)?;
     assert_eq!(fills(&scene, PIECE)?.len(), 1);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, []);
     assert_eq!(view.transitions.count(), 0);
     assert!(!view.needs_frame());
     Ok(())

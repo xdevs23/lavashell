@@ -26,7 +26,7 @@ fn an_exit_that_ends_on_the_clock_while_its_node_paints_retires_on_the_next_fram
     view.motion().time_source(|| Duration::from_millis(1200));
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 900)?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1200)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, []);
     assert_eq!(view.transitions.count(), 0);
     Ok(())
 }
@@ -101,7 +101,7 @@ fn a_child_left_behind_by_a_shared_node_that_painted_in_a_departure_fades_out() 
     assert_eq!(fills(&scene, PIECE)?.len(), 1);
     assert_f64s_eq(&presences(&scene), &[0.625, 0.75]);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1500)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, []);
     Ok(())
 }
 

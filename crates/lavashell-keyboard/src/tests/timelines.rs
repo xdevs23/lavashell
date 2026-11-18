@@ -96,7 +96,7 @@ fn a_preview_removed_in_the_first_frame_after_its_release_closes_with_the_closin
         closing > half_closed && closing < full,
         "it accelerates: {closing:?}"
     );
-    assert!(previews(&mut host, close_begins + closing_duration)?.is_empty());
+    assert_eq!(previews(&mut host, close_begins + closing_duration)?, []);
     Ok(())
 }
 
@@ -154,7 +154,7 @@ fn under_reduced_motion_a_preview_opens_and_closes_without_scaling() -> Result<(
         previews(&mut host, just_before(start + LINGER)?)?[0],
         full
     ));
-    assert!(previews(&mut host, start + LINGER)?.is_empty());
+    assert_eq!(previews(&mut host, start + LINGER)?, []);
     Ok(())
 }
 
@@ -266,7 +266,7 @@ fn a_long_press_on_the_globe_lists_the_layouts_to_choose_by_sliding_or_by_a_tap(
     host.frame()?;
     assert_eq!(host.layout.get().id(), shipped()?.german.id());
     assert!(!has(&host.view, &Role::Menu, "Keyboard layouts"));
-    assert!(host.sent().is_empty());
+    assert_eq!(host.sent(), []);
     Ok(())
 }
 
@@ -328,6 +328,6 @@ fn a_finger_that_slides_off_the_letters_of_a_long_press_types_none() -> Result<(
     host.view.input(InputEvent::TouchUp(finger(1, away)));
     host.frame()?;
     assert!(!has(&host.view, &Role::Menu, "More letters"));
-    assert!(host.sent().is_empty());
+    assert_eq!(host.sent(), []);
     Ok(())
 }

@@ -97,7 +97,7 @@ fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Erro
         Ok(())
     });
     shot(&mut play, "music-album", |view, _, model| {
-        assert!(model.get().recent.is_empty());
+        assert_eq!(model.get().recent, []);
         click(view, Tag::PlayAlbum)?;
         assert_eq!(model.get().current, tracks()[0]);
         assert_eq!(model.get().album, AlbumId::all().next());

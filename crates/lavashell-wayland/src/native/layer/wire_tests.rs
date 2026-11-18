@@ -43,7 +43,7 @@ fn margin_updates_are_sent_separately_and_geometry_is_replayed_for_a_new_surface
         &qh,
         (),
     );
-    assert!(!compositor.flush()?.is_empty());
+    assert_ne!(compositor.flush()?, []);
     let layout = LayerLayout {
         horizontal: AxisPlacement::Start(Extent::dp(321.dp())?),
         vertical: AxisPlacement::Start(Extent::dp(345.dp())?),
@@ -127,7 +127,7 @@ fn margin_updates_are_sent_separately_and_geometry_is_replayed_for_a_new_surface
 fn a_layer_is_resized_and_reserved_again_for_a_new_content_height() -> Result<(), TestError> {
     let mut client = LayerClient::new(4)?;
     let layer = client.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
-    assert!(!client.flush()?.is_empty());
+    assert_ne!(client.flush()?, []);
     let mut state = SurfaceState::default();
     state.apply(SurfaceChange::Panel(top_bar(Size::new(500.dp(), 40.dp()))?));
     let role = layer.id().protocol_id();

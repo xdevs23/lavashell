@@ -234,7 +234,7 @@ fn the_focus_ring_of_the_theme_paints_only_where_focus_is_visible() -> TestResul
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     tap(&mut view, "button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    assert!(stroke_widths(&scene.commands()).is_empty());
+    assert_eq!(stroke_widths(&scene.commands()), []);
     view.input(TAB);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), [5.dp()]);
@@ -264,7 +264,7 @@ fn a_focus_within_border_paints_only_where_focus_inside_is_visible() -> TestResu
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     tap(&mut view, "button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    assert!(stroke_widths(&scene.commands()).is_empty());
+    assert_eq!(stroke_widths(&scene.commands()), []);
     view.input(TAB);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), [3.dp()]);
@@ -301,7 +301,7 @@ fn a_state_style_reading_focus_visible_changes_without_composing_again() -> Test
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     tap(&mut view, "button")?;
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    assert!(stroke_widths(&scene.commands()).is_empty());
+    assert_eq!(stroke_widths(&scene.commands()), []);
     let compositions = view.stats().root_compositions;
     view.input(InputEvent::Key {
         key: Key::Down,

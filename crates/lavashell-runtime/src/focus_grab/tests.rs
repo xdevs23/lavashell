@@ -102,14 +102,14 @@ fn grab(active: &State<bool>) -> FocusGrab {
 #[test]
 fn a_grab_starts_once_the_shown_content_accepts_input_and_fits_the_surface() -> TestResult {
     let mut host = Host::new(grab(&State::new(true)))?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(false, surface_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(true, other_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     Ok(())
 }
 
@@ -120,15 +120,15 @@ fn a_started_grab_ends_with_the_input_of_the_content_or_the_activity_of_the_pane
     host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     host.show(true, other_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(false, surface_size())?;
     assert_eq!(host.update(), [host.release()]);
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     active.set(false);
     assert_eq!(host.update(), [host.release()]);
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     Ok(())
 }
 
@@ -139,11 +139,11 @@ fn a_cleared_grab_of_an_active_panel_waits_for_the_panel_to_become_inactive() ->
     host.show(true, surface_size())?;
     assert_eq!(host.update(), [host.acquire()]);
     host.clear();
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     host.show(true, surface_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     active.set(false);
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     active.set(true);
     assert_eq!(host.update(), [host.acquire()]);
     Ok(())
@@ -189,7 +189,7 @@ fn a_grab_makes_no_request_once_its_surface_closed() -> TestResult {
     let closed = host.surfaces.handle(host.surface, SurfaceEvent::Closed);
     assert_eq!(closed, Some(SurfaceRequest::Destroy(host.surface)));
     host.show(false, surface_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     Ok(())
 }
 
@@ -209,7 +209,7 @@ fn a_forgotten_grab_requests_its_release_only_when_it_was_started() -> TestResul
     host.clear();
     assert_eq!(cleared.get(), 0);
     host.show(false, surface_size())?;
-    assert!(host.update().is_empty());
+    assert_eq!(host.update(), []);
     Ok(())
 }
 

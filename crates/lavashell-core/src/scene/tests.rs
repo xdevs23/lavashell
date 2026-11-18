@@ -319,7 +319,7 @@ fn an_icon_without_an_area_paints_nothing_and_a_path_off_its_grid_is_left_out() 
     ] {
         let mut commands = Vec::new();
         icon.paint(square, color, IconStyle::Filled, &mut commands);
-        assert!(commands.is_empty(), "{icon:?}: {commands:?}");
+        assert_eq!(commands, [], "{icon:?}");
     }
 }
 
@@ -381,5 +381,5 @@ fn a_path_without_points_draws_nothing() {
         &screen(TextScaling::default()),
     )
     .path(&[], true, Color::WHITE, None);
-    assert!(commands.is_empty());
+    assert_eq!(commands, []);
 }

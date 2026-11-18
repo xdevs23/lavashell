@@ -74,7 +74,7 @@ fn passive_button_text_merges_and_actions_share_callback_without_recomposition()
     let button = target(&view, "Run")?;
     let node = &view.accessibility.tree.nodes[&button];
     assert_eq!(node.role, Role::Button);
-    assert!(node.children.is_empty());
+    assert_eq!(node.children, []);
     assert_eq!(view.accessibility.tree.nodes.len(), 2);
     let before = view.stats().root_compositions;
     assert_eq!(
@@ -239,10 +239,9 @@ fn decorative_hidden_and_clear_have_distinct_meanings() -> TestResult {
             .values()
             .any(|node| node.name.as_deref() == Some("Replaced"))
     );
-    assert!(
-        view.accessibility.tree.nodes[&target(&view, "Summary")?]
-            .children
-            .is_empty()
+    assert_eq!(
+        view.accessibility.tree.nodes[&target(&view, "Summary")?].children,
+        []
     );
     Ok(())
 }

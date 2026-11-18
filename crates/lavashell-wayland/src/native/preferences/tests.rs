@@ -14,7 +14,7 @@ fn locale_tags_that_are_not_a_language_are_dropped() {
         languages(tags.into_iter()),
         [langid!("de-DE"), langid!("en")]
     );
-    assert!(languages(["C".to_owned()].into_iter()).is_empty());
+    assert_eq!(languages(["C".to_owned()].into_iter()), []);
 }
 
 #[test]

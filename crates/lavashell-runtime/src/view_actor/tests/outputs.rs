@@ -67,14 +67,14 @@ fn lock_outputs(requests: &[PlatformRequest]) -> Vec<(SurfaceId, OutputId)> {
 fn an_output_gets_its_panels_once_the_host_reported_its_geometry() -> TestResult {
     let mut views = Views::start(bars_on_every_output(), Capability::ALL, host([]))?;
     let added = views.step([output(OutputEvent::Added(FIRST))])?;
-    assert!(panel_outputs(&added).is_empty());
+    assert_eq!(panel_outputs(&added), []);
     let updated = views.step([output(OutputEvent::Updated(FIRST, monitor(1920)))])?;
     assert_eq!(
         panel_outputs(&updated),
         [(SurfaceId::numbered(0), Some(FIRST))]
     );
     let resized = views.step([output(OutputEvent::Updated(FIRST, monitor(2560)))])?;
-    assert!(panel_outputs(&resized).is_empty());
+    assert_eq!(panel_outputs(&resized), []);
     Ok(())
 }
 
@@ -132,7 +132,7 @@ fn an_output_that_appears_while_the_session_is_locked_gets_a_lock_surface() -> T
     let started = views.step([])?;
     assert_eq!(lock_outputs(&started), [(SurfaceId::numbered(0), FIRST)]);
     let known = views.step([output(OutputEvent::Added(FIRST))])?;
-    assert!(lock_outputs(&known).is_empty());
+    assert_eq!(lock_outputs(&known), []);
     let added = views.step([output(OutputEvent::Added(THIRD))])?;
     assert_eq!(lock_outputs(&added), [(SurfaceId::numbered(1), THIRD)]);
     Ok(())

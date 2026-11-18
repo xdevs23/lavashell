@@ -195,7 +195,7 @@ fn leaving_nodes_inside_a_component_disappear_when_their_exit_ends() -> TestResu
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1999)?;
     assert_eq!(painted_colors(&scene.commands()), [Color::WHITE.to_argb8()]);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 2000)?;
-    assert!(painted_colors(&scene.commands()).is_empty());
+    assert_eq!(painted_colors(&scene.commands()), []);
     Ok(())
 }
 

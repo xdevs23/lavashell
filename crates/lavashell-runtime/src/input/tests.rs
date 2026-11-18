@@ -210,7 +210,7 @@ fn a_removed_pointer_cancels_its_interaction_with_every_surface() {
         pointer: MOUSE,
         at: at(2, 2),
     };
-    assert!(router.route(motion).is_empty());
+    assert_eq!(router.route(motion), []);
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn forgetting_a_surface_drops_the_pointers_on_it_so_a_later_pointer_enters_witho
         pointer: MOUSE,
         at: at(2, 2),
     };
-    assert!(router.route(motion).is_empty());
+    assert_eq!(router.route(motion), []);
     assert_eq!(router.interacting_pointer(WINDOW), None);
     let entered = router.route(enter(TABLET, WINDOW, at(3, 3)));
     assert_eq!(entered, [by(TABLET, WINDOW, InputEvent::Move(at(3, 3)))]);
@@ -261,11 +261,7 @@ fn keys_reach_the_focused_surface_with_the_modifiers_held_on_their_keyboard() {
     ];
     assert_eq!(received, expected);
     assert_eq!(router.keyboard_focus(KEYBOARD), None);
-    assert!(
-        router
-            .route(DeviceEvent::KeyboardRemoved(KEYBOARD))
-            .is_empty()
-    );
+    assert_eq!(router.route(DeviceEvent::KeyboardRemoved(KEYBOARD)), []);
 }
 
 #[test]
@@ -281,7 +277,7 @@ fn a_surface_has_window_focus_while_any_keyboard_focuses_it() {
         keyboard: SECOND_KEYBOARD,
         surface: Some(WINDOW),
     };
-    assert!(router.route(second_on_window).is_empty());
+    assert_eq!(router.route(second_on_window), []);
     assert_eq!(
         router.route(focus(Some(PANEL))),
         [window_focus(PANEL, true)]

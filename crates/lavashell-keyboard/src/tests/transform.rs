@@ -62,7 +62,7 @@ fn two_fingers_on_keys_that_come_together_pass_each_transform_to_the_host_and_ty
         "the scale is passed on unchanged: {:?}",
         last_scale(&host)
     );
-    assert!(host.sent().is_empty());
+    assert_eq!(host.sent(), []);
     Ok(())
 }
 
@@ -76,7 +76,7 @@ fn two_fingers_on_keys_that_spread_pass_a_growing_scale_to_the_host_and_type_not
     lift(&mut host, [first, apart])?;
     assert_eq!(phases(&host).last(), Some(&DragPhase::Ended));
     assert!(last_scale(&host).is_some_and(|scale| scale > 1.0));
-    assert!(host.sent().is_empty());
+    assert_eq!(host.sent(), []);
     Ok(())
 }
 
@@ -98,7 +98,7 @@ fn two_fingers_on_the_bare_panel_pass_a_transform_to_the_host() -> Result<(), Te
     assert_eq!(phases.first(), Some(&DragPhase::Started), "{phases:?}");
     assert_eq!(phases.last(), Some(&DragPhase::Ended), "{phases:?}");
     assert!(last_scale(&host).is_some_and(|scale| scale < 1.0));
-    assert!(host.sent().is_empty());
+    assert_eq!(host.sent(), []);
     Ok(())
 }
 

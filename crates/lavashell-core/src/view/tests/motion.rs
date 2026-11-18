@@ -128,7 +128,7 @@ fn entering_and_exiting_nodes_finish_and_removed_nodes_cannot_receive_input() ->
     );
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
     assert!(!view.needs_frame());
-    assert!(scene.commands().is_empty());
+    assert_eq!(scene.commands(), []);
     Ok(())
 }
 

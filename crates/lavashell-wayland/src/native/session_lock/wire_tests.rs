@@ -25,7 +25,7 @@ fn an_unlock_is_sent_before_the_sync_that_confirms_it() -> Result<(), TestError>
         .display()
         .get_registry(&registry_qh, ());
     let manager = registry.bind::<ExtSessionLockManagerV1, _, _>(1, 1, &qh, ());
-    assert!(!compositor.flush()?.is_empty());
+    assert_ne!(compositor.flush()?, []);
     let lock = request_lock(&manager, &qh);
     let manager = manager.id().protocol_id();
     let proxy = lock.id().protocol_id();

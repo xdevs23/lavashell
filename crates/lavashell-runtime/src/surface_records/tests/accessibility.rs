@@ -218,7 +218,7 @@ fn a_surface_that_the_host_has_not_configured_shows_and_publishes_nothing() -> T
     let outcome = records.handle_accessibility(activated, show(&shown));
     assert_eq!(shown.get(), 0);
     assert!(outcome.publish.is_none() && outcome.failures.is_empty());
-    assert!(records.update_accessibility()?.is_empty());
+    assert_eq!(records.update_accessibility()?, []);
     Ok(())
 }
 
@@ -233,7 +233,7 @@ fn semantics_that_change_without_a_frame_are_published_once() -> TestResult {
     let tree = only_published_tree(records.update_accessibility()?, surface)?;
     let value = (tree.nodes.iter()).find_map(|(_, node)| node.numeric_value());
     assert_eq!(value, Some(2.0));
-    assert!(records.update_accessibility()?.is_empty());
+    assert_eq!(records.update_accessibility()?, []);
     Ok(())
 }
 
@@ -261,7 +261,7 @@ fn a_retired_surface_publishes_nothing() -> TestResult {
     records.retire(surface);
     name.set("Stop".into());
     assert_eq!(records.publish_accessibility(surface)?, None);
-    assert!(records.update_accessibility()?.is_empty());
+    assert_eq!(records.update_accessibility()?, []);
     Ok(())
 }
 

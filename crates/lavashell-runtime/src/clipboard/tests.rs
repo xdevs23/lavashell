@@ -169,7 +169,7 @@ fn a_refused_selection_reports_the_refusal_and_sends_nothing() -> TestResult {
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
     let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
-    assert!(bytes.is_empty());
+    assert_eq!(bytes, []);
     Ok(())
 }
 
@@ -190,7 +190,7 @@ fn a_send_after_the_selection_was_cancelled_writes_nothing() -> TestResult {
     assert!(run.watches.take_requests().is_empty());
     let mut bytes = Vec::new();
     let _byte_count_is_checked_through_the_bytes = reader.read_to_end(&mut bytes)?;
-    assert!(bytes.is_empty());
+    assert_eq!(bytes, []);
     Ok(())
 }
 

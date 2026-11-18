@@ -113,7 +113,8 @@ fn a_long_press_offers_the_letters_of_the_shown_layout_and_then_of_every_configu
     host.settings
         .update(|settings| settings.layouts = vec![first]);
     host.frame()?;
-    assert!(offered(&mut host, "c")?.is_empty());
+    let no_letters: [&str; 0] = [];
+    assert_eq!(offered(&mut host, "c")?, no_letters);
     assert!(host.sent().is_empty(), "a cancelled press types nothing");
     Ok(())
 }

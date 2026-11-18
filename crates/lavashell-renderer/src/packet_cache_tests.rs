@@ -340,10 +340,13 @@ fn a_copy_stored_at_one_pixel_scale_is_not_drawn_at_another() -> Result<(), Test
     let square = paint(&mut direct, PixelScale::SQUARE)?;
     let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
     for _ in 0..3 {
-        assert!(differing(&paint(&mut cached, PixelScale::SQUARE)?, &square)?.is_empty());
+        assert_eq!(
+            differing(&paint(&mut cached, PixelScale::SQUARE)?, &square)?,
+            []
+        );
     }
     let expected = paint(&mut direct, wide)?;
-    assert!(differing(&paint(&mut cached, wide)?, &expected)?.is_empty());
+    assert_eq!(differing(&paint(&mut cached, wide)?, &expected)?, []);
     assert_eq!(cached.render_stats().cache_hits, 1);
     Ok(())
 }

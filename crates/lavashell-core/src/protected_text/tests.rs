@@ -12,7 +12,7 @@ fn replacement_preserves_unicode() {
     assert_eq!(field.replace(0..4, "z"), 1);
     let private = field.take();
     private.expose(|value| assert_eq!(value, "z"));
-    assert!(field.masked('•').is_empty());
+    assert_eq!(field.masked('•'), "");
 }
 
 #[test]

@@ -107,7 +107,7 @@ fn turning_the_key_preview_off_on_the_platform_applies_on_the_next_frame() -> Re
     host.frame()?;
     press(&mut host, "b")?;
     host.frame()?;
-    assert!(unions(&host.scene, 2).is_empty());
+    assert_eq!(unions(&host.scene, 2), []);
     Ok(())
 }
 

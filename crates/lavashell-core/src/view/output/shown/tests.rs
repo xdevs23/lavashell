@@ -274,10 +274,9 @@ fn items_painted_again_with_the_same_commands_change_nothing() -> TestResult {
             .iter()
             .all(|kind| *kind == Received::Insert)
     );
-    assert!(
-        consumer
-            .show(&[leaf(0.0), component(7, 0.0, &repainted)])?
-            .is_empty()
+    assert_eq!(
+        consumer.show(&[leaf(0.0), component(7, 0.0, &repainted)])?,
+        []
     );
     Ok(())
 }
