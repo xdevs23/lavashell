@@ -8,7 +8,9 @@ use lavashell_core::prelude::Modifier;
 use lavashell_core::ui::InputModifiers;
 use lavashell_core::units::Density;
 use lavashell_core::view::{InputEvent, View};
-use lavashell_core::window::{WindowCapabilities, WindowControl, WindowRegion, WindowState};
+use lavashell_core::window::{
+    ResizeEdge, WindowCapabilities, WindowControl, WindowRegion, WindowState,
+};
 use lavashell_platform::{
     AccessibilityRequest, Button, ClipboardEvent, ClipboardRequest, DeviceEvent, FormatId,
     InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice, PointerPress, PressState,
@@ -153,6 +155,20 @@ fn begins_move(request: &PlatformRequest) -> bool {
     )
 }
 
+fn begins_resize(request: &PlatformRequest, edge: ResizeEdge) -> bool {
+    matches!(
+        request,
+        PlatformRequest::WindowControl(WindowControlRequest::BeginResize {
+            surface: WINDOW,
+            press: PointerPress {
+                pointer: POINTER,
+                ..
+            },
+            edge: requested,
+        }) if *requested == edge
+    )
+}
+
 fn sets_window_focus(requests: &[PlatformRequest], focused: bool) -> bool {
     let window_focus = AccessibilityRequest::SetWindowFocus {
         surface: WINDOW,
@@ -275,14 +291,16 @@ fn a_paste_without_an_edited_field_reaches_the_view() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_press_that_begins_a_window_move_starts_no_drag_gesture() -> TestResult {
+fn requests_of_a_press_dragged_across(
+    region: WindowRegion,
+    offered: WindowControl,
+) -> Result<(Vec<PlatformRequest>, bool), TestError> {
     let gestured = Rc::new(Cell::new(false));
     let seen = Rc::clone(&gestured);
     let size = Size::new(100.dp(), 100.dp());
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
-        let header = Modifier::new().window_region(WindowRegion::Drag);
-        ui.spacer(size.width, size.height, header);
+        let whole_window = Modifier::new().window_region(region);
+        ui.spacer(size.width, size.height, whole_window);
     });
     let viewport = Viewport::new(size, Density::ONE);
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
@@ -295,23 +313,40 @@ fn a_press_that_begins_a_window_move_starts_no_drag_gesture() -> TestResult {
     let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let origin = Point::new(10.dp(), 10.dp());
     let moved = Point::new(60.dp(), 60.dp());
-    let movable = SurfaceEvent::Configured {
+    let configured = SurfaceEvent::Configured {
         width: None,
         height: None,
         token: None,
         window: Some(WindowState {
-            capabilities: WindowCapabilities::new([WindowControl::Move]),
+            capabilities: WindowCapabilities::new([offered]),
             ..WindowState::default()
         }),
     };
     let drag = [
-        PlatformEvent::Surface(WINDOW, movable),
+        PlatformEvent::Surface(WINDOW, configured),
         pointer_enters(WINDOW),
         press_primary(origin),
         pointer_moves(moved),
     ];
     let requests = views.step(drag)?;
+    Ok((requests, gestured.get()))
+}
+
+#[test]
+fn a_press_that_begins_a_window_move_starts_no_drag_gesture() -> TestResult {
+    let (requests, gestured) =
+        requests_of_a_press_dragged_across(WindowRegion::Drag, WindowControl::Move)?;
     assert!(requests.iter().any(begins_move));
-    assert!(!gestured.get());
+    assert!(!gestured);
+    Ok(())
+}
+
+#[test]
+fn a_press_that_begins_a_window_resize_starts_no_drag_gesture() -> TestResult {
+    let edge = ResizeEdge::BottomRight;
+    let (requests, gestured) =
+        requests_of_a_press_dragged_across(WindowRegion::Resize(edge), WindowControl::Resize)?;
+    assert!(requests.iter().any(|request| begins_resize(request, edge)));
+    assert!(!gestured);
     Ok(())
 }

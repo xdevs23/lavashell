@@ -4,7 +4,7 @@ use crate::{HostScript, TestPlatform};
 use lavashell_core::geometry::Point;
 use lavashell_core::prelude::{Activation, Density, DpExt, Modifier};
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::window::{WINDOW, WindowHandle, WindowRegion, WindowRequest};
+use lavashell_core::window::{ResizeEdge, WINDOW, WindowHandle, WindowRegion, WindowRequest};
 use lavashell_platform::{
     Button, DeviceEvent, InputSerial, PointerDevice, PointerPress, PressState, WindowControlRequest,
 };
@@ -133,6 +133,25 @@ fn the_test_platform_records_the_move_started_by_a_press_in_a_drag_region() -> T
         press: PRESS,
     };
     assert_eq!(frames?.window_requests(), [begin_move]);
+    Ok(())
+}
+
+#[test]
+fn the_test_platform_records_the_resize_started_by_a_press_in_a_resize_region() -> TestResult {
+    let edge = ResizeEdge::BottomRight;
+    let app = app(move |ui| {
+        let whole_window = Modifier::new().window_region(WindowRegion::Resize(edge));
+        ui.spacer(100.dp(), 100.dp(), whole_window);
+    })?;
+    let script = pressing(Button::Primary, Point::new(21.dp(), 23.dp()));
+    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    ran?;
+    let begin_resize = WindowControlRequest::BeginResize {
+        surface: SURFACE,
+        press: PRESS,
+        edge,
+    };
+    assert_eq!(frames?.window_requests(), [begin_resize]);
     Ok(())
 }
 

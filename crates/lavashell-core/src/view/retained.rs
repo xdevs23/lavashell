@@ -332,7 +332,7 @@ impl View {
                 focused,
                 focus_source: focused.and(self.routing.focus.source()),
                 pointers: (self.routing.pointers.values())
-                    .map(|pointer| (local(pointer.capture()), local(pointer.over)))
+                    .map(|pointer| (local(pointer.capture()), local(pointer.over())))
                     .filter(|pointer| *pointer != (None, None))
                     .collect(),
                 window_focused: self.window_focused,

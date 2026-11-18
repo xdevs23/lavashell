@@ -155,7 +155,7 @@ impl View {
         let enabled = self.input_enabled_nodes();
         let focus_disabled = (self.routing.focus.node()).is_some_and(|id| !enabled.contains(&id));
         let invalid: BTreeSet<_> = (self.routing.pointers.values())
-            .flat_map(|pointer| pointer.nodes().chain(pointer.over))
+            .flat_map(|pointer| pointer.nodes().chain(pointer.over()))
             .filter(|id| !enabled.contains(id))
             .collect();
         if focus_disabled {
@@ -167,10 +167,8 @@ impl View {
             self.end_captures(|id| invalid.contains(&id));
             self.cancel_text_drag();
         }
-        for pointer in self.routing.pointers.values_mut() {
-            if pointer.over.is_some_and(|id| invalid.contains(&id)) {
-                pointer.over = None;
-            }
+        for hover in (self.routing.pointers.values_mut()).filter_map(|state| state.hover.as_mut()) {
+            hover.over = hover.over.filter(|id| !invalid.contains(id));
         }
     }
 

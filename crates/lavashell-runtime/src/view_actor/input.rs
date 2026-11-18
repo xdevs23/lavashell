@@ -7,11 +7,10 @@ use crate::view_actor::ViewError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
     DeviceEvent, KeyAction, KeyboardDevice, Platform, PlatformRequest, PressState,
-    WindowControlRequest,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum WindowMove {
+enum InteractiveWindowControl {
     Begins,
     NotBegun,
 }
@@ -65,7 +64,7 @@ impl<P: Platform> ViewActor<P> {
 
     fn route(&mut self, event: DeviceEvent) -> Result<(), ViewError> {
         for routed in self.input.route(event) {
-            let _moves_start_only_from_pointer_input = self.deliver(routed)?;
+            let _window_controls_begin_only_from_pointer_input = self.deliver(routed)?;
         }
         Ok(())
     }
@@ -82,16 +81,16 @@ impl<P: Platform> ViewActor<P> {
         let drags = &mut self.transfers.drags;
         let records = self.surfaces.records_mut();
         let dragging = press.is_none() && drags.track_gesture(surface, &event, records);
-        let mut window_move = WindowMove::NotBegun;
+        let mut interactive_control = InteractiveWindowControl::NotBegun;
         for routed in self.input.route(event) {
             if (!dragging || matches!(routed, RoutedInput::Cancel { .. }))
-                && self.deliver(routed)? == WindowMove::Begins
+                && self.deliver(routed)? == InteractiveWindowControl::Begins
             {
-                window_move = WindowMove::Begins;
+                interactive_control = InteractiveWindowControl::Begins;
             }
         }
         if let Some(press) = press
-            && window_move == WindowMove::NotBegun
+            && interactive_control == InteractiveWindowControl::NotBegun
         {
             let _a_press_starts_no_drag =
                 (self.transfers.drags).track_gesture(surface, &press, self.surfaces.records_mut());
@@ -103,7 +102,7 @@ impl<P: Platform> ViewActor<P> {
         let pressed = action.press_state() == PressState::Pressed;
         for routed in self.input.route(event) {
             if !pressed || self.run_clipboard_shortcut(&routed) == ShortcutOutcome::Declined {
-                let _keys_start_no_move = self.deliver(routed)?;
+                let _keys_begin_no_window_control = self.deliver(routed)?;
             }
         }
         Ok(())
@@ -122,21 +121,21 @@ impl<P: Platform> ViewActor<P> {
             })
     }
 
-    fn deliver(&mut self, routed: RoutedInput) -> Result<WindowMove, ViewError> {
+    fn deliver(&mut self, routed: RoutedInput) -> Result<InteractiveWindowControl, ViewError> {
         if let RoutedInput::Cancel { surface, pointer } = routed {
             self.transfers.drags.cancel_gesture(pointer, surface);
         }
         let request = routed.deliver(self.surfaces.records_mut());
-        let window_move = match request {
-            Some(PlatformRequest::WindowControl(WindowControlRequest::BeginMove { .. })) => {
-                WindowMove::Begins
+        let interactive_control = match request.as_ref() {
+            Some(PlatformRequest::WindowControl(control)) if control.begins_pointer_grab() => {
+                InteractiveWindowControl::Begins
             }
-            Some(_) | None => WindowMove::NotBegun,
+            Some(_) | None => InteractiveWindowControl::NotBegun,
         };
         if let Some(request) = request {
             self.request(request)?;
         }
-        Ok(window_move)
+        Ok(interactive_control)
     }
 
     fn host_key(&mut self, keyboard: KeyboardDevice, code: u32, action: KeyAction) -> bool {

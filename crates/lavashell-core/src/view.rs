@@ -76,7 +76,7 @@ use crate::ui::{
     Gestures, InputModifiers, Memory, Node, NodeId, PointerKind, TouchId, Ui, ViewTag,
 };
 use crate::units::{Density, Dp};
-use crate::window::{WINDOW, WindowRegion};
+use crate::window::{ResizeEdge, WINDOW, WindowRegion};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -86,6 +86,7 @@ pub enum Cursor {
     Default,
     Pointer,
     Text,
+    Resize(ResizeEdge),
 }
 
 #[derive(Debug, PartialEq)]
@@ -401,8 +402,7 @@ impl View {
     #[must_use]
     pub fn window_region_at(&self, at: Point) -> Option<WindowRegion> {
         let window = self.root_values.value(&WINDOW).get()?;
-        (self.routing.window_region_at(at))
-            .filter(|region| window.offers(region.required_control()))
+        (self.routing).window_region_at(at, |control| window.offers(control))
     }
 
     #[must_use]
@@ -412,8 +412,11 @@ impl View {
 
     #[must_use]
     pub fn cursor(&self) -> Cursor {
+        if let Some(cursor) = self.hovered_window_region().and_then(WindowRegion::cursor) {
+            return cursor;
+        }
         let pointed =
-            (self.routing.primary()).and_then(|primary| primary.capture().or(primary.over));
+            (self.routing.primary()).and_then(|primary| primary.capture().or(primary.over()));
         self.routing
             .hits
             .iter()

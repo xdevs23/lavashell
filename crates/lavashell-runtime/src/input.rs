@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::surface_records::SurfaceRecords;
-use crate::window_move::begin_move;
+use crate::window_control::begin_window_control;
 use lavashell_core::geometry::Point;
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::surface::SurfaceId;
@@ -44,7 +44,7 @@ impl RoutedInput {
                 pointer,
             } => deliver_input(records, surface, input, pointer),
             Self::PrimaryPress { surface, press, at } => {
-                match begin_move(records, surface, press, at) {
+                match begin_window_control(records, surface, press, at) {
                     Some(request) => {
                         cancel_pointer(records, surface);
                         Some(PlatformRequest::WindowControl(request))

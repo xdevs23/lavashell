@@ -250,7 +250,7 @@ impl View {
             InputEvent::Leave => {
                 self.cancel_text_drag();
                 if let Some(primary) = self.routing.pointers.get_mut(&PointerId::Primary) {
-                    primary.over = None;
+                    primary.hover = None;
                 }
                 self.redraw = true;
             }

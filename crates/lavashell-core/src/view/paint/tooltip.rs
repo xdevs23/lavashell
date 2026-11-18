@@ -3,11 +3,12 @@ use crate::geometry::Rect;
 use crate::scene::DrawCommand;
 use crate::shape::Shape;
 use crate::units::Dp;
+use crate::view::pointers::Pointer;
 use crate::view::{TextMeasurer, View};
 
 impl View {
     pub(in crate::view) fn paint_tooltip(&mut self, text: &mut impl TextMeasurer) {
-        let hovered = self.routing.primary().and_then(|primary| primary.over);
+        let hovered = self.routing.primary().and_then(Pointer::over);
         let Some((index, tooltip)) = self.nodes.iter().enumerate().find_map(|(index, node)| {
             let tooltip = node.tooltip.as_ref().filter(|_| Some(node.id) == hovered)?;
             Some((index, tooltip))

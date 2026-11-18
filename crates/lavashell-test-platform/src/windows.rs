@@ -100,6 +100,7 @@ impl Windows {
                 ..state
             })?,
             WindowControlRequest::BeginMove { .. }
+            | WindowControlRequest::BeginResize { .. }
             | WindowControlRequest::Minimize { .. }
             | WindowControlRequest::ShowMenu { .. } => self.recorded_requests.push(request),
         }

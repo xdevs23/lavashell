@@ -2,6 +2,7 @@
 use crate::flag_set::flag_set;
 use crate::geometry::Point;
 use crate::local::Local;
+use crate::view::Cursor;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
@@ -21,6 +22,7 @@ flag_set!(
         Fullscreen => fullscreen,
         WindowMenu => window_menu,
         Move => move_,
+        Resize => resize,
     }
 );
 
@@ -41,8 +43,35 @@ impl WindowState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ResizeEdge {
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+    TopLeft,
+}
+
+impl ResizeEdge {
+    pub const ALL: [Self; 8] = [
+        Self::Top,
+        Self::TopRight,
+        Self::Right,
+        Self::BottomRight,
+        Self::Bottom,
+        Self::BottomLeft,
+        Self::Left,
+        Self::TopLeft,
+    ];
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowRegion {
     Drag,
+    Resize(ResizeEdge),
 }
 
 impl WindowRegion {
@@ -50,6 +79,15 @@ impl WindowRegion {
     pub const fn required_control(self) -> WindowControl {
         match self {
             Self::Drag => WindowControl::Move,
+            Self::Resize(_) => WindowControl::Resize,
+        }
+    }
+
+    #[must_use]
+    pub const fn cursor(self) -> Option<Cursor> {
+        match self {
+            Self::Drag => None,
+            Self::Resize(edge) => Some(Cursor::Resize(edge)),
         }
     }
 }

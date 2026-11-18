@@ -5,9 +5,6 @@ use sctk::reexports::csd_frame::{WindowManagerCapabilities, WindowState as XdgSt
 use sctk::shell::xdg::window::WindowConfigure;
 
 pub(super) fn read_window_state(configure: &WindowConfigure) -> WindowState {
-    let offered = |control| {
-        native_capability(control).is_none_or(|native| configure.capabilities.contains(native))
-    };
     WindowState {
         maximized: configure.is_maximized(),
         fullscreen: configure.is_fullscreen(),
@@ -16,7 +13,7 @@ pub(super) fn read_window_state(configure: &WindowConfigure) -> WindowState {
             .collect(),
         suspended: configure.state.contains(XdgState::SUSPENDED),
         capabilities: (WindowControl::ALL.into_iter())
-            .filter(|&control| offered(control))
+            .filter(|&control| is_offered(configure, control))
             .collect(),
     }
 }
@@ -30,13 +27,15 @@ fn is_tiled_at(configure: &WindowConfigure, edge: Edge) -> bool {
     }
 }
 
-fn native_capability(control: WindowControl) -> Option<WindowManagerCapabilities> {
+fn is_offered(configure: &WindowConfigure, control: WindowControl) -> bool {
+    let supports = |native| configure.capabilities.contains(native);
     match control {
-        WindowControl::Maximize => Some(WindowManagerCapabilities::MAXIMIZE),
-        WindowControl::Minimize => Some(WindowManagerCapabilities::MINIMIZE),
-        WindowControl::Fullscreen => Some(WindowManagerCapabilities::FULLSCREEN),
-        WindowControl::WindowMenu => Some(WindowManagerCapabilities::WINDOW_MENU),
-        WindowControl::Move => None,
+        WindowControl::Maximize => supports(WindowManagerCapabilities::MAXIMIZE),
+        WindowControl::Minimize => supports(WindowManagerCapabilities::MINIMIZE),
+        WindowControl::Fullscreen => supports(WindowManagerCapabilities::FULLSCREEN),
+        WindowControl::WindowMenu => supports(WindowManagerCapabilities::WINDOW_MENU),
+        WindowControl::Move => true,
+        WindowControl::Resize => !configure.is_maximized() && !configure.is_fullscreen(),
     }
 }
 

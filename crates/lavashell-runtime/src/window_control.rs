@@ -5,7 +5,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::window::WindowRegion;
 use lavashell_platform::{PointerPress, WindowControlRequest};
 
-pub(crate) fn begin_move(
+pub(crate) fn begin_window_control(
     records: &SurfaceRecords,
     surface: SurfaceId,
     press: PointerPress,
@@ -13,5 +13,10 @@ pub(crate) fn begin_move(
 ) -> Option<WindowControlRequest> {
     (records.window_region_at(surface, at)).map(|region| match region {
         WindowRegion::Drag => WindowControlRequest::BeginMove { surface, press },
+        WindowRegion::Resize(edge) => WindowControlRequest::BeginResize {
+            surface,
+            press,
+            edge,
+        },
     })
 }

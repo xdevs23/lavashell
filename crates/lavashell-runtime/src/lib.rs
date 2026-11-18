@@ -45,7 +45,7 @@ pub mod view_actions;
 mod view_actor;
 pub mod watches;
 pub mod window;
-mod window_move;
+mod window_control;
 mod window_requests;
 
 pub use app::{App, SetupError};

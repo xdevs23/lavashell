@@ -2,7 +2,7 @@
 use super::*;
 use crate::geometry::Axis;
 use crate::window::{
-    WindowCapabilities, WindowControl, WindowRegion, WindowRequestQueue, WindowState,
+    ResizeEdge, WindowCapabilities, WindowControl, WindowRegion, WindowRequestQueue, WindowState,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -38,6 +38,28 @@ fn a_drag_region_is_reported_only_in_a_window_that_offers_moves() -> TestResult 
     assert_eq!(view.window_region_at(in_region), None);
     provide_window_offering(&view, WindowCapabilities::new([WindowControl::Move]));
     assert_eq!(view.window_region_at(in_region), Some(WindowRegion::Drag));
+    Ok(())
+}
+
+#[test]
+fn a_point_in_two_stacked_regions_reports_the_topmost_region_that_the_window_offers() -> TestResult
+{
+    let strip = WindowRegion::Resize(ResizeEdge::Top);
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let bar = Modifier::new().window_region(WindowRegion::Drag);
+        ui.layout(Axis::Vertical, bar, |ui| {
+            ui.spacer(40.dp(), 40.dp(), Modifier::new().window_region(strip));
+        });
+    });
+    advance(&mut Scene::default(), &mut view, WINDOW_SIZE, 0)?;
+    let in_strip_and_bar = at(20, 20);
+    provide_window_offering(&view, WindowCapabilities::new([WindowControl::Move]));
+    let reported = view.window_region_at(in_strip_and_bar);
+    assert_eq!(reported, Some(WindowRegion::Drag));
+    provide_window_offering(&view, WindowCapabilities::new([WindowControl::Resize]));
+    assert_eq!(view.window_region_at(in_strip_and_bar), Some(strip));
+    provide_window_offering(&view, WindowCapabilities::all());
+    assert_eq!(view.window_region_at(in_strip_and_bar), Some(strip));
     Ok(())
 }
 
@@ -196,5 +218,29 @@ fn a_clickable_node_tagged_as_a_drag_region_is_a_region_and_clicks_on_a_press_se
     assert_eq!(view.cursor(), Cursor::Pointer);
     tap_at(&mut view, on_node);
     assert_eq!(clicks.get(), 1);
+    Ok(())
+}
+
+#[test]
+fn the_pointer_over_an_offered_resize_region_shows_the_resize_cursor_of_its_edge() -> TestResult {
+    let corner = ResizeEdge::BottomRight;
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        let region = Modifier::new().window_region(WindowRegion::Resize(corner));
+        ui.spacer(40.dp(), 40.dp(), region);
+    });
+    advance(&mut Scene::default(), &mut view, WINDOW_SIZE, 0)?;
+    let (in_region, outside) = (at(20, 20), at(20, 60));
+    view.input(InputEvent::Move(in_region));
+    assert_eq!(view.window_region_at(in_region), None);
+    assert_eq!(view.cursor(), Cursor::Default);
+    provide_window_offering(&view, WindowCapabilities::new([WindowControl::Resize]));
+    let offered = Some(WindowRegion::Resize(corner));
+    assert_eq!(view.window_region_at(in_region), offered);
+    assert_eq!(view.cursor(), Cursor::Resize(corner));
+    view.input(InputEvent::Move(outside));
+    assert_eq!(view.cursor(), Cursor::Default);
+    view.input(InputEvent::Move(in_region));
+    view.input(InputEvent::Leave);
+    assert_eq!(view.cursor(), Cursor::Default);
     Ok(())
 }

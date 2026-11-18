@@ -75,6 +75,14 @@ impl Translator {
                     Ok(known.begin_move(surface, seat, serial)?)
                 })
             }
+            WindowControlRequest::BeginResize {
+                surface,
+                press,
+                edge,
+            } => self.control_window(surface, |known| {
+                let (seat, serial) = self.press_seat(press)?;
+                Ok(known.begin_resize(surface, seat, serial, edge)?)
+            }),
             WindowControlRequest::SetMaximized { surface, maximized } => {
                 self.control_window(surface, |known| Ok(known.set_maximized(surface, maximized)?))
             }

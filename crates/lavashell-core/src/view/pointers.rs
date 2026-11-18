@@ -4,15 +4,25 @@ use super::input::InputRouting;
 use super::{Hit, TouchSample, View, gestures};
 use crate::geometry::Point;
 use crate::ui::{NodeId, PointerId, PointerKind};
-use crate::window::WindowRegion;
+use crate::window::{WindowControl, WindowRegion};
 
 #[derive(Default)]
 pub(super) struct Pointer {
-    pub over: Option<NodeId>,
+    pub hover: Option<Hover>,
     arena: Option<Arena>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Hover {
+    pub at: Point,
+    pub over: Option<NodeId>,
+}
+
 impl Pointer {
+    pub fn over(&self) -> Option<NodeId> {
+        self.hover?.over
+    }
+
     pub fn capture(&self) -> Option<NodeId> {
         self.arena.as_ref()?.capture()
     }
@@ -112,7 +122,10 @@ impl View {
         self.cancel_press(pointer);
         let hit = self.routing.hit_at(sample.at()).map(|hit| hit.id);
         let state = Pointer {
-            over: hit,
+            hover: Some(Hover {
+                at: sample.at(),
+                over: hit,
+            }),
             arena: None,
         };
         let _state_of_the_previous_press = self.routing.pointers.insert(pointer, state);
@@ -134,13 +147,18 @@ impl View {
         if !pointer.hovers() && !self.routing.pointers.contains_key(&pointer) {
             return;
         }
-        let over = self.routing.hit_at(sample.at()).map(|hit| hit.id);
+        let hover = Hover {
+            at: sample.at(),
+            over: self.routing.hit_at(sample.at()).map(|hit| hit.id),
+        };
         let state = self.routing.pointers.entry(pointer).or_default();
-        if state.over != over {
-            state.over = over;
-            self.redraw = true;
-        }
+        self.redraw |= state.over() != hover.over;
+        state.hover = Some(hover);
         self.step_arena(pointer, Event::Move(sample));
+    }
+
+    pub(super) fn hovered_window_region(&self) -> Option<WindowRegion> {
+        self.window_region_at(self.routing.primary()?.hover?.at)
     }
 
     pub(super) fn release(&mut self, sample: PointerSample) {
@@ -168,11 +186,11 @@ impl InputRouting {
     pub(super) fn is_hovered(&self, id: NodeId) -> bool {
         self.pointers
             .values()
-            .any(|pointer| pointer.over == Some(id))
+            .any(|pointer| pointer.over() == Some(id))
     }
     pub(super) fn is_pressed(&self, id: NodeId) -> bool {
         (self.pointers.values())
-            .any(|pointer| pointer.capture() == Some(id) && pointer.over == Some(id))
+            .any(|pointer| pointer.capture() == Some(id) && pointer.over() == Some(id))
     }
     pub(super) fn hit_at(&self, at: Point) -> Option<&Hit> {
         self.hits
@@ -180,9 +198,14 @@ impl InputRouting {
             .rev()
             .find(|hit| hit.contains(at, &self.moving))
     }
-    pub(super) fn window_region_at(&self, at: Point) -> Option<WindowRegion> {
+    pub(super) fn window_region_at(
+        &self,
+        at: Point,
+        offers: impl Fn(WindowControl) -> bool,
+    ) -> Option<WindowRegion> {
         let topmost = (self.window_regions.iter().rev())
-            .find(|region| region.area.contains(at, &self.moving))?;
+            .filter(|hit| offers(hit.region.required_control()))
+            .find(|hit| hit.area.contains(at, &self.moving))?;
         let covered = (self.hits.iter().skip(topmost.input_hits_below))
             .any(|hit| hit.contains(at, &self.moving));
         (!covered).then_some(topmost.region)

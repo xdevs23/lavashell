@@ -3,7 +3,9 @@ use super::{NativeRole, NativeWindow, Surface};
 use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
 use lavashell_core::surface::SurfaceId;
+use lavashell_core::window::ResizeEdge;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
+use sctk::reexports::protocols::xdg::shell::client::xdg_toplevel;
 
 mod error;
 
@@ -17,6 +19,18 @@ impl Surface {
         serial: ProtocolSerial,
     ) -> Result<(), WindowControlError> {
         self.window(id)?.move_(seat, serial.get());
+        Ok(())
+    }
+
+    pub(crate) fn begin_resize(
+        &self,
+        id: SurfaceId,
+        seat: &WlSeat,
+        serial: ProtocolSerial,
+        edge: ResizeEdge,
+    ) -> Result<(), WindowControlError> {
+        self.window(id)?
+            .resize(seat, serial.get(), native_resize_edge(edge));
         Ok(())
     }
 
@@ -72,3 +86,19 @@ impl Surface {
         Ok(window)
     }
 }
+
+const fn native_resize_edge(edge: ResizeEdge) -> xdg_toplevel::ResizeEdge {
+    match edge {
+        ResizeEdge::Top => xdg_toplevel::ResizeEdge::Top,
+        ResizeEdge::TopRight => xdg_toplevel::ResizeEdge::TopRight,
+        ResizeEdge::Right => xdg_toplevel::ResizeEdge::Right,
+        ResizeEdge::BottomRight => xdg_toplevel::ResizeEdge::BottomRight,
+        ResizeEdge::Bottom => xdg_toplevel::ResizeEdge::Bottom,
+        ResizeEdge::BottomLeft => xdg_toplevel::ResizeEdge::BottomLeft,
+        ResizeEdge::Left => xdg_toplevel::ResizeEdge::Left,
+        ResizeEdge::TopLeft => xdg_toplevel::ResizeEdge::TopLeft,
+    }
+}
+
+#[cfg(test)]
+mod tests;
