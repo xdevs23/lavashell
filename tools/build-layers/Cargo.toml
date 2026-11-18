@@ -34,10 +34,13 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
 [workspace.dependencies]
+lavashell-aosp-library-check = { path = "aosp-library-check" }
 lavashell-cargo-model = { path = "cargo-model" }
 lavashell-command-output = { path = "command-output" }
 lavashell-enum-values = { path = "../../crates/lavashell-enum-values" }
+lavashell-nix-tests = { path = "nix-tests" }
 lavashell-plan-check = { path = "plan-check" }
+lavashell-projection-refresh = { path = "projection-refresh" }
 clap = { version = "=4.6.7", features = ["derive"] }
 object = { version = "=0.41.0", default-features = false, features = ["elf", "names", "read_core", "std"] }
 serde = { version = "=1.0.229", features = ["derive"] }

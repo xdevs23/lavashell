@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
+
 use lavashell_command_output::nix::NixEvaluator;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use lavashell_nix_tests::repository::repository_root;

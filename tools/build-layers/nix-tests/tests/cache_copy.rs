@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
+
 use lavashell_nix_tests::evaluation::evaluate;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use serde::Serialize;

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
+
 use lavashell_cargo_model::lock::{CargoLock, LockedPackage};
 use lavashell_command_output::json::CommandError;
 use lavashell_command_output::nix::NixError;
