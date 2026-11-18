@@ -8,14 +8,13 @@ pub use error::Error;
 use crate::accessibility::SurfaceAccessibility;
 use crate::lifecycle::Lifecycle;
 use crate::settings::HostSettings;
-use crate::window::DragRegion;
 use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::{SurfaceId, SurfaceIds};
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::view::{Proposal, TextMeasurer, View};
-use lavashell_core::window::{WindowRequest, WindowRequestQueue, WindowState};
+use lavashell_core::window::{WindowRegion, WindowRequest, WindowRequestQueue, WindowState};
 use lavashell_platform::{SettingsEvent, SurfaceEvent, SurfaceRequest};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -27,7 +26,6 @@ struct Record {
     density: Density,
     scale: PixelScale,
     lifecycle: Lifecycle,
-    drag_region: Option<DragRegion>,
     accessibility: SurfaceAccessibility,
     window_requests: Option<WindowRequestQueue>,
 }
@@ -87,7 +85,6 @@ impl SurfaceRecords {
         view: View,
         size: Size,
         density: Density,
-        drag_region: Option<DragRegion>,
         accessible_name: Option<String>,
     ) -> Result<SurfaceId, Error> {
         let id = self.surface_ids.next_id().map_err(Error::NumberSurface)?;
@@ -100,7 +97,6 @@ impl SurfaceRecords {
             density,
             scale: PixelScale::SQUARE,
             lifecycle: Lifecycle::Waiting,
-            drag_region,
             accessibility: SurfaceAccessibility::new(accessible_name),
             window_requests: None,
         };
@@ -176,10 +172,8 @@ impl SurfaceRecords {
         (self.records.get(&surface)).is_some_and(|record| record.lifecycle.is_configured())
     }
 
-    pub(crate) fn in_drag_region(&self, surface: SurfaceId, at: Point) -> bool {
-        self.open_record(surface).is_some_and(|record| {
-            (record.drag_region.as_ref()).is_some_and(|region| region(at, record.size))
-        })
+    pub(crate) fn window_region_at(&self, surface: SurfaceId, at: Point) -> Option<WindowRegion> {
+        self.open_record(surface)?.view.window_region_at(at)
     }
 
     pub(crate) fn take_window_requests(&self) -> Vec<(SurfaceId, WindowRequest)> {

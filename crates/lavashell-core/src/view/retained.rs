@@ -3,7 +3,10 @@ use super::crossing::Crossed;
 use super::moving::MovingGroup;
 use super::output::{GroupId, Painted, placed_at};
 use super::paint::{Above, Detached, Inherited};
-use super::{Hit, HitClip, TextMeasurer, TextTarget, View, accessibility, paint, scroll_followers};
+use super::{
+    Hit, HitArea, HitClip, PaintedHit, TextMeasurer, TextTarget, View, accessibility, paint,
+    scroll_followers,
+};
 use crate::geometry::{Constraints, Point, Rect, Scale, Size};
 use crate::reactive::Phase;
 use crate::scene::{Affine, Transform};
@@ -40,7 +43,7 @@ struct Painting {
     key: PaintKey,
     items: Arc<[Painted]>,
     placed: Transform,
-    hits: Vec<Hit>,
+    hits: Vec<PaintedHit>,
     moving: Vec<MovingGroup>,
     followers: Vec<scroll_followers::ScrollFollower>,
     above: Vec<Above>,
@@ -359,7 +362,11 @@ impl View {
             return;
         };
         let moved = painting.moved(placed);
-        for hit in &mut painting.hits {
+        let input_hits = (painting.hits.iter_mut()).filter_map(|hit| match hit {
+            PaintedHit::Input(hit) => Some(hit),
+            PaintedHit::WindowRegion { .. } => None,
+        });
+        for hit in input_hits {
             let index = index_of(&self.nodes, hit.id);
             if let Some(target) = hit.input {
                 hit.input = index.map(|index| TextTarget { index, ..target });
@@ -394,7 +401,7 @@ impl View {
         };
         let moved = painting.moved(placed);
         if painting.modal {
-            self.routing.hits.clear();
+            self.routing.painted_hits.clear();
         }
         let around = self.routing.moving.current;
         self.routing.moving.place(&painting.moving, moved);
@@ -403,16 +410,27 @@ impl View {
         (self.painting.flown)
             .extend((painting.flown.iter()).map(|(id, flown)| (*id, flown.moved_by(moved))));
         for hit in &painting.hits {
-            let inner = (hit.clips.iter()).map(|clip| {
+            let area = hit.area();
+            let inner = (area.clips.iter()).map(|clip| {
                 let clip = clip.mapped(moved);
                 clip.in_group(clip.group.or(around))
             });
-            self.routing.hits.push(Hit {
-                rect: moved.rect(hit.rect),
-                input: hit.input.map(|target| target.mapped(moved)),
+            let area = HitArea {
+                rect: moved.rect(area.rect),
                 clips: clips.iter().copied().chain(inner).collect(),
-                group: hit.group.or(around),
-                ..hit.clone()
+                group: area.group.or(around),
+            };
+            self.routing.painted_hits.push(match hit {
+                PaintedHit::Input(hit) => PaintedHit::Input(Hit {
+                    area,
+                    input: hit.input.map(|target| target.mapped(moved)),
+                    ..hit.clone()
+                }),
+                PaintedHit::WindowRegion { id, region, .. } => PaintedHit::WindowRegion {
+                    id: *id,
+                    area,
+                    region: *region,
+                },
             });
         }
         for (node, geometry) in &painting.accessibility_geometry {

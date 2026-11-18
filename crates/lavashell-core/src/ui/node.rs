@@ -12,6 +12,7 @@ use crate::scene::{DrawContext, Drawing, Icon, IconStyle, TextStyle};
 use crate::style::{BorderStyle, InteractionStyle};
 use crate::units::{Dp, NumberError, Positive};
 use crate::view::{Crossing, Transition};
+use crate::window::WindowRegion;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -260,6 +261,7 @@ pub struct Node {
     pub focusable: bool,
     pub focus_within: Option<BorderStyle>,
     pub tag: Option<NodeTag>,
+    pub window_region: Option<WindowRegion>,
     pub(crate) references: Vec<NodeRef>,
     pub tooltip: Option<Tooltip>,
     pub interaction: InteractionStyle,
@@ -313,6 +315,7 @@ impl Node {
             focusable: true,
             focus_within: None,
             tag: None,
+            window_region: None,
             references: Vec::new(),
             tooltip: None,
             interaction,

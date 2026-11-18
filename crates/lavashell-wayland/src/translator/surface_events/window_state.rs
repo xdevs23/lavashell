@@ -5,7 +5,9 @@ use sctk::reexports::csd_frame::{WindowManagerCapabilities, WindowState as XdgSt
 use sctk::shell::xdg::window::WindowConfigure;
 
 pub(super) fn read_window_state(configure: &WindowConfigure) -> WindowState {
-    let offered = |control| configure.capabilities.contains(native_capability(control));
+    let offered = |control| {
+        native_capability(control).is_none_or(|native| configure.capabilities.contains(native))
+    };
     WindowState {
         maximized: configure.is_maximized(),
         fullscreen: configure.is_fullscreen(),
@@ -28,12 +30,13 @@ fn is_tiled_at(configure: &WindowConfigure, edge: Edge) -> bool {
     }
 }
 
-fn native_capability(control: WindowControl) -> WindowManagerCapabilities {
+fn native_capability(control: WindowControl) -> Option<WindowManagerCapabilities> {
     match control {
-        WindowControl::Maximize => WindowManagerCapabilities::MAXIMIZE,
-        WindowControl::Minimize => WindowManagerCapabilities::MINIMIZE,
-        WindowControl::Fullscreen => WindowManagerCapabilities::FULLSCREEN,
-        WindowControl::WindowMenu => WindowManagerCapabilities::WINDOW_MENU,
+        WindowControl::Maximize => Some(WindowManagerCapabilities::MAXIMIZE),
+        WindowControl::Minimize => Some(WindowManagerCapabilities::MINIMIZE),
+        WindowControl::Fullscreen => Some(WindowManagerCapabilities::FULLSCREEN),
+        WindowControl::WindowMenu => Some(WindowManagerCapabilities::WINDOW_MENU),
+        WindowControl::Move => None,
     }
 }
 

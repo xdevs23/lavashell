@@ -13,8 +13,9 @@ fn a_set_offers_by_name_only_the_flags_it_was_built_from() {
         offered.minimize(),
         offered.fullscreen(),
         offered.window_menu(),
+        offered.move_(),
     ];
-    assert_eq!(controls, [false, false, false, true]);
+    assert_eq!(controls, [false, false, false, true, false]);
     assert!(Edges::all().bottom());
     assert!(Edges::default().is_empty());
 }

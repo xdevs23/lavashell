@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::shape::WindowShape;
 use crate::surface_records::{self, measure_content};
-use lavashell_core::geometry::{Point, Size};
+use lavashell_core::geometry::Size;
 use lavashell_core::output::{HdrMetadata, OutputRequest};
 use lavashell_core::units::Dp;
 use lavashell_core::view::{Proposal, TextMeasurer, View};
 use lavashell_platform::{Role, SurfaceAppearance, SurfaceSpec, WindowRole};
-use std::rc::Rc;
-
-pub type DragRegion = Rc<dyn Fn(Point, Size) -> bool>;
 
 #[derive(Clone)]
 pub struct Window {
@@ -18,7 +15,6 @@ pub struct Window {
     pub background_blur: bool,
     pub transparent: bool,
     pub shape: Option<WindowShape>,
-    pub drag_region: Option<DragRegion>,
     pub size: Option<Size>,
     pub app_id: String,
     pub min_size: Option<Size>,
@@ -34,7 +30,6 @@ impl Window {
             background_blur: false,
             transparent: false,
             shape: None,
-            drag_region: None,
             size: None,
             app_id: app_id.into(),
             min_size: None,
@@ -69,12 +64,6 @@ impl Window {
     #[must_use]
     pub fn shape(mut self, shape: WindowShape) -> Self {
         self.shape = Some(shape);
-        self
-    }
-
-    #[must_use]
-    pub fn drag_region(mut self, region: impl Fn(Point, Size) -> bool + 'static) -> Self {
-        self.drag_region = Some(Rc::new(region));
         self
     }
 

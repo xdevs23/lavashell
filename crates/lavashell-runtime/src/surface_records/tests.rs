@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 fn open(records: &mut SurfaceRecords) -> Result<SurfaceId, ViewError> {
     let size = Size::new(100.dp(), 50.dp());
-    Ok(records.open(empty_view(), size, Density::ONE, None, None)?)
+    Ok(records.open(empty_view(), size, Density::ONE, None)?)
 }
 
 fn frame(records: &mut SurfaceRecords, surface: SurfaceId) -> TestResult {
@@ -107,7 +107,7 @@ fn only_a_window_configure_hands_a_window_to_the_view() -> TestResult {
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         reader.set(Some(ui.local(&WINDOW).as_ref().map(WindowHandle::state)));
     });
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     assert_eq!(records.handle(surface, configure(None)), None);
     frame(&mut records, surface)?;
     assert_eq!(read.get(), Some(None));
@@ -135,7 +135,7 @@ fn a_request_from_the_view_comes_out_once_with_the_surface_of_its_window() -> Te
             assert_eq!(window.request(WindowRequest::Minimize), Ok(()));
         }
     });
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     let offering = WindowState {
         capabilities: WindowCapabilities::all(),
         ..WindowState::default()
@@ -164,7 +164,7 @@ fn a_window_handle_refuses_requests_once_the_compositor_closed_the_window() -> T
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         *composed.borrow_mut() = ui.local(&WINDOW);
     });
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     let offering = WindowState {
         capabilities: WindowCapabilities::all(),
         ..WindowState::default()
@@ -224,7 +224,7 @@ fn the_view_shown_by_the_app_is_dropped_only_once_the_surface_retires() -> Resul
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
         ui.spacer(*captured, *captured, Modifier::new());
     });
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     assert_eq!(Rc::strong_count(&held), 2);
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     assert_eq!(Rc::strong_count(&held), 2);

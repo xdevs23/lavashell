@@ -4,6 +4,7 @@ use super::input::InputRouting;
 use super::{Hit, TouchSample, View, gestures};
 use crate::geometry::Point;
 use crate::ui::{NodeId, PointerId, PointerKind};
+use crate::window::WindowRegion;
 
 #[derive(Default)]
 pub(super) struct Pointer {
@@ -178,6 +179,13 @@ impl InputRouting {
             .iter()
             .rev()
             .find(|hit| hit.contains(at, &self.moving))
+    }
+    pub(super) fn window_region_at(&self, at: Point) -> Option<WindowRegion> {
+        let topmost = (self.window_regions.iter().rev())
+            .find(|region| region.area.contains(at, &self.moving))?;
+        let covered = (self.hits.iter().skip(topmost.input_hits_below))
+            .any(|hit| hit.contains(at, &self.moving));
+        (!covered).then_some(topmost.region)
     }
     fn arena(&mut self, pointer: PointerId) -> Option<&mut Arena> {
         self.pointers.get_mut(&pointer)?.arena.as_mut()

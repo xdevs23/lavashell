@@ -428,9 +428,9 @@ fn nested_nodes_at_the_ends_of_the_scale_range_paint_finite_transforms_and_hits(
             assert!(finite(&c), "{scale}: {c:?}");
             assert!(c.xx != 0.0 && c.yy != 0.0, "{scale}: {c:?}");
         }
-        assert_eq!(view.routing.input_hits.len(), DEPTH + 2);
-        for hit in &view.routing.input_hits {
-            let r = hit.rect;
+        assert_eq!(view.routing.painted_hits.len(), DEPTH + 2);
+        for hit in &view.routing.painted_hits {
+            let r = hit.area().rect;
             assert!(
                 [r.x, r.y, r.width, r.height].iter().all(|v| v.is_finite()),
                 "{scale}: {r:?}"

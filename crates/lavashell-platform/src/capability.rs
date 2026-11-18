@@ -26,7 +26,6 @@ capabilities! {
     Panels => "panels",
     SessionLock => "session lock",
     FocusGrab => "focus grabs",
-    WindowMove => "window moves",
     Clipboard => "clipboard",
     DragAndDrop => "drag and drop",
     Accessibility => "accessibility",

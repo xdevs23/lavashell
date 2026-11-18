@@ -9,7 +9,6 @@ use crate::scheduler::{SchedulerInput, ViewState};
 use crate::shape::WindowShape;
 use crate::surface_records::{self, SurfaceRecords};
 use crate::view_actor::ViewError;
-use crate::window::DragRegion;
 use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::{ScaledViewport, Size, Viewport};
@@ -26,7 +25,6 @@ use std::mem;
 
 pub(super) struct Opening {
     pub(super) shape: Option<WindowShape>,
-    pub(super) drag_region: Option<DragRegion>,
     pub(super) accessible_name: Option<String>,
     pub(super) composition_order: i32,
 }
@@ -64,13 +62,7 @@ impl OpenSurfaces {
         size: Size,
         opening: Opening,
     ) -> Result<SurfaceId, surface_records::Error> {
-        let id = self.records.open(
-            view,
-            size,
-            Density::ONE,
-            opening.drag_region,
-            opening.accessible_name,
-        )?;
+        let id = (self.records).open(view, size, Density::ONE, opening.accessible_name)?;
         let surface = ViewSurface::new(opening.shape, opening.composition_order);
         let _replaced_surface = self.view_surfaces.insert(id, surface);
         Ok(id)

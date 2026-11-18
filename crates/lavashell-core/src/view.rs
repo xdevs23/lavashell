@@ -76,6 +76,7 @@ use crate::ui::{
     Gestures, InputModifiers, Memory, Node, NodeId, PointerKind, TouchId, Ui, ViewTag,
 };
 use crate::units::{Density, Dp};
+use crate::window::{WINDOW, WindowRegion};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -129,24 +130,34 @@ impl TouchSample {
 }
 
 #[derive(Clone)]
-struct Hit {
-    id: NodeId,
-    focusable: bool,
+struct HitArea {
     rect: Rect,
     clips: Vec<HitClip>,
     group: Option<output::GroupId>,
+}
+
+impl HitArea {
+    fn contains(&self, p: Point, moving: &Moving) -> bool {
+        self.rect.contains(moving.painted(self.group, p))
+            && (self.clips.iter()).all(|clip| clip.shape.contains(moving.painted(clip.group, p)))
+    }
+}
+
+#[derive(Clone)]
+struct Hit {
+    id: NodeId,
+    focusable: bool,
+    area: HitArea,
     gestures: Gestures,
     input: Option<TextTarget>,
 }
 
 impl Hit {
-    fn new(id: NodeId, focusable: bool, rect: Rect, clips: Vec<HitClip>) -> Self {
+    fn new(id: NodeId, focusable: bool, area: HitArea) -> Self {
         Self {
             id,
             focusable,
-            rect,
-            clips,
-            group: None,
+            area,
             gestures: Gestures::default(),
             input: None,
         }
@@ -157,13 +168,44 @@ impl Hit {
     }
 
     fn contains(&self, p: Point, moving: &Moving) -> bool {
-        self.rect.contains(moving.painted(self.group, p))
-            && (self.clips.iter()).all(|clip| clip.shape.contains(moving.painted(clip.group, p)))
+        self.area.contains(p, moving)
     }
 
     fn activates(&self) -> bool {
         self.gestures.activates()
     }
+}
+
+#[derive(Clone)]
+enum PaintedHit {
+    Input(Hit),
+    WindowRegion {
+        id: NodeId,
+        area: HitArea,
+        region: WindowRegion,
+    },
+}
+
+impl PaintedHit {
+    fn id(&self) -> NodeId {
+        match self {
+            Self::Input(hit) => hit.id,
+            Self::WindowRegion { id, .. } => *id,
+        }
+    }
+
+    fn area(&self) -> &HitArea {
+        match self {
+            Self::Input(hit) => &hit.area,
+            Self::WindowRegion { area, .. } => area,
+        }
+    }
+}
+
+struct WindowRegionHit {
+    area: HitArea,
+    region: WindowRegion,
+    input_hits_below: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -354,6 +396,13 @@ impl View {
 
     fn index_tagged<T: ViewTag>(&self, tag: &T) -> Option<usize> {
         self.nodes.iter().position(|node| node.has_tag(tag))
+    }
+
+    #[must_use]
+    pub fn window_region_at(&self, at: Point) -> Option<WindowRegion> {
+        let window = self.root_values.value(&WINDOW).get()?;
+        (self.routing.window_region_at(at))
+            .filter(|region| window.offers(region.required_control()))
     }
 
     #[must_use]

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::laid_out::LaidOutTree;
 use super::scroll::ScrollStyle;
-use super::{Hit, View};
+use super::{Hit, PaintedHit, View, WindowRegionHit};
 use crate::geometry::Axis;
 use crate::keyboard::{Key, Shortcut};
 use crate::scroll::page_length;
@@ -159,25 +159,31 @@ impl View {
     pub(super) fn filter_input_hits(&mut self) {
         let enabled = self.input_enabled_nodes();
         self.routing.hits.clear();
-        self.routing.hits.extend(
-            self.routing
-                .input_hits
-                .iter()
-                .filter(|hit| {
-                    enabled.contains(&hit.id)
-                        && hit.clips.iter().all(|clip| {
-                            let clip_rect = clip.shape.rect();
-                            hit.rect.intersection(clip_rect).is_some()
-                                || clip.group != hit.group
-                                    && (self.routing.moving.rested(hit.group, hit.rect))
-                                        .intersection(
-                                            self.routing.moving.rested(clip.group, clip_rect),
-                                        )
-                                        .is_some()
-                        })
+        self.routing.window_regions.clear();
+        let shown = self.routing.painted_hits.iter().filter(|hit| {
+            let area = hit.area();
+            enabled.contains(&hit.id())
+                && area.clips.iter().all(|clip| {
+                    let clip_rect = clip.shape.rect();
+                    area.rect.intersection(clip_rect).is_some()
+                        || clip.group != area.group
+                            && (self.routing.moving.rested(area.group, area.rect))
+                                .intersection(self.routing.moving.rested(clip.group, clip_rect))
+                                .is_some()
                 })
-                .cloned(),
-        );
+        });
+        for hit in shown {
+            match hit {
+                PaintedHit::Input(hit) => self.routing.hits.push(hit.clone()),
+                PaintedHit::WindowRegion { area, region, .. } => {
+                    self.routing.window_regions.push(WindowRegionHit {
+                        area: area.clone(),
+                        region: *region,
+                        input_hits_below: self.routing.hits.len(),
+                    });
+                }
+            }
+        }
     }
 
     pub(super) fn scroll_key(&mut self, index: usize, shortcut: Shortcut) -> bool {

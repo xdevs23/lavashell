@@ -20,6 +20,7 @@ flag_set!(
         Minimize => minimize,
         Fullscreen => fullscreen,
         WindowMenu => window_menu,
+        Move => move_,
     }
 );
 
@@ -36,6 +37,20 @@ impl WindowState {
     #[must_use]
     pub fn floating(self) -> bool {
         !self.maximized && !self.fullscreen && self.tiled.is_empty()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowRegion {
+    Drag,
+}
+
+impl WindowRegion {
+    #[must_use]
+    pub const fn required_control(self) -> WindowControl {
+        match self {
+            Self::Drag => WindowControl::Move,
+        }
     }
 }
 
@@ -97,9 +112,13 @@ impl WindowHandle {
         self.state
     }
 
+    pub(crate) fn offers(&self, control: WindowControl) -> bool {
+        self.state.capabilities.contains(control)
+    }
+
     pub fn request(&self, request: WindowRequest) -> Result<(), WindowRequestRefusal> {
         let control = request.required_control();
-        if !self.state.capabilities.contains(control) {
+        if !self.offers(control) {
             return Err(WindowRequestRefusal::NotOffered(control));
         }
         let requests = (self.requests.upgrade()).ok_or(WindowRequestRefusal::WindowClosed)?;

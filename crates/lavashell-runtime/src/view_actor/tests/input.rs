@@ -2,16 +2,19 @@
 use super::*;
 use crate::observers::{HostKey, KeyboardFocus};
 use crate::test_host::{FIELD_VIEWPORT, field_view, focus_field};
-use lavashell_core::geometry::Point;
+use lavashell_core::geometry::{Point, Viewport};
 use lavashell_core::keyboard::{Key, KeyStroke, Shortcut};
 use lavashell_core::prelude::Modifier;
 use lavashell_core::ui::InputModifiers;
-use lavashell_core::view::InputEvent;
+use lavashell_core::units::Density;
+use lavashell_core::view::{InputEvent, View};
+use lavashell_core::window::{WindowCapabilities, WindowControl, WindowRegion, WindowState};
 use lavashell_platform::{
     AccessibilityRequest, Button, ClipboardEvent, ClipboardRequest, DeviceEvent, FormatId,
     InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice, PointerPress, PressState,
-    WindowControlRequest,
+    SurfaceEvent, WindowControlRequest,
 };
+use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 use std::cell::RefCell;
 
 const POINTER: PointerDevice = PointerDevice(1);
@@ -276,10 +279,15 @@ fn a_paste_without_an_edited_field_reaches_the_view() -> TestResult {
 fn a_press_that_begins_a_window_move_starts_no_drag_gesture() -> TestResult {
     let gestured = Rc::new(Cell::new(false));
     let seen = Rc::clone(&gestured);
-    let header = Window::new("window", "test.app")
-        .size(100.dp(), 100.dp())
-        .drag_region(|_, _| true);
-    let mut setup = runtime_setup(vec![SurfaceSetup::Window(header, empty_view())]);
+    let size = Size::new(100.dp(), 100.dp());
+    let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        let header = Modifier::new().window_region(WindowRegion::Drag);
+        ui.spacer(size.width, size.height, header);
+    });
+    let viewport = Viewport::new(size, Density::ONE);
+    (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
+    let window = Window::new("window", "test.app").size(size.width, size.height);
+    let mut setup = runtime_setup(vec![SurfaceSetup::Window(window, view)]);
     setup.drags.on_drag_source(move |_, _| {
         seen.set(true);
         None
@@ -287,7 +295,17 @@ fn a_press_that_begins_a_window_move_starts_no_drag_gesture() -> TestResult {
     let mut views = Views::start(setup, Capability::ALL, host([]))?;
     let origin = Point::new(10.dp(), 10.dp());
     let moved = Point::new(60.dp(), 60.dp());
+    let movable = SurfaceEvent::Configured {
+        width: None,
+        height: None,
+        token: None,
+        window: Some(WindowState {
+            capabilities: WindowCapabilities::new([WindowControl::Move]),
+            ..WindowState::default()
+        }),
+    };
     let drag = [
+        PlatformEvent::Surface(WINDOW, movable),
         pointer_enters(WINDOW),
         press_primary(origin),
         pointer_moves(moved),

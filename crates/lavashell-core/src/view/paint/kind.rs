@@ -7,7 +7,7 @@ use crate::ui::{NodeId, NodeKind};
 use crate::units::Dp;
 use crate::view::field::{FieldFocus, TextMove};
 use crate::view::transition::TextBlend;
-use crate::view::{Hit, HitClip, TextMeasurer, TextTarget, View};
+use crate::view::{Hit, HitClip, PaintedHit, TextMeasurer, TextTarget, View};
 
 #[derive(Clone, Copy)]
 pub(super) struct KindInput {
@@ -99,11 +99,10 @@ impl View {
         if self.text_selectable(index) {
             if node.enabled {
                 let content = transform.rect(rect);
-                self.routing.hits.push(Hit {
+                self.routing.painted_hits.push(PaintedHit::Input(Hit {
                     input: Some(TextTarget::new(index, content)),
-                    group: self.routing.moving.current,
-                    ..Hit::new(id, node.focusable, content, inside.clips.to_vec())
-                });
+                    ..Hit::new(id, node.focusable, self.hit_area(content, inside.clips))
+                }));
             }
             let (caret_width, device_pixel) = (self.caret_width(), self.device_pixel());
             (self.editing)
@@ -152,11 +151,11 @@ impl View {
             TextMove::Allowed
         };
         if node.enabled {
-            self.routing.hits.push(Hit {
+            let area = self.hit_area(transform.rect(bounds), clips);
+            self.routing.painted_hits.push(PaintedHit::Input(Hit {
                 input: Some(TextTarget::new(index, transform.rect(rect))),
-                group: self.routing.moving.current,
-                ..Hit::new(id, node.focusable, transform.rect(bounds), clips.to_vec())
-            });
+                ..Hit::new(id, node.focusable, area)
+            }));
         }
         let (caret_width, device_pixel) = (self.caret_width(), self.device_pixel());
         (self.editing)

@@ -44,7 +44,7 @@ impl Host {
         let panel = Panel::new(options, &mut view, &mut NoText)?;
         let mut surfaces = SurfaceRecords::new(PreferenceOverrides::default());
         let surface = surfaces
-            .open(view, surface_size(), Density::ONE, None, None)
+            .open(view, surface_size(), Density::ONE, None)
             .map_err(ViewError::from)?;
         let configure = SurfaceEvent::Configured {
             width: None,

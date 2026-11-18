@@ -17,7 +17,7 @@ mod tooltip;
 use super::interaction::StyledAppearance;
 use super::output::{Canvas, Shown};
 use super::parents::ROOT;
-use super::{Hit, HitClip, TextMeasurer, View, accessibility};
+use super::{Hit, HitArea, HitClip, PaintedHit, TextMeasurer, View, accessibility};
 use crate::geometry::{Point, Rect};
 use crate::scene::{DrawCommand, Transform};
 use crate::shape::{Corners, Shape};
@@ -403,16 +403,26 @@ impl View {
     fn register_hit(&mut self, index: usize, clips: &[HitClip]) {
         let node = &self.nodes[index];
         if node.modal {
-            self.routing.hits.clear();
+            self.routing.painted_hits.clear();
         }
+        let rect = self.layout[index].rect;
         if node.enabled && (node.handles_input() || node.modal) {
-            let rect = self.layout[index].rect;
-            let mut hit = Hit {
-                group: self.routing.moving.current,
-                ..Hit::new(node.id, node.focusable && !node.modal, rect, clips.to_vec())
-            };
+            let area = self.hit_area(rect, clips);
+            let mut hit = Hit::new(node.id, node.focusable && !node.modal, area);
             hit.use_gestures_of(node);
-            self.routing.hits.push(hit);
+            self.routing.painted_hits.push(PaintedHit::Input(hit));
+        }
+        if let Some(region) = node.window_region {
+            let (id, area) = (node.id, self.hit_area(rect, clips));
+            (self.routing.painted_hits).push(PaintedHit::WindowRegion { id, area, region });
+        }
+    }
+
+    fn hit_area(&self, rect: Rect, clips: &[HitClip]) -> HitArea {
+        HitArea {
+            rect,
+            clips: clips.to_vec(),
+            group: self.routing.moving.current,
         }
     }
 

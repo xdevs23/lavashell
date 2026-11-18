@@ -3,7 +3,6 @@ use super::*;
 use crate::surface_records::test_error::SurfaceRecordsTestError;
 use crate::test_error::TestResult;
 use crate::view_actor::ViewError;
-use crate::window::DragRegion;
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::keyboard::{Key, Shortcut};
 use lavashell_core::preferences::PreferenceOverrides;
@@ -11,6 +10,7 @@ use lavashell_core::prelude::Modifier;
 use lavashell_core::ui::PointerPhase;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_core::view::{Cursor, View};
+use lavashell_core::window::{WindowCapabilities, WindowControl, WindowRegion, WindowState};
 use lavashell_platform::{KeyAction, SurfaceEvent, WindowControlRequest};
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
 use std::cell::{Cell, RefCell};
@@ -388,7 +388,7 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
 -> Result<(), crate::surface_records::Error> {
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let view = View::new(lavashell_test_fixtures::facts(), |_| {});
-    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None)?;
     let moved = by(MOUSE, surface, InputEvent::Move(at(1, 1)));
     let sets_default_cursor = |request: Option<PlatformRequest>| {
         matches!(
@@ -414,8 +414,7 @@ fn a_delivered_input_reaches_an_open_view_and_its_pointer_takes_the_cursor_of_th
 }
 
 #[test]
-fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_the_press()
--> TestResult {
+fn a_primary_press_in_a_drag_region_starts_a_move_once_the_window_offers_the_move() -> TestResult {
     let phases = Rc::new(RefCell::new(Vec::new()));
     let recorded = phases.clone();
     let size = Size::new(10.dp(), 10.dp());
@@ -424,20 +423,43 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
         let modifier =
             Modifier::new().on_pointer(move |input| recorded.borrow_mut().push(input.phase));
         ui.spacer(size.width, size.height, modifier);
+        let upper_half = Modifier::new().window_region(WindowRegion::Drag);
+        ui.spacer(size.width, size.height * 0.5, upper_half);
     });
     let presses = || {
         (phases.borrow().iter())
             .filter(|&&phase| phase == PointerPhase::Pressed)
             .count()
     };
+    let sets_pointer_cursor = |request: Option<PlatformRequest>| {
+        matches!(
+            request,
+            Some(PlatformRequest::Input(InputRequest::SetCursor(
+                MOUSE,
+                Cursor::Pointer
+            )))
+        )
+    };
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
-    let upper_half: DragRegion = Rc::new(|at: Point, size: Size| at.y < size.height * 0.5);
     let surface = records
-        .open(view, size, Density::ONE, Some(upper_half), None)
+        .open(view, size, Density::ONE, None)
         .map_err(ViewError::from)?;
     let viewport = (records.open_viewport(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     let view = (records.open_view_mut(surface)).ok_or(SurfaceRecordsTestError::NotOpen)?;
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
+    let in_region = || primary_press(MOUSE, surface, at(5, 2));
+    assert!(sets_pointer_cursor(in_region().deliver(&mut records)));
+    assert_eq!(presses(), 1);
+    let movable = SurfaceEvent::Configured {
+        width: None,
+        height: None,
+        token: None,
+        window: Some(WindowState {
+            capabilities: WindowCapabilities::new([WindowControl::Move]),
+            ..WindowState::default()
+        }),
+    };
+    assert!(records.handle(surface, movable).is_none());
     let begin_move = WindowControlRequest::BeginMove {
         surface,
         press: PointerPress {
@@ -445,23 +467,16 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
             serial: SERIAL,
         },
     };
-    let in_region = primary_press(MOUSE, surface, at(5, 2));
     assert!(matches!(
-        in_region.deliver(&mut records),
+        in_region().deliver(&mut records),
         Some(PlatformRequest::WindowControl(request)) if request == begin_move
     ));
-    assert_eq!(presses(), 0);
-    let outside = primary_press(MOUSE, surface, at(5, 8));
-    assert!(matches!(
-        outside.deliver(&mut records),
-        Some(PlatformRequest::Input(InputRequest::SetCursor(
-            MOUSE,
-            Cursor::Pointer
-        )))
-    ));
     assert_eq!(presses(), 1);
+    let outside = primary_press(MOUSE, surface, at(5, 8));
+    assert!(sets_pointer_cursor(outside.deliver(&mut records)));
+    assert_eq!(presses(), 2);
     assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
     records.retire(surface);
-    assert!(!records.in_drag_region(surface, at(5, 2)));
+    assert!(in_region().deliver(&mut records).is_none());
     Ok(())
 }

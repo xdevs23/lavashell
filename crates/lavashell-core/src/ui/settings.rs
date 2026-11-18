@@ -15,6 +15,7 @@ use crate::scene::{FontWeight, TextStyle};
 use crate::style::{BorderStyle, InteractionState, StateStyles};
 use crate::units::{Dp, NonNegativeDp, NumberError, Positive, Sp};
 use crate::view::{CompositionError, Transition};
+use crate::window::WindowRegion;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -38,6 +39,7 @@ pub(super) enum NodeSetting {
     Scroll(ScrollAction),
     Weight(Result<Weight, NumberError>),
     Tag(NodeTag),
+    WindowRegion(WindowRegion),
     Reference(NodeRef),
     Focusable(bool),
     FocusWithin(BorderStyle),
@@ -81,6 +83,7 @@ impl NodeSetting {
             }
             Self::Weight(Err(error)) => node.invalid_weight = Some(*error),
             Self::Tag(tag) => node.tag = Some(tag.clone()),
+            Self::WindowRegion(region) => node.window_region = Some(*region),
             Self::Reference(reference) => node.references.push(reference.clone()),
             Self::Focusable(focusable) => node.focusable = *focusable,
             Self::FocusWithin(border) => node.focus_within = Some(border.clone()),
@@ -253,6 +256,10 @@ impl Modifier {
 
     pub fn tag(self, tag: impl ViewTag) -> Self {
         self.set(NodeSetting::Tag(NodeTag::new(tag)))
+    }
+
+    pub fn window_region(self, region: WindowRegion) -> Self {
+        self.set(NodeSetting::WindowRegion(region))
     }
 
     pub fn node_ref(self, node: &NodeRef) -> Self {

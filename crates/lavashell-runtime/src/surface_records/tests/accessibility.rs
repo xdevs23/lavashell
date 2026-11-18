@@ -57,7 +57,7 @@ fn open_progress(records: &mut SurfaceRecords, progress: &State<f64>) -> TestRes
 
 fn open_configured(records: &mut SurfaceRecords, view: View) -> Result<SurfaceId, ViewError> {
     let size = Size::new(100.dp(), 20.dp());
-    let surface = records.open(view, size, Density::ONE, None, Some("Window".into()))?;
+    let surface = records.open(view, size, Density::ONE, Some("Window".into()))?;
     assert_eq!(records.handle(surface, configure(None)), None);
     Ok(surface)
 }

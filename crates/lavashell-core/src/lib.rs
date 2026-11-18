@@ -124,7 +124,7 @@ pub mod prelude {
         TextSelectionSource, TouchSample, Transition, View,
     };
     pub use crate::window::{
-        Edge, Edges, WINDOW, WindowCapabilities, WindowControl, WindowHandle, WindowRequest,
-        WindowRequestRefusal, WindowState,
+        Edge, Edges, WINDOW, WindowCapabilities, WindowControl, WindowHandle, WindowRegion,
+        WindowRequest, WindowRequestRefusal, WindowState,
     };
 }

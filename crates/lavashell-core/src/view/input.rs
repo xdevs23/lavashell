@@ -4,7 +4,7 @@ use super::moving::Moving;
 use super::navigation::FocusDirection;
 use super::pointers::Pointer;
 use super::pointers::PointerSample;
-use super::{Hit, InputEvent, View};
+use super::{Hit, InputEvent, PaintedHit, View, WindowRegionHit};
 use crate::geometry::Point;
 use crate::input_method::TextAction;
 use crate::keyboard::{Key, Shortcut};
@@ -61,7 +61,8 @@ pub(super) struct InputRouting {
     pub shortcuts: Vec<(Shortcut, Action)>,
     pub root_shortcuts: Vec<ComposedShortcut>,
     pub hits: Vec<Hit>,
-    pub input_hits: Vec<Hit>,
+    pub window_regions: Vec<WindowRegionHit>,
+    pub painted_hits: Vec<PaintedHit>,
     pub moving: Moving,
 }
 

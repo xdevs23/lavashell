@@ -116,7 +116,7 @@ impl View {
             let painted_focus = self.routing.focus.node();
             self.routing.shortcuts = self.shown_shortcuts();
             self.painting.canvas = output::Canvas::default();
-            self.routing.hits.clear();
+            self.routing.painted_hits.clear();
             self.routing.moving = Moving::default();
             self.followers.clear();
             self.accessibility.geometry.clear();
@@ -138,7 +138,6 @@ impl View {
             }
         };
         self.transitions.end_first_frame();
-        std::mem::swap(&mut self.routing.hits, &mut self.routing.input_hits);
         self.followers.refresh(&mut self.routing.moving);
         self.routing.moving.present(self.motion.now());
         self.sample_accessibility_metadata();

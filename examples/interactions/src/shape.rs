@@ -150,22 +150,11 @@ fn hole_center(size: Size) -> Point {
     Point::new(size.width - 68.dp(), size.height * 0.40)
 }
 
-pub fn header(point: Point, size: Size) -> bool {
-    Rect::new(
-        24.dp(),
-        24.dp(),
-        (size.width - 48.dp()).max(Dp::ZERO),
-        48.dp(),
-    )
-    .contains(point)
-}
-
 pub fn window(hole: Hole) -> Window {
     Window::new(copy(CopyKey::Title), "lavashell.interactions.shaped")
         .size(WINDOW.width, WINDOW.height)
         .min_size(MIN_WINDOW.width, MIN_WINDOW.height)
         .shape(WindowShape::new(move |size| outline(size, &hole)))
-        .drag_region(header)
 }
 
 pub fn compose(ui: &mut Ui, demo: &Demo, actions: &ViewActions) {
@@ -270,7 +259,10 @@ pub fn child_compose(ui: &mut Ui, demo: &Demo, clipboard: &Clipboard, actions: &
                 .background(colors.background)
                 .padding(36.dp()),
             |ui| {
-                ui.row(Modifier::new().align_items(Align::Center), |ui| {
+                let header = Modifier::new()
+                    .align_items(Align::Center)
+                    .window_region(WindowRegion::Drag);
+                ui.row(header, |ui| {
                     ui.text(
                         copy(CopyKey::Title),
                         Modifier::new()

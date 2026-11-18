@@ -20,7 +20,11 @@ fn a_maximized_configure_reads_into_its_state_and_offered_controls() {
         fullscreen: false,
         tiled: Edges::new([Edge::Left]),
         suspended: true,
-        capabilities: WindowCapabilities::new([WindowControl::Minimize, WindowControl::WindowMenu]),
+        capabilities: WindowCapabilities::new([
+            WindowControl::Minimize,
+            WindowControl::WindowMenu,
+            WindowControl::Move,
+        ]),
     };
     assert_eq!(read_window_state(&maximized), expected);
 }
@@ -36,7 +40,11 @@ fn a_fullscreen_configure_reads_into_its_state_and_offered_controls() {
         fullscreen: true,
         tiled: Edges::new([Edge::Top, Edge::Right, Edge::Bottom]),
         suspended: false,
-        capabilities: WindowCapabilities::new([WindowControl::Maximize, WindowControl::Fullscreen]),
+        capabilities: WindowCapabilities::new([
+            WindowControl::Maximize,
+            WindowControl::Fullscreen,
+            WindowControl::Move,
+        ]),
     };
     assert_eq!(read_window_state(&fullscreen), expected);
 }

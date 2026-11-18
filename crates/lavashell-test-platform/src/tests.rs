@@ -10,6 +10,7 @@ use lavashell_platform::{
 use lavashell_renderer::skia::{
     self, AlphaType, ColorSpace, ColorType, Data, ISize, Image, ImageInfo,
 };
+use lavashell_runtime::layer_surface::LayerSurface;
 use lavashell_runtime::window::Window;
 use lavashell_runtime::{App, RunError, SetupError, run, watches};
 use std::cell::{Cell, RefCell};
@@ -218,17 +219,15 @@ fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
 }
 
 #[test]
-fn an_app_that_needs_a_missing_capability_fails_before_the_run_starts() -> TestResult {
+fn an_app_that_needs_a_missing_capability_fails_before_the_run_starts() {
     let mut app = App::new(lavashell_test_fixtures::facts());
-    let window = Window::new("test", APP_ID).drag_region(|_, _| true);
-    app.window(window.size(100.dp(), 100.dp()), |_| {})?;
+    app.layer(LayerSurface::new("bar"), |_| {});
     let (ran, frames) = HostScript::new(Density::ONE).serve(|host| run::<TestPlatform>(app, host));
     assert!(matches!(
         ran,
-        Err(RunError::Unsupported(missing)) if missing == BTreeSet::from([Capability::WindowMove])
+        Err(RunError::Unsupported(missing)) if missing == BTreeSet::from([Capability::Panels])
     ));
     assert!(matches!(frames, Err(Error::NotServed(_))));
-    Ok(())
 }
 
 #[test]

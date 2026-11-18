@@ -45,13 +45,7 @@ impl Editor {
             assert_eq!(outcome, Ok(ActionOutcome::Performed));
         }
         let mut records = SurfaceRecords::new(PreferenceOverrides::default());
-        let surface = records.open(
-            view,
-            FIELD_VIEWPORT.size,
-            FIELD_VIEWPORT.density,
-            None,
-            None,
-        )?;
+        let surface = records.open(view, FIELD_VIEWPORT.size, FIELD_VIEWPORT.density, None)?;
         let watches = Watches::default();
         let actions = ActionQueue::new(&watches);
         actions.open_surface(surface);

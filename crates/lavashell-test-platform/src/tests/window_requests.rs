@@ -4,7 +4,7 @@ use crate::{HostScript, TestPlatform};
 use lavashell_core::geometry::Point;
 use lavashell_core::prelude::{Activation, Density, DpExt, Modifier};
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::window::{WINDOW, WindowHandle, WindowRequest};
+use lavashell_core::window::{WINDOW, WindowHandle, WindowRegion, WindowRequest};
 use lavashell_platform::{
     Button, DeviceEvent, InputSerial, PointerDevice, PointerPress, PressState, WindowControlRequest,
 };
@@ -13,7 +13,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 const SURFACE: SurfaceId = SurfaceId::numbered(0);
-const MOUSE: PointerDevice = PointerDevice(1);
+const PRESS: PointerPress = PointerPress {
+    pointer: PointerDevice(1),
+    serial: InputSerial(4127),
+};
 
 type ComposedWindow = Rc<RefCell<Option<WindowHandle>>>;
 
@@ -32,6 +35,22 @@ fn app_requesting_on_each_key(
         false
     });
     Ok((app, window))
+}
+
+fn pressing(button: Button, at: Point) -> HostScript {
+    HostScript::new(Density::ONE)
+        .report(DeviceEvent::PointerEnter {
+            pointer: PRESS.pointer,
+            surface: SURFACE,
+            at,
+        })
+        .report(DeviceEvent::Button {
+            pointer: PRESS.pointer,
+            button,
+            state: PressState::Pressed,
+            at,
+            serial: PRESS.serial,
+        })
 }
 
 fn typing_one_key() -> HostScript {
@@ -88,31 +107,32 @@ fn a_right_click_opens_the_window_menu_with_the_serial_of_its_press() -> TestRes
         };
         ui.spacer(100.dp(), 100.dp(), Modifier::new().on_context(open_menu));
     })?;
-    let press = PointerPress {
-        pointer: MOUSE,
-        serial: InputSerial(4127),
-    };
-    let script = HostScript::new(Density::ONE)
-        .report(DeviceEvent::PointerEnter {
-            pointer: MOUSE,
-            surface: SURFACE,
-            at,
-        })
-        .report(DeviceEvent::Button {
-            pointer: MOUSE,
-            button: Button::Secondary,
-            state: PressState::Pressed,
-            at,
-            serial: press.serial,
-        });
+    let script = pressing(Button::Secondary, at);
     let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
     ran?;
     let menu = WindowControlRequest::ShowMenu {
         surface: SURFACE,
-        press,
+        press: PRESS,
         at,
     };
     assert_eq!(frames?.window_requests(), [menu]);
+    Ok(())
+}
+
+#[test]
+fn the_test_platform_records_the_move_started_by_a_press_in_a_drag_region() -> TestResult {
+    let app = app(|ui| {
+        let whole_window = Modifier::new().window_region(WindowRegion::Drag);
+        ui.spacer(100.dp(), 100.dp(), whole_window);
+    })?;
+    let script = pressing(Button::Primary, Point::new(21.dp(), 23.dp()));
+    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    ran?;
+    let begin_move = WindowControlRequest::BeginMove {
+        surface: SURFACE,
+        press: PRESS,
+    };
+    assert_eq!(frames?.window_requests(), [begin_move]);
     Ok(())
 }
 

@@ -55,7 +55,7 @@ fn a_window_below_one_dp_is_accepted() -> TestResult {
         .size(0.3.dp(), 0.3.dp())
         .min_size(Dp::ZERO, Dp::ZERO);
     app.window(tiny, |_| {})?;
-    assert_eq!(app.setup.windows().count(), 1);
+    assert_eq!(app.setup.surfaces.len(), 1);
     Ok(())
 }
 

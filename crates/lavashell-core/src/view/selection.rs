@@ -317,7 +317,7 @@ impl InputRouting {
         at: Point,
     ) -> Option<Point> {
         let origin = hit.input?.origin;
-        let at = self.moving.painted(hit.group, at);
+        let at = self.moving.painted(hit.area.group, at);
         if positions.scale.x <= 0.0
             || positions.scale.y <= 0.0
             || !at.x.is_finite()

@@ -280,6 +280,9 @@ mod wheel;
 #[path = "tests/pointers.rs"]
 mod pointers;
 
+#[path = "tests/window_regions.rs"]
+mod window_regions;
+
 #[path = "tests/gesture_handlers.rs"]
 mod gesture_handlers;
 #[path = "tests/gestures.rs"]

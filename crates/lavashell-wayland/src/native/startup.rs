@@ -34,7 +34,6 @@ impl SurfaceProtocols {
         [
             self.layers.is_some().then_some(Capability::Panels),
             self.lock.capability(),
-            self.xdg.is_some().then_some(Capability::WindowMove),
         ]
         .into_iter()
         .flatten()

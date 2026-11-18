@@ -292,10 +292,10 @@ fn automatic_corner_radius_is_not_scaled_twice_when_bounds_change() -> TestResul
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     expanded.set(true);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    let radius = view.routing.hits[0].clips[0].shape.corners().top_left;
+    let radius = view.routing.hits[0].area.clips[0].shape.corners().top_left;
     assert_eq!((radius.x, radius.y), (20.dp(), 20.dp()));
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
-    let radius = view.routing.hits[0].clips[0].shape.corners().top_left;
+    let radius = view.routing.hits[0].area.clips[0].shape.corners().top_left;
     assert_eq!((radius.x, radius.y), (25.dp(), 25.dp()));
     Ok(())
 }

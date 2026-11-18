@@ -4,7 +4,6 @@ use crate::layer_surface::LayerSurface;
 use crate::run::SurfaceSetup;
 use crate::session_lock::{LockConfiguration, SessionLock};
 use crate::test_host::{empty_view, runtime_setup, window};
-use crate::window::Window;
 use lavashell_core::focus_grab::FocusGrab;
 
 fn offering(capabilities: impl IntoIterator<Item = Capability>) -> BTreeSet<Capability> {
@@ -29,7 +28,6 @@ fn a_setup_without_optional_subsystems_needs_no_capability() {
 
 #[test]
 fn each_used_subsystem_needs_its_capability() {
-    let movable = Window::new("movable", "test.app").drag_region(|_, _| true);
     let grabbing = LayerSurface::new("popover").focus_grab(FocusGrab::new(|| true, || {}));
     let mut dragging = runtime_setup(vec![window("target")]);
     dragging.drags.on_drop(|_, _| true);
@@ -47,10 +45,6 @@ fn each_used_subsystem_needs_its_capability() {
         (
             runtime_setup(vec![panel(grabbing)]),
             offering([Capability::Panels, Capability::FocusGrab]),
-        ),
-        (
-            runtime_setup(vec![SurfaceSetup::Window(movable, empty_view())]),
-            offering([Capability::WindowMove]),
         ),
         (copying, offering([Capability::Clipboard])),
         (dragging, offering([Capability::DragAndDrop])),

@@ -22,7 +22,6 @@ impl<P: Platform> ViewActor<P> {
         let spec = window.spec(&mut view, &mut self.shaper)?;
         let opening = Opening {
             shape: window.shape,
-            drag_region: window.drag_region,
             accessible_name: Some(window.title),
             composition_order: 0,
         };
@@ -56,7 +55,6 @@ impl<P: Platform> ViewActor<P> {
         };
         let opening = Opening {
             shape: options.shape,
-            drag_region: None,
             accessible_name: Some(options.namespace),
             composition_order: options.composition_order,
         };
@@ -81,7 +79,6 @@ impl<P: Platform> ViewActor<P> {
         };
         let opening = Opening {
             shape: None,
-            drag_region: None,
             accessible_name: None,
             composition_order: 0,
         };

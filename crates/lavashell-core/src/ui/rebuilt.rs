@@ -28,6 +28,7 @@ impl Node {
             focusable,
             focus_within,
             tag,
+            window_region,
             references,
             tooltip,
             interaction,
@@ -64,6 +65,7 @@ impl Node {
             && *focusable == earlier.focusable
             && *focus_within == earlier.focus_within
             && *tag == earlier.tag
+            && *window_region == earlier.window_region
             && *references == earlier.references
             && *tooltip == earlier.tooltip
             && *interaction == earlier.interaction

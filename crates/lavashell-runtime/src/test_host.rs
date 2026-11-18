@@ -169,7 +169,7 @@ pub(crate) fn open_empty_surface() -> Result<OpenSurface, TestError> {
     let watches = Watches::default();
     let mut records = SurfaceRecords::new(PreferenceOverrides::default());
     let size = Size::new(100.dp(), 50.dp());
-    let surface = records.open(empty_view(), size, Density::ONE, None, None)?;
+    let surface = records.open(empty_view(), size, Density::ONE, None)?;
     Ok(OpenSurface {
         watches,
         records,

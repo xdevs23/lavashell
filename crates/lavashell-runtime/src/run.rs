@@ -47,13 +47,6 @@ pub(crate) struct RuntimeSetup {
 }
 
 impl RuntimeSetup {
-    pub fn windows(&self) -> impl Iterator<Item = &Window> {
-        self.surfaces.iter().filter_map(|surface| match surface {
-            SurfaceSetup::Window(window, _) => Some(window),
-            SurfaceSetup::Panel(..) => None,
-        })
-    }
-
     pub fn panels(&self) -> impl Iterator<Item = &LayerSurface> {
         self.surfaces.iter().filter_map(|surface| match surface {
             SurfaceSetup::Panel(layer, _) => Some(layer),

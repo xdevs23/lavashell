@@ -6,8 +6,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::{WindowCapabilities, WindowState};
 use lavashell_platform::{
-    PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec,
-    WindowControlRequest,
+    Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec, WindowControlRequest,
 };
 use lavashell_renderer::NoStreams;
 use lavashell_vulkan::HeadlessWindow;
@@ -100,13 +99,9 @@ impl Windows {
                 fullscreen,
                 ..state
             })?,
-            WindowControlRequest::Minimize { .. } | WindowControlRequest::ShowMenu { .. } => {
-                self.recorded_requests.push(request);
-            }
-            WindowControlRequest::BeginMove { .. } => {
-                let unsupported = PlatformRequest::WindowControl(request);
-                return Err(Error::Unsupported(Box::new(unsupported)));
-            }
+            WindowControlRequest::BeginMove { .. }
+            | WindowControlRequest::Minimize { .. }
+            | WindowControlRequest::ShowMenu { .. } => self.recorded_requests.push(request),
         }
         Ok(())
     }

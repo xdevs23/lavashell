@@ -235,7 +235,8 @@ impl View {
     ) -> Option<(T, Rect)> {
         self.routing.hits_of(node).find_map(|hit| {
             let handler = pick(&hit.gestures)?.clone();
-            Some((handler, self.routing.moving.shown(hit.group, hit.rect)))
+            let area = &hit.area;
+            Some((handler, self.routing.moving.shown(area.group, area.rect)))
         })
     }
 }
