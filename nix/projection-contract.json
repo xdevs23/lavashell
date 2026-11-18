@@ -13,6 +13,7 @@
     "wayland-input": "tools/wayland-input",
     "native-harness": "tools/native-harness",
     "source-rules": "tools/source-rules",
+    "repository-hooks": "tools/repository-hooks",
     "bevy": "crates/lavashell-bevy",
     "test-platform": "crates/lavashell-test-platform",
     "recordings": "examples/recordings"

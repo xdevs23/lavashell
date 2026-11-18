@@ -107,6 +107,9 @@ let
         buildInputs =
           rustPackageDefaults.buildInputs
           ++ lib.concatMap (requirement: requirement.buildInputs) requirements;
+        nativeCheckInputs =
+          rustPackageDefaults.nativeCheckInputs
+          ++ lib.concatMap (requirement: requirement.nativeCheckInputs) (requirementsOf testPackages);
         cargoBuildFlags =
           artifacts.flags selected
           ++ [ "--frozen" ]

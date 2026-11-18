@@ -3023,6 +3023,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-repository-hooks"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "lavashell-error-chain",
+ "regex",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "lavashell-runtime"
 version = "0.1.0"
 dependencies = [

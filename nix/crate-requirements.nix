@@ -10,9 +10,10 @@ let
     {
       buildInputs ? [ ],
       installLicenses ? "",
+      nativeCheckInputs ? [ ],
     }:
     {
-      inherit buildInputs installLicenses;
+      inherit buildInputs installLicenses nativeCheckInputs;
     };
   requirements = lib.mapAttrs (_: requirement) {
     lavashell-lucide.installLicenses = ''
@@ -22,6 +23,7 @@ let
       buildInputs = [ skia ];
       installLicenses = skia.installLicenses ''"$out/share/licenses/skia"'';
     };
+    lavashell-repository-hooks.nativeCheckInputs = [ pkgs.git ];
     lavashell-wayland.installLicenses = ''
       install -Dm444 -t "$out/share/licenses/hyprland-protocols" ${pkgs.hyprland-protocols.src}/LICENSE \
         ${pkgs.hyprland-protocols}/share/hyprland-protocols/protocols/hyprland-focus-grab-v1.xml

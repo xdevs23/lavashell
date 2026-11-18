@@ -134,6 +134,12 @@
             meta.description = projectionRefresh.meta.description;
             meta.lavashellHost = types.hosts.checkout;
           };
+          repository-hooks = {
+            type = "app";
+            program = lib.getExe examples.packagedCrates.repository-hooks;
+            meta.description = "Check a commit or a push against the rules of the repository";
+            meta.lavashellHost = types.hosts.checkout;
+          };
         };
       checks.${system} =
         examples.checks
