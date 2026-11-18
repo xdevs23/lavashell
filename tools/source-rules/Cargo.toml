@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 csv.workspace = true
 ignore.workspace = true
+lavashell-enum-values.workspace = true
 lavashell-error-chain.workspace = true
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 quote.workspace = true

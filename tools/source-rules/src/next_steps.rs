@@ -42,6 +42,7 @@ pub fn next_step(error: &Error) -> NextStep {
         | Error::ParseSource { .. }
         | Error::ParsePatch { .. }
         | Error::ReadManifest { .. }
+        | Error::ReadWorkspaceList { .. }
         | Error::AmbiguousCrateName { .. }
         | Error::ReadCopy { .. }
         | Error::ListFiles(_)

@@ -29,6 +29,12 @@ pub enum Error {
         #[source]
         source: toml::de::Error,
     },
+    #[error("{path} is not a valid list of Cargo workspaces")]
+    ReadWorkspaceList {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
     #[error("the copy catalog {path} cannot be read")]
     ReadCopy {
         path: PathBuf,

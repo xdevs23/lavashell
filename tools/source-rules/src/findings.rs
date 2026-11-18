@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::crate_manifests::CrateRule;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -18,16 +19,7 @@ pub enum Rule {
     Document { allowed: &'static str },
     UnknownFileKind,
     PythonOutsidePlace { directory: &'static str },
-    InexactWorkspaceDependency { name: String },
-    UnlistedMember { member: String },
-    UnlistedWorkspace { listing: &'static str },
-    ListedWithoutWorkspace { directory: String },
-    DifferentWorkspaceTable { table: &'static str },
-    OwnDependency { name: String },
-    OwnVersion,
-    OwnEdition,
-    OwnLints,
-    VulkanDependency { vulkan: String, through: String },
+    Crate(CrateRule),
     NoCopyCatalogs,
     CopyColumns,
     DuplicateCopyKey { key: String },
@@ -86,40 +78,7 @@ impl fmt::Display for Rule {
                 formatter,
                 "the source rules allow Python files only directly in {directory}. Move the file there or rewrite it in Rust",
             ),
-            Self::InexactWorkspaceDependency { name } => write!(
-                formatter,
-                "lock the workspace dependency {name} to an exact version `=x.y.z` or give it a path",
-            ),
-            Self::UnlistedMember { member } => write!(
-                formatter,
-                "add the member {member} to the workspace dependencies as a path entry",
-            ),
-            Self::UnlistedWorkspace { listing } => write!(
-                formatter,
-                "list the directory of this Cargo workspace in the directories of {listing}",
-            ),
-            Self::ListedWithoutWorkspace { directory } => write!(
-                formatter,
-                "remove the directory {directory}, which has no Cargo.toml with a [workspace] table",
-            ),
-            Self::DifferentWorkspaceTable { table } => write!(
-                formatter,
-                "copy workspace.{table} of the root Cargo.toml unchanged, which a nested workspace cannot inherit",
-            ),
-            Self::OwnDependency { name } => write!(
-                formatter,
-                "take the dependency {name} from the workspace with `{name}.workspace = true`",
-            ),
-            Self::OwnVersion => formatter
-                .write_str("take package.version from the workspace with `version.workspace = true`"),
-            Self::OwnEdition => formatter
-                .write_str("take package.edition from the workspace with `edition.workspace = true`"),
-            Self::OwnLints => formatter
-                .write_str("take the lints from the workspace with `[lints]` and `workspace = true`"),
-            Self::VulkanDependency { vulkan, through } => write!(
-                formatter,
-                "remove the dependency {through}, which brings {vulkan} into a crate that builds without Vulkan",
-            ),
+            Self::Crate(rule) => fmt::Display::fmt(rule, formatter),
             Self::NoCopyCatalogs => formatter.write_str(
                 "the copy rules found no catalog at examples/<example>/copy/<area>.en.tsv",
             ),
@@ -135,6 +94,12 @@ impl fmt::Display for Rule {
                 "remove the semicolon, em dash or en dash from the copy of the key {key}",
             ),
         }
+    }
+}
+
+impl From<CrateRule> for Rule {
+    fn from(rule: CrateRule) -> Self {
+        Self::Crate(rule)
     }
 }
 

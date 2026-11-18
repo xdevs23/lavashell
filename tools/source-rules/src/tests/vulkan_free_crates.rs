@@ -2,6 +2,7 @@
 use super::{
     CARGO_WORKSPACES, Failure, ROOT_WORKSPACE_LISTING, crate_report_of_every_workspace, findings_of,
 };
+use crate::crate_manifests::CrateRule;
 use crate::findings::Rule;
 
 const WORKSPACE: &str = r#"
@@ -63,10 +64,10 @@ fn findings(core: &str, middle: &str) -> Result<Vec<(String, Rule)>, Failure> {
 }
 
 fn core_finding(through: &str) -> Vec<(String, Rule)> {
-    let rule = Rule::VulkanDependency {
+    let rule = Rule::Crate(CrateRule::VulkanDependency {
         vulkan: "ash".to_owned(),
         through: through.to_owned(),
-    };
+    });
     vec![("crates/lavashell-core/Cargo.toml".to_owned(), rule)]
 }
 

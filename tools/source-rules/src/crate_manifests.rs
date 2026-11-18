@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/cargo/reference/manifest.html
 use crate::error::Error;
-use crate::findings::{Finding, Report, Rule};
+use crate::findings::{Finding, Report};
 use crate::metadata::MANIFEST;
 use cargo_workspaces::CargoWorkspaces;
+use lavashell_enum_values::enum_with_values;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 mod cargo_workspaces;
+mod crate_rule;
 mod vulkan_free;
+
+pub use crate_rule::CrateRule;
 
 const EXACT_VERSION_PREFIX: char = '=';
 
@@ -28,12 +33,18 @@ struct Workspace {
     lints: Option<BTreeMap<String, BTreeMap<String, LintSetting>>>,
 }
 
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum InheritedTable {
-    Package,
-    Lints,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum InheritedTable {
+        Package,
+        Lints,
+    }
+
+    pub const ALL;
 }
+
+#[derive(Debug)]
+pub struct UnknownInheritedTable;
 
 #[derive(Clone, Copy)]
 struct RootTables<'a> {
@@ -184,11 +195,21 @@ impl Inheritable {
 }
 
 impl InheritedTable {
-    fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Self::Package => "package",
             Self::Lints => "lints",
         }
+    }
+}
+
+impl FromStr for InheritedTable {
+    type Err = UnknownInheritedTable;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        (Self::ALL.into_iter())
+            .find(|table| table.name() == name)
+            .ok_or(UnknownInheritedTable)
     }
 }
 
@@ -202,12 +223,10 @@ impl Workspace {
 }
 
 impl<'a> RootTables<'a> {
-    fn copy_rules(self, workspace: &'a Workspace) -> impl Iterator<Item = Rule> + 'a {
+    fn copy_rules(self, workspace: &'a Workspace) -> impl Iterator<Item = CrateRule> + 'a {
         (self.inherited.iter())
             .filter(move |table| workspace.differs_in(self.workspace, **table))
-            .map(|table| Rule::DifferentWorkspaceTable {
-                table: table.name(),
-            })
+            .map(|table| CrateRule::DifferentWorkspaceTable { table: *table })
     }
 }
 
@@ -218,39 +237,43 @@ impl MemberManifest {
             .flat_map(DependencyTables::build_names)
     }
 
-    fn rules(&self) -> Vec<Rule> {
-        let mut rules: Vec<Rule> = std::iter::once(&self.tables)
+    fn rules(&self) -> Vec<CrateRule> {
+        let mut rules: Vec<CrateRule> = std::iter::once(&self.tables)
             .chain(self.target.values())
             .flat_map(DependencyTables::entries)
             .filter(|(_, entry)| !entry.is_inherited())
-            .map(|(name, _)| Rule::OwnDependency { name: name.clone() })
+            .map(|(name, _)| CrateRule::OwnDependency { name: name.clone() })
             .collect();
         if !Inheritable::is_inherited(self.package.version.as_ref()) {
-            rules.push(Rule::OwnVersion);
+            rules.push(CrateRule::OwnVersion);
         }
         if !Inheritable::is_inherited(self.package.edition.as_ref()) {
-            rules.push(Rule::OwnEdition);
+            rules.push(CrateRule::OwnEdition);
         }
         if !self
             .lints
             .as_ref()
             .is_some_and(|lints| lints.workspace && lints.own.is_empty())
         {
-            rules.push(Rule::OwnLints);
+            rules.push(CrateRule::OwnLints);
         }
         rules
     }
 }
 
-fn read_manifest<Manifest: for<'de> Deserialize<'de>>(path: &Path) -> Result<Manifest, Error> {
+fn read_toml<Contents: for<'de> Deserialize<'de>>(
+    path: &Path,
+    malformed: impl FnOnce(PathBuf, toml::de::Error) -> Error,
+) -> Result<Contents, Error> {
     let text = std::fs::read_to_string(path).map_err(|source| Error::ReadSource {
         path: path.to_owned(),
         source,
     })?;
-    toml::from_str(&text).map_err(|source| Error::ReadManifest {
-        path: path.to_owned(),
-        source,
-    })
+    toml::from_str(&text).map_err(|source| malformed(path.to_owned(), source))
+}
+
+fn read_manifest<Manifest: for<'de> Deserialize<'de>>(path: &Path) -> Result<Manifest, Error> {
+    read_toml(path, |path, source| Error::ReadManifest { path, source })
 }
 
 pub fn crate_report(root: &Path, nested_directories: &[PathBuf]) -> Result<Report, Error> {
@@ -291,13 +314,13 @@ fn workspace_report(
         .dependencies
         .iter()
         .filter(|(_, entry)| !entry.is_exact_or_path())
-        .map(|(name, _)| Rule::InexactWorkspaceDependency { name: name.clone() })
+        .map(|(name, _)| CrateRule::InexactWorkspaceDependency { name: name.clone() })
         .chain(
             workspace
                 .members
                 .iter()
                 .filter(|member| !listed_paths.contains(member.as_str()))
-                .map(|member| Rule::UnlistedMember {
+                .map(|member| CrateRule::UnlistedMember {
                     member: member.clone(),
                 }),
         )
@@ -306,7 +329,7 @@ fn workspace_report(
         .map(|rule| Finding {
             path: workspace_path.clone(),
             line: None,
-            rule,
+            rule: rule.into(),
         })
         .collect();
     let members = (workspace.members.iter())
@@ -319,7 +342,7 @@ fn workspace_report(
         findings.extend(manifest.rules().into_iter().map(|rule| Finding {
             path: path.clone(),
             line: None,
-            rule,
+            rule: rule.into(),
         }));
     }
     findings.extend(vulkan_free::vulkan_findings(directory, &members)?);

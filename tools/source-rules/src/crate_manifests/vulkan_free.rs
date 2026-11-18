@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/cargo/reference/resolver.html#lockfile
-use super::{MemberManifest, read_manifest};
+use super::{CrateRule, MemberManifest, read_manifest};
 use crate::error::Error;
-use crate::findings::{Finding, Rule};
+use crate::findings::Finding;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ pub(super) fn vulkan_findings(
             vulkan_rules(&graph, manifest).map(move |rule| Finding {
                 path: path.clone(),
                 line: None,
-                rule,
+                rule: rule.into(),
             })
         })
         .collect())
@@ -60,11 +60,11 @@ pub(super) fn vulkan_findings(
 fn vulkan_rules<'a>(
     graph: &'a BuildGraph<'a>,
     manifest: &'a MemberManifest,
-) -> impl Iterator<Item = Rule> + 'a {
+) -> impl Iterator<Item = CrateRule> + 'a {
     manifest.build_dependencies().flat_map(move |through| {
         (reached_from(graph, through).into_iter())
             .filter(|name| VULKAN_CRATES.contains(name))
-            .map(move |vulkan| Rule::VulkanDependency {
+            .map(move |vulkan| CrateRule::VulkanDependency {
                 vulkan: vulkan.to_owned(),
                 through: through.to_owned(),
             })
