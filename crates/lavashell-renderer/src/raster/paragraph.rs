@@ -84,8 +84,7 @@ mod tests {
                 let render =
                     |mode: crate::raster::RasterMode| -> Result<Pixels<[u8; 4]>, TestError> {
                         let mut painter =
-                            crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
-                                .with_raster_mode(mode);
+                            crate::Painter::without_device(&fonts)?.with_raster_mode(mode);
                         painter.set_blend_space(crate::BlendSpace::Srgb);
                         let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {
                             ui.text(

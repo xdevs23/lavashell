@@ -104,7 +104,7 @@ fn assert_refracts_only_inside(
     shapes: impl IntoIterator<Item = Shape>,
     destination: Destination,
 ) -> Result<(), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for shape in shapes {
         let plain = glass_pixels(&mut painter, &shape, 0.dp(), destination)?;
         let glass = glass_pixels(&mut painter, &shape, 9.dp(), destination)?;
@@ -129,9 +129,9 @@ fn glass_keeps_its_lens_in_layers() -> Result<(), TestError> {
 #[test]
 fn glass_that_cannot_read_the_surface_for_its_lens_blurs_and_reports_it() -> Result<(), TestError> {
     let [.., long_contour, many_members] = shapes()?;
-    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     let resources = PaintResources::new(
-        &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+        &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
         Failures::default(),
     )?;
     for shape in [long_contour, many_members] {

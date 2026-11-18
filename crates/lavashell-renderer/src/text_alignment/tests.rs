@@ -7,7 +7,7 @@ use lavashell_core::prelude::*;
 
 fn new_painter() -> Result<crate::Painter, TestError> {
     let fonts = crate::test_font::test_font()?;
-    let painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let painter = crate::Painter::without_device(&fonts)?;
     Ok(painter)
 }
 

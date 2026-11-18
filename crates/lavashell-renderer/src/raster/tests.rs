@@ -72,9 +72,8 @@ fn gradient_path_cache_distinguishes_shaders_and_reuses_equal_gradients() -> Res
     use lavashell_core::prelude::{
         Density, DrawContext, Drawing, Gradient, Point, Rect as UiRect, Size, Viewport,
     };
-    let mut painter =
-        crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?
-            .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter = crate::Painter::without_device(&crate::Fonts::new())?
+        .with_raster_mode(crate::raster::RasterMode::Tiles);
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((48, 48)).ok_or(TestError::RasterSurface)?;
     for rgb in [0x00ff_0000, 0x0000_00ff, 0x00ff_0000, 0x0000_00ff] {
@@ -173,9 +172,8 @@ fn an_icon_moved_by_whole_pixels_reuses_the_tiles_of_its_paths() -> Result<(), T
             },
         ],
     };
-    let mut painter =
-        crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?
-            .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter = crate::Painter::without_device(&crate::Fonts::new())?
+        .with_raster_mode(crate::raster::RasterMode::Tiles);
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((64, 64)).ok_or(TestError::RasterSurface)?;
     let context = DrawContext::new(Viewport::new(Size::new(64.dp(), 64.dp()), Density::ONE));

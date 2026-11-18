@@ -33,8 +33,8 @@ fn new_painter() -> Result<Painter, TestError> {
 }
 
 fn new_painter_with(fonts: &crate::Fonts) -> Result<Painter, TestError> {
-    let mut painter = Painter::new(fonts, crate::UniformRange::VULKAN_REQUIRED)?
-        .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter =
+        Painter::without_device(fonts)?.with_raster_mode(crate::raster::RasterMode::Tiles);
     painter.set_blend_space(BlendSpace::Srgb);
     Ok(painter)
 }
@@ -306,8 +306,8 @@ fn a_weight_between_two_static_faces_adds_the_coverage_of_both_for_ordinary_and_
 fn subpixel_text_stays_subpixel_from_one_static_face_through_the_blend_to_the_other()
 -> Result<(), TestError> {
     let fonts = crate::test_font::static_test_faces()?;
-    let mut painter = Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
-        .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter =
+        Painter::without_device(&fonts)?.with_raster_mode(crate::raster::RasterMode::Tiles);
     painter.set_text_rendering(
         TextRendering {
             antialiasing: TextAntialiasing::Subpixel,

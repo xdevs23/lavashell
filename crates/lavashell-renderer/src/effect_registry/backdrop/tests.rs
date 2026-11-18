@@ -38,7 +38,7 @@ fn the_blur_halves_per_level_until_it_spans_less_than_a_device_pixel() -> Result
 
 #[test]
 fn a_stored_image_evicts_the_least_recently_used_images_until_it_fits() -> Result<(), TestError> {
-    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     let mut shared = Shared::new(glass);
     let image = skia_safe::surfaces::raster_n32_premul((1, 1))
         .ok_or(TestError::RasterSurface)?
@@ -80,7 +80,7 @@ fn fractional_offscreen_snapshot_replays_without_stretching() -> Result<(), Test
 fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(), TestError> {
     let (resources, failures) = (
         PaintResources::new(
-            &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+            &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
             Failures::default(),
         )?,
         Failures::default(),
@@ -139,7 +139,7 @@ fn cached_output_rejects_new_opacity_destination_and_a_new_scene() -> Result<(),
 fn cached_pixels_and_retirement_respect_the_window_surface() -> Result<(), TestError> {
     let (resources, failures) = (
         PaintResources::new(
-            &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+            &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
             Failures::default(),
         )?,
         Failures::default(),

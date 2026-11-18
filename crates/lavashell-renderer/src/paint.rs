@@ -116,7 +116,7 @@ impl Painter {
     }
 
     pub fn without_device(registry: &crate::Fonts) -> Result<Self, crate::Error> {
-        Self::new(registry, crate::UniformRange::VULKAN_REQUIRED)
+        Self::new(registry, crate::UniformRange::WITHOUT_DEVICE)
     }
 
     #[must_use]

@@ -4,7 +4,7 @@ use crate::scalar::scalar;
 use crate::test_error::TestError;
 use crate::test_scenes::TEST_SURFACE;
 use crate::test_surfaces::rgba8_pixel;
-use crate::{Fonts, Painter, StreamFrames, SurfaceFrame, UniformRange, input_cells};
+use crate::{Fonts, Painter, StreamFrames, SurfaceFrame, input_cells};
 use lavashell_core::geometry::{Point, Size};
 use lavashell_core::prelude::{
     Brush, Color, Corners, Density, DpExt, DrawCommand, PixelScale, Rect, SceneTree,
@@ -106,7 +106,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
         let mut surface =
             skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
         let clip = outline_path(&outline(size)?)?;
-        let mut painter = Painter::new(&Fonts::new(), UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = Painter::without_device(&Fonts::new())?;
         let bounds = Rect::new(0.dp(), 0.dp(), size.width, size.height);
         let fill = DrawCommand::Fill {
             shape: bounds.into(),

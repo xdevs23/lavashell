@@ -26,7 +26,7 @@ fn blend_changes_rebuild_every_target_with_empty_or_partial_damage() -> Result<(
         BLEND_SURFACE.raster()?,
         BLEND_SURFACE.raster()?,
     ];
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for (index, surface) in (0_u64..).zip(&mut surfaces) {
         paint_damage(
             &mut painter,
@@ -86,10 +86,10 @@ fn srgb_planned_backdrop_reads_current_layer_on_first_and_later_frames() -> Resu
 }
 
 fn assert_planned(change_after_plan: bool) -> Result<(), TestError> {
-    let mut planned = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut planned = Painter::without_device(&Fonts::new())?;
     planned.set_blend_space(BlendSpace::Srgb);
     planned.effect_quality(BudgetChooser::default());
-    let mut reference = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut reference = Painter::without_device(&Fonts::new())?;
     reference.set_blend_space(BlendSpace::Srgb);
     for frame in 1..=3 {
         let mut commands = Vec::new();

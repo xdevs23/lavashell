@@ -48,7 +48,7 @@ fn plan(painter: &mut Painter, tree: &SceneTree, frame: u64) -> QualityChange {
 #[test]
 fn private_prefixes_are_never_held_in_effect_inputs_or_reusable_backdrop_snapshots()
 -> Result<(), TestError> {
-    let mut painter = Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&crate::Fonts::new())?;
     let secret = ProtectedText::new();
     let state = secret.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {

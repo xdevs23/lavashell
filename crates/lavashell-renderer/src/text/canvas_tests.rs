@@ -10,7 +10,7 @@ use std::{cell::Cell, rc::Rc};
 #[test]
 fn canvas_only_text_observes_policy_in_root_and_retained_paint_scopes() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = crate::Painter::without_device(&fonts)?;
     let counts = [Rc::new(Cell::new(0_u32)), Rc::new(Cell::new(0_u32))];
     let observers = counts.clone();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {

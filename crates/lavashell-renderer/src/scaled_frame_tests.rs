@@ -30,10 +30,7 @@ fn marked(marks: &[Rect], color: Color) -> Result<SceneSnapshot, TestError> {
 }
 
 fn painter() -> Result<Painter, TestError> {
-    Ok(Painter::new(
-        &Fonts::new(),
-        crate::UniformRange::VULKAN_REQUIRED,
-    )?)
+    Ok(Painter::without_device(&Fonts::new())?)
 }
 
 fn paint_wide(

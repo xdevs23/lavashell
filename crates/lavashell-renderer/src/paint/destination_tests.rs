@@ -69,7 +69,7 @@ fn blur_backdrop(canvas: &Canvas, command: &DrawCommand) -> Result<(), DrawFailu
 }
 
 fn new_painter() -> Result<Painter, TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let id = EffectId(0x1234);
     painter.effect_registry_mut().register_effect(
         id,

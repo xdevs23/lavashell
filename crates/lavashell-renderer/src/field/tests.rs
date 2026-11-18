@@ -43,7 +43,7 @@ fn points() -> impl Iterator<Item = (usize, Point)> {
 }
 
 fn analytic(main: &'static str, reads: Content, shape: &Shape) -> Result<Vec<[f64; 4]>, TestError> {
-    let room = FieldRoom::new(UniformRange::VULKAN_REQUIRED)?;
+    let room = FieldRoom::new(UniformRange::WITHOUT_DEVICE)?;
     let fields = Fields::new(&room)?;
     let programs = Analytic::<()>::new("test", reads, &[Part::new(main)], Pass::Own(&room))?;
     let bound = programs
@@ -130,7 +130,7 @@ fn most_star_points(fields: &Fields, programs: &Analytic<()>) -> Result<u16, Tes
 
 #[test]
 fn contour_fields_match_shape_distance() -> Result<(), TestError> {
-    let room = FieldRoom::new(UniformRange::VULKAN_REQUIRED)?;
+    let room = FieldRoom::new(UniformRange::WITHOUT_DEVICE)?;
     let fields = Fields::new(&room)?;
     let programs = Analytic::<()>::new(
         "test",
@@ -306,7 +306,7 @@ fn texture_lens(shape: &Shape, density: Density) -> Result<Vec<[f64; 4]>, TestEr
     let scale = crate::scalar::scalar(density.get())?;
     let _canvas_returned_for_chaining = canvas.scale((scale, scale));
     let texels = TexelPixels::lens(canvas).ok_or(TestError::Missing("texel size of the lens"))?;
-    let lens = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?
+    let lens = Fields::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?
         .lens(canvas, &Solid::of(shape), texels)?
         .ok_or(TestError::Missing("lens texture"))?;
     pixels(lens.shader()?)

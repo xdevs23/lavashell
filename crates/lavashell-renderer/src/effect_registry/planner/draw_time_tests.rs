@@ -64,7 +64,7 @@ fn circle() -> [DrawCommand; 1] {
 }
 
 fn planned_painter(tree: &SceneTree) -> Result<Painter, TestError> {
-    let mut painter = Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&crate::Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EFFECT,

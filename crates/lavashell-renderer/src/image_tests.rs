@@ -27,7 +27,7 @@ fn decoded_cpu_asset_is_shared_with_the_painter_without_a_second_decode() -> Res
         .ok_or(TestError::Missing("Skia image in the decoded image"))?;
     assert!(!decoded.is_texture_backed());
     let identity = decoded.unique_id();
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut surface = skia_safe::surfaces::raster_n32_premul(IMAGE.dimensions())
         .ok_or(TestError::RasterSurface)?;
     painter.paint_as_leaf(

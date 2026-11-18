@@ -75,8 +75,7 @@ mod tests {
             Some(Extent::Within(output)) if output.x + output.width >= 1516.dp()
         ));
         let tree = crate::test_scenes::leaves([packet])?;
-        let mut painter =
-            crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = crate::Painter::without_device(&crate::Fonts::new())?;
         let mut surface =
             skia_safe::surfaces::raster_n32_premul((1536, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -117,8 +116,7 @@ mod tests {
             Some(Extent::Within(output)) if output.x + output.width >= 144.dp()
         ));
         let tree = crate::test_scenes::leaves([packet])?;
-        let mut painter =
-            crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = crate::Painter::without_device(&crate::Fonts::new())?;
         let mut surface =
             skia_safe::surfaces::raster_n32_premul((160, 16)).ok_or(TestError::RasterSurface)?;
         let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -162,8 +160,7 @@ mod tests {
                 DrawCommand::Restore,
                 DrawCommand::Restore,
             ];
-            let mut painter =
-                crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+            let mut painter = crate::Painter::without_device(&crate::Fonts::new())?;
             let mut surface =
                 skia_safe::surfaces::raster_n32_premul((96, 16)).ok_or(TestError::RasterSurface)?;
             let _canvas_returned_for_chaining =

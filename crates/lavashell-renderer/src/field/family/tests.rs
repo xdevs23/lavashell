@@ -35,7 +35,7 @@ fn length(program: &Program<Columns>) -> i32 {
 
 #[test]
 fn a_shape_gets_the_shortest_program_that_holds_its_columns() -> Result<(), TestError> {
-    let room = FieldRoom::new(UniformRange::VULKAN_REQUIRED)?;
+    let room = FieldRoom::new(UniformRange::WITHOUT_DEVICE)?;
     let family = Family::<Columns>::new("test", &PARTS, shader_effect, Pass::Own(&room))?;
     let most = family.most();
     assert_eq!(length(family.holding(1)?), 1);
@@ -65,7 +65,7 @@ fn first_only(source: &str) -> Result<RuntimeEffect, SkslDiagnostic> {
 
 #[test]
 fn a_program_that_fails_to_compile_is_rejected_with_its_cause() -> Result<(), TestError> {
-    let room = FieldRoom::new(UniformRange::VULKAN_REQUIRED)?;
+    let room = FieldRoom::new(UniformRange::WITHOUT_DEVICE)?;
     let family = Family::<Columns>::new("test", &PARTS, first_only, Pass::Own(&room))?;
     assert_eq!(length(family.holding(1)?), 1);
     for _ in 0..2 {

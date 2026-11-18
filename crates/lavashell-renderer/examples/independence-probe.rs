@@ -8,7 +8,7 @@ use lavashell_effect_quality::{EffectId, OfferedVariant, VariantId, VariantQuali
 use lavashell_renderer::effect_registry::{
     DrawTarget, EffectBackend, EffectRegistration, EffectRegistry, EffectRequest,
 };
-use lavashell_renderer::{Error, FieldRoom, Fonts, Painter, UniformRange, skia};
+use lavashell_renderer::{Error, FieldRoom, Fonts, Painter, skia};
 use std::time::Duration;
 
 const ID: EffectId = EffectId(0x00ab_cdef);
@@ -68,8 +68,7 @@ fn main() -> Result<(), RenderError> {
             Point::new(Dp::ZERO, Dp::ZERO),
         )),
     );
-    let mut painter =
-        Painter::new(&Fonts::new(), UniformRange::VULKAN_REQUIRED).map_err(RenderError::Painter)?;
+    let mut painter = Painter::without_device(&Fonts::new()).map_err(RenderError::Painter)?;
     let registry = painter.effect_registry_mut();
     assert!(registry.identify(&commands[0]).is_none());
     assert_eq!(registry.identify(&commands[1]), Some(ID));

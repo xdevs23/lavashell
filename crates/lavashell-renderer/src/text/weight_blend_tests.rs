@@ -19,10 +19,7 @@ use skia_safe::{AlphaType, ColorSpace, ColorType};
 
 fn static_face_painter() -> Result<crate::Painter, TestError> {
     let fonts = crate::test_font::static_test_faces()?;
-    Ok(crate::Painter::new(
-        &fonts,
-        crate::UniformRange::VULKAN_REQUIRED,
-    )?)
+    Ok(crate::Painter::without_device(&fonts)?)
 }
 
 fn srgb_painter() -> Result<crate::Painter, TestError> {

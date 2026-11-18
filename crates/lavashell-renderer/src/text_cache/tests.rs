@@ -52,7 +52,7 @@ fn paint(
 
 #[test]
 fn text_measured_after_a_paint_leaves_its_paragraphs_in_the_cache() -> Result<(), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let style = TextStyle::new("sans-serif", 14.sp(), Color::WHITE).resolve_unscaled();
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter
@@ -84,7 +84,7 @@ fn text_measured_after_a_paint_leaves_its_paragraphs_in_the_cache() -> Result<()
 
 #[test]
 fn text_measured_after_three_surfaces_paint_keeps_the_first_paragraph() -> Result<(), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let style = TextStyle::new("sans-serif", 14.sp(), Color::WHITE).resolve_unscaled();
     let rect = Rect::new(0.dp(), 0.dp(), 200.dp(), 40.dp());
     let label_key = painter

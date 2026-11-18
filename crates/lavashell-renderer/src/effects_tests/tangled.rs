@@ -51,7 +51,7 @@ fn a_tangled_contour_draws_its_fill_and_its_glass() -> Result<(), TestError> {
             command,
             DrawCommand::Restore,
         ]);
-        let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = Painter::without_device(&Fonts::new())?;
         painter.paint_as_leaf(drawn.canvas(), &commands, Density::ONE)?;
         let (drawn, expected) = (linear_pixels(&mut drawn), linear_pixels(&mut expected));
         let radius = |position| EFFECT_SURFACE.pixel_distance_from_center(position);

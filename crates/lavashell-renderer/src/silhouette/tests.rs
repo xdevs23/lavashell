@@ -347,7 +347,7 @@ fn render(
     paint: impl FnOnce(&mut Drawing<'_>),
 ) -> Result<Pixels<[f32; 4]>, TestError> {
     let mut s = EFFECT_SURFACE.raster()?;
-    let painter = crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let painter = crate::Painter::without_device(&crate::Fonts::new())?;
     draw_with(&mut painter.with_raster_mode(mode), &mut s, paint)?;
     Ok(linear_pixels(&mut s))
 }
@@ -368,7 +368,7 @@ fn a_contour_keeps_its_path_and_band_regions_while_frames_draw_it() -> Result<()
     let mut surface =
         skia_safe::surfaces::raster_n32_premul((200, 120)).ok_or(TestError::RasterSurface)?;
     let mut resources = PaintResources::new(
-        &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+        &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
         Failures::default(),
     )?;
     let shape = star(12, 26.0)?;
@@ -422,8 +422,7 @@ fn a_border_that_path_operations_give_up_on_draws_from_the_field() -> Result<(),
         Affine::scale(16.0, 16.0).translated(EFFECT_SURFACE.center()),
     )];
     commands.push(DrawCommand::Stroke { shape, stroke });
-    let mut painter =
-        crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = crate::Painter::without_device(&crate::Fonts::new())?;
     painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)?;
     let mut rim: u16 = 0;
     for ((x, y), &[.., alpha]) in linear_pixels(&mut surface).positioned()? {

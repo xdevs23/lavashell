@@ -37,7 +37,7 @@ fn field_textures_match_shape_distance_at_texel_centres() -> Result<(), TestErro
     )?;
     let info = ImageInfo::new((200, 120), ColorType::RGBAF16, AlphaType::Premul, None);
     let mut surface = surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-    let fields = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let fields = Fields::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     for shape in [star(40, 30.0)?, row, fused] {
         let field = fields
             .exact(surface.canvas(), &shape, 0.0, TexelPixels::DEVICE_PIXEL)?
@@ -72,7 +72,7 @@ fn image_id(texture: Result<Option<FieldTexture>, FailedDraw>) -> Result<u32, Te
 fn every_part_of_a_frame_reads_one_texture_of_a_shape() -> Result<(), TestError> {
     let mut surface = surfaces::raster_n32_premul((200, 120)).ok_or(TestError::RasterSurface)?;
     let canvas = surface.canvas();
-    let mut fields = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let mut fields = Fields::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     fields.begin_frame(SurfaceId::numbered(0));
     let shape = star(40, 30.0)?;
     let shadow = image_id(fields.exact(canvas, &shape, 24.0, TexelPixels::DEVICE_PIXEL))?;
@@ -103,7 +103,7 @@ fn every_part_of_a_frame_reads_one_texture_of_a_shape() -> Result<(), TestError>
 fn a_field_texture_stays_while_frames_draw_its_shape() -> Result<(), TestError> {
     let mut surface = surfaces::raster_n32_premul((200, 120)).ok_or(TestError::RasterSurface)?;
     let canvas = surface.canvas();
-    let mut fields = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let mut fields = Fields::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     let shape = star(40, 30.0)?;
     let id = |fields: &mut Fields| {
         fields.begin_frame(SurfaceId::numbered(0));
@@ -119,7 +119,7 @@ fn a_field_texture_stays_while_frames_draw_its_shape() -> Result<(), TestError> 
 #[test]
 fn a_field_texture_that_cannot_be_allocated_fails() -> Result<(), TestError> {
     let mut surface = surfaces::raster_n32_premul((200, 120)).ok_or(TestError::RasterSurface)?;
-    let fields = Fields::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let fields = Fields::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     assert_eq!(
         fields
             .exact(

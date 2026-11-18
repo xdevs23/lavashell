@@ -72,7 +72,7 @@ pub fn faded(
 }
 
 pub fn assert_first_frame_blur(surface: &mut Surface) -> Result<(), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for background_alpha in [1.0, 0.25] {
         for alpha in [0.1, 0.5, 0.9, 1.0] {
             let _canvas_returned_for_chaining =
@@ -142,8 +142,7 @@ pub fn assert_nested_groups<S: DerefMut<Target = Surface>, E: From<TestError>>(
             DrawCommand::Restore,
         ];
         let tree = faded(commands, alpha, child)?;
-        let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)
-            .map_err(TestError::from)?;
+        let mut painter = Painter::without_device(&Fonts::new()).map_err(TestError::from)?;
         crate::test_scenes::paint(&mut painter, surface.canvas(), &tree, Density::ONE)
             .map_err(TestError::from)?;
         Ok(surface)

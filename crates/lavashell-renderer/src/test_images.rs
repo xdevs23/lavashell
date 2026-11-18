@@ -34,7 +34,7 @@ pub fn scene(bytes: Vec<u8>) -> Result<Vec<DrawCommand>, TestError> {
             canvas.image(&image, IMAGE.bounds(), ImageFit::Stretch);
         });
     });
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let viewport = Viewport::new(IMAGE.size(), Density::ONE);
     crate::test_scenes::framed_commands(&mut view, viewport, &mut painter)
 }

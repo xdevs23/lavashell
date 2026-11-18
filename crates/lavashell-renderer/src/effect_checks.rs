@@ -24,11 +24,7 @@ pub fn linear_pixels(surface: &mut Surface) -> Pixels<[f32; 4]> {
 }
 
 pub fn draw(surface: &mut Surface, paint: impl FnOnce(&mut Drawing<'_>)) -> Result<(), TestError> {
-    draw_with(
-        &mut Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
-        surface,
-        paint,
-    )
+    draw_with(&mut Painter::without_device(&Fonts::new())?, surface, paint)
 }
 
 pub fn draw_with(

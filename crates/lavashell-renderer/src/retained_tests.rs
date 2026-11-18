@@ -86,8 +86,8 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
     })?;
     let mut retained = SURFACE.raster()?;
     let mut reference = SURFACE.raster()?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut full = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
+    let mut full = Painter::without_device(&Fonts::new())?;
     full.set_packet_caching(crate::PacketCaching::Disabled);
     let (mut tree, mut presented) = (SceneTree::default(), DamageTracker::default());
     for sequence in 0..8_u16 {
@@ -143,7 +143,7 @@ fn partial_damage_matches_full_redraw_as_glass_moves_and_shadow_ends() -> Result
 #[test]
 fn a_damage_rectangle_repaints_every_pixel_that_it_covers_in_part() -> Result<(), TestError> {
     let viewport = SURFACE.bounds();
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = SURFACE.raster()?;
     let damaged = Rect::new(4.6.dp(), 2.6.dp(), 5.dp(), 5.dp());
     let disc = |color| DrawCommand::Circle {
@@ -178,7 +178,7 @@ fn a_damage_rectangle_repaints_every_pixel_that_it_covers_in_part() -> Result<()
 #[test]
 fn a_stable_leaf_cut_by_damage_is_copied_once_then_drawn_from_the_copy() -> Result<(), TestError> {
     let stable = card(Rect::new(0.dp(), 0.dp(), 40.dp(), 40.dp()))?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let frames = damage_frames(full_damage_then_cuts(), || Ok(vec![stable.clone()]))?;
     let shown = repainted_pixels(&mut painter, None, frames)?;
     let (cut, stable_and_cut) = (80 * 10, 110 * 41);
@@ -192,7 +192,7 @@ fn a_stable_leaf_cut_by_damage_is_copied_once_then_drawn_from_the_copy() -> Resu
 fn a_leaf_with_a_changing_packet_neither_fills_nor_widens_the_damage() -> Result<(), TestError> {
     let stable = card(Rect::new(0.dp(), 0.dp(), 40.dp(), 40.dp()))?;
     let transient = || card(Rect::new(100.dp(), 0.dp(), 40.dp(), 40.dp()));
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let frames = damage_frames(full_damage_then_cuts(), || {
         Ok(vec![stable.clone(), transient()?])
     })?;
@@ -207,7 +207,7 @@ fn a_leaf_with_a_changing_packet_neither_fills_nor_widens_the_damage() -> Result
 fn damage_covering_only_the_edge_of_a_stable_leaf_still_copies_the_leaf() -> Result<(), TestError> {
     let stable = card(Rect::new(0.dp(), 0.dp(), 40.dp(), 40.dp()))?;
     let edge = Rect::new(40.dp(), 10.dp(), 10.dp(), 10.dp());
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let frames = damage_frames([SURFACE.bounds(), edge, edge, edge], || {
         Ok(vec![stable.clone()])
     })?;
@@ -224,7 +224,7 @@ fn a_stable_leaf_cut_by_window_shape_neither_fills_nor_widens_damage() -> Result
     let stable = card(Rect::new(0.dp(), 0.dp(), 40.dp(), 40.dp()))?;
     let shape = skia_safe::Path::rect(skia_safe::Rect::from_wh(20.0, 120.0), None);
     let damage = Rect::new(10.dp(), 10.dp(), 20.dp(), 10.dp());
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let frames = damage_frames([SURFACE.bounds(), damage, damage, damage], || {
         Ok(vec![stable.clone()])
     })?;
@@ -239,7 +239,7 @@ fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), T
     let rect = Rect::new(0.dp(), 0.dp(), 100.dp(), 100.dp());
     let red = leaves([packet(rect, |d| d.fill(rect, Color::rgb(0x00ff_0000)))?])?;
     let blue = leaves([packet(rect, |d| d.fill(rect, Color::rgb(0x0000_00ff)))?])?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = SURFACE.raster()?;
     for (frame, window, tree) in [
         (1, 11, &red),
@@ -282,8 +282,8 @@ fn the_same_leaf_in_different_windows_reuses_the_cached_images() -> Result<(), T
 #[test]
 fn transient_packets_paint_correctly_without_allocating_cached_images() -> Result<(), TestError> {
     let rect = Rect::new(0.dp(), 0.dp(), 100.dp(), 100.dp());
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut reference = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
+    let mut reference = Painter::without_device(&Fonts::new())?;
     reference.set_packet_caching(crate::PacketCaching::Disabled);
     let mut target = SURFACE.raster()?;
     let mut full = SURFACE.raster()?;
@@ -313,7 +313,7 @@ fn transient_packets_paint_correctly_without_allocating_cached_images() -> Resul
 #[test]
 fn a_new_view_painted_by_the_same_painter_shows_its_own_commands() -> Result<(), TestError> {
     let viewport = Viewport::new(SURFACE.size(), Density::ONE);
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = SURFACE.raster()?;
     for color in [Color::rgb(0x00ff_0000), Color::rgb(0x0000_00ff)] {
         let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {

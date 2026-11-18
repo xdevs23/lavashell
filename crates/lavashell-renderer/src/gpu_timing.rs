@@ -395,7 +395,7 @@ mod tests {
             timing.frames.keys().collect::<Vec<_>>(),
             [&SurfaceId::numbered(2)]
         );
-        let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = Painter::without_device(&Fonts::new())?;
         painter.gpu_timing = Some(timing);
         assert_eq!(
             painter.take_gpu_frame_time(SurfaceId::numbered(2)),

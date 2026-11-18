@@ -73,7 +73,7 @@ fn a_bound_frame_draws_the_pixels_of_the_same_image_in_every_pane() -> Result<()
         ("opacity", translucent, ImageFit::cover()),
         ("non-uniform scale", stretched, ImageFit::contain()),
     ];
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for (case, pane, fit) in cases {
         let stream = |drawing: &mut Drawing<'_>| drawing.stream_image(&frame, destination, fit);
         let still = |drawing: &mut Drawing<'_>| drawing.image(&image, destination, fit);
@@ -108,7 +108,7 @@ fn a_crop_draws_the_pixels_of_that_part_of_the_buffer_alone() -> Result<(), Test
         ImageFit::Frame(zoomed),
         ImageFit::Frame(small),
     ];
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for fit in fits {
         let streamed = scene(|drawing| drawing.stream_image(&frame, destination, fit));
         let imaged = scene(|drawing| drawing.image(&image, destination, fit));
@@ -133,7 +133,7 @@ fn a_frame_under_a_non_uniform_scale_fills_the_scaled_destination() -> Result<()
         });
     });
     let drawn = render(
-        &mut Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
+        &mut Painter::without_device(&Fonts::new())?,
         &commands,
         &streams,
     )?;
@@ -154,7 +154,7 @@ fn a_stream_without_a_bound_frame_draws_nothing_and_records_a_failure() -> Resul
         let destination = Rect::new(0.dp(), 0.dp(), 32.dp(), 32.dp());
         drawing.stream_image(&frame, destination, ImageFit::cover());
     });
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     assert!(transparent(&render(
         &mut painter,
         &commands,
@@ -185,7 +185,7 @@ fn a_frame_of_another_generation_than_the_bound_one_draws_nothing_and_records_a_
         let destination = Rect::new(0.dp(), 0.dp(), 32.dp(), 32.dp());
         drawing.stream_image(&newer, destination, ImageFit::cover());
     });
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     assert!(transparent(&render(&mut painter, &commands, &streams)?));
     assert_eq!(painter.failures.count(DrawFailure::StreamStale), 1);
     streams.retire(stream);
@@ -205,11 +205,11 @@ fn a_frame_in_a_leaf_is_drawn_on_every_paint_and_never_cached() -> Result<(), Te
     let direct = scene(|drawing| drawing.stream_image(&frame, destination, ImageFit::cover()));
     let tree = leaves([Packet::new(Arc::from(direct.clone()))?])?;
     let expected = render(
-        &mut Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
+        &mut Painter::without_device(&Fonts::new())?,
         &direct,
         &streams,
     )?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     for _ in 0..3 {
         let mut target = surface(SIDE, SIDE)?;
         painter.paint_scene_with_streams(

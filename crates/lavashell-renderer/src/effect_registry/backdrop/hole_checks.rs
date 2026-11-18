@@ -51,7 +51,7 @@ pub(super) fn backend(shared: &Rc<RefCell<Shared>>) -> Backend {
 }
 
 pub(super) fn shared() -> Result<Rc<RefCell<Shared>>, TestError> {
-    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     Ok(Rc::new(RefCell::new(Shared::new(glass))))
 }
 
@@ -113,7 +113,7 @@ pub(super) fn render(
     } = drawn;
     let (resources, failures) = (
         PaintResources::new(
-            &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+            &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
             Failures::default(),
         )?,
         Failures::default(),

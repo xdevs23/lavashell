@@ -36,7 +36,7 @@ fn effect_layer(bounds: Rect, blend: BlendMode, blur: NonNegativeDp) -> DrawComm
 
 fn painted(surface: &mut Surface, commands: &[DrawCommand]) -> Result<Pixels<[u8; 4]>, TestError> {
     let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.paint_as_leaf(surface.canvas(), commands, Density::ONE)?;
     Ok(pixels(surface))
 }

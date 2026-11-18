@@ -38,7 +38,7 @@ fn snapshot(view: &View, tag: &'static str) -> Result<(Rect, Vec<Rect>), TestErr
 #[test]
 fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = crate::Painter::without_device(&fonts)?;
     let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.layout(Axis::Vertical, Modifier::new(), |ui| {
             ui.text(
@@ -126,7 +126,7 @@ fn policy_changes_invalidate_the_same_view_and_its_retained_component() -> Resul
 fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identical()
 -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = crate::Painter::without_device(&fonts)?;
     let mut view = View::new(lavashell_test_fixtures::facts(), |ui| {
         ui.scoped("static label", Modifier::new(), |ui| {
             ui.text(PLAIN_LABEL_TEXT, probe_modifier().tag("static"));
@@ -165,7 +165,7 @@ fn antialiasing_changes_refresh_static_packets_when_measured_bounds_are_identica
 fn antialiasing_reconstructs_each_persistent_target_even_with_empty_command_damage()
 -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = crate::Painter::without_device(&fonts)?;
     let target = crate::test_surfaces::lcd_destination();
     let size = RETENTION_SURFACE.size();
     let mut view = View::new(lavashell_test_fixtures::facts(), move |ui| {

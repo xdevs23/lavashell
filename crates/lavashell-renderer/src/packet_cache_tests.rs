@@ -107,7 +107,7 @@ fn cache_hits(
     paint: impl Fn(&mut Painter, &Canvas) -> Result<(), TestError>,
 ) -> Result<u64, TestError> {
     let painter = || -> Result<Painter, TestError> {
-        let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = Painter::without_device(&Fonts::new())?;
         prepare(&mut painter)?;
         Ok(painter)
     };
@@ -145,7 +145,7 @@ fn the_text_of_the_card_paints_glyphs() -> Result<(), TestError> {
         .collect();
     let paint = |commands| -> Result<Pixels<[f32; 4]>, TestError> {
         let tree = scene(at(12.0, 8.0), None, commands)?;
-        let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut painter = Painter::without_device(&Fonts::new())?;
         painted(ColorType::RGBAF16, |canvas| {
             paint_scene(&tree, Density::ONE)(&mut painter, canvas)
         })
@@ -215,7 +215,7 @@ fn leaves_without_an_opaque_fill_below_all_they_paint_paint_directly() -> Result
 #[test]
 fn a_card_whose_height_alone_scales_paints_directly() -> Result<(), TestError> {
     let mut tree = scene(at(12.0, 8.0), None, card())?;
-    let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut cached = Painter::without_device(&Fonts::new())?;
     let paint = |painter: &mut Painter, tree: &SceneTree| {
         painted(ColorType::RGBAF16, |canvas| {
             paint_scene(tree, Density::ONE)(painter, canvas)
@@ -231,7 +231,7 @@ fn a_card_whose_height_alone_scales_paints_directly() -> Result<(), TestError> {
         id: SceneNodeId(2),
         slot: SlotChange::Transform(Slot::Value(squeezed)),
     })?;
-    let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut direct = Painter::without_device(&Fonts::new())?;
     direct.set_packet_caching(crate::PacketCaching::Disabled);
     assert_eq!(paint(&mut cached, &tree)?, paint(&mut direct, &tree)?);
     assert_eq!(cached.render_stats().cache_hits, 1);
@@ -262,7 +262,7 @@ fn a_card_is_copied_into_an_image_only_inside_its_clip() -> Result<(), TestError
 #[test]
 fn a_card_image_stands_in_under_a_clip_cutting_it_only_with_hard_edges() -> Result<(), TestError> {
     let mut tree = scene(at(12.0, 8.0), Some(around()), card())?;
-    let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut cached = Painter::without_device(&Fonts::new())?;
     let paint = |painter: &mut Painter, tree: &SceneTree| {
         painted(ColorType::RGBAF16, |canvas| {
             paint_scene(tree, Density::ONE)(painter, canvas)
@@ -275,7 +275,7 @@ fn a_card_image_stands_in_under_a_clip_cutting_it_only_with_hard_edges() -> Resu
             id: SceneNodeId(2),
             slot: SlotChange::Clip(Some(Slot::Value(clip))),
         })?;
-        let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+        let mut direct = Painter::without_device(&Fonts::new())?;
         direct.set_packet_caching(crate::PacketCaching::Disabled);
         assert!(
             paint(&mut cached, &tree)? == paint(&mut direct, &tree)?,
@@ -335,10 +335,10 @@ fn a_copy_stored_at_one_pixel_scale_is_not_drawn_at_another() -> Result<(), Test
     };
     let differing =
         |actual: &Pixels<[f32; 4]>, expected| actual.positions_differing_in_bits(expected);
-    let mut direct = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut direct = Painter::without_device(&Fonts::new())?;
     direct.set_packet_caching(crate::PacketCaching::Disabled);
     let square = paint(&mut direct, PixelScale::SQUARE)?;
-    let mut cached = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut cached = Painter::without_device(&Fonts::new())?;
     for _ in 0..3 {
         assert_eq!(
             differing(&paint(&mut cached, PixelScale::SQUARE)?, &square)?,

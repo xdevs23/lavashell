@@ -47,7 +47,7 @@ impl PerSurface for Recorded {
 fn effects_in_leaves_are_planned_and_rendered_under_the_key_of_their_leaf() -> Result<(), TestError>
 {
     let (planned, rendered) = (Recorded::default(), Recorded::default());
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EffectId(907),

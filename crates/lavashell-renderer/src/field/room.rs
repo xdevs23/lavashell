@@ -18,6 +18,8 @@ impl UniformRange {
     // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#limits-minmax
     pub const VULKAN_REQUIRED: Self = Self(16384);
 
+    pub const WITHOUT_DEVICE: Self = Self::VULKAN_REQUIRED;
+
     #[must_use]
     pub fn of_device(max_uniform_buffer_range: u32) -> Self {
         Self(max_uniform_buffer_range)

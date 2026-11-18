@@ -50,7 +50,7 @@ impl EffectBackend for VariantRecorder {
 fn fine_effect(
     draws: &Rc<RefCell<Vec<VariantId>>>,
 ) -> Result<(Painter, Vec<DrawCommand>), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EffectId(905),
@@ -141,7 +141,7 @@ struct PlanRecorder(Rc<RefCell<Vec<DrawId>>>);
 #[test]
 fn alternating_windows_keep_distinct_draw_identity_and_unchanged_pixels() -> Result<(), TestError> {
     let draws = Rc::new(RefCell::new(Vec::new()));
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EffectId(905),
@@ -200,7 +200,7 @@ impl PerSurface for PlanRecorder {
 fn mixed_leaf_registrations_match_planning_ids_across_leaves() -> Result<(), TestError> {
     let draws = Rc::new(RefCell::new(Vec::new()));
     let planned = Rc::new(RefCell::new(Vec::new()));
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     for (id, matcher) in [
         (
@@ -323,7 +323,7 @@ impl EffectBackend for PillPainter {
 
 #[test]
 fn effects_fill_and_clip_shapes_the_way_the_painter_draws_them() -> Result<(), TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EffectId(907),
@@ -363,7 +363,7 @@ impl EffectBackend for SurfaceRecorder {
 #[test]
 fn effects_inside_layers_cannot_read_the_surface() -> Result<(), TestError> {
     let surfaces = Rc::new(RefCell::new(Vec::new()));
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     painter.effect_registry_mut().register_effect(
         EffectId(906),

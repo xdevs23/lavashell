@@ -62,7 +62,7 @@ fn assert_independent_reader(retained: bool) -> Result<(), TestError> {
             }
         }
     }
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.replace_effect_registry(EffectRegistry::empty());
     let id = EffectId(0x1234);
     painter.effect_registry_mut().register_effect(

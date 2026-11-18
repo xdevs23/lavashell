@@ -156,7 +156,7 @@ fn a_union_keeps_the_hole_of_a_member_open() -> Result<(), TestError> {
 #[test]
 fn a_moving_hole_reuses_its_path_and_drops_paths_of_earlier_positions() -> Result<(), TestError> {
     let mut resources = PaintResources::new(
-        &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+        &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
         Failures::default(),
     )?;
     let shape = |x: f64| card().minus(lens(Rect::new(Dp::new(x), 14.dp(), 20.dp(), 20.dp())));
@@ -196,7 +196,7 @@ fn a_moving_hole_reuses_its_path_and_drops_paths_of_earlier_positions() -> Resul
 #[test]
 fn an_outline_beyond_the_range_of_skia_scalars_fails_to_route() -> Result<(), TestError> {
     let resources = PaintResources::new(
-        &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+        &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
         Failures::default(),
     )?;
     let far = Dp::new(f64::from(f32::MAX) * 2.0);

@@ -37,8 +37,8 @@ fn render(
 #[test]
 fn policy_changes_replace_native_runs_and_keep_painters_independent() -> Result<(), TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut a = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
-    let mut b = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut a = crate::Painter::without_device(&fonts)?;
+    let mut b = crate::Painter::without_device(&fonts)?;
     let target = TextDestination::default();
     let none = TextRendering {
         hinting: Hinting::None,
@@ -71,10 +71,7 @@ fn policy_changes_replace_native_runs_and_keep_painters_independent() -> Result<
 #[test]
 fn fractional_positioning_changes_real_coverage_and_returns_to_cached_policy()
 -> Result<(), TestError> {
-    let mut painter = crate::Painter::new(
-        &crate::test_font::test_font()?,
-        crate::UniformRange::VULKAN_REQUIRED,
-    )?;
+    let mut painter = crate::Painter::without_device(&crate::test_font::test_font()?)?;
     let target = TextDestination::default();
     let fractional = TextRendering {
         hinting: Hinting::None,
@@ -97,10 +94,7 @@ fn fractional_positioning_changes_real_coverage_and_returns_to_cached_policy()
 #[test]
 fn shaped_carets_follow_hinting_without_splitting_combining_or_bidi_clusters()
 -> Result<(), TestError> {
-    let mut painter = crate::Painter::new(
-        &crate::test_font::test_font()?,
-        crate::UniformRange::VULKAN_REQUIRED,
-    )?;
+    let mut painter = crate::Painter::without_device(&crate::test_font::test_font()?)?;
     let target = TextDestination::default();
     let value = multiline_label_text();
     let mut style = probe_style();
@@ -170,13 +164,13 @@ fn lcd_requires_an_opaque_target_and_survives_the_tiled_backend() -> Result<(), 
     for geometry in PixelGeometry::ALL {
         for opaque in [false, true] {
             let target = TextDestination { opaque, geometry };
-            let mut direct = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+            let mut direct = crate::Painter::without_device(&fonts)?;
             direct.set_text_rendering(request, target);
             assert_eq!(
                 has_colored_fringe(&render(&mut direct, 13.0, target)?),
                 opaque && geometry != PixelGeometry::None
             );
-            let mut tiled = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
+            let mut tiled = crate::Painter::without_device(&fonts)?
                 .with_raster_mode(crate::raster::RasterMode::Tiles);
             tiled.set_text_rendering(request, target);
             assert_eq!(
@@ -190,9 +184,8 @@ fn lcd_requires_an_opaque_target_and_survives_the_tiled_backend() -> Result<(), 
 
 #[test]
 fn cached_rgba_tiles_preserve_an_opaque_colored_background() -> Result<(), TestError> {
-    let mut painter =
-        crate::Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?
-            .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter = crate::Painter::without_device(&crate::Fonts::new())?
+        .with_raster_mode(crate::raster::RasterMode::Tiles);
     let info = skia_safe::ImageInfo::new(
         (20, 20),
         skia_safe::ColorType::BGRA8888,

@@ -74,7 +74,7 @@ fn commands(image: &Image, destination: Rect, fit: ImageFit) -> Vec<DrawCommand>
 
 fn render(commands: &[DrawCommand]) -> Result<Pixels<[u8; 4]>, TestError> {
     let mut surface = surface(SIDE, SIDE)?;
-    Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?.paint_as_leaf(
+    Painter::without_device(&Fonts::new())?.paint_as_leaf(
         surface.canvas(),
         commands,
         Density::ONE,
@@ -155,7 +155,7 @@ fn an_image_that_declares_another_size_than_its_pixels_is_left_out() -> Result<(
     let declared =
         Image::encoded(Vec::new(), 35, 25).with_backend_data(pattern(TestSurface::new(70, 50))?);
     let destination = Rect::new(3.dp(), 5.dp(), 64.dp(), 64.dp());
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = surface(SIDE, SIDE)?;
     let commands = commands(&declared, destination, ImageFit::cover());
     painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
@@ -177,7 +177,7 @@ fn an_image_cropped_between_pixels_on_a_cached_card_is_the_image_drawn_directly(
     let card = [vec![card], commands(&image, destination, fit)].concat();
     let direct = render(&card)?;
     let tree = crate::test_scenes::leaves([Packet::new(Arc::from(card))?])?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut cached = surface(SIDE, SIDE)?;
     for _ in 0..3 {
         let _canvas_returned_for_chaining = cached.canvas().clear(skia_safe::Color::TRANSPARENT);

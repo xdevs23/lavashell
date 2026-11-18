@@ -36,7 +36,7 @@ pub(super) fn background(canvas: &Canvas) -> Result<(), TestError> {
 }
 
 pub(super) fn setup() -> Result<(Backend, DrawCommand, EffectInput), TestError> {
-    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?;
+    let glass = GlassPrograms::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?;
     let shared = Rc::new(RefCell::new(Shared::new(glass)));
     Ok((
         Backend { shared },
@@ -138,7 +138,7 @@ pub fn assert_cached_glass_matches_ordinary_glass(
 ) -> Result<(), TestError> {
     let (resources, failures) = (
         PaintResources::new(
-            &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+            &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
             Failures::default(),
         )?,
         Failures::default(),
@@ -162,10 +162,10 @@ pub fn assert_cached_glass_matches_ordinary_glass(
     let DrawCommand::Backdrop { shape, effect } = &command else {
         return Err(TestError::Missing("backdrop command"));
     };
-    GlassPrograms::new(&FieldRoom::new(UniformRange::VULKAN_REQUIRED)?)?.backdrop(
+    GlassPrograms::new(&FieldRoom::new(UniformRange::WITHOUT_DEVICE)?)?.backdrop(
         reference.canvas(),
         &PaintResources::new(
-            &FieldRoom::new(UniformRange::VULKAN_REQUIRED)?,
+            &FieldRoom::new(UniformRange::WITHOUT_DEVICE)?,
             Failures::default(),
         )?,
         shape,

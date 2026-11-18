@@ -9,8 +9,8 @@ use std::ops::Range;
 
 pub fn new_painter(geometry: PixelGeometry) -> Result<crate::Painter, TestError> {
     let fonts = crate::test_font::test_font()?;
-    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
-        .with_raster_mode(crate::raster::RasterMode::Tiles);
+    let mut painter =
+        crate::Painter::without_device(&fonts)?.with_raster_mode(crate::raster::RasterMode::Tiles);
     painter.set_text_rendering(
         TextRendering {
             antialiasing: TextAntialiasing::SubpixelApproximate,

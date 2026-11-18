@@ -82,7 +82,7 @@ fn grouped(node: Node, commands: Vec<DrawCommand>) -> Result<SceneTree, TestErro
 }
 
 fn painted(tree: &SceneTree, density: Density) -> Result<Pixels<[u8; 4]>, TestError> {
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     painter.set_packet_caching(crate::PacketCaching::Disabled);
     let mut target = SURFACE.raster()?;
     painter.paint_scene(
@@ -252,7 +252,7 @@ fn a_graft_paints_the_namespace_that_it_shows_in_place() -> Result<(), TestError
 fn a_layer_group_without_an_extent_paints_nothing() -> Result<(), TestError> {
     let nothing = vec![DrawCommand::Save, DrawCommand::Restore];
     let scene = grouped(group(Affine::IDENTITY, 0.5, None), nothing)?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = SURFACE.raster()?;
     let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::WHITE);
     let before = pixels(&mut target);
@@ -286,7 +286,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
 -> Result<(), TestError> {
     let at = |x: f64, y: f64| Affine::translate(Point::new(x.dp(), y.dp()));
     let mut scene = grouped(group(at(10.0, 6.0), 1.0, None), card())?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut target = SURFACE.raster()?;
     let mut paint = |painter: &mut Painter, scene: &SceneTree| {
         let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
@@ -345,7 +345,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
         insert(2, None, 2, group(at(0.0), 1.0, None)),
         insert(3, Some(2), 0, leaf(glass())?),
     ])?;
-    let mut painter = Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&Fonts::new())?;
     let mut retained = SURFACE.raster()?;
     let mut presented = DamageTracker::default();
     for sequence in 0..8_u8 {
@@ -392,7 +392,7 @@ fn a_leaf_without_layers_paints_past_its_footprint() -> Result<(), TestError> {
         style,
     };
     let tree = tree([insert(1, None, 0, leaf(vec![text])?)])?;
-    let mut painter = Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;
+    let mut painter = Painter::without_device(&fonts)?;
     let mut target = SURFACE.raster()?;
     painter.paint_scene(
         target.canvas(),

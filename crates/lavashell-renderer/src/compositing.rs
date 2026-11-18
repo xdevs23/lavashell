@@ -53,8 +53,7 @@ mod tests {
     #[test]
     fn explicit_srgb_blending_preserves_the_default_linear_result() -> Result<(), TestError> {
         for (space, expected) in [(BlendSpace::Linear, 188u8), (BlendSpace::Srgb, 128u8)] {
-            let mut painter =
-                Painter::new(&crate::Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?;
+            let mut painter = Painter::without_device(&crate::Fonts::new())?;
             painter.set_blend_space(space);
             let info = crate::color::working_image_info((4, 4))?;
             let mut surface =
