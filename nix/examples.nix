@@ -17,9 +17,8 @@ let
   ) (builtins.readDir (root + "/examples"));
   directories = lib.mapAttrs (name: _: root + "/examples/${name}") runnable;
   packagedDirectories = lib.mapAttrs (_: directory: root + "/${directory}") contract.packagedCrates;
-  packageRoots = map sources.packageName (
-    lib.attrValues directories ++ lib.attrValues packagedDirectories
-  );
+  packageDirectories = lib.attrValues directories ++ lib.attrValues packagedDirectories;
+  packageRoots = map sources.packageName packageDirectories;
   launches = {
     wayland-input = {
       kind = types.launchKinds.helper;
@@ -79,7 +78,7 @@ let
       requirements = requirementsOf dependencies;
       testedByOtherPackages =
         lib.remove program packageRoots ++ lib.concatMap (other: other.testPackages) testedElsewhere;
-      local =
+      routed =
         {
           ${types.layerRoutes.registryOnly} = artifacts.registry directory;
           ${types.layerRoutes.framework} = framework;
@@ -89,6 +88,25 @@ let
           };
         }
         .${route};
+      local =
+        if builtins.elem name contract.libraryLayers then
+          artifacts.framework directory [ routed ] {
+            example = false;
+            features = sources.dependencyFeaturesEnabledByDependents {
+              inherit directory;
+              dependents = lib.filter (
+                other: other != directory && builtins.elem program (sources.packageNames other)
+              ) packageDirectories;
+            };
+            testedByOtherPackages = [ program ] ++ testedByOtherPackages;
+          }
+        else
+          routed;
+      libraries = map (library: library.frameworkArtifacts) (
+        lib.filter (
+          library: builtins.elem (sources.packageName library.directory) dependencies
+        ) libraryCrates
+      );
       selected = artifacts.selectedPackages directory;
       testPackages = lib.subtractLists (
         lib.concatMap artifacts.packagesTestedThrough [
@@ -102,6 +120,7 @@ let
       rustPackageDefaults
       // artifacts.tests testPackages
       // artifacts.lint testPackages
+      // artifacts.enableFeatures local.cargoBuildFeatures
       // {
         pname = "lavashell-${name}";
         src = sources.sourceFor directory;
@@ -129,13 +148,14 @@ let
         preBuild =
           rustPackageDefaults.preBuild
           + (import ./vendor-directory-times.nix)
-          + artifacts.copy [ local ]
+          + artifacts.copy ([ local ] ++ libraries)
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
           inherit directory route testPackages;
           registryArtifacts = registry;
           engineArtifacts = engine;
           frameworkArtifacts = local;
+          libraryArtifacts = libraries;
         };
         meta = rustPackageDefaults.meta // lib.optionalAttrs (!library) { mainProgram = program; };
       }
@@ -146,6 +166,7 @@ let
   packagedCrates = lib.mapAttrs (
     name: packageSkippingTestsOf (testedElsewhere.${name} or [ ]) name
   ) packagedDirectories;
+  libraryCrates = lib.attrValues (lib.getAttrs contract.libraryLayers packagedCrates);
   packages = lib.mapAttrs (packageSkippingTestsOf [ ]) directories // {
     inherit (packagedCrates) wayland-input;
   };

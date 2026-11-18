@@ -11,6 +11,7 @@ let
       inherit (pkgs) rustPlatform;
     }).examples;
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
+  contract = import (/. + input.nix + "/projection-contract.nix");
   examples = removeAttrs tree.packages [ "examples" ] // tree.packagedCrates;
   checkOf = built: {
     inherit (built) drvPath doCheck cargoTestFlags;
@@ -37,8 +38,22 @@ in
     )
   );
   support = checkOf tree.checks.framework;
+  libraryLayers = map (
+    name:
+    let
+      crate = tree.packagedCrates.${name};
+    in
+    {
+      package = workspaceCrates.packageName crate.directory;
+      layer = crate.frameworkArtifacts.drvPath;
+      hasEngine = crate.engineArtifacts != null;
+    }
+  ) contract.libraryLayers;
   examples = lib.mapAttrs (_: package: {
+    package = workspaceCrates.packageName package.directory;
     closure = workspaceCrates.packageNames package.directory;
     derivations = map checkOf ([ package ] ++ layersThrough package.frameworkArtifacts);
+    libraryLayers = map (layer: layer.drvPath) package.libraryArtifacts;
+    hasEngine = package.engineArtifacts != null;
   }) examples;
 }

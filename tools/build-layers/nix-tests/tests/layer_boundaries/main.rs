@@ -67,15 +67,15 @@ fn an_edit_of_the_reference_source_reaches_only_the_reference() -> Result<(), La
 }
 
 #[test]
-fn an_edit_of_the_recordings_source_changes_only_the_recordings_package()
+fn an_edit_of_the_recordings_source_changes_only_its_library_layer_and_package()
 -> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     append_newline(&fixture.root().join("examples/recordings/src/lib.rs"))?;
     let current = fixture.all_layers()?;
-    let recordings =
-        std::slice::from_ref(&base()?.packages.crate_with_engine("recordings")?.package);
-    assert_unchanged(&current, &base()?.all_except(recordings))?;
-    assert_changed(&current, recordings)
+    let recordings = base()?.packages.crate_with_engine("recordings")?;
+    let built_from_its_source = [recordings.framework.clone(), recordings.package.clone()];
+    assert_unchanged(&current, &base()?.all_except(&built_from_its_source))?;
+    assert_changed(&current, &built_from_its_source)
 }
 
 #[test]

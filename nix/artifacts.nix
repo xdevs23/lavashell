@@ -32,6 +32,7 @@ let
     doCheck = packages != [ ];
   };
   lint = packages: clippy (flags packages);
+  enableFeatures = features: lib.optionalAttrs (features != [ ]) { buildFeatures = features; };
   engineDefaults = rustPackageDefaults // {
     nativeBuildInputs = [ pkgs.pkg-config ];
     buildInputs = [ pkgs.wayland ];
@@ -67,6 +68,7 @@ let
       testedByOtherPackages ? [ ],
       configuration,
       validateEngine ? false,
+      features ? [ ],
     }:
     let
       names = sources.crateNames projection.crates;
@@ -82,6 +84,7 @@ let
       configuration
       // testPhase
       // lint (testPackages ++ stubsLintedToCheckTheirDependencies)
+      // enableFeatures features
       // {
         inherit pname;
         src = source;
@@ -137,6 +140,7 @@ in
     {
       example ? true,
       validateEngine ? false,
+      features ? [ ],
       testedByOtherPackages ? [ ],
     }:
     let
@@ -148,6 +152,7 @@ in
         directory
         previous
         validateEngine
+        features
         testedByOtherPackages
         ;
       projection = sources.project directory;
@@ -157,6 +162,7 @@ in
     };
   inherit
     copy
+    enableFeatures
     flags
     lint
     packagesTestedThrough

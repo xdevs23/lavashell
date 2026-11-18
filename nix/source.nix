@@ -64,6 +64,7 @@ in
     packageNames
     localCrates
     crateNames
+    dependencyFeaturesEnabledByDependents
     ;
   version = workspaceCrates.workspace.workspace.package.version;
   inherit dependencyProject engineProject registryProject;

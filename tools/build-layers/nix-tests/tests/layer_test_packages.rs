@@ -53,9 +53,21 @@ impl CheckPhase {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Example {
+    package: String,
     closure: Vec<String>,
     derivations: Vec<CheckPhase>,
+    library_layers: Vec<String>,
+    has_engine: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryLayer {
+    package: String,
+    layer: String,
+    has_engine: bool,
 }
 
 #[derive(Deserialize)]
@@ -66,6 +78,7 @@ struct CheckPhases {
     checks: Vec<CheckPhase>,
     dependency_layers: Vec<CheckPhase>,
     support: CheckPhase,
+    library_layers: Vec<LibraryLayer>,
     examples: BTreeMap<String, Example>,
 }
 
@@ -116,6 +129,30 @@ fn every_local_crate_of_an_example_is_tested_once_in_the_whole_build() -> Result
             })
             .collect();
         assert!(runs.values().all(|count| *count == 1), "{name}: {runs:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_package_linking_a_library_crate_copies_its_layer_and_has_an_engine_layer_like_it()
+-> Result<(), FixtureError> {
+    let phases = check_phases()?;
+    for library in &phases.library_layers {
+        let linking = phases.examples.iter().filter(|(_, example)| {
+            example.package != library.package && example.closure.contains(&library.package)
+        });
+        for (name, example) in linking {
+            assert!(
+                example.library_layers.contains(&library.layer),
+                "{name} does not copy the layer of {}",
+                library.package
+            );
+            assert!(
+                example.has_engine || !library.has_engine,
+                "{name} has no engine layer, although {} has one",
+                library.package
+            );
+        }
     }
     Ok(())
 }

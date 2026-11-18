@@ -60,6 +60,18 @@ let
           );
     };
   nativeDirectory = root + "/${contract.nativeDirectory}";
+  dependencyFeaturesEnabledByDependents =
+    { directory, dependents }:
+    let
+      declaredByCrate = builtins.intersectAttrs ((readManifest directory).dependencies or { });
+      featuresOf =
+        dependency: declared: map (feature: "${dependency}/${feature}") (declared.features or [ ]);
+    in
+    lib.unique (
+      lib.concatMap (table: lib.concatLists (lib.mapAttrsToList featuresOf (declaredByCrate table))) (
+        lib.concatMap (dependent: dependencyTables (readManifest dependent)) dependents
+      )
+    );
 in
 {
   inherit
@@ -70,6 +82,7 @@ in
     crateNames
     localCrates
     nativeDirectory
+    dependencyFeaturesEnabledByDependents
     ;
   inherit (cargoManifest) dependencyKinds dependencyTables;
   packageNames = directory: crateNames (localCrates directory);
