@@ -245,29 +245,36 @@ pub(super) fn output(ui: &mut Ui, demo: &Demo) {
                     colors.accent,
                 );
             });
-            ui.space(Modifier::new());
-            ui.column(Modifier::new().gap(5.dp()), |ui| {
-                label(ui, CopyKey::Active, 12.sp(), colors.muted);
-                match demo.output.get() {
-                    Some(info) => label(ui, profile_key(info.profile), 13.sp(), colors.ink),
-                    None => data(ui, "—", 13.sp(), colors.ink),
-                }
-            });
-            ui.spacer(28.dp(), 0.dp(), Modifier::new());
-            ui.column(Modifier::new().gap(5.dp()), |ui| {
-                label(ui, CopyKey::Precision, 12.sp(), colors.muted);
-                data(
-                    ui,
-                    demo.output.get().map_or("—".into(), |i| {
-                        format!("{} / α {}", i.color_bits, i.alpha_bits)
-                    }),
-                    13.sp(),
-                    colors.ink,
-                );
-            });
+            if demo.follows_output() {
+                negotiated_output(ui, demo);
+            }
         },
     );
     if demo.output.get().is_some_and(|i| i.fallback) {
         label(ui, CopyKey::Fallback, 12.sp(), colors.accent);
     }
+}
+
+fn negotiated_output(ui: &mut Ui, demo: &Demo) {
+    let colors = ui.local(&PALETTE);
+    ui.space(Modifier::new());
+    ui.column(Modifier::new().gap(5.dp()), |ui| {
+        label(ui, CopyKey::Active, 12.sp(), colors.muted);
+        match demo.output.get() {
+            Some(info) => label(ui, profile_key(info.profile), 13.sp(), colors.ink),
+            None => data(ui, "—", 13.sp(), colors.ink),
+        }
+    });
+    ui.spacer(28.dp(), 0.dp(), Modifier::new());
+    ui.column(Modifier::new().gap(5.dp()), |ui| {
+        label(ui, CopyKey::Precision, 12.sp(), colors.muted);
+        data(
+            ui,
+            demo.output.get().map_or("—".into(), |i| {
+                format!("{} / α {}", i.color_bits, i.alpha_bits)
+            }),
+            13.sp(),
+            colors.ink,
+        );
+    });
 }

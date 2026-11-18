@@ -14,6 +14,12 @@ const TREATMENT: SurfaceTreatment = SurfaceTreatment::RefractiveGlass;
 const HUE: f64 = 80.0;
 const CHROMA: f64 = 0.035;
 
+#[derive(Clone, Copy)]
+pub enum Run {
+    Live { autoplay: bool },
+    Screenshot,
+}
+
 #[derive(Clone)]
 pub struct Demo {
     pub treatment: State<SurfaceTreatment>,
@@ -34,10 +40,11 @@ pub struct Demo {
     pub pause: &'static Icon,
     pub theme: Theme,
     phase_frames: Keyframes<f64>,
+    run: Run,
 }
 
 impl Demo {
-    pub fn new(autoplay: bool, theme: ThemeChoice) -> Result<Self, Error> {
+    pub fn new(run: Run, theme: ThemeChoice) -> Result<Self, Error> {
         let phase_frames = Keyframes::new(vec![
             Keyframe::new(Duration::ZERO, 0.0).easing(Easing::Linear),
             Keyframe::new(Duration::from_secs(8), 1.0),
@@ -54,7 +61,7 @@ impl Demo {
             chroma: State::new(CHROMA),
             position: State::new(START),
             dragging: State::new(None),
-            animate: State::new(autoplay),
+            animate: State::new(matches!(run, Run::Live { autoplay: true })),
             phase: Animation::new(0.0).map_err(Error::PhaseMotion)?,
             request: State::new(OutputRequest::default()),
             output: State::new(None),
@@ -63,7 +70,13 @@ impl Demo {
             pause: icon(&lucide::PAUSE)?,
             theme: Theme::new(theme)?,
             phase_frames,
+            run,
         })
+    }
+
+    #[must_use]
+    pub fn follows_output(&self) -> bool {
+        matches!(self.run, Run::Live { .. })
     }
 
     pub fn select(&self, treatment: SurfaceTreatment) {

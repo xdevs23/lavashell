@@ -18,8 +18,12 @@ include!(concat!(env!("OUT_DIR"), "/copy.rs"));
 pub const APP_ID: &str = "lavashell.materials";
 
 pub fn app(app: App, demo: &Demo, size: Option<Size>, fullscreen: bool) -> Result<App, Error> {
-    let state = demo.clone();
-    let mut app = app.output_observer(move |_, info| state.output.set(Some(info)));
+    let mut app = if demo.follows_output() {
+        let state = demo.clone();
+        app.output_observer(move |_, info| state.output.set(Some(info)))
+    } else {
+        app
+    };
     let window = Window::new(copy(CopyKey::Title), APP_ID)
         .fullscreen(fullscreen)
         .output(demo.request.get());

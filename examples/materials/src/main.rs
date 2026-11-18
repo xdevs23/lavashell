@@ -4,7 +4,10 @@ mod profile;
 
 use clap::Parser;
 use lavashell_example_support::ExampleArguments;
-use lavashell_materials_example::{APP_ID, Error, model::Demo};
+use lavashell_materials_example::{
+    APP_ID, Error,
+    model::{Demo, Run},
+};
 use profile::Profile;
 use std::{path::PathBuf, process::ExitCode};
 
@@ -28,8 +31,13 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
-    let autoplay = arguments.autoplay && arguments.screenshot.is_none();
-    let demo = Demo::new(autoplay, arguments.example.theme())?;
+    let run = match arguments.screenshot {
+        Some(_) => Run::Screenshot,
+        None => Run::Live {
+            autoplay: arguments.autoplay,
+        },
+    };
+    let demo = Demo::new(run, arguments.example.theme())?;
     demo.request.set(arguments.profile.request());
 
     let app = arguments.example.app()?;

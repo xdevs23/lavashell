@@ -5,7 +5,10 @@ use lavashell_example_support::testing::{
     Shaping, capture_path, click, control, drag, write_first_frames,
 };
 use lavashell_example_support::{Start, Steps, ThemeChoice, default_app};
-use lavashell_materials_example::{CopyKey, Error, Tag, app, model::Demo};
+use lavashell_materials_example::{
+    CopyKey, Error, Tag, app,
+    model::{Demo, Run},
+};
 use std::path::{Path, PathBuf};
 use std::{cell::Cell, rc::Rc};
 
@@ -28,7 +31,7 @@ fn record(play: Play, demo: &Demo, size: Option<Size>) -> Result<(), Error> {
 #[test]
 fn controls_change_the_material_and_render_offscreen() -> Result<(), Error> {
     let measured = Rc::new(Cell::new(Size::default()));
-    let demo = Demo::new(false, ThemeChoice::System)?;
+    let demo = Demo::new(Run::Live { autoplay: false }, ThemeChoice::System)?;
     let mut play = Play::new(demo.clone());
     keyboard_reaches_motion(&mut play, &measured, Shaping::new()?);
     let window = Rc::clone(&measured);
@@ -216,7 +219,7 @@ fn page_fill(
 
 #[test]
 fn the_theme_switch_repaints_the_window() -> Result<(), Error> {
-    let demo = Demo::new(false, ThemeChoice::System)?;
+    let demo = Demo::new(Run::Live { autoplay: false }, ThemeChoice::System)?;
     let mut play = Play::new(demo.clone());
     let shaping = Shaping::new()?;
     play.push(Start::at_rest(), move |view, viewport, _| {
