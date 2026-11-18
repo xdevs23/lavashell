@@ -12,7 +12,7 @@ pub struct PlatformFacts {
     pub touch_slop: Option<Dp>,
     pub caret_width: Option<Dp>,
     pub long_press: Duration,
-    pub double_tap: Duration,
+    pub double_press: Duration,
     pub key_repeat: Option<KeyRepeat>,
     pub text_size: Sp,
     pub foreground: Color,
@@ -74,7 +74,7 @@ pub struct KeyboardPreferences {
 pub static TOUCH_SLOP: Local<Option<Dp>> = Local::platform(|platform| platform.touch_slop);
 pub static CARET_WIDTH: Local<Option<Dp>> = Local::platform(|platform| platform.caret_width);
 pub static LONG_PRESS: Local<Duration> = Local::platform(|platform| platform.long_press);
-pub static DOUBLE_TAP: Local<Duration> = Local::platform(|platform| platform.double_tap);
+pub static DOUBLE_PRESS: Local<Duration> = Local::platform(|platform| platform.double_press);
 pub static KEY_REPEAT: Local<Option<KeyRepeat>> = Local::platform(|platform| platform.key_repeat);
 pub static COLOR_SCHEME: Local<ColorScheme> = Local::platform(|platform| platform.color_scheme);
 pub static PASSWORD_MASK: Local<char> = Local::platform(|platform| platform.password_mask);

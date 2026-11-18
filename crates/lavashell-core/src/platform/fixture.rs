@@ -6,7 +6,7 @@ use icu_locale_core::langid;
 use std::time::Duration;
 
 pub const LONG_PRESS: Duration = Duration::from_millis(300);
-pub const DOUBLE_TAP: Duration = Duration::from_millis(300);
+pub const DOUBLE_PRESS: Duration = Duration::from_millis(300);
 pub const REPEAT_DELAY: Duration = Duration::from_millis(400);
 pub const REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -16,7 +16,7 @@ pub fn facts() -> PlatformFacts {
         touch_slop: Some(8.dp()),
         caret_width: Some(1.dp()),
         long_press: LONG_PRESS,
-        double_tap: DOUBLE_TAP,
+        double_press: DOUBLE_PRESS,
         key_repeat: KeyRepeat::new(REPEAT_DELAY, REPEAT_INTERVAL),
         text_size: 14.sp(),
         foreground: Color::WHITE,

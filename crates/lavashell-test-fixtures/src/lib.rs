@@ -8,7 +8,7 @@ mod text;
 
 pub use frames::{FrameFailure, WithoutFailures, failure_causes};
 pub use lavashell_core::platform::fixture::{
-    DOUBLE_TAP, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, facts,
+    DOUBLE_PRESS, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, facts,
 };
 pub use lavashell_core::scene::tree::show_all;
 pub use scene::RecordedScene;

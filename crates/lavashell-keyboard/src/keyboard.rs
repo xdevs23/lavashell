@@ -355,7 +355,7 @@ impl Keyboard {
         });
         if after.double_tap {
             let window = self.timer(&snapshot.view, Keyboard::close_double_tap_window);
-            window.start(snapshot.platform.double_tap);
+            window.start(snapshot.platform.double_press);
             *self.0.double_tap.borrow_mut() = Some(window);
         }
     }

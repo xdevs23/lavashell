@@ -183,10 +183,10 @@ fn the_key_repeat_of_the_platform_applies_on_the_next_press_and_none_stops_it()
 }
 
 #[test]
-fn the_double_tap_time_of_the_platform_applies_on_the_next_tap() -> Result<(), TestError> {
+fn the_double_press_time_of_the_platform_applies_on_the_next_tap() -> Result<(), TestError> {
     let mut host = shown()?;
-    let window = DOUBLE_TAP * 2;
-    host.platform(|facts| facts.double_tap = window);
+    let window = DOUBLE_PRESS * 2;
+    host.platform(|facts| facts.double_press = window);
     host.frame()?;
     let shift = key(&host.view, "Shift")?;
     host.view.input(InputEvent::Press(shift));

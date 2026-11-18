@@ -47,7 +47,7 @@ fn a_second_tap_after_the_double_tap_window_turns_shift_off() -> Result<(), Test
     let shift = key(&host.view, "Shift")?;
     host.view.input(InputEvent::Press(shift));
     host.view.input(InputEvent::Release(shift));
-    host.at(just_before(host.time + DOUBLE_TAP)?)?;
+    host.at(just_before(host.time + DOUBLE_PRESS)?)?;
     host.view.input(InputEvent::Press(shift));
     host.view.input(InputEvent::Release(shift));
     host.frame()?;
@@ -56,7 +56,7 @@ fn a_second_tap_after_the_double_tap_window_turns_shift_off() -> Result<(), Test
         "caps lock after a double tap"
     );
     tap(&mut host.view, "Shift")?;
-    host.at(host.time + DOUBLE_TAP)?;
+    host.at(host.time + DOUBLE_PRESS)?;
     tap(&mut host.view, "Shift")?;
     host.frame()?;
     tap(&mut host.view, "A")?;

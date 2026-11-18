@@ -5,7 +5,7 @@ use icu_locale_core::subtags::language;
 use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::prelude::*;
 use lavashell_test_fixtures::{
-    DOUBLE_TAP, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
+    DOUBLE_PRESS, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

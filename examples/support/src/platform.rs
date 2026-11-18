@@ -9,7 +9,7 @@ pub fn platform() -> PlatformFacts {
         touch_slop: None,
         caret_width: None,
         long_press: Duration::from_millis(300),
-        double_tap: Duration::from_millis(300),
+        double_press: Duration::from_millis(300),
         key_repeat: KeyRepeat::new(Duration::from_millis(400), Duration::from_millis(50)),
         text_size: 14.sp(),
         foreground: Color::WHITE,
