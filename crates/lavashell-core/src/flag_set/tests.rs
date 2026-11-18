@@ -4,8 +4,8 @@ flag_set!(pub enum Light in Lights { Red, Green, Blue });
 
 #[test]
 fn the_set_of_all_flags_lists_each_in_declaration_order_and_the_default_set_is_empty() {
-    let all: Vec<Light> = Lights::all().iter().collect();
-    assert_eq!(all, [Light::Red, Light::Green, Light::Blue]);
+    let all: Vec<u8> = Lights::all().iter().map(|light| light as u8).collect();
+    assert_eq!(all, [0, 1, 2]);
     assert!(Lights::default().is_empty());
 }
 

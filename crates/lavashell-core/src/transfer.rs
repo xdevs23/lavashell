@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn a_move_is_preferred_over_a_copy_when_both_are_allowed() {
-        let both = DragActions::new([DragAction::Copy, DragAction::Move]);
+        let both = DragActions::all();
         assert_eq!(both.preferred(), Some(DragAction::Move));
         assert_eq!(
             DragActions::new([DragAction::Copy]).preferred(),

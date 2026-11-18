@@ -17,7 +17,7 @@ use lavashell_core::prelude::{Density, DpExt, PixelScale, Point, PxExt, Size};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::view::{Cursor, TouchSample};
-use lavashell_core::window::{Edge, Edges, WindowCapabilities, WindowState};
+use lavashell_core::window::{Edges, WindowCapabilities, WindowState};
 use lavashell_platform::{
     DeviceEvent, InputRequest, OutputEvent, OutputId, PlatformEvent, PlatformLinks,
     PlatformRequest, Reports, Role, SettingsEvent, StreamTask, SurfaceAppearance,
@@ -253,7 +253,7 @@ fn configured(surface: SurfaceId, width: i32, height: i32) -> Sent {
     let display_filling = WindowState {
         maximized: false,
         fullscreen: false,
-        tiled: Edges::new([Edge::Top, Edge::Right, Edge::Bottom, Edge::Left]),
+        tiled: Edges::all(),
         suspended: false,
         capabilities: WindowCapabilities::default(),
     };

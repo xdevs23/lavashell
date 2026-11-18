@@ -41,7 +41,7 @@ pub fn assert_halfway_from_blue_to_violet(color: Color, path: HuePath) {
 #[track_caller]
 pub fn assert_shown_alike(actual: Color, expected: Color) {
     let numbers = |color: Color, gamut| color.to_encoded(gamut).into_iter().chain([color.alpha()]);
-    for gamut in [Gamut::Srgb, Gamut::DisplayP3, Gamut::Rec2020] {
+    for gamut in Gamut::ALL {
         let mut differences =
             (numbers(actual, gamut).zip(numbers(expected, gamut))).map(|(a, e)| (a - e).abs());
         assert!(

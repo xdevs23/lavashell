@@ -40,7 +40,7 @@ fn contract() -> ProjectionContract {
         projection_directory: "nix/cargo-projections".to_owned(),
         engine_root: "bevy".to_owned(),
         native_directory: "examples/support".to_owned(),
-        layers: vec![Layer::Engine, Layer::Registry],
+        layers: Layer::ALL.to_vec(),
         companions: Vec::new(),
         packaged_crates: BTreeMap::new(),
         source_files: SourceFiles {

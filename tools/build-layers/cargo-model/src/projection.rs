@@ -2,14 +2,19 @@
 use crate::lock::{CargoLock, LockedPackage};
 use crate::manifest::{FeatureActivations, StubManifest};
 use crate::unit_graph::UnitRecord;
+use lavashell_enum_values::enum_with_values;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Layer {
-    Engine,
-    Registry,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Layer {
+        Engine,
+        Registry,
+    }
+
+    pub const ALL;
 }
 
 impl Layer {

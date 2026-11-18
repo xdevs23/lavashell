@@ -4,6 +4,7 @@ use crate::geometry::{ContourPoint, Point};
 use crate::numbers::count_f64;
 use crate::shape::{PointsError, Polygon, Shape, check_points};
 use crate::units::{Dp, NumberError};
+use lavashell_enum_values::enum_with_values;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Contour<P = Point>(Vec<P>);
@@ -146,7 +147,7 @@ impl<P: ContourPoint> Contour<P> {
                 })
                 .sum()
         };
-        let best = [Winding::Forward, Winding::Reverse]
+        let best = Winding::ALL
             .into_iter()
             .flat_map(|winding| (0..n).map(move |offset| Alignment { offset, winding }))
             .map(|alignment| (error(&alignment), alignment))
@@ -159,10 +160,14 @@ impl<P: ContourPoint> Contour<P> {
     }
 }
 
-#[derive(Clone, Copy)]
-enum Winding {
-    Forward,
-    Reverse,
+enum_with_values! {
+    #[derive(Clone, Copy)]
+    enum Winding {
+        Forward,
+        Reverse,
+    }
+
+    const ALL;
 }
 
 #[derive(Clone, Copy)]

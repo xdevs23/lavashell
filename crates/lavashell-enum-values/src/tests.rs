@@ -37,10 +37,7 @@ use declared::{Ranked, Season, Single};
 
 #[test]
 fn all_lists_every_variant_in_declaration_order() {
-    assert_eq!(
-        Season::ALL,
-        [Season::Spring, Season::Summer, Season::Autumn]
-    );
+    assert_eq!(Season::ALL.map(|season| season as u8), [0, 1, 2]);
 }
 
 #[test]
@@ -55,5 +52,5 @@ fn discriminants_apply_to_the_enum() {
 
 #[test]
 fn single_variant_enum_lists_its_variant() {
-    assert_eq!(Single::ALL, [Single::Only]);
+    assert_eq!(Single::ALL.map(|single| single as u8), [0]);
 }

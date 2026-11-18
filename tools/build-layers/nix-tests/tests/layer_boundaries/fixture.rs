@@ -120,11 +120,15 @@ pub enum Variant {
     GuiTools,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-enum TreeKey {
-    Directory,
-    PackagesByRoute,
+enum_with_values! {
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    enum TreeKey {
+        Directory,
+        PackagesByRoute,
+    }
+
+    const ALL;
 }
 
 #[derive(Serialize)]
@@ -237,11 +241,7 @@ impl Fixture {
     }
 
     fn tree(&self) -> Result<Tree, FixtureError> {
-        self.evaluate_keys(
-            EXPRESSION,
-            Variant::Plain,
-            &[TreeKey::Directory, TreeKey::PackagesByRoute],
-        )
+        self.evaluate_keys(EXPRESSION, Variant::Plain, &TreeKey::ALL)
     }
 
     pub fn stale_layers(&self) -> Result<Vec<Derivation>, LayerTestError> {

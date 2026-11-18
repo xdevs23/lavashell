@@ -115,13 +115,7 @@ mod tests {
 
     #[test]
     fn profiles_create_color_spaces() {
-        for p in [
-            OutputProfile::Srgb,
-            OutputProfile::DisplayP3,
-            OutputProfile::Rec2020,
-            OutputProfile::Hdr10,
-            OutputProfile::ScRgb,
-        ] {
+        for p in OutputProfile::ALL {
             assert!(output_color_space(p).is_some());
         }
     }

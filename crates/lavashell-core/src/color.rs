@@ -2,6 +2,7 @@
 
 use crate::output::finest_step;
 use convert::{convert, decode, encode, lab_to_rgb, rgb_to_lab};
+use lavashell_enum_values::enum_with_values;
 use palette::Srgba;
 use palette::rgb::channels::Argb;
 use std::hash::{Hash, Hasher};
@@ -19,13 +20,17 @@ const CHANNEL_MAX: f64 = u8::MAX as f64;
 
 const DEGREES_PER_TURN: f64 = 360.0;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Gamut {
-    #[default]
-    Srgb,
-    DisplayP3,
-    Rec2020,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub enum Gamut {
+        #[default]
+        Srgb,
+        DisplayP3,
+        Rec2020,
+    }
+
+    pub(crate) const ALL;
 }
 
 impl Gamut {
@@ -266,7 +271,7 @@ mod tests {
     fn primary_reference_and_roundtrips() {
         let red = Color::rgb(0x00ff_0000);
         assert_shown_alike(Color::oklab(0.627_955_4, 0.224_863_1, 0.125_846_3), red);
-        for gamut in [Gamut::Srgb, Gamut::DisplayP3, Gamut::Rec2020] {
+        for gamut in Gamut::ALL {
             let c = Color::encoded([0.17, 0.53, 0.91], 0.7, gamut);
             let [lightness, a, b] = c.to_oklab();
             assert_shown_alike(Color::oklab(lightness, a, b).with_alpha(c.alpha()), c);
@@ -297,7 +302,7 @@ mod tests {
             [1.0, 0.0, 1.0],
             [1.0, 1.0, 1.0],
         ];
-        for gamut in [Gamut::Srgb, Gamut::DisplayP3, Gamut::Rec2020] {
+        for gamut in Gamut::ALL {
             for channels in corners {
                 let [lightness, chroma, hue] = Color::encoded(channels, 1.0, gamut).to_oklch();
                 let through_oklch = Color::oklch(lightness, chroma, hue);
@@ -310,7 +315,7 @@ mod tests {
     fn each_gamut_has_its_published_primaries_and_d65_white_to_its_four_published_decimals() {
         let rec2020 = Gamut::Rec2020.primaries();
         assert_eq!(rec2020.red, Chromaticity { x: 0.708, y: 0.292 });
-        for gamut in [Gamut::Srgb, Gamut::DisplayP3, Gamut::Rec2020] {
+        for gamut in Gamut::ALL {
             let white = gamut.primaries().white;
             let published_decimals = [(white.x * 1e4).round(), (white.y * 1e4).round()];
             assert_f64s_eq(&published_decimals, &[3127.0, 3290.0]);

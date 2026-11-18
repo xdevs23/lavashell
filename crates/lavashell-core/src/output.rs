@@ -3,14 +3,18 @@
 use crate::geometry::Size;
 use lavashell_enum_values::enum_with_values;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum OutputProfile {
-    #[default]
-    Srgb,
-    DisplayP3,
-    Rec2020,
-    Hdr10,
-    ScRgb,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum OutputProfile {
+        #[default]
+        Srgb,
+        DisplayP3,
+        Rec2020,
+        Hdr10,
+        ScRgb,
+    }
+
+    pub const ALL;
 }
 
 enum_with_values! {
