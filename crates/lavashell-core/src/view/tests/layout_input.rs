@@ -108,23 +108,21 @@ fn padding_of_a_parent_is_outside_the_hit_area_of_the_child() -> TestResult {
         );
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
-    view.input(InputEvent::Press(Point {
-        x: 2.dp(),
-        y: 2.dp(),
-    }));
-    view.input(InputEvent::Release(Point {
-        x: 2.dp(),
-        y: 2.dp(),
-    }));
+    press_and_release_at(
+        &mut view,
+        Point {
+            x: 2.dp(),
+            y: 2.dp(),
+        },
+    );
     assert_eq!(count.get(), 0);
-    view.input(InputEvent::Press(Point {
-        x: 7.dp(),
-        y: 7.dp(),
-    }));
-    view.input(InputEvent::Release(Point {
-        x: 7.dp(),
-        y: 7.dp(),
-    }));
+    press_and_release_at(
+        &mut view,
+        Point {
+            x: 7.dp(),
+            y: 7.dp(),
+        },
+    );
     assert_eq!(count.get(), 1);
     Ok(())
 }
@@ -155,14 +153,13 @@ fn clip_excludes_input_and_keyboard_activates() -> TestResult {
         ui.spacer(30.dp(), 30.dp(), modifier.clip(Corners::all(15.dp())));
     });
     advance_with(&mut scene, &mut view, WINDOW, &mut Metrics)?;
-    view.input(InputEvent::Press(Point {
-        x: 1.dp(),
-        y: 1.dp(),
-    }));
-    view.input(InputEvent::Release(Point {
-        x: 1.dp(),
-        y: 1.dp(),
-    }));
+    press_and_release_at(
+        &mut view,
+        Point {
+            x: 1.dp(),
+            y: 1.dp(),
+        },
+    );
     assert_eq!(count.get(), 0);
     view.input(InputEvent::Key {
         key: Key::Tab,
@@ -413,8 +410,7 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
     assert_eq!(view.tagged_bounds(&"allocated")?.height, 1.dp());
     assert_eq!(view.tagged_bounds(&"natural-child")?.height, 200.dp());
     let point = Point::new(20.dp(), 120.dp());
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     assert!(!activated.get());
     advance_with(
         &mut scene,
@@ -423,8 +419,7 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
         &mut Metrics,
     )?;
     assert_eq!(view.tagged_bounds(&"allocated")?.height, 224.dp());
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     assert!(activated.get());
     Ok(())
 }

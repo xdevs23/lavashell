@@ -50,14 +50,7 @@ fn composite_focus_encloses_padded_content_and_leaves_tab_order_to_controls() ->
     let card = view.tagged_bounds(&"card")?;
     assert_eq!(editor.x - card.x, 20.dp());
     assert_eq!(editor.y - card.y, 20.dp());
-    view.input(InputEvent::Press(Point::new(
-        editor.x + 5.dp(),
-        editor.y + 5.dp(),
-    )));
-    view.input(InputEvent::Release(Point::new(
-        editor.x + 5.dp(),
-        editor.y + 5.dp(),
-    )));
+    press_and_release_at(&mut view, Point::new(editor.x + 5.dp(), editor.y + 5.dp()));
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     let commands = scene.commands();
     let outline = commands
@@ -124,8 +117,7 @@ fn asynchronous_paste_keeps_field_identity_and_native_selection_uses_utf8() -> T
     });
     let window = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
-    view.input(InputEvent::Press(Point::new(5.dp(), 5.dp())));
-    view.input(InputEvent::Release(Point::new(5.dp(), 5.dp())));
+    press_and_release_at(&mut view, Point::new(5.dp(), 5.dp()));
     let target = view.editing_target().required("an editing target")?;
     view.input(InputEvent::Shortcut(Shortcut::control(Key::Character('a'))));
     assert_eq!(view.copy_selection().as_deref(), Some("雪🙂"));
@@ -140,8 +132,7 @@ fn asynchronous_paste_keeps_field_identity_and_native_selection_uses_utf8() -> T
     assert!(view.paste_text_at(&paste, "hello\n雪"));
     assert_eq!(first.get(), "hello\n雪");
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
-    view.input(InputEvent::Press(Point::new(5.dp(), 55.dp())));
-    view.input(InputEvent::Release(Point::new(5.dp(), 55.dp())));
+    press_and_release_at(&mut view, Point::new(5.dp(), 55.dp()));
     assert!(!view.paste_text_at(&late, "late transfer"));
     assert_eq!(second.get(), "other");
     assert_eq!(first.get(), "hello\n雪");
@@ -177,8 +168,7 @@ fn multiline_editing_wraps_selects_rows_and_leaves_enter_policy_to_the_caller() 
     });
     let window = Viewport::new(Size::new(200.dp(), 100.dp()), Density::ONE);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
-    view.input(InputEvent::Press(Point::new(4.dp(), 4.dp())));
-    view.input(InputEvent::Release(Point::new(4.dp(), 4.dp())));
+    press_and_release_at(&mut view, Point::new(4.dp(), 4.dp()));
     view.input(InputEvent::Text("ab雪".into()));
     view.input(InputEvent::Key {
         key: Key::Enter,
@@ -233,8 +223,7 @@ fn multiline_default_enter_inserts_text_and_reports_natural_height() -> TestResu
     });
     let window = Viewport::new(Size::new(100.dp(), 100.dp()), Density::ONE);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
-    view.input(InputEvent::Press(Point::new(78.dp(), 4.dp())));
-    view.input(InputEvent::Release(Point::new(78.dp(), 4.dp())));
+    press_and_release_at(&mut view, Point::new(78.dp(), 4.dp()));
     view.input(InputEvent::Key {
         key: Key::Enter,
         shift: false,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::crate_manifests::CrateRule;
+use crate::device_words::DeviceWord;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -15,6 +16,7 @@ pub enum Rule {
     HandWrittenEnumValues { enum_name: String },
     ProbeFamilyLiteral { family: String },
     PixelSizeInTest,
+    DeviceWord { name: String, word: DeviceWord },
     Comment,
     Document { allowed: &'static str },
     UnknownFileKind,
@@ -61,6 +63,10 @@ impl fmt::Display for Rule {
             ),
             Self::PixelSizeInTest => formatter.write_str(
                 "size a test surface with a `TestSurface` value and its `pixel_size()`, never with `PixelSize::new`",
+            ),
+            Self::DeviceWord { name, word } => write!(
+                formatter,
+                "rename `{name}` so it does not contain the word {word}. Apps of every kind use the crate. Name a gesture as a press, a release or an activation",
             ),
             Self::Comment => formatter.write_str(concat!(
                 "remove the comment or documentation attribute. The only comments allowed are an ",

@@ -46,8 +46,7 @@ fn centered_visual_scale_keeps_layout_but_transforms_input_and_accessibility() -
         (Point::new(5.dp(), 20.dp()), 0),
         (Point::new(50.dp(), 20.dp()), 1),
     ] {
-        view.input(InputEvent::Press(point));
-        view.input(InputEvent::Release(point));
+        press_and_release_at(&mut view, point);
         assert_eq!(hits.get(), expected);
     }
     assert!(

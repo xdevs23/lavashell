@@ -10,7 +10,7 @@ use crate::scene::TextStyle;
 use crate::test_error::{Required, TestError, TestResult};
 use crate::ui::{Modifier, NodeId, TextFieldOptions};
 use crate::units::{Density, Dp, DpExt};
-use crate::view::fixture::press_and_release_at;
+use crate::view::press_and_release_at;
 use crate::view::test_scene::{Scene, advance_with};
 use crate::view::test_tags::Tagged;
 use crate::view::test_text::repeated;

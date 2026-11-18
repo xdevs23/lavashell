@@ -7,10 +7,10 @@ use lavashell::keyboard::ShippedLayouts;
 use lavashell::prelude::*;
 use lavashell_example_recordings::Error;
 use lavashell_example_recordings::keyboard::stage::{
-    QUERY, finger, key, key_bounds, key_name, panel, tap, tap_field_end, touch,
+    QUERY, finger, key, key_bounds, key_name, panel, press_field_end, press_key, touch,
 };
 use lavashell_example_recordings::{RecordedFrame, Start, Steps, capture_path, write_first_frames};
-use lavashell_example_support::testing::click;
+use lavashell_example_support::testing::press_and_release;
 use lavashell_example_support::{ThemeChoice, default_app, node};
 use lavashell_on_screen_keyboard::{
     CopyKey, Error as KeyboardError, app, copy,
@@ -143,7 +143,7 @@ fn show(play: &mut Play) {
         Ok(())
     });
     shot(play, settled(), "hidden");
-    tap_field(play);
+    press_field(play);
     play.check(settled(), |view, _, demo| {
         let panel = panel(view, demo)?.bounds;
         let field = (view.bounds_of(&FIELD)).ok_or(Error::MissingField)?;
@@ -165,17 +165,17 @@ fn show(play: &mut Play) {
 }
 
 fn focused(play: &mut Play) {
-    tap_field(play);
+    press_field(play);
     type_query(play);
 }
 
-fn tap_field(play: &mut Play) {
-    play.push(settled(), |view, _, _| tap_field_end(view, pixel()));
+fn press_field(play: &mut Play) {
+    play.push(settled(), |view, _, _| press_field_end(view, pixel()));
 }
 
 fn type_query(play: &mut Play) {
     play.push(settled(), |view, _, demo| {
-        (QUERY.chars()).try_for_each(|character| tap(view, &key_name(demo, character)))
+        (QUERY.chars()).try_for_each(|character| press_key(view, &key_name(demo, character)))
     });
     play.check(settled(), query(QUERY.to_owned()));
 }
@@ -205,12 +205,14 @@ fn typing(play: &mut Play) {
         touch_key(view, "y", InputEvent::TouchUp)
     });
     play.check(Start::NEXT, query(format!("{QUERY}y")));
-    play.push(Start::NEXT, |view, _, _| tap(view, copy(CopyKey::Delete)));
+    play.push(Start::NEXT, |view, _, _| {
+        press_key(view, copy(CopyKey::Delete))
+    });
     play.check(Start::NEXT, query(QUERY.to_owned()));
 }
 
-fn tap_shift(view: &mut View, _: Viewport, _: &Demo) -> Result<(), Error> {
-    tap(view, copy(CopyKey::Shift))
+fn press_shift(view: &mut View, _: Viewport, _: &Demo) -> Result<(), Error> {
+    press_key(view, copy(CopyKey::Shift))
 }
 
 fn shift_checked(expected: Checked) -> impl FnOnce(&View, Viewport, &Demo) -> Result<(), Error> {
@@ -222,14 +224,14 @@ fn shift_checked(expected: Checked) -> impl FnOnce(&View, Viewport, &Demo) -> Re
 }
 
 fn shift(play: &mut Play) {
-    play.push(settled(), tap_shift);
+    play.push(settled(), press_shift);
     play.check(Start::NEXT, shift_checked(Checked::True));
     shot(play, settled(), "shift");
-    play.push(settled(), tap_shift);
-    play.push(Start::NEXT, tap_shift);
+    play.push(settled(), press_shift);
+    play.push(Start::NEXT, press_shift);
     play.check(Start::NEXT, shift_checked(Checked::Mixed));
     shot(play, settled(), "caps");
-    play.push(settled(), tap_shift);
+    play.push(settled(), press_shift);
     play.check(Start::NEXT, shift_checked(Checked::False));
 }
 
@@ -243,7 +245,7 @@ fn pages(play: &mut Play, shipped: &'static ShippedLayouts) {
         (CopyKey::MoreSymbols, "€", Some("more-symbols")),
         (CopyKey::Letters, "q", None),
     ] {
-        play.push(settled(), move |view, _, _| tap(view, copy(page)));
+        play.push(settled(), move |view, _, _| press_key(view, copy(page)));
         play.check(settled(), move |view, _, _| {
             assert!(
                 node(view, &Role::Button, key_on_page).is_ok(),
@@ -277,13 +279,15 @@ fn actions(play: &mut Play) {
         shot(play, settled(), &format!("action-{}", word.to_lowercase()));
     }
     play.push(settled(), set(|demo| &demo.action, TextAction::Done));
-    play.push(settled(), |view, _, _| tap(view, copy(CopyKey::ActionDone)));
+    play.push(settled(), |view, _, _| {
+        press_key(view, copy(CopyKey::ActionDone))
+    });
     play.check(settled(), |view, _, demo| {
         assert!(panel(view, demo).is_err(), "Done hides the keyboard");
         assert_eq!(demo.query.get(), QUERY);
         Ok(())
     });
-    tap_field(play);
+    press_field(play);
     play.check(settled(), |view, _, demo| {
         assert!(
             panel(view, demo).is_ok(),
@@ -307,7 +311,7 @@ fn arrow_keys(play: &mut Play) {
         );
         Ok(())
     });
-    tap_field(play);
+    press_field(play);
     play.push(settled(), |view, _, _| {
         touch_key(view, "q", InputEvent::TouchDown)?;
         view.input(InputEvent::TouchCancel(touch(1)));
@@ -339,7 +343,9 @@ fn the_theme_switch_in_the_taskbar_changes_the_theme() -> Result<(), Error> {
     let demo = Demo::new(ThemeChoice::Dark)?;
     let mut steps = Play::new(demo.clone());
     for choice in ThemeChoice::ALL {
-        steps.push(settled(), move |view, _, _| Ok(click(view, choice)?));
+        steps.push(settled(), move |view, _, _| {
+            Ok(press_and_release(view, choice)?)
+        });
         steps.check(settled(), move |_, _, demo| {
             assert_eq!(demo.theme.choice(), choice);
             Ok(())

@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
 use lavashell_example_recordings::{RecordedFrame, Start, Steps, capture_path, write_first_frames};
-use lavashell_example_support::testing::{Shaping, click, control, drag};
+use lavashell_example_support::testing::{Shaping, control, drag, press_and_release};
 use lavashell_example_support::{ThemeChoice, default_app, node};
 use lavashell_motion::{CopyKey, Error as MotionError, Tag, app, copy, model::Demo, ui::WINDOW};
 use std::{cell::Cell, path::Path, rc::Rc, time::Duration};
@@ -74,7 +74,7 @@ fn retarget(play: &mut Play, demo: &Demo) {
         let autoplay = node(view, &Role::Switch, copy(CopyKey::AutoPlay))?;
         assert_eq!(autoplay.state.semantics.checked, Some(Checked::False));
         assert!(!demo.autoplay.get());
-        Ok(click(view, Tag::Control(CopyKey::Collapse))?)
+        Ok(press_and_release(view, Tag::Control(CopyKey::Collapse))?)
     });
     play.mark(Start::NEXT, Capture::Uncaptured);
     let before = Rc::new(Cell::new(Rect::default()));
@@ -88,7 +88,7 @@ fn retarget(play: &mut Play, demo: &Demo) {
                 "the card is still collapsing"
             );
             collapsing.set(bounds);
-            Ok(click(view, Tag::Card)?)
+            Ok(press_and_release(view, Tag::Card)?)
         },
     );
     play.check(Start::NEXT, move |view, _, demo| {
@@ -105,7 +105,7 @@ fn pause_seek_and_play(play: &mut Play) {
     let held = Rc::new(Cell::new(0.0));
     let pausing = Rc::clone(&held);
     play.push(Start::NEXT, move |view, _, demo| {
-        click(view, Tag::Control(CopyKey::Pause))?;
+        press_and_release(view, Tag::Control(CopyKey::Pause))?;
         pausing.set(demo.timeline.get());
         Ok(())
     });
@@ -131,7 +131,7 @@ fn pause_seek_and_play(play: &mut Play) {
         Start::after(Duration::from_millis(200)),
         move |view, _, demo| {
             assert_eq!(demo.timeline.get().to_bits(), paused.get().to_bits());
-            Ok(click(view, Tag::Control(CopyKey::Play))?)
+            Ok(press_and_release(view, Tag::Control(CopyKey::Play))?)
         },
     );
     play.check(
@@ -213,7 +213,7 @@ fn morph_and_spring(play: &mut Play) {
     play.push(Start::NEXT, move |view, _, demo| {
         let before = demo.shape();
         assert!(before.is_some());
-        click(view, Tag::Control(CopyKey::Morph))?;
+        press_and_release(view, Tag::Control(CopyKey::Morph))?;
         assert_eq!(demo.shape(), before);
         clicked.set(before);
         Ok(())
@@ -225,7 +225,7 @@ fn morph_and_spring(play: &mut Play) {
         move |view, _, demo| {
             assert_ne!(demo.shape(), shape.take());
             let moving = demo.shape();
-            click(view, Tag::Control(CopyKey::Morph))?;
+            press_and_release(view, Tag::Control(CopyKey::Morph))?;
             assert_eq!(demo.shape(), moving);
 
             let slider = control(view, Tag::SpringTarget)?;
@@ -249,7 +249,10 @@ fn morph_and_spring(play: &mut Play) {
 
 fn reduced_motion(play: &mut Play) {
     play.push(Start::NEXT, |view, _, _| {
-        Ok(click(view, Tag::Control(CopyKey::ReducedMotion))?)
+        Ok(press_and_release(
+            view,
+            Tag::Control(CopyKey::ReducedMotion),
+        )?)
     });
     play.check(Start::NEXT, |view, _, demo| {
         assert!(!view.motion().is_active());
@@ -295,9 +298,9 @@ fn the_theme_switch_repaints_the_window() -> Result<(), Error> {
     let shaping = Shaping::new()?;
     steps.push(Start::NEXT, move |view, viewport, _| {
         let by_system = page_fill(&shaping, view, viewport)?;
-        click(view, ThemeChoice::Light)?;
+        press_and_release(view, ThemeChoice::Light)?;
         assert_ne!(page_fill(&shaping, view, viewport)?, by_system);
-        click(view, ThemeChoice::Dark)?;
+        press_and_release(view, ThemeChoice::Dark)?;
         assert_eq!(page_fill(&shaping, view, viewport)?, by_system);
         Ok(())
     });
@@ -376,12 +379,12 @@ fn the_back_control_and_the_display_row_animate_the_crossing_both_ways() -> Resu
         Ok(())
     };
     steps.push(Start::NEXT, |view, _, _| {
-        Ok(click(view, Tag::Control(CopyKey::Back))?)
+        Ok(press_and_release(view, Tag::Control(CopyKey::Back))?)
     });
     steps.check(Start::after(Duration::from_millis(100)), crossing);
     steps.push(Start::after(Duration::from_secs(2)), |view, _, demo| {
         assert!(!demo.back.shows_display());
-        Ok(click(view, Tag::DisplayRow)?)
+        Ok(press_and_release(view, Tag::DisplayRow)?)
     });
     steps.check(Start::after(Duration::from_millis(100)), crossing);
     steps.check(Start::after(Duration::from_secs(2)), |_, _, demo| {

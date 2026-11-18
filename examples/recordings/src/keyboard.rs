@@ -3,6 +3,7 @@ pub mod stage;
 
 use crate::Error;
 use crate::{Recording, Steps, write_capture};
+use lavashell::core::view::press_and_release_at;
 use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
 use lavashell_example_support::{ThemeChoice, default_app};
@@ -12,7 +13,7 @@ use lavashell_on_screen_keyboard::{
     scene::{self, FIELD},
 };
 use lavashell_test_platform::{HostScript, RecordedFrame};
-use stage::{QUERY, finger, tap, tap_field_end};
+use stage::{QUERY, finger, press_field_end, press_key};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 #[derive(Clone, Copy)]
@@ -34,18 +35,19 @@ fn steps(demo: &Demo) -> Steps<Demo, Take, Error> {
     let pixel = Viewport::new(scene::screen(), scene::density()).pixel();
     let mut steps = Steps::new(demo.clone());
     steps.push_at_rest_and_mark(Take::Sequence("show"), move |view, _, _| {
-        tap_field_end(view, pixel)
+        press_field_end(view, pixel)
     });
     steps.push_at_rest_and_mark(Take::Unrecorded, |view, _, typed| {
-        (QUERY.chars()).try_for_each(|character| tap(view, &stage::key_name(typed, character)))
+        (QUERY.chars())
+            .try_for_each(|character| press_key(view, &stage::key_name(typed, character)))
     });
     steps.push_at_rest_and_mark(Take::Sequence("hide"), |view, _, shown| {
         let outside = outside_field(view, shown)?;
-        stage::tap_at(view, outside);
+        press_and_release_at(view, outside);
         Ok(())
     });
     steps.push_at_rest_and_mark(Take::Unrecorded, move |view, _, _| {
-        tap_field_end(view, pixel)
+        press_field_end(view, pixel)
     });
     previews(&mut steps);
     for placement in [docked(Side::Left), Placement::FullWidth] {
@@ -55,14 +57,14 @@ fn steps(demo: &Demo) -> Steps<Demo, Take, Error> {
         });
     }
     steps.push_at_rest_and_mark(Take::Unrecorded, |view, _, _| {
-        tap(view, copy(CopyKey::Back))
+        press_key(view, copy(CopyKey::Back))
     });
     steps.push_at_rest_and_mark(Take::Still("reduced-motion-before"), |view, _, _| {
         view.provide(&REDUCED_MOTION, true);
         Ok(())
     });
     steps.push_at_rest_and_mark(Take::Still("reduced-motion-after"), move |view, _, _| {
-        tap_field_end(view, pixel)
+        press_field_end(view, pixel)
     });
     steps
 }

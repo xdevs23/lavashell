@@ -5,12 +5,18 @@ use super::navigation::FocusDirection;
 use super::pointers::Pointer;
 use super::pointers::PointerSample;
 use super::{Hit, InputEvent, PaintedHit, View, WindowRegionHit};
+use crate::geometry::Point;
 use crate::input_method::TextAction;
 use crate::keyboard::{Key, Shortcut};
 use crate::ui::{
     Action, ComposedShortcut, ContextRequest, InputModifiers, Lines, NodeId, NodeKind, PointerId,
 };
 use std::collections::BTreeMap;
+
+pub fn press_and_release_at(view: &mut View, at: Point) {
+    view.input(InputEvent::Press(at));
+    view.input(InputEvent::Release(at));
+}
 
 impl InputEvent {
     fn focus_source(&self) -> Option<FocusSource> {

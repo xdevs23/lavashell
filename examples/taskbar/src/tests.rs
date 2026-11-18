@@ -11,7 +11,7 @@ use crate::{
 };
 use lavashell::prelude::*;
 use lavashell_example_recordings::{FrameInterval, Start, Steps, capture_path, write_first_frames};
-use lavashell_example_support::testing::{click, control, interaction};
+use lavashell_example_support::testing::{control, interaction, press_and_release};
 use lavashell_example_support::{ThemeChoice, default_app};
 use std::cell::{Cell, RefCell};
 use std::{path::PathBuf, rc::Rc, time::Duration};
@@ -322,7 +322,7 @@ fn theme(play: &mut Play, seen: &Rc<Seen>) {
     play.cue(Start::at_rest());
     play.capture(midway(), "to-dark");
     play.steps.push(Start::at_rest(), |view, _, taskbar| {
-        click(view, ThemeChoice::System)?;
+        press_and_release(view, ThemeChoice::System)?;
         assert_eq!(taskbar.theme.choice(), ThemeChoice::System);
         Ok(())
     });

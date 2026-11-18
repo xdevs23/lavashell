@@ -35,11 +35,9 @@ fn automatic_geometry_transitions_keep_hit_testing_at_visible_bounds() -> TestRe
     let rect = view.tagged_bounds(&"moving")?;
     assert_eq!(rect.x, 110.dp());
     let at = Point::new(rect.x + 20.dp(), rect.y + 20.dp());
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
+    press_and_release_at(&mut view, at);
     assert_eq!(activated.get(), 1);
-    view.input(InputEvent::Press(Point::new(240.dp(), 40.dp())));
-    view.input(InputEvent::Release(Point::new(240.dp(), 40.dp())));
+    press_and_release_at(&mut view, Point::new(240.dp(), 40.dp()));
     assert_eq!(activated.get(), 1);
     moved.set(false);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 500)?;
@@ -360,8 +358,7 @@ fn interrupted_entering_fades_keep_velocity_and_ancestor_clipping_on_exit() -> T
         .position(|command| matches!(command, DrawCommand::Opacity(_)));
     assert!(clip.is_some() && clip < layer);
     assert!(view.routing.hits.is_empty());
-    view.input(InputEvent::Press(Point::new(30.dp(), 30.dp())));
-    view.input(InputEvent::Release(Point::new(30.dp(), 30.dp())));
+    press_and_release_at(&mut view, Point::new(30.dp(), 30.dp()));
     assert_eq!(activated.get(), 0, "removed nodes cannot receive input");
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 3000)?;
     assert_eq!(view.transitions.count(), 0);

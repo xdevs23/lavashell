@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use lavashell::core::accessibility::AccessibleNode;
+use lavashell::core::view::press_and_release_at;
 use lavashell::prelude::*;
 use lavashell_example_support::node;
 use lavashell_on_screen_keyboard::{
@@ -41,20 +42,15 @@ pub fn key_name(demo: &Demo, character: char) -> String {
     }
 }
 
-pub fn tap_at(view: &mut View, at: Point) {
-    view.input(InputEvent::Press(at));
-    view.input(InputEvent::Release(at));
-}
-
-pub fn tap(view: &mut View, name: &str) -> Result<(), Error> {
+pub fn press_key(view: &mut View, name: &str) -> Result<(), Error> {
     let at = key(view, name)?;
-    tap_at(view, at);
+    press_and_release_at(view, at);
     Ok(())
 }
 
-pub fn tap_field_end(view: &mut View, pixel: Dp) -> Result<(), Error> {
+pub fn press_field_end(view: &mut View, pixel: Dp) -> Result<(), Error> {
     let at = field_end(view, pixel)?;
-    tap_at(view, at);
+    press_and_release_at(view, at);
     Ok(())
 }
 

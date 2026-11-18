@@ -148,8 +148,7 @@ fn pointer_active_follows_capture_inside_and_window_focus_cancels() -> TestResul
     assert!(view.tagged_state(&"button")?.pointer.hovered);
     assert!(!view.tagged_state(&"button")?.focus.focused);
     view.input(InputEvent::WindowFocus(true));
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     assert_eq!(activations.get(), 1);
     Ok(())
 }

@@ -2,6 +2,7 @@
 use crate::comments::comment_report;
 use crate::copy_catalogs::copy_report;
 use crate::crate_manifests::crate_report;
+use crate::device_words::{CORE_DEVICE_WORD_RULES, PLATFORM_DEVICE_WORD_RULES};
 use crate::documents::{ALLOWED_DOCUMENT, document_report};
 use crate::enum_value_lists::hand_written_value_lists;
 use crate::error::Error;
@@ -21,7 +22,11 @@ pub struct CrateRule {
     pub findings: fn(&Crate<'_>) -> Result<Vec<Finding>, Error>,
 }
 
-const CRATE_RULES: [CrateRule; 1] = [RENDERER_TEST_RULES];
+const CRATE_RULES: [CrateRule; 3] = [
+    RENDERER_TEST_RULES,
+    CORE_DEVICE_WORD_RULES,
+    PLATFORM_DEVICE_WORD_RULES,
+];
 
 #[derive(Clone, Copy, Debug)]
 pub enum RuleSet {

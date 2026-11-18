@@ -11,7 +11,6 @@ use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};
 use crate::units::{Density, DpExt, NumberError, Positive, SpExt};
-use fixture::press_and_release_at;
 use test_scene::{Scene, advance_with, advance_with_timing};
 use test_tags::Tagged;
 use test_text::repeated;

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf, StripPrefixError};
 
 mod copy_catalogs;
 mod crate_manifests;
+mod device_words;
 mod enum_value_lists;
 mod metadata;
 mod renderer_test_fixtures;

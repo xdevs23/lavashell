@@ -45,6 +45,7 @@ pub use frame_error::{
     LayoutReads, NodeName, NodeValue,
 };
 pub use frame_result::Failures;
+pub use input::press_and_release_at;
 use layout::Layout;
 pub use layout::Proposal;
 use moving::Moving;
@@ -55,8 +56,6 @@ pub use transition::{BoundsMotion, Exit, Transition};
 
 #[cfg(test)]
 mod component_tests;
-#[cfg(any(test, feature = "test-support"))]
-pub mod fixture;
 #[cfg(test)]
 pub(crate) mod test_scene;
 #[cfg(test)]

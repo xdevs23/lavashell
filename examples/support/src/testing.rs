@@ -2,7 +2,7 @@
 use crate::error::reject_failures;
 use crate::{Error, fonts};
 use lavashell::core::ui::{NodeTag, ViewTag};
-use lavashell::core::view::fixture::press_and_release_at;
+use lavashell::core::view::press_and_release_at;
 use lavashell::prelude::*;
 use lavashell::renderer::text::{Shaper, TextRendering};
 use std::{cell::RefCell, rc::Rc};
@@ -34,7 +34,7 @@ pub fn interaction(view: &View, tag: impl ViewTag) -> Result<InteractionState, E
         .ok_or_else(|| Error::MissingControl(NodeTag::new(tag)))
 }
 
-pub fn click(view: &mut View, tag: impl ViewTag) -> Result<(), Error> {
+pub fn press_and_release(view: &mut View, tag: impl ViewTag) -> Result<(), Error> {
     let at = control(view, tag)?.center();
     press_and_release_at(view, at);
     Ok(())

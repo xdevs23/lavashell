@@ -43,8 +43,7 @@ fn keyed_state_survives_reorder_and_drops_after_removal() -> TestResult {
         x: rect.x + 5.dp(),
         y: rect.y + 5.dp(),
     };
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     order.set(vec![2, 1]);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert_eq!(initializations.get(), 2);
@@ -237,8 +236,7 @@ fn scrolling_clamps_offset_and_clips_activation() -> TestResult {
         x: 10.dp(),
         y: 75.dp(),
     };
-    view.input(InputEvent::Press(outside));
-    view.input(InputEvent::Release(outside));
+    press_and_release_at(&mut view, outside);
     assert_eq!(activations.get(), 0);
     view.input(InputEvent::Scroll {
         at: Point {
@@ -249,14 +247,13 @@ fn scrolling_clamps_offset_and_clips_activation() -> TestResult {
     });
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert_eq!(view.tagged_bounds(&("item", 2))?.y, 0.dp());
-    view.input(InputEvent::Press(Point {
-        x: 10.dp(),
-        y: 15.dp(),
-    }));
-    view.input(InputEvent::Release(Point {
-        x: 10.dp(),
-        y: 15.dp(),
-    }));
+    press_and_release_at(
+        &mut view,
+        Point {
+            x: 10.dp(),
+            y: 15.dp(),
+        },
+    );
     assert_eq!(activations.get(), 1);
     Ok(())
 }

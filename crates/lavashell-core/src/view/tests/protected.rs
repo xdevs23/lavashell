@@ -203,8 +203,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
     let text = node.text.as_ref().required("the text of the node")?;
     assert_eq!(text.value, "");
     assert!(!node.actions.contains(&ActionKind::SetValue));
-    view.input(InputEvent::Press(Point::new(19.dp(), 20.dp())));
-    view.input(InputEvent::Release(Point::new(19.dp(), 20.dp())));
+    press_and_release_at(&mut view, Point::new(19.dp(), 20.dp()));
     view.input(InputEvent::Key {
         key: Key::Backspace,
         shift: false,
@@ -267,8 +266,7 @@ fn protected_field_with_key_handler_edits_text_and_space_in_a_retained_scope() -
     let mut scene = Scene::default();
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     let point = Point::new(15.dp(), 20.dp());
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     advance_with(&mut scene, &mut view, window, &mut Metrics)?;
     assert!(view.tagged_state(&"private-with-handler")?.focus.focused);
     view.input(InputEvent::Text("wadswads".into()));

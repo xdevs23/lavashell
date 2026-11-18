@@ -2,6 +2,7 @@
 
 use crate::attributes::configured_attributes;
 use crate::findings::{Finding, Rule};
+use crate::identifiers::identifiers;
 use crate::modules::{Crate, Source};
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use quote::ToTokens;
@@ -48,11 +49,9 @@ pub fn missing_forbid(crate_files: &Crate<'_>) -> syn::Result<Option<Finding>> {
 }
 
 fn has_unsafe(tokens: TokenStream) -> bool {
-    tokens.into_iter().any(|token| match token {
-        TokenTree::Ident(ident) => ident == "unsafe",
-        TokenTree::Group(group) => has_unsafe(group.stream()),
-        TokenTree::Punct(_) | TokenTree::Literal(_) => false,
-    })
+    identifiers(tokens)
+        .into_iter()
+        .any(|ident| ident == "unsafe")
 }
 
 fn forbidden_lints(file: &syn::File) -> syn::Result<Vec<syn::Path>> {

@@ -96,8 +96,7 @@ fn a_touch_point_ends_at_release_while_the_primary_pointer_hovers_on() -> TestRe
     let mut scene = Scene::default();
     let KeysFixture { mut view, .. } = keys(&mut scene)?;
     let (a, b) = (at(&view, "a")?, at(&view, "b")?);
-    view.input(InputEvent::Press(a));
-    view.input(InputEvent::Release(a));
+    press_and_release_at(&mut view, a);
     view.input(InputEvent::TouchDown(finger(7, b)));
     assert!(view.tagged_state(&"b")?.pointer.hovered);
     view.input(InputEvent::TouchUp(finger(7, b)));

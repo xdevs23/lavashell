@@ -159,8 +159,7 @@ fn dynamic_disabled_metadata_gates_real_input_and_reenables_without_composition(
     let point = Point::new(1.dp(), 1.dp());
     disabled.set(true);
     view.update_accessibility();
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     view.input(InputEvent::Key {
         key: Key::Enter,
         shift: false,
@@ -168,8 +167,7 @@ fn dynamic_disabled_metadata_gates_real_input_and_reenables_without_composition(
     assert_eq!(activations.get(), 0);
     disabled.set(false);
     view.update_accessibility();
-    view.input(InputEvent::Press(point));
-    view.input(InputEvent::Release(point));
+    press_and_release_at(&mut view, point);
     assert_eq!(activations.get(), 1);
     assert_eq!(view.stats().root_compositions, compositions);
     Ok(())

@@ -4,6 +4,7 @@ use crate::{
     model::{App, Taskbar},
     tag::Tag,
 };
+use lavashell::core::view::press_and_release_at;
 use lavashell::prelude::*;
 use lavashell_example_support::ThemeChoice;
 
@@ -17,7 +18,7 @@ pub enum Cue {
     Press(App),
     Release(App),
     Tab,
-    TapMap,
+    PressMap,
 }
 
 pub const CUES: [Cue; 15] = [
@@ -31,7 +32,7 @@ pub const CUES: [Cue; 15] = [
     Cue::Tab,
     Cue::Tab,
     Cue::Tab,
-    Cue::TapMap,
+    Cue::PressMap,
     Cue::Trip(false),
     Cue::Foreground(App::Navigation),
     Cue::Theme(ThemeChoice::Light),
@@ -73,11 +74,10 @@ impl Cue {
                 key: Key::Tab,
                 shift: false,
             }),
-            Self::TapMap => {
+            Self::PressMap => {
                 let bar = view.bounds_of(&Tag::Bar).ok_or(Error::MissingBar)?;
                 let at = Rect::new(bar.x, Dp::ZERO, bar.width, bar.y).center();
-                view.input(InputEvent::Press(at));
-                view.input(InputEvent::Release(at));
+                press_and_release_at(view, at);
             }
         }
         Ok(())

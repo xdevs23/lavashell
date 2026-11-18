@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Play, platform, query, settled, shot, showing, touch_key};
 use icu_locale_core::langid;
+use lavashell::core::view::press_and_release_at;
 use lavashell::keyboard::{Layout, ShippedLayouts};
 use lavashell::prelude::*;
 use lavashell_example_recordings::Error;
 use lavashell_example_recordings::Start;
-use lavashell_example_recordings::keyboard::stage::{
-    QUERY, finger, key_bounds, tap, tap_at, touch,
-};
+use lavashell_example_recordings::keyboard::stage::{QUERY, finger, key_bounds, press_key, touch};
 use lavashell_example_support::node;
 use lavashell_on_screen_keyboard::{CopyKey, copy, model::Demo};
 use std::{cell::Cell, rc::Rc};
 
-fn tap_globe(view: &mut View, _: Viewport, _: &Demo) -> Result<(), Error> {
-    tap(view, copy(CopyKey::Globe))
+fn press_globe(view: &mut View, _: Viewport, _: &Demo) -> Result<(), Error> {
+    press_key(view, copy(CopyKey::Globe))
 }
 
 fn shows(layout: &'static Layout) -> impl FnOnce(&View, Viewport, &Demo) -> Result<(), Error> {
@@ -42,7 +41,7 @@ pub(super) fn layouts(play: &mut Play, shipped: &'static ShippedLayouts) {
         (&shipped.portuguese, "portugues"),
         (&shipped.english, "english"),
     ] {
-        play.push(settled(), tap_globe);
+        play.push(settled(), press_globe);
         play.check(settled(), shows(layout));
         shot(play, settled(), &format!("layout-{name}"));
     }
@@ -68,7 +67,7 @@ pub(super) fn layouts(play: &mut Play, shipped: &'static ShippedLayouts) {
     let measured = Rc::clone(&english);
     play.push(settled(), move |view, viewport, demo| {
         measured.set(key_bounds(view, "q")?.width);
-        tap_globe(view, viewport, demo)
+        press_globe(view, viewport, demo)
     });
     play.check(settled(), move |view, _, _| {
         assert!(
@@ -87,13 +86,13 @@ pub(super) fn layouts(play: &mut Play, shipped: &'static ShippedLayouts) {
     shot(play, settled(), "globe-list");
     play.push(settled(), |view, _, _| {
         let portuguese = node(view, &Role::MenuItem, "Português")?.bounds.center();
-        tap_at(view, portuguese);
+        press_and_release_at(view, portuguese);
         Ok(())
     });
     play.check(settled(), layouts_menu(false));
     play.check(Start::NEXT, shows(&shipped.portuguese));
-    play.push(Start::NEXT, tap_globe);
-    play.push(Start::NEXT, tap_globe);
+    play.push(Start::NEXT, press_globe);
+    play.push(Start::NEXT, press_globe);
     play.check(settled(), shows(&shipped.german));
 }
 
@@ -115,8 +114,10 @@ pub(super) fn further_letters(play: &mut Play, shipped: &'static ShippedLayouts)
         touch_key(view, "a", InputEvent::TouchUp)
     });
     play.check(Start::NEXT, query(format!("{QUERY}à")));
-    play.push(Start::NEXT, |view, _, _| tap(view, copy(CopyKey::Delete)));
-    play.push(Start::NEXT, tap_globe);
+    play.push(Start::NEXT, |view, _, _| {
+        press_key(view, copy(CopyKey::Delete))
+    });
+    play.push(Start::NEXT, press_globe);
     play.push(settled(), |view, _, _| {
         touch_key(view, "c", InputEvent::TouchDown)
     });
@@ -136,8 +137,10 @@ pub(super) fn further_letters(play: &mut Play, shipped: &'static ShippedLayouts)
         Ok(())
     });
     play.check(Start::NEXT, query(format!("{QUERY}ê")));
-    play.push(Start::NEXT, |view, _, _| tap(view, copy(CopyKey::Delete)));
+    play.push(Start::NEXT, |view, _, _| {
+        press_key(view, copy(CopyKey::Delete))
+    });
     play.check(Start::NEXT, query(QUERY.to_owned()));
-    play.push(Start::NEXT, tap_globe);
+    play.push(Start::NEXT, press_globe);
     play.check(settled(), shows(&shipped.english));
 }

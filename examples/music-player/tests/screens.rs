@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
+use lavashell::core::view::press_and_release_at;
 use lavashell::prelude::*;
 use lavashell_example_recordings::{Start, Steps, at_rest, capture_path, write_first_frames};
-use lavashell_example_support::testing::{Shaping, click, control};
+use lavashell_example_support::testing::{Shaping, control, press_and_release};
 use lavashell_example_support::{Theme, ThemeChoice, default_app, node};
 use lavashell_music_player::{
     app,
@@ -78,7 +79,7 @@ fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Erro
     play.mark(Start::at_rest(), capture("music"));
     controls(&mut play);
     shot(&mut play, "music-search", |view, _, model| {
-        click(view, Tag::SearchInput)?;
+        press_and_release(view, Tag::SearchInput)?;
         view.input(InputEvent::Text("glass".into()));
         assert_eq!(model.get().query, "glass");
         Ok(())
@@ -93,7 +94,10 @@ fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Erro
         Ok(())
     });
     shot(&mut play, "music-favorites", |view, _, _| {
-        Ok(click(view, Tag::Navigation(CopyKey::NavFavorites))?)
+        Ok(press_and_release(
+            view,
+            Tag::Navigation(CopyKey::NavFavorites),
+        )?)
     });
     play.check(Start::at_rest(), |view, _, _| {
         assert!(view.bounds_of(&Tag::Track(tracks()[3])).is_some());
@@ -107,19 +111,19 @@ fn controls_update_the_shared_model_and_render_every_screen() -> Result<(), Erro
     });
     shot(&mut play, "music-album", |view, _, model| {
         assert_eq!(model.get().recent, []);
-        click(view, Tag::PlayAlbum)?;
+        press_and_release(view, Tag::PlayAlbum)?;
         assert_eq!(model.get().current, tracks()[0]);
         assert_eq!(model.get().album, AlbumId::all().next());
         assert!(model.get().playing);
         Ok(())
     });
     play.push(Start::at_rest(), |view, _, model| {
-        click(view, Tag::Next)?;
+        press_and_release(view, Tag::Next)?;
         assert_eq!(model.get().current, tracks()[1]);
         Ok(())
     });
     shot(&mut play, "music-recent", |view, _, model| {
-        click(view, Tag::Navigation(CopyKey::NavRecent))?;
+        press_and_release(view, Tag::Navigation(CopyKey::NavRecent))?;
         assert_eq!(model.get().recent, vec![tracks()[1], tracks()[0]]);
         Ok(())
     });
@@ -143,7 +147,7 @@ fn controls(play: &mut Play) {
     ];
     for (tag, changed) in clicks {
         play.push(Start::at_rest(), move |view, _, model| {
-            click(view, tag)?;
+            press_and_release(view, tag)?;
             assert!(changed(&model.get()), "{tag:?}");
             Ok(())
         });
@@ -151,8 +155,7 @@ fn controls(play: &mut Play) {
     play.push(Start::at_rest(), |view, _, model| {
         let r = control(view, Tag::Volume)?;
         let p = Point::new(r.x + r.width * 0.3, r.y + r.height / 2.0);
-        view.input(InputEvent::Press(p));
-        view.input(InputEvent::Release(p));
+        press_and_release_at(view, p);
         assert!((model.get().volume - 0.3).abs() < 0.01);
         Ok(())
     });
@@ -239,7 +242,7 @@ fn panel_reaches_the_library() -> Result<(), Error> {
     let panel_at_rest = Start::when(move |view| !is_library(view) && at_rest(view));
     play.push(panel_at_rest, |view, _, model| {
         let previous = model.get().current;
-        click(view, Tag::Next)?;
+        press_and_release(view, Tag::Next)?;
         assert_ne!(model.get().current, previous);
         Ok(())
     });
@@ -323,9 +326,9 @@ fn the_theme_switch_repaints_the_screen() -> Result<(), Error> {
     let mut play = Play::new(model.clone());
     play.push(Start::at_rest(), move |view, viewport, _| {
         let by_system = page_fill(view, viewport)?;
-        click(view, ThemeChoice::Light)?;
+        press_and_release(view, ThemeChoice::Light)?;
         assert_ne!(page_fill(view, viewport)?, by_system);
-        click(view, ThemeChoice::Dark)?;
+        press_and_release(view, ThemeChoice::Dark)?;
         assert_eq!(page_fill(view, viewport)?, by_system);
         Ok(())
     });

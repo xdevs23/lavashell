@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 use lavashell::{materials::SurfaceTreatment, prelude::*};
 use lavashell_example_recordings::{Start, Steps, capture_path, write_first_frames};
-use lavashell_example_support::testing::{Shaping, click, control, drag};
+use lavashell_example_support::testing::{Shaping, control, drag, press_and_release};
 use lavashell_example_support::{ThemeChoice, default_app};
 use lavashell_materials_example::{
     CopyKey, Tag, app,
@@ -61,12 +61,12 @@ fn controls_change_the_material_and_render_offscreen() -> Result<(), Error> {
             Point::new(area.x + p.x + 140.dp(), area.y + p.y + 120.dp()),
         );
         assert!((demo.position.get().x - p.x - 40.dp()).abs() < 0.1.dp());
-        click(view, Tag::Control(CopyKey::Frosted))?;
+        press_and_release(view, Tag::Control(CopyKey::Frosted))?;
         assert_eq!(demo.blur.get(), 18.dp());
         Ok(())
     });
     play.push(Start::at_rest(), |view, _, _| {
-        Ok(click(view, Tag::Control(CopyKey::Reset))?)
+        Ok(press_and_release(view, Tag::Control(CopyKey::Reset))?)
     });
     sliders(&mut play);
     record(play, &demo, None)?;
@@ -135,7 +135,7 @@ fn sliders(play: &mut Play) {
     });
 
     play.push(Start::at_rest(), |view, _, _| {
-        Ok(click(view, Tag::Control(CopyKey::Paper))?)
+        Ok(press_and_release(view, Tag::Control(CopyKey::Paper))?)
     });
     play.push(Start::at_rest(), |view, _, demo| {
         let blur = demo.blur.get();
@@ -233,9 +233,9 @@ fn the_theme_switch_repaints_the_window() -> Result<(), Error> {
     let shaping = Shaping::new()?;
     play.push(Start::at_rest(), move |view, viewport, _| {
         let by_system = page_fill(&shaping, view, viewport)?;
-        click(view, ThemeChoice::Light)?;
+        press_and_release(view, ThemeChoice::Light)?;
         assert_ne!(page_fill(&shaping, view, viewport)?, by_system);
-        click(view, ThemeChoice::Dark)?;
+        press_and_release(view, ThemeChoice::Dark)?;
         assert_eq!(page_fill(&shaping, view, viewport)?, by_system);
         Ok(())
     });
