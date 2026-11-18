@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::targets::AttachedSurface;
-use super::{Drawn, FrameError, PresentFrame, SurfaceControl};
-use crate::FrameOutcome;
+use super::{Drawn, FrameError};
 use crate::vulkan::{CompletedScene, DrawnFrame, VulkanRenderer};
 use lavashell_core::prelude::{PixelSize, Presented, Rect};
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::{FrameOutcome, PresentFrame, SurfaceControl};
 use lavashell_renderer::{FrameDevice, SceneImage, SurfaceFrame};
 
 #[derive(Clone, Copy)]

@@ -22,14 +22,12 @@ use lavashell_core::units::{Density, Dp, DpExt};
 use lavashell_core::view::{InputEvent, TextMeasurer, View};
 use lavashell_platform::{
     Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
-    PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
-    no_streams,
+    PlatformRequest, SurfaceAttachment, SurfaceControl, SurfaceEvent, SurfaceRequest, SurfaceSpec,
+    TimingEvent,
 };
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming};
 use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
-use lavashell_vulkan_renderer::{
-    HeadlessPresentation, NoStreams, PainterSetup, RendererSetup, SurfaceControl,
-};
+use lavashell_vulkan_renderer::{HeadlessBackend, PainterSetup, RendererSetup};
 use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
 use std::convert::Infallible;
@@ -223,9 +221,8 @@ pub(crate) struct StandIn {
 impl Platform for StandIn {
     type Setup = Scenario;
     type Error = StandInError;
-    type Presentation = HeadlessPresentation;
+    type Backend = HeadlessBackend;
     type Control = NoControl;
-    type Streams = NoStreams;
 
     fn connect(scenario: Scenario) -> Result<Connection<Self>, StandInError> {
         match scenario {
@@ -240,8 +237,7 @@ impl Platform for StandIn {
                     script,
                     log,
                 },
-                presentation: HeadlessPresentation::without_surfaces(),
-                streams: no_streams(),
+                backend: HeadlessBackend::without_surfaces(),
                 host,
                 clock: Arc::new(SystemClock::start()),
             }),
@@ -253,20 +249,20 @@ impl Platform for StandIn {
         self.offered.clone()
     }
 
-    fn serve(self, links: PlatformLinks<NoControl, NoStreams>) -> Result<(), StandInError> {
+    fn serve(self, links: PlatformLinks<NoControl, HeadlessBackend>) -> Result<(), StandInError> {
         (self.script)(Wire::new(links, self.log))
     }
 }
 
 pub(crate) struct Wire {
-    links: PlatformLinks<NoControl, NoStreams>,
+    links: PlatformLinks<NoControl, HeadlessBackend>,
     waiting: VecDeque<PlatformRequest>,
     taken: Vec<PlatformRequest>,
     log: RequestLog,
 }
 
 impl Wire {
-    fn new(links: PlatformLinks<NoControl, NoStreams>, log: RequestLog) -> Self {
+    fn new(links: PlatformLinks<NoControl, HeadlessBackend>, log: RequestLog) -> Self {
         Self {
             links,
             waiting: VecDeque::new(),

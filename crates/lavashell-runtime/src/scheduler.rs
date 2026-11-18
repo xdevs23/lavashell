@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime};
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::TimingEvent;
-use lavashell_vulkan_renderer::FrameOutcome;
+use lavashell_platform::{FrameOutcome, TimingEvent};
 use pacing::Pacing;
 use std::collections::BTreeMap;
 use std::mem;

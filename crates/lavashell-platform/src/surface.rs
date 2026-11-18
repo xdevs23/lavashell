@@ -7,9 +7,6 @@ use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::window::WindowState;
-use lavashell_vulkan::Window;
-use lavashell_vulkan_renderer::{Attach, SurfaceAlpha};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SurfaceEvent {
@@ -63,7 +60,7 @@ pub struct SurfaceSpec {
 
 impl SurfaceSpec {
     #[must_use]
-    pub fn attach<C>(&self, surface: SurfaceId, window: Arc<dyn Window>, control: C) -> Attach<C> {
+    pub fn attach<C, W>(&self, surface: SurfaceId, window: W, control: C) -> Attach<C, W> {
         let alpha = if self.appearance.transparent {
             SurfaceAlpha::Transparent
         } else {
@@ -78,6 +75,21 @@ impl SurfaceSpec {
             control,
         }
     }
+}
+
+pub struct Attach<C, W> {
+    pub surface: SurfaceId,
+    pub window: W,
+    pub alpha: SurfaceAlpha,
+    pub output: OutputRequest,
+    pub hdr_metadata: Option<HdrMetadata>,
+    pub control: C,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SurfaceAlpha {
+    Opaque,
+    Transparent,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

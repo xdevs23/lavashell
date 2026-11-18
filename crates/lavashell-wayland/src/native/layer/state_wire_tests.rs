@@ -6,7 +6,7 @@ use crate::test_error::TestError;
 use lavashell_core::prelude::{
     Density, DpExt, FrameTime, PixelScale, Rect, ScaledViewport, Size, Viewport,
 };
-use lavashell_vulkan_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
+use lavashell_platform::{FrameOutcome, PresentFrame, SurfaceControl};
 use layer_client::{LayerClient, top_bar};
 
 const ACK_CONFIGURE: u16 = zwlr_layer_surface_v1::REQ_ACK_CONFIGURE_OPCODE;

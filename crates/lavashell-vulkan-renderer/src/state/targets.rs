@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::StateError;
-use crate::{FrameOutcome, SurfaceContents, SurfaceTarget};
+use crate::{SurfaceContents, SurfaceTarget};
 use lavashell_core::prelude::{DamageTracker, PixelScale, PixelSize, Presented, Rect, Viewport};
 use lavashell_core::scene::tree::TreeId;
+use lavashell_platform::FrameOutcome;
 use lavashell_renderer::effect_registry::QualityChange;
 
 #[cfg(test)]

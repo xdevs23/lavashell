@@ -17,9 +17,10 @@ use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_core::units::Density;
 use lavashell_core::view::{TextMeasurer, View};
 use lavashell_platform::{
-    Capability, FocusGrabEvent, FocusGrabRequest, KeyboardMode, SurfaceEvent, SurfaceRequest,
+    Capability, FocusGrabEvent, FocusGrabRequest, FrameOutcome, KeyboardMode, SurfaceEvent,
+    SurfaceRequest,
 };
-use lavashell_vulkan_renderer::{FrameOutcome, SurfaceContents};
+use lavashell_vulkan_renderer::SurfaceContents;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 

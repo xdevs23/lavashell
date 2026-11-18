@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::AospError;
 use super::surface_in_window::SurfaceInWindow;
+use super::{AospError, AospReports};
 use crate::input::ShownSurface;
 use crate::layout_size::LayoutSize;
 use crate::native_window::NativeWindow;
 use crate::output::report_entered;
 use crate::platform::vulkan_window;
-use crate::streams::AospStreams;
 use lavashell_core::prelude::PixelSize;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::{Edges, WindowState};
 use lavashell_platform::{
-    InputRequest, PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
+    InputRequest, PlatformRequest, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
     SurfaceSpec, TimingEvent,
 };
 use std::sync::mpsc;
@@ -61,7 +60,7 @@ impl HostSurface {
     pub(crate) fn execute(
         &mut self,
         request: PlatformRequest,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         let request = match request {
             PlatformRequest::Surface(request) => request,
@@ -99,7 +98,7 @@ impl HostSurface {
     pub(crate) fn created(
         &mut self,
         window: NativeWindow,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         if self.window.is_some() {
             return Err(AospError::SecondWindow);
@@ -108,10 +107,7 @@ impl HostSurface {
         self.show(reports)
     }
 
-    pub(crate) fn changed(
-        &mut self,
-        reports: &Reports<NativeWindow, AospStreams>,
-    ) -> Result<(), AospError> {
+    pub(crate) fn changed(&mut self, reports: &AospReports) -> Result<(), AospError> {
         if let (RuntimeSurface::Shown(shown), Some(window)) = (&mut self.surface, &self.window) {
             shown.resize(
                 window_size(window)?,
@@ -126,7 +122,7 @@ impl HostSurface {
     pub(crate) fn change_density(
         &mut self,
         density: Density,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         if density == self.density {
             return Ok(());
@@ -141,7 +137,7 @@ impl HostSurface {
     pub(crate) fn change_layout_size(
         &mut self,
         layout_size: Option<LayoutSize>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         self.layout_size = layout_size;
         if let RuntimeSurface::Shown(shown) = &mut self.surface {
@@ -150,11 +146,7 @@ impl HostSurface {
         Ok(())
     }
 
-    pub(crate) fn destroyed(
-        &mut self,
-        retired: mpsc::SyncSender<()>,
-        reports: &Reports<NativeWindow, AospStreams>,
-    ) {
+    pub(crate) fn destroyed(&mut self, retired: mpsc::SyncSender<()>, reports: &AospReports) {
         drop(self.window.take());
         match &self.surface {
             RuntimeSurface::Shown(shown) => {
@@ -170,7 +162,7 @@ impl HostSurface {
         }
     }
 
-    pub(crate) fn frame(&self, reports: &Reports<NativeWindow, AospStreams>) {
+    pub(crate) fn frame(&self, reports: &AospReports) {
         if let RuntimeSurface::Shown(shown) = &self.surface {
             reports.time(TimingEvent::DisplayReady(shown.id()));
         }
@@ -194,7 +186,7 @@ impl HostSurface {
         }
     }
 
-    fn show(&mut self, reports: &Reports<NativeWindow, AospStreams>) -> Result<(), AospError> {
+    fn show(&mut self, reports: &AospReports) -> Result<(), AospError> {
         let (RuntimeSurface::Requested { surface, spec }, Some(window)) =
             (&self.surface, &self.window)
         else {

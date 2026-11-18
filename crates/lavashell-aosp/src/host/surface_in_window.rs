@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::AospError;
+use super::{AospError, AospReports};
 use crate::input::ShownSurface;
 use crate::layout_size::{LayoutSize, fit_viewport_into_window};
-use crate::native_window::NativeWindow;
-use crate::streams::AospStreams;
 use lavashell_core::geometry::{PixelSize, ScaledViewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::WindowState;
-use lavashell_platform::{Reports, SurfaceEvent};
+use lavashell_platform::SurfaceEvent;
 
 pub(super) struct SurfaceInWindow {
     id: SurfaceId,
@@ -24,7 +22,7 @@ impl SurfaceInWindow {
         window: Option<WindowState>,
         density: Density,
         layout_size: Option<LayoutSize>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<Self, AospError> {
         let mut shown = Self {
             id,
@@ -52,7 +50,7 @@ impl SurfaceInWindow {
         window_size: PixelSize,
         density: Density,
         layout_size: Option<LayoutSize>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         self.window_size = window_size;
         self.lay_out(density, layout_size, reports)
@@ -62,7 +60,7 @@ impl SurfaceInWindow {
         &mut self,
         density: Density,
         layout_size: Option<LayoutSize>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         reports.report((self.id, SurfaceEvent::DensityChanged(density)));
         self.lay_out(density, layout_size, reports)
@@ -72,7 +70,7 @@ impl SurfaceInWindow {
         &mut self,
         density: Density,
         layout_size: Option<LayoutSize>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<(), AospError> {
         let fitted = fit_viewport_into_window(self.window_size, density, layout_size);
         if let Some(scaled_viewport) = fitted.map_err(AospError::FitLayout)? {

@@ -2992,8 +2992,6 @@ dependencies = [
  "lavashell-actor",
  "lavashell-core",
  "lavashell-renderer",
- "lavashell-vulkan",
- "lavashell-vulkan-renderer",
  "thiserror 2.0.21",
 ]
 
@@ -3143,6 +3141,7 @@ dependencies = [
  "lavashell-core",
  "lavashell-effect-quality",
  "lavashell-error-chain",
+ "lavashell-platform",
  "lavashell-renderer",
  "lavashell-test-fixtures",
  "lavashell-vulkan",

@@ -18,6 +18,7 @@ pub use error::{Stopped, ViewError};
 use crate::deadline_receiver::{Arrival, DeadlineReceiver};
 use crate::input::InputRouter;
 use crate::observers::Observers;
+use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::{RendererOutput, RendererStopped};
 use crate::run::{RunError, RuntimeSetup, SurfaceSetup};
 use crate::run_end::RunEnd;
@@ -29,8 +30,7 @@ use crate::window_requests::to_window_control_request;
 use actors::{ActorSetup, ActorStops, Actors};
 use lavashell_actor::{Clock, Closed, Merge, MergeEffect, Outlet, Sender};
 use lavashell_platform::{
-    Capability, HostFacts, Platform, PlatformEvent, PlatformRequest, Reports, SessionLockRequest,
-    StreamSetup,
+    Capability, HostFacts, PlatformEvent, PlatformRequest, Reports, SessionLockRequest,
 };
 use lavashell_renderer::text::Shaper;
 use open_surfaces::OpenSurfaces;
@@ -125,7 +125,7 @@ impl<T> ActorOutlet<T> {
     }
 }
 
-pub(crate) struct ViewActor<P: Platform> {
+pub(crate) struct ViewActor<P: RenderedPlatform> {
     surfaces: OpenSurfaces,
     outputs: Outputs,
     actors: Actors<P>,
@@ -141,14 +141,13 @@ pub(crate) struct ViewActor<P: Platform> {
     clock: Arc<dyn Clock>,
 }
 
-pub(crate) struct Connected<P: Platform> {
-    pub(crate) presentation: P::Presentation,
-    pub(crate) streams: StreamSetup<P::Streams>,
+pub(crate) struct Connected<P: RenderedPlatform> {
+    pub(crate) backend: P::Backend,
     pub(crate) host: HostFacts,
     pub(crate) clock: Arc<dyn Clock>,
 }
 
-impl<P: Platform> ViewActor<P> {
+impl<P: RenderedPlatform> ViewActor<P> {
     pub(crate) fn start(
         setup: RuntimeSetup,
         offered: &BTreeSet<Capability>,
@@ -157,8 +156,7 @@ impl<P: Platform> ViewActor<P> {
         inbox: &Sender<ViewInput>,
     ) -> Result<Self, RunError<P>> {
         let Connected {
-            presentation,
-            streams,
+            backend,
             host,
             clock,
         } = connected;
@@ -186,9 +184,8 @@ impl<P: Platform> ViewActor<P> {
         };
         let fonts = renderer_setup.fonts.clone();
         let actor_setup = ActorSetup {
-            presentation,
+            backend,
             renderer: renderer_setup,
-            streams,
             redraw,
             cpu_timing: observers.cpu_timing(),
         };
@@ -217,7 +214,7 @@ impl<P: Platform> ViewActor<P> {
     pub(crate) fn reports(
         &self,
         view: Outlet<PlatformEvent>,
-    ) -> Result<Reports<P::Control, P::Streams>, RendererStopped> {
+    ) -> Result<Reports<P::Control, P::Backend>, RendererStopped> {
         self.actors.reports(view, Arc::clone(&self.clock))
     }
 

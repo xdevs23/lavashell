@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-mod control;
 mod error;
 mod present;
 mod scene_source;
@@ -7,26 +6,23 @@ mod targets;
 #[cfg(test)]
 mod tests;
 
-pub use control::{PresentFrame, SurfaceControl};
 pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
 
-use crate::NoStreams;
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
-use crate::{FrameOutcome, SurfaceAlpha, SurfaceContents};
+use crate::{NoStreams, SurfaceContents, VulkanWindow};
 use lavashell_core::frame::{GpuFrameTime, RenderStats};
 use lavashell_core::prelude::{
-    HdrMetadata, OutputInfo, OutputRequest, PixelSize, Rect, ScaledViewport, SceneSnapshot,
+    OutputInfo, OutputRequest, PixelSize, Rect, ScaledViewport, SceneSnapshot,
 };
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_effect_quality::FrameBudget;
+use lavashell_platform::{Attach, FrameOutcome, PresentFrame, SurfaceControl};
 use lavashell_renderer::text::{Shaper, TextRendering};
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter, StreamBackend};
-use lavashell_vulkan::Window;
 use present::FrameInputs;
 use scene_source::SceneImages;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use std::sync::Arc;
 use std::time::Duration;
 use targets::{AttachedSurface, PixelInputs};
 
@@ -47,15 +43,6 @@ impl RendererSetup {
     pub fn shows_scene(&self) -> bool {
         self.scene.is_some()
     }
-}
-
-pub struct Attach<C> {
-    pub surface: SurfaceId,
-    pub window: Arc<dyn Window>,
-    pub alpha: SurfaceAlpha,
-    pub output: OutputRequest,
-    pub hdr_metadata: Option<HdrMetadata>,
-    pub control: C,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -119,7 +106,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         })
     }
 
-    pub fn attach(&mut self, attach: Attach<C>) -> Result<(), AttachError<C>> {
+    pub fn attach(&mut self, attach: Attach<C, VulkanWindow>) -> Result<(), AttachError<C>> {
         let Attach {
             surface,
             window,

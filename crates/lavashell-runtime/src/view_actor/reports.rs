@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
+use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::{RendererInput, RendererOutput};
 use crate::scene_pipeline::BuilderReport;
 use crate::scheduler::{SchedulerInput, SchedulerOutput};
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{Platform, PlatformRequest, SurfaceRequest};
+use lavashell_platform::{PlatformRequest, SurfaceRequest};
 
-impl<P: Platform> ViewActor<P> {
+impl<P: RenderedPlatform> ViewActor<P> {
     pub(super) fn scene_report(&mut self, report: BuilderReport) {
         match report {
             BuilderReport::Built { surface, sequence } => {

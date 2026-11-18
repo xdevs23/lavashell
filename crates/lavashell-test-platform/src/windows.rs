@@ -9,11 +9,11 @@ use lavashell_platform::{
     Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec, WindowControlRequest,
 };
 use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::NoStreams;
+use lavashell_vulkan_renderer::{HeadlessBackend, VulkanWindow};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-type TestReports = Reports<FrameCapture, NoStreams>;
+type TestReports = Reports<FrameCapture, HeadlessBackend>;
 
 pub(crate) struct WindowRecording {
     pub app_ids: BTreeMap<SurfaceId, String>,
@@ -55,7 +55,8 @@ impl Windows {
 
     pub(crate) fn create(&mut self, reports: &TestReports, surface: SurfaceId, spec: SurfaceSpec) {
         let control = FrameCapture::new(surface, self.capture, self.shown_by_controls.clone());
-        let attach = spec.attach(surface, Arc::new(HeadlessWindow), control);
+        let headless: VulkanWindow = Arc::new(HeadlessWindow);
+        let attach = spec.attach(surface, headless, control);
         reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
         reports.report((surface, SurfaceEvent::DensityChanged(self.density)));
         let window = opened_window_state(&spec.role);

@@ -33,7 +33,7 @@ pub use scene_mailbox::{CompletedScene, SceneMailbox};
 pub(crate) use skia_handoff::SkiaFormat;
 pub use timestamps::GpuProfiler;
 pub(crate) use wsi::DrawnFrame;
-pub use wsi::{FrameOutcome, SurfaceAlpha, SurfaceContents, SurfaceTarget};
+pub use wsi::{SurfaceContents, SurfaceTarget};
 
 #[cfg(test)]
 mod tests;
@@ -41,6 +41,7 @@ mod tests;
 use crate::Error;
 use ash::vk;
 use lavashell_core::prelude::PixelSize;
+use lavashell_platform::SurfaceAlpha;
 use lavashell_vulkan::{Device, DeviceRequest, ExtensionSet, Features, Instance, InstanceRequest};
 use painter_recipe::PainterRecipe;
 use skia_handoff::{SkiaContext, gpu_render_target};

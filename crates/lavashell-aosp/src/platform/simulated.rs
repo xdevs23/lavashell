@@ -16,11 +16,13 @@ pub(crate) use importer::{
 };
 use lavashell_actor::lock_ignoring_poison;
 use lavashell_core::prelude::PixelSize;
+use lavashell_platform::FrameOutcome;
 pub(crate) use lavashell_renderer::Sampling;
 use lavashell_renderer::{Fonts, Painter, UniformRange, skia};
 use lavashell_vulkan::{Instance, Window};
-use lavashell_vulkan_renderer::Error as RendererError;
-use lavashell_vulkan_renderer::FrameOutcome;
+use lavashell_vulkan_renderer::{
+    Error as RendererError, HeadlessPresentation, VulkanBackend, VulkanWindow,
+};
 use reader::Queue;
 pub(crate) use reader::{Buffer, Event as StreamEvent, Producer, Writing};
 pub(crate) use simulation::Simulation;
@@ -140,9 +142,11 @@ unsafe impl Window for SimulatedWindow {
     }
 }
 
-pub(crate) fn vulkan_window(_: &crate::NativeWindow) -> Arc<dyn Window> {
+pub(crate) fn vulkan_window(_: &crate::NativeWindow) -> VulkanWindow {
     Arc::new(SimulatedWindow)
 }
+
+pub(crate) type AospBackend = VulkanBackend<HeadlessPresentation, crate::AospStreams>;
 
 pub struct VulkanRenderer {
     gpu: Rc<Gpu>,

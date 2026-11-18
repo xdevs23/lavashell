@@ -22,6 +22,7 @@ pub mod pipe_transfers;
 #[cfg(test)]
 mod preference_reader;
 mod registry;
+mod rendered_platform;
 mod renderer_actor;
 mod run;
 mod run_end;
@@ -51,6 +52,7 @@ mod window_requests;
 pub use app::{App, SetupError};
 pub use lavashell_platform::Capability;
 pub use panels::{KeyboardPolicy, PanelOptions};
+pub use rendered_platform::RenderedPlatform;
 pub use renderer_actor::RendererError;
 pub use run::{RunError, run};
 pub use view_actor::{Stopped, ViewError};

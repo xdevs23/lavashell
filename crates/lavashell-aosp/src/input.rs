@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::native_window::NativeWindow;
-use crate::streams::AospStreams;
+use crate::host::AospReports;
 use lavashell_core::geometry::{Point, Rect, ScaledViewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::Px;
 use lavashell_core::view::TouchSample;
-use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState, Reports};
+use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState};
 
 pub(crate) const MOUSE: PointerDevice = PointerDevice(0);
 
@@ -83,7 +82,7 @@ impl MotionTranslator {
         &mut self,
         event: MotionEvent,
         shown: Option<ShownSurface>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) {
         for device_event in self.translate(event, shown) {
             reports.report(device_event);

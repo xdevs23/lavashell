@@ -14,6 +14,7 @@ use lavashell_platform::{
     AccessibilityRequest, PanelRequest, PointerPress, Role, SurfaceAttachment, SurfaceEvent,
     SurfaceRequest, SurfaceSpec, WindowControlRequest,
 };
+use lavashell_vulkan_renderer::VulkanWindow;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_surface;
 use std::sync::Arc;
@@ -140,7 +141,8 @@ impl Translator {
             return Ok(());
         };
         let control = self.surface_control(surface, &wl, &extensions, &spec.role, role_control);
-        let attach = spec.attach(surface, window.clone(), control);
+        let vulkan_window: VulkanWindow = window.clone();
+        let attach = spec.attach(surface, vulkan_window, control);
         let accessibility = Bridge::new(surface, self.view.clone());
         let native = Surface::new(window, extensions, role, accessibility);
         self.surfaces.insert(surface, native);

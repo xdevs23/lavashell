@@ -8,6 +8,7 @@ use crate::input::InputFilter;
 use crate::layer_surface::LayerSurface;
 use crate::observers::Observers;
 use crate::panels::PanelsPerOutput;
+use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::PlatformRendererError;
 use crate::run_end::RunEnd;
 use crate::session_lock::LockConfiguration;
@@ -19,7 +20,7 @@ use crate::{logging, registry, scene_pipeline};
 use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
-use lavashell_platform::{Capability, Platform, PlatformLinks};
+use lavashell_platform::{Capability, PlatformLinks};
 use lavashell_vulkan_renderer::RendererSetup;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -60,7 +61,7 @@ impl RuntimeSetup {
 }
 
 #[derive(thiserror::Error)]
-pub enum RunError<P: Platform> {
+pub enum RunError<P: RenderedPlatform> {
     #[error("the app has not added a window, a layer or a session lock")]
     NoSurfaces,
     #[error(
@@ -87,7 +88,7 @@ pub enum RunError<P: Platform> {
     View(#[from] ViewError),
 }
 
-impl<P: Platform> fmt::Debug for RunError<P> {
+impl<P: RenderedPlatform> fmt::Debug for RunError<P> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (name, field): (&str, Option<&dyn fmt::Debug>) = match self {
             Self::NoSurfaces => ("NoSurfaces", None),
@@ -109,7 +110,7 @@ impl<P: Platform> fmt::Debug for RunError<P> {
     }
 }
 
-pub fn run<P: Platform>(app: App, platform_setup: P::Setup) -> Result<(), RunError<P>> {
+pub fn run<P: RenderedPlatform>(app: App, platform_setup: P::Setup) -> Result<(), RunError<P>> {
     logging::install_default_logger();
     let setup = app.into_setup();
     if !setup.has_surfaces() {
@@ -118,7 +119,7 @@ pub fn run<P: Platform>(app: App, platform_setup: P::Setup) -> Result<(), RunErr
     drive::<P>(setup, platform_setup)
 }
 
-pub(crate) fn drive<P: Platform>(
+pub(crate) fn drive<P: RenderedPlatform>(
     setup: RuntimeSetup,
     platform_setup: P::Setup,
 ) -> Result<(), RunError<P>> {
@@ -134,8 +135,7 @@ pub(crate) fn drive<P: Platform>(
         DeadlineReceiver::new(inputs, clock.as_ref()).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
     let connected = Connected {
-        presentation: connection.presentation,
-        streams: connection.streams,
+        backend: connection.backend,
         host: connection.host,
         clock: Arc::clone(&clock),
     };

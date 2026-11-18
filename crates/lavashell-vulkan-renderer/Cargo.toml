@@ -13,9 +13,10 @@ workspace = true
 lavashell-effect-quality.workspace = true
 lavashell-core.workspace = true
 lavashell-error-chain.workspace = true
+lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
 lavashell-vulkan.workspace = true
-skia-safe.workspace = true
+skia-safe = { workspace = true, features = ["vulkan"] }
 ash.workspace = true
 log.workspace = true
 thiserror.workspace = true

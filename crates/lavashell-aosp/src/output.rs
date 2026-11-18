@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use crate::native_window::NativeWindow;
-use crate::streams::AospStreams;
+use crate::host::AospReports;
 use lavashell_core::geometry::Size;
 use lavashell_core::output::MonitorInfo;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Px, RefreshRate};
-use lavashell_platform::{OutputEvent, OutputId, Reports};
+use lavashell_platform::{OutputEvent, OutputId};
 use std::time::Duration;
 
 pub(crate) const DISPLAY: OutputId = OutputId(0);
@@ -41,16 +40,16 @@ impl TryFrom<DisplayReading> for HostDisplay {
     }
 }
 
-pub(crate) fn report_added(display: HostDisplay, reports: &Reports<NativeWindow, AospStreams>) {
+pub(crate) fn report_added(display: HostDisplay, reports: &AospReports) {
     reports.report(OutputEvent::Added(DISPLAY));
     report_display(display, reports);
 }
 
-pub(crate) fn report_entered(surface: SurfaceId, reports: &Reports<NativeWindow, AospStreams>) {
+pub(crate) fn report_entered(surface: SurfaceId, reports: &AospReports) {
     reports.report(OutputEvent::Entered(DISPLAY, surface));
 }
 
-pub(crate) fn report_display(display: HostDisplay, reports: &Reports<NativeWindow, AospStreams>) {
+pub(crate) fn report_display(display: HostDisplay, reports: &AospReports) {
     let monitor = MonitorInfo {
         name: None,
         size: Size::from_px(display.width, display.height, display.density),

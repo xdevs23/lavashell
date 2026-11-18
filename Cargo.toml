@@ -175,7 +175,7 @@ zeroize = "=1.9.1"
 [workspace.dependencies.skia-safe]
 version = "=0.153.3"
 default-features = false
-features = ["embed-icudtl", "ganesh", "jpeg", "no-compile", "pdf", "textlayout", "vulkan"]
+features = ["embed-icudtl", "ganesh", "jpeg", "no-compile", "pdf", "textlayout"]
 
 [patch.crates-io.skia-safe]
 git = "https://github.com/xquant23/rust-skia_rust-skia"

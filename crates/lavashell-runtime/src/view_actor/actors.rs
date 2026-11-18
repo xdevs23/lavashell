@@ -1,46 +1,45 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Stopped, ViewError, ViewInput, observer};
 use crate::cpu_time::CpuTiming;
+use crate::rendered_platform::{PlatformStreams, RenderedPlatform};
 use crate::renderer_actor::{PlatformRendererError, Renderer, RendererStopped};
 use crate::run::RunError;
 use crate::scene_pipeline::{self, ScenePipeline};
 use crate::scheduler::Redraw;
 use crate::scheduler_actor::{self, SchedulerThread};
 use lavashell_actor::{Clock, JoinError, Outlet, Sender};
-use lavashell_platform::{Platform, PlatformEvent, Reports, StreamSetup};
+use lavashell_platform::{PlatformEvent, Reports};
 use lavashell_vulkan_renderer::RendererSetup;
 use std::sync::Arc;
 
-pub(super) struct Actors<P: Platform> {
+pub(super) struct Actors<P: RenderedPlatform> {
     pub(super) scene: ScenePipeline,
-    pub(super) renderer: Renderer<P::Control, P::Streams>,
+    pub(super) renderer: Renderer<P::Control, PlatformStreams<P>>,
     pub(super) scheduler: SchedulerThread,
 }
 
-pub(crate) struct ActorStops<P: Platform> {
+pub(crate) struct ActorStops<P: RenderedPlatform> {
     pub(crate) renderer: Result<(), JoinError<PlatformRendererError<P>>>,
     pub(crate) scheduler: Result<(), scheduler_actor::Error>,
     pub(crate) scene: Result<(), Arc<scene_pipeline::Error>>,
 }
 
-pub(super) struct ActorSetup<P: Platform> {
-    pub(super) presentation: P::Presentation,
+pub(super) struct ActorSetup<P: RenderedPlatform> {
+    pub(super) backend: P::Backend,
     pub(super) renderer: RendererSetup,
-    pub(super) streams: StreamSetup<P::Streams>,
     pub(super) redraw: Redraw,
     pub(super) cpu_timing: CpuTiming,
 }
 
-impl<P: Platform> Actors<P> {
+impl<P: RenderedPlatform> Actors<P> {
     pub(super) fn start(
         setup: ActorSetup<P>,
         clock: &Arc<dyn Clock>,
         inbox: &Sender<ViewInput>,
     ) -> Result<Self, RunError<P>> {
         let ActorSetup {
-            presentation,
+            backend,
             renderer: renderer_setup,
-            streams,
             redraw,
             cpu_timing,
         } = setup;
@@ -50,15 +49,8 @@ impl<P: Platform> Actors<P> {
         let scheduler = SchedulerThread::start(redraw, clock.clone(), scheduler_outputs)
             .map_err(ViewError::from)?;
         let outputs = observer(inbox, ViewInput::Renderer, Stopped::Renderer);
-        let renderer = Renderer::start(
-            presentation,
-            renderer_setup,
-            streams,
-            clock.clone(),
-            cpu_timing,
-            outputs,
-        )
-        .map_err(RunError::StartRenderer)?;
+        let renderer = Renderer::start(backend, renderer_setup, clock.clone(), cpu_timing, outputs)
+            .map_err(RunError::StartRenderer)?;
         Ok(Self {
             scene,
             renderer,
@@ -70,7 +62,7 @@ impl<P: Platform> Actors<P> {
         &self,
         view: Outlet<PlatformEvent>,
         clock: Arc<dyn Clock>,
-    ) -> Result<Reports<P::Control, P::Streams>, RendererStopped> {
+    ) -> Result<Reports<P::Control, P::Backend>, RendererStopped> {
         Ok(Reports {
             view,
             scheduler: self.scheduler.timing_outlet(),

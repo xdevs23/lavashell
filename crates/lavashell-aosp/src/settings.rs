@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::native_window::NativeWindow;
-use crate::streams::AospStreams;
+use crate::host::AospReports;
 use icu_locale_core::{LanguageIdentifier, Locale};
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::Appearance;
-use lavashell_platform::{Reports, SettingsEvent};
+use lavashell_platform::SettingsEvent;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostConfiguration {
@@ -35,10 +34,7 @@ impl From<ConfigurationReading> for HostConfiguration {
     }
 }
 
-pub(crate) fn report_configuration(
-    configuration: HostConfiguration,
-    reports: &Reports<NativeWindow, AospStreams>,
-) {
+pub(crate) fn report_configuration(configuration: HostConfiguration, reports: &AospReports) {
     let appearance = Appearance {
         color_scheme: Some(configuration.color_scheme),
         ..Appearance::default()

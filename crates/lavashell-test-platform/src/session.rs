@@ -12,7 +12,7 @@ use lavashell_platform::{
     DeviceEvent, PlatformEvent, PlatformLinks, PlatformRequest, Role, SurfaceEvent, SurfaceRequest,
     TimingEvent,
 };
-use lavashell_vulkan_renderer::NoStreams;
+use lavashell_vulkan_renderer::HeadlessBackend;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ mod paced;
 
 pub(crate) struct Session {
     clock: VirtualClock,
-    links: PlatformLinks<FrameCapture, NoStreams>,
+    links: PlatformLinks<FrameCapture, HeadlessBackend>,
     screen: Screen,
     windows: Windows,
 }
@@ -39,7 +39,7 @@ impl From<Error> for Stop {
 impl Session {
     pub(crate) fn new(
         clock: VirtualClock,
-        links: PlatformLinks<FrameCapture, NoStreams>,
+        links: PlatformLinks<FrameCapture, HeadlessBackend>,
         density: Density,
     ) -> Self {
         let (shown_by_controls, shown) = mailbox();

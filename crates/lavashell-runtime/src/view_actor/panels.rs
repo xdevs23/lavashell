@@ -2,17 +2,18 @@
 use super::ViewActor;
 use super::frames::send_surface_state;
 use crate::panels::Transaction;
+use crate::rendered_platform::RenderedPlatform;
 use crate::scene_pipeline::FrameStatus;
 use crate::scheduler::SchedulerInput;
 use crate::view_actor::ViewError;
 use lavashell_core::geometry::Size;
 use lavashell_core::panel::{AxisPlacement, PanelGeometry};
 use lavashell_core::units::{Dp, NonNegativeDp};
-use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
+use lavashell_platform::{PanelRequest, PlatformRequest};
 
 pub(super) const OPENING_LENGTH: Dp = Dp::new(1.0);
 
-impl<P: Platform> ViewActor<P> {
+impl<P: RenderedPlatform> ViewActor<P> {
     pub(super) fn update_panels(&mut self) -> Result<(), ViewError> {
         let mut changed_states = Vec::new();
         for (id, update) in self.surfaces.panel_updates() {

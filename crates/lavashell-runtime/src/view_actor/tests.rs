@@ -13,9 +13,9 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
 use lavashell_platform::{
     Readiness, Role, SurfaceAppearance, SurfaceRequest, SurfaceSpec, WatchEvent, WatchId,
-    WatchRequest, WindowRole, no_streams,
+    WatchRequest, WindowRole,
 };
-use lavashell_vulkan_renderer::HeadlessPresentation;
+use lavashell_vulkan_renderer::HeadlessBackend;
 use rustix::event::{EventfdFlags, eventfd};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -45,8 +45,7 @@ impl Views {
         let (sender, requests) = mailbox();
         let offered = offered.into_iter().collect();
         let connected = Connected {
-            presentation: HeadlessPresentation::without_surfaces(),
-            streams: no_streams(),
+            backend: HeadlessBackend::without_surfaces(),
             host,
             clock: Arc::clone(&clock),
         };

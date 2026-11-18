@@ -8,13 +8,11 @@ use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
-use lavashell_platform::no_streams;
+use lavashell_platform::{Attach, SurfaceAlpha};
 use lavashell_renderer::Painter;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
 use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::{
-    Attach, HeadlessPresentation, NoStreams, PainterSetup, SurfaceAlpha,
-};
+use lavashell_vulkan_renderer::{HeadlessBackend, NoStreams, PainterSetup};
 use std::sync::mpsc;
 
 const SURFACE_3: SurfaceId = SurfaceId::numbered(3);
@@ -33,17 +31,10 @@ fn start(
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
-    let presentation = HeadlessPresentation::with_surfaces();
+    let backend = HeadlessBackend::with_surfaces();
     let clock = Arc::new(SystemClock::start());
     let observer = Box::new(observer);
-    let renderer = Renderer::start(
-        presentation,
-        setup,
-        no_streams(),
-        clock,
-        CpuTiming::Skipped,
-        observer,
-    )?;
+    let renderer = Renderer::start(backend, setup, clock, CpuTiming::Skipped, observer)?;
     Ok((renderer, received))
 }
 

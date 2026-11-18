@@ -2,10 +2,8 @@
 use crate::clock::VirtualClock;
 use crate::session::Session;
 use crate::{Error, FrameCapture, HostScript, RecordedFrames};
-use lavashell_platform::{
-    Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks, no_streams,
-};
-use lavashell_vulkan_renderer::{HeadlessPresentation, NoStreams};
+use lavashell_platform::{Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks};
+use lavashell_vulkan_renderer::HeadlessBackend;
 use std::collections::BTreeSet;
 use std::sync::{Arc, mpsc};
 
@@ -24,15 +22,13 @@ pub struct TestPlatform {
 impl Platform for TestPlatform {
     type Setup = ScriptedHost;
     type Error = Error;
-    type Presentation = HeadlessPresentation;
+    type Backend = HeadlessBackend;
     type Control = FrameCapture;
-    type Streams = NoStreams;
 
     fn connect(host: ScriptedHost) -> Result<Connection<Self>, Error> {
         let clock = VirtualClock::default();
         Ok(Connection {
-            presentation: HeadlessPresentation::with_surfaces(),
-            streams: no_streams(),
+            backend: HeadlessBackend::with_surfaces(),
             host: HostFacts {
                 outputs: vec![OUTPUT],
                 reports_presentation: true,
@@ -46,7 +42,7 @@ impl Platform for TestPlatform {
         BTreeSet::new()
     }
 
-    fn serve(self, links: PlatformLinks<FrameCapture, NoStreams>) -> Result<(), Error> {
+    fn serve(self, links: PlatformLinks<FrameCapture, HeadlessBackend>) -> Result<(), Error> {
         let ScriptedHost { script, recorded } = self.host;
         let mut session = Session::new(self.clock, links, script.density);
         let served = session.play(script.steps);

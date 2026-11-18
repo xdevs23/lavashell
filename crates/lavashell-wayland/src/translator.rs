@@ -28,10 +28,10 @@ use crate::native::{
     Control, Grabs, PresentationFeedbackSource, SurfaceProtocols, advertised_outputs,
 };
 use crate::sctk;
-use crate::wayland_presentation::WaylandPresentation;
+use crate::wayland_presentation::{WaylandBackend, WaylandPresentation};
 use lavashell_actor::SystemClock;
-use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks, no_streams};
-use lavashell_vulkan_renderer::NoStreams;
+use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks, Reports};
+use lavashell_vulkan_renderer::VulkanBackend;
 use requests::{Requests, execute_arrived};
 use sctk::compositor::CompositorState;
 use sctk::data_device_manager::DataDeviceManagerState;
@@ -43,6 +43,9 @@ use sctk::reexports::client::{Connection, EventQueue, Proxy};
 use sctk::shm::Shm;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+
+type WaylandReports = Reports<Control, WaylandBackend>;
+type WaylandLinks = PlatformLinks<Control, WaylandBackend>;
 
 pub struct Wayland {
     connection: Connection,
@@ -59,9 +62,8 @@ pub struct Wayland {
 impl Platform for Wayland {
     type Setup = ();
     type Error = Error;
-    type Presentation = WaylandPresentation;
+    type Backend = WaylandBackend;
     type Control = Control;
-    type Streams = NoStreams;
 
     fn connect((): ()) -> Result<lavashell_platform::Connection<Self>, Error> {
         let connection = Connection::connect_to_env().map_err(ConnectionError::Connect)?;
@@ -73,7 +75,8 @@ impl Platform for Wayland {
             outputs: advertised_outputs(&globals),
             reports_presentation: presentation.is_some(),
         };
-        let backend = WaylandPresentation::new(connection.backend());
+        let backend =
+            VulkanBackend::without_streams(WaylandPresentation::new(connection.backend()));
         let wayland = Self {
             protocols: SurfaceProtocols::bind(&globals, &qh),
             focus_grabs: Grabs::bind(&globals, &qh),
@@ -91,8 +94,7 @@ impl Platform for Wayland {
         };
         Ok(lavashell_platform::Connection {
             platform: wayland,
-            presentation: backend,
-            streams: no_streams(),
+            backend,
             host,
             clock: Arc::new(SystemClock::start()),
         })
@@ -111,7 +113,7 @@ impl Platform for Wayland {
             .collect()
     }
 
-    fn serve(self, links: PlatformLinks<Control, NoStreams>) -> Result<(), Error> {
+    fn serve(self, links: WaylandLinks) -> Result<(), Error> {
         let PlatformLinks { reports, requests } = links;
         let mut event_loop: EventLoop<'static, Translator> =
             EventLoop::try_new().map_err(EventLoopError::CreateEventLoop)?;

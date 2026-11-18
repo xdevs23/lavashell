@@ -3,6 +3,7 @@ use super::open_surfaces::OpenSurfaces;
 use super::{ViewActor, send_request};
 use crate::cpu_time::CpuStamp;
 use crate::panels::PanelRequests;
+use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::{Rendered, RendererInput};
 use crate::scene_pipeline::{FrameStatus, SceneSink};
 use crate::scheduler::{FrameKind, FrameSequence, SchedulerInput};
@@ -16,8 +17,8 @@ use lavashell_core::geometry::{ScaledViewport, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
-use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
-use lavashell_vulkan_renderer::{Drawn, FrameOutcome, SurfaceContents};
+use lavashell_platform::{FrameOutcome, PanelRequest, PlatformRequest};
+use lavashell_vulkan_renderer::{Drawn, SurfaceContents};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
@@ -107,7 +108,7 @@ impl ViewSurface {
     }
 }
 
-impl<P: Platform> ViewActor<P> {
+impl<P: RenderedPlatform> ViewActor<P> {
     pub(super) fn render(&mut self) -> Result<(), ViewError> {
         self.execute_surface_requests()?;
         self.commit_built_states()?;

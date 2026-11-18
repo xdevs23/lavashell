@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::motion::{finger, hovering, mouse, touch};
-use crate::host::{AospError, AospHost, HostMessage, HostState};
+use crate::host::{AospError, AospHost, AospReports, HostMessage, HostState};
 use crate::input::{MOUSE, MotionEvent, MouseAction, TouchAction};
 use crate::layout_size::LayoutSize;
 use crate::native_window::NativeWindow;
@@ -55,7 +55,7 @@ impl Merge for Sent {
     }
 }
 
-fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
+fn reports() -> (AospReports, Receiver<Sent>) {
     let (sender, sent) = mailbox();
     let reports = Reports {
         view: sender.outlet(|event: PlatformEvent| match event {
@@ -70,7 +70,7 @@ fn reports() -> (Reports<NativeWindow, AospStreams>, Receiver<Sent>) {
             _ => Sent::Unexpected,
         }),
         renderer: sender.outlet(
-            |attachment: SurfaceAttachment<NativeWindow>| match attachment {
+            |attachment: SurfaceAttachment<NativeWindow, _>| match attachment {
                 SurfaceAttachment::Attach(attach) => Sent::Attach(attach.surface),
                 SurfaceAttachment::Control { message, .. } => match message {},
                 SurfaceAttachment::Detach(surface) => Sent::Detach(surface),
@@ -86,7 +86,7 @@ struct Host {
     state: HostState,
     requests: Sender<PlatformRequest>,
     received: Receiver<PlatformRequest>,
-    reports: Reports<NativeWindow, AospStreams>,
+    reports: AospReports,
     sent: Receiver<Sent>,
 }
 

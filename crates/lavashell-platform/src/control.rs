@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::FrameOutcome;
 use lavashell_core::prelude::{FrameTime, ScaledViewport};
 use lavashell_core::surface::SurfaceState;
+use lavashell_renderer::skia::Canvas;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
@@ -10,6 +10,13 @@ pub struct PresentFrame<'a> {
     pub scaled_viewport: ScaledViewport,
     pub present_at: Option<Duration>,
     pub state: &'a SurfaceState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FrameOutcome {
+    Shown,
+    Pending,
+    Stale,
 }
 
 pub trait SurfaceControl {
@@ -24,11 +31,7 @@ pub trait SurfaceControl {
 
     fn before_present(&mut self, _frame: &PresentFrame) {}
 
-    fn painted(
-        &mut self,
-        _frame: &PresentFrame,
-        _canvas: &skia_safe::Canvas,
-    ) -> Result<(), Self::Error> {
+    fn painted(&mut self, _frame: &PresentFrame, _canvas: &Canvas) -> Result<(), Self::Error> {
         Ok(())
     }
 

@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::Wayland;
 use super::links::ViewLink;
 use super::requests::{Ending, Requests};
+use super::{Wayland, WaylandReports};
 use crate::Error;
 use crate::EventLoopError;
 use crate::clipboard::ClipboardState;
 use crate::native::{
-    Control, Grabs, NativeSurfaces, PresentationFeedbackSource, SeatSet, SurfaceProtocols,
-    WatchSources, install_preferences,
+    Grabs, NativeSurfaces, PresentationFeedbackSource, SeatSet, SurfaceProtocols, WatchSources,
+    install_preferences,
 };
 use crate::sctk;
-use lavashell_platform::Reports;
-use lavashell_vulkan_renderer::NoStreams;
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};
@@ -26,7 +24,7 @@ pub(crate) struct Translator {
     pub(super) sources: Vec<RegistrationToken>,
     pub(super) watches: WatchSources,
     pub(super) surfaces: NativeSurfaces,
-    pub(super) links: Reports<Control, NoStreams>,
+    pub(super) links: WaylandReports,
     pub(super) view: ViewLink,
     pub(super) requests: Requests,
     pub(super) ending: Ending,
@@ -57,7 +55,7 @@ impl Drop for Translator {
 impl Translator {
     pub(super) fn new(
         wayland: Wayland,
-        links: Reports<Control, NoStreams>,
+        links: WaylandReports,
         requests: Requests,
         loop_handle: LoopHandle<'static, Self>,
     ) -> Result<Self, Error> {

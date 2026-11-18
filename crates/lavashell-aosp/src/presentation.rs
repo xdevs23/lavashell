@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::hardware_buffer::HardwareBufferMemory;
 use crate::native_window::NativeWindow;
+use crate::streams::AospStreams;
 use ash::khr::android_surface;
 use ash::vk;
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
 use lavashell_vulkan_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
-use lavashell_vulkan_renderer::{ForeignMemory, PresentationBackend};
+use lavashell_vulkan_renderer::{ForeignMemory, PresentationBackend, VulkanBackend, VulkanWindow};
 use std::ffi::CStr;
 use std::sync::Arc;
+
+pub(crate) type AospBackend = VulkanBackend<AospPresentation, AospStreams>;
 
 pub struct AospPresentation;
 
@@ -47,7 +50,7 @@ impl PresentationBackend for AospPresentation {
 
 struct AospWindow(ndk::native_window::NativeWindow);
 
-pub(crate) fn vulkan_window(window: &NativeWindow) -> Arc<dyn Window> {
+pub(crate) fn vulkan_window(window: &NativeWindow) -> VulkanWindow {
     Arc::new(AospWindow(window.window.clone()))
 }
 

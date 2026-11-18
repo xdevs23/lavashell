@@ -9,6 +9,7 @@ use crate::input::{MotionEvent, MotionTranslator};
 use crate::layout_size::LayoutSize;
 use crate::native_window::NativeWindow;
 use crate::output::{HostDisplay, report_added, report_display};
+use crate::platform::AospBackend;
 use crate::settings::{HostConfiguration, report_configuration};
 use crate::streams::AospStreams;
 use lavashell_actor::{Closed, lock_ignoring_poison, lock_unpoisoned};
@@ -18,6 +19,9 @@ use lavashell_renderer::Painter;
 use std::ops::ControlFlow;
 use std::sync::{Arc, Mutex, mpsc};
 use surface::HostSurface;
+
+pub(crate) type AospReports = Reports<NativeWindow, AospBackend>;
+pub(crate) type AospLinks = PlatformLinks<NativeWindow, AospBackend>;
 
 pub(crate) enum HostMessage {
     SurfaceCreated(NativeWindow),
@@ -49,10 +53,7 @@ struct AwaitingRunEnd {
 }
 
 impl HostLink {
-    pub(crate) fn serve(
-        self,
-        links: PlatformLinks<NativeWindow, AospStreams>,
-    ) -> Result<(), AospError> {
+    pub(crate) fn serve(self, links: AospLinks) -> Result<(), AospError> {
         let Self { start, channel } = self;
         let HostStart {
             messages,
@@ -81,7 +82,7 @@ impl HostLink {
 fn execute_messages(
     messages: &mpsc::Receiver<HostMessage>,
     requests: &lavashell_actor::Receiver<PlatformRequest>,
-    reports: &Reports<NativeWindow, AospStreams>,
+    reports: &AospReports,
     state: &mut HostState,
 ) -> Result<(), AospError> {
     for message in messages {
@@ -109,7 +110,7 @@ impl HostState {
         &mut self,
         message: HostMessage,
         requests: &lavashell_actor::Receiver<PlatformRequest>,
-        reports: &Reports<NativeWindow, AospStreams>,
+        reports: &AospReports,
     ) -> Result<ControlFlow<()>, AospError> {
         let surface = &mut self.surface;
         match message {

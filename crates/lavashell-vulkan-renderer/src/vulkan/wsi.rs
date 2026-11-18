@@ -3,6 +3,7 @@ use crate::Error;
 use ash::vk;
 use lavashell_core::color;
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputProfile, OutputRequest, PixelSize};
+use lavashell_platform::{FrameOutcome, SurfaceAlpha};
 use lavashell_renderer::{DrawFailure, scalars};
 use lavashell_vulkan::{
     Chromaticity, Device, ExtensionSet, MasteringDisplay, Semaphore, Submission, Swapchain,
@@ -20,13 +21,6 @@ pub(super) mod present;
 
 use present::PresentationPolicy;
 pub(super) use present::PresentationTime;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum FrameOutcome {
-    Shown,
-    Pending,
-    Stale,
-}
 
 pub(crate) enum DrawnFrame<T> {
     Skipped(SkippedFrame),
@@ -53,12 +47,6 @@ impl SkippedFrame {
 pub enum SurfaceContents {
     Current,
     Outdated,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SurfaceAlpha {
-    Opaque,
-    Transparent,
 }
 
 struct Slot {

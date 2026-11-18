@@ -1178,8 +1178,6 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-renderer",
-          "lavashell-vulkan",
-          "lavashell-vulkan-renderer",
           "thiserror 2.0.21"
         ]
       },
@@ -1250,6 +1248,7 @@
           "lavashell-core",
           "lavashell-effect-quality",
           "lavashell-error-chain",
+          "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
@@ -2625,7 +2624,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "8e792feeb247d0e7bf6b28cba0fcfc20e3b32dc99eb00025698297d4893a58a5",
+        "seedHash": "8348cc0d013179ad5313a9d5753d5cf86ec7ec737e678495a8066419213f2dc5",
         "plan": {
           "schema": 1,
           "selection": {
@@ -3322,18 +3321,6 @@
                     ],
                     "path": "../lavashell-renderer"
                   },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
-                  },
-                  "lavashell-vulkan-renderer": {
-                    "package": "lavashell-vulkan-renderer",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan-renderer"
-                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -3718,6 +3705,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
                   },
                   "lavashell-renderer": {
                     "package": "lavashell-renderer",
@@ -5254,8 +5247,6 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-renderer",
-                  "lavashell-vulkan",
-                  "lavashell-vulkan-renderer",
                   "thiserror"
                 ]
               },
@@ -5314,6 +5305,7 @@
                   "lavashell-core",
                   "lavashell-effect-quality",
                   "lavashell-error-chain",
+                  "lavashell-platform",
                   "lavashell-renderer",
                   "lavashell-vulkan",
                   "log",

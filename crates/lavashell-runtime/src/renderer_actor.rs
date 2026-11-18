@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::cpu_time::{CpuStamp, CpuTiming};
 use crate::failures::log_failure_to_stop;
+use crate::rendered_platform::{PlatformStreams, WindowAttachment};
 use crate::surface_slots::BuiltSurface;
 use lavashell_actor::{
     Actor, Clock, Closed, Flow, Handle, JoinError, Merge, MergeEffect, Outlet, Sender, SpawnError,
@@ -9,21 +10,20 @@ use lavashell_actor::{
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{Platform, StreamSetup, StreamTask, SurfaceAttachment};
+use lavashell_platform::{Platform, PresentFrame, StreamTask, SurfaceAttachment, SurfaceControl};
 use lavashell_renderer::StreamBackend;
 use lavashell_renderer::skia::Path;
 use lavashell_renderer::text::TextRendering;
-use lavashell_vulkan_renderer::vulkan::PresentationBackend;
 use lavashell_vulkan_renderer::{
-    CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, RendererStreams,
-    StartError, StateError, SurfaceContents, SurfaceControl,
+    CommitError, DrawError, Drawn, RendererBackend, RendererSetup, RendererState, RendererStreams,
+    StartError, StateError, SurfaceContents,
 };
 use std::fmt;
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 pub enum RendererInput<C: SurfaceControl, S> {
-    Surface(SurfaceAttachment<C>),
+    Surface(WindowAttachment<C>),
     Streams(StreamTask<S>),
     Outline {
         surface: SurfaceId,
@@ -85,8 +85,7 @@ pub struct Rendered {
     pub cpu_time: Option<Duration>,
 }
 
-pub type PlatformRendererError<P> =
-    RendererError<<P as Platform>::Control, <P as Platform>::Streams>;
+pub type PlatformRendererError<P> = RendererError<<P as Platform>::Control, PlatformStreams<P>>;
 
 pub type RendererObserver = Box<dyn FnMut(RendererOutput) -> Result<(), Closed> + Send>;
 
@@ -150,10 +149,9 @@ where
     C: SurfaceControl + Send + 'static,
     S: RendererStreams,
 {
-    pub fn start<B: PresentationBackend + Send + 'static>(
-        backend: B,
+    pub fn start(
+        backend: impl RendererBackend<Streams = S>,
         setup: RendererSetup,
-        streams: StreamSetup<S>,
         clock: Arc<dyn Clock>,
         cpu_timing: CpuTiming,
         observer: RendererObserver,
@@ -161,8 +159,7 @@ where
         let (inbox, receiver) = mailbox_on(clock.as_ref());
         let (rendering, started_rendering) = mpsc::sync_channel(1);
         let actor = spawn("renderer", receiver, move || {
-            let state = RendererState::with_streams(&backend, setup, streams)
-                .map_err(RendererError::Start)?;
+            let state = backend.start(setup).map_err(RendererError::Start)?;
             let _spawner_may_have_left = rendering.send(state.text_rendering());
             Ok(RendererActor {
                 state,
@@ -185,7 +182,7 @@ where
         self.text_rendering
     }
 
-    pub(crate) fn attachments(&self) -> Result<Outlet<SurfaceAttachment<C>>, RendererStopped> {
+    pub(crate) fn attachments(&self) -> Result<Outlet<WindowAttachment<C>>, RendererStopped> {
         self.outlet(RendererInput::Surface)
     }
 
@@ -284,7 +281,7 @@ where
 {
     fn attachment(
         &mut self,
-        attachment: SurfaceAttachment<C>,
+        attachment: WindowAttachment<C>,
     ) -> Result<Option<RendererOutput>, RendererError<C, S>> {
         match attachment {
             SurfaceAttachment::Attach(attach) => {

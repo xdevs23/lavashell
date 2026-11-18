@@ -9,6 +9,7 @@ use lavashell_core::prelude::{
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceChange;
+use lavashell_platform::SurfaceAlpha;
 use lavashell_renderer::test_scenes::insert;
 use lavashell_renderer::test_surfaces::{TestSurface, WIDE_SURFACE};
 use lavashell_renderer::{FrameDevice, StreamFrames};
@@ -18,6 +19,7 @@ use skia_safe::IPoint;
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::rc::Rc;
+use std::sync::Arc;
 
 const SURFACE_1: SurfaceId = SurfaceId::numbered(1);
 
@@ -122,7 +124,7 @@ fn state() -> Result<RendererState<RecordingControl>, TestError> {
     )?)
 }
 
-fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl> {
+fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl, VulkanWindow> {
     Attach {
         surface: SURFACE,
         window: Arc::new(HeadlessWindow),
