@@ -140,7 +140,7 @@ impl View {
         if !sample.kind().drags_content() {
             path.truncate(1);
         }
-        let slop = self.touch_slop();
+        let slop = self.slop();
         let press = |(depth, index): (usize, usize)| Press {
             sample,
             index,

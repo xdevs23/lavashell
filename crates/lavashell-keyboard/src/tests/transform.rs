@@ -103,7 +103,7 @@ fn two_fingers_on_the_bare_panel_pass_a_transform_to_the_host() -> Result<(), Te
 }
 
 #[test]
-fn two_fingers_on_keys_that_stay_within_the_touch_slop_type_both_keys_and_pass_no_transform()
+fn two_fingers_on_keys_that_stay_within_the_slop_type_both_keys_and_pass_no_transform()
 -> Result<(), TestError> {
     let (mut host, [first, second]) = pressed(on_keys("d", "k"))?;
     let nudged = Point::new(second.x + 4.dp(), second.y);

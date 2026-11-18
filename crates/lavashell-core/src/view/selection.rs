@@ -218,7 +218,7 @@ impl View {
     }
 
     pub(super) fn drag_text_to(&mut self, id: NodeId, at: Point) {
-        let slop = self.touch_slop();
+        let slop = self.slop();
         self.change_selection_at(id, at, |edit, positions, point| {
             edit.drag_to(&positions.geometry, point, slop);
         });

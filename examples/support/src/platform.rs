@@ -6,7 +6,7 @@ use std::time::Duration;
 #[must_use]
 pub fn platform() -> PlatformFacts {
     PlatformFacts {
-        touch_slop: None,
+        slop: None,
         caret_width: None,
         long_press: Duration::from_millis(300),
         double_press: Duration::from_millis(300),

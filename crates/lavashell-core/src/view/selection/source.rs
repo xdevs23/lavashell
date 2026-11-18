@@ -51,7 +51,7 @@ impl View {
                 self.editing
                     .edits
                     .get(&source.id)
-                    .is_some_and(|edit| edit.drag_ready(point, self.touch_slop()))
+                    .is_some_and(|edit| edit.drag_ready(point, self.slop()))
             })
     }
 

@@ -287,8 +287,8 @@ mod window_regions;
 mod gesture_handlers;
 #[path = "tests/gestures.rs"]
 mod gestures;
-#[path = "tests/touch_slop.rs"]
-mod touch_slop;
+#[path = "tests/slop.rs"]
+mod slop;
 
 #[path = "tests/pinch.rs"]
 mod pinch;

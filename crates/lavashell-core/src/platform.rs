@@ -9,7 +9,7 @@ use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlatformFacts {
-    pub touch_slop: Option<Dp>,
+    pub slop: Option<Dp>,
     pub caret_width: Option<Dp>,
     pub long_press: Duration,
     pub double_press: Duration,
@@ -71,7 +71,7 @@ pub struct KeyboardPreferences {
     pub key_preview: bool,
 }
 
-pub static TOUCH_SLOP: Local<Option<Dp>> = Local::platform(|platform| platform.touch_slop);
+pub static SLOP: Local<Option<Dp>> = Local::platform(|platform| platform.slop);
 pub static CARET_WIDTH: Local<Option<Dp>> = Local::platform(|platform| platform.caret_width);
 pub static LONG_PRESS: Local<Duration> = Local::platform(|platform| platform.long_press);
 pub static DOUBLE_PRESS: Local<Duration> = Local::platform(|platform| platform.double_press);

@@ -13,7 +13,7 @@ pub const REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 #[must_use]
 pub fn facts() -> PlatformFacts {
     PlatformFacts {
-        touch_slop: Some(8.dp()),
+        slop: Some(8.dp()),
         caret_width: Some(1.dp()),
         long_press: LONG_PRESS,
         double_press: DOUBLE_PRESS,

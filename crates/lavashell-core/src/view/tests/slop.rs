@@ -4,11 +4,11 @@ use crate::geometry::{Axis, Viewport};
 use crate::scroll::ScrollState;
 
 #[test]
-fn without_a_touch_slop_of_the_platform_a_finger_scrolls_past_one_device_pixel() -> TestResult {
+fn without_a_slop_of_the_platform_a_finger_scrolls_past_one_device_pixel() -> TestResult {
     let scroll = ScrollState::new(Axis::Vertical);
     let content = scroll.clone();
     let platform = PlatformFacts {
-        touch_slop: None,
+        slop: None,
         ..crate::platform::fixture::facts()
     };
     let mut scene = Scene::default();
