@@ -3,7 +3,7 @@ use super::coordinate_fonts::CoordinateFonts;
 use crate::failure::DrawFailure;
 use crate::fonts::{LoadedFonts, has_weight_axis, skia_weight, with_weight_arguments};
 use crate::paint::solid;
-use crate::scalar::scalars;
+use crate::scalar::{scalar, scalars};
 use crate::text_cache::{CachedParagraph, ParagraphSource, TextCache};
 use lavashell_core::prelude::*;
 use skia_safe::font_style::{Slant, Weight, Width};
@@ -19,6 +19,7 @@ use std::ops::Range;
 pub(super) struct Layout {
     size: f32,
     letter_spacing: f32,
+    line_height_multiple: Option<f32>,
     width: f32,
     foreground: Paint,
 }
@@ -28,9 +29,16 @@ impl Layout {
         let letter_spacing = style.letter_spacing.to_dp(style.size);
         let [size, letter_spacing, width] =
             scalars([style.size.get(), letter_spacing.get(), width.get()])?;
+        let line_height_multiple = (style.line_height)
+            .map(|line_height| line_height.multiple_of(style.size))
+            .transpose()
+            .map_err(|_not_positive_and_finite| DrawFailure::NumberRange)?
+            .map(|multiple| scalar(multiple.get()))
+            .transpose()?;
         Ok(Self {
             size,
             letter_spacing,
+            line_height_multiple,
             width,
             foreground: solid(style.color)?,
         })
@@ -64,6 +72,10 @@ impl<'t> ParagraphInput<'t> {
         style.weight.hash(&mut key);
         style.max_lines.hash(&mut key);
         style.letter_spacing.get().to_bits().hash(&mut key);
+        style
+            .line_height
+            .map(|line_height| line_height.get().get().to_bits())
+            .hash(&mut key);
         style.spans.hash(&mut key);
         style.alignment.hash(&mut key);
         style.direction.hash(&mut key);
@@ -195,6 +207,12 @@ pub(super) fn build(
         Slant::Upright,
     );
     let _style_returned_for_chaining = ts.set_letter_spacing(layout.letter_spacing);
+    if let Some(multiple) = layout.line_height_multiple {
+        let _style_returned_for_chaining = ts
+            .set_height(multiple)
+            .set_height_override(true)
+            .set_half_leading(true);
+    }
     let mut ps = ParagraphStyle::new();
     rendering.apply(&mut ts, &mut ps);
     crate::text_alignment::apply(style, &mut ps);

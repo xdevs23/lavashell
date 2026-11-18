@@ -4,7 +4,7 @@ use crate::Painter;
 use crate::failure::Failures;
 use crate::raster::RasterCache;
 use crate::test_error::TestError;
-use crate::test_font::{probe_modifier, probe_style};
+use crate::test_font::{probe_modifier, probe_style, probe_style_before_scaling};
 use crate::test_surfaces::{Pixels, drawn_pixels, has_colored_fringe, lcd_destination};
 use crate::text::sample_fixtures::{LABEL_SURFACE, PLAIN_LABEL_TEXT, mixed_script_label_text};
 use crate::text::weight_blend_fixtures::{
@@ -562,6 +562,29 @@ fn field_beside_text(secret: &ProtectedText) -> View {
             ui.text("tail", probe_modifier().tag("sibling"));
         });
     })
+}
+
+#[test]
+fn private_text_with_a_line_height_measures_and_places_carets_like_plain_text()
+-> Result<(), TestError> {
+    let mut painter = new_painter()?;
+    let mut reference = Shaper::new(crate::test_font::test_font()?.load()?, Failures::default());
+    let plain = probe_style_before_scaling();
+    let style = (plain.clone().line_height(plain.size * 1.5)?).resolve_unscaled();
+    let value = "Open the app";
+    let (_view_not_framed_again, _builder_not_framed_again, _secret, private) =
+        field(&mut painter, value)?;
+    let shaper = &mut painter.shaper;
+    assert_eq!(
+        shaper.private_measure(&private, &style, TEXT_WIDTH),
+        reference.measure(value, &style, TEXT_WIDTH)
+    );
+    let caret_rects = |geometry: TextGeometry| geometry.carets.into_iter().map(|caret| caret.rect);
+    assert!(
+        caret_rects(shaper.private_geometry(&private, &style, TEXT_WIDTH))
+            .eq(caret_rects(reference.geometry(value, &style, TEXT_WIDTH)))
+    );
+    Ok(())
 }
 
 #[test]

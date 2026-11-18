@@ -127,8 +127,9 @@ fn shape(
     let mut utf16 = 0;
     let utf16_bytes = byte_offsets_by_utf16(text);
     let lines = line_ranges(paragraph, &utf16_bytes);
+    let line_boxes = line_boxes(paragraph, empty_line, text);
     let mut line = 0;
-    let mut last = Rect::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, empty_line);
+    let mut last = line_boxes[0];
     for (index, ch) in text.char_indices() {
         if ch == '\n' {
             if !clusters
@@ -150,7 +151,7 @@ fn shape(
                 });
             }
             line += 1;
-            last = Rect::new(Dp::ZERO, last.y + last.height, Dp::ZERO, empty_line);
+            last = line_boxes[line];
         } else if let Some(info) = paragraph.get_glyph_info_at_utf16_offset(utf16)
             && info.grapheme_cluster_text_range.start == utf16
         {
@@ -160,17 +161,13 @@ fn shape(
                 .get_line_number_at_utf16_offset(utf16)
                 .unwrap_or(line);
             let x = if rtl { r.right } else { r.left };
-            let height = if r.height() > 0.0 {
-                dp_of(r.height())
-            } else {
-                empty_line
-            };
-            let rect = Rect::new(dp_of(x), dp_of(r.top), Dp::ZERO, height);
+            let line_box = line_boxes[glyph_line];
             if let Some(end) = utf16_bytes.get(&info.grapheme_cluster_text_range.end) {
                 clusters.push(TextCluster {
                     byte_range: index..*end,
                     bounds: Rect {
-                        height,
+                        y: line_box.y,
+                        height: line_box.height,
                         ..rect_of(r)
                     },
                     direction: if rtl {
@@ -189,9 +186,16 @@ fn shape(
                 });
                 line = glyph_line;
             }
+            let rect = Rect {
+                x: dp_of(x),
+                ..line_box
+            };
             carets.push(TextCaret { index, rect, line });
             let end = if rtl { r.left } else { r.right };
-            last = Rect::new(dp_of(end), rect.y, Dp::ZERO, rect.height);
+            last = Rect {
+                x: dp_of(end),
+                ..line_box
+            };
         }
         utf16 += ch.len_utf16();
     }
@@ -218,6 +222,25 @@ fn byte_offsets_by_utf16(text: &str) -> HashMap<usize, usize> {
             Some((start, byte))
         })
         .chain([(units, text.len())])
+        .collect()
+}
+
+fn line_boxes(
+    paragraph: &skia_safe::textlayout::Paragraph,
+    empty_line: Dp,
+    text: &str,
+) -> Vec<Rect> {
+    let laid_out_lines = paragraph.get_line_metrics();
+    let lines_beyond_the_layout = text.matches('\n').count() + 1;
+    (laid_out_lines.iter())
+        .map(|line| Dp::new(line.height))
+        .chain(std::iter::repeat(empty_line))
+        .take(laid_out_lines.len() + lines_beyond_the_layout)
+        .scan(Dp::ZERO, |top, height| {
+            let line_box = Rect::new(Dp::ZERO, *top, Dp::ZERO, height);
+            *top += height;
+            Some(line_box)
+        })
         .collect()
 }
 
@@ -286,6 +309,60 @@ mod tests {
                 .carets
                 .is_empty()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn each_line_of_a_text_with_a_line_height_is_one_line_height_tall() -> Result<(), TestError> {
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
+        let subtitle = TextStyle::new("sans-serif", 16.sp(), Color::WHITE).line_height(24.sp())?;
+        let bold_first_word = TextStyle {
+            spans: vec![TextSpan {
+                range: 0..4,
+                weight: Some(FontWeight::BOLD),
+                italic: false,
+                family: None,
+            }],
+            ..subtitle.clone()
+        };
+        let wrapping = "Open the companion app on your phone and keep Bluetooth turned on";
+        for (scaling, style, expected_line) in [
+            (1.0, subtitle.clone(), 24.dp()),
+            (1.3, subtitle, 31.dp()),
+            (1.0, bold_first_word, 24.dp()),
+        ] {
+            let scaling = TextScaling::linear(scaling).ok_or(TestError::Missing("scaling"))?;
+            let style = style.resolve(&scaling);
+            let line = shaper.line_height(&style);
+            assert_eq!(line, expected_line);
+            let row_top =
+                |row: usize| -> Result<Dp, TestError> { Ok(line * f64::from(u32::try_from(row)?)) };
+            for (text, width, least_rows) in [
+                ("", 500.dp(), 1),
+                ("Open\nthe\napp", 500.dp(), 3),
+                ("Open\n\napp", 500.dp(), 3),
+                ("Open\n", 500.dp(), 2),
+                (wrapping, 120.dp(), 3),
+            ] {
+                let geometry = shaper.geometry(text, &style, width);
+                for caret in &geometry.carets {
+                    let line_box = (caret.rect.y, caret.rect.height);
+                    assert_eq!(line_box, (row_top(caret.line)?, line), "{text:?} {caret:?}");
+                }
+                for cluster in &geometry.clusters {
+                    let line_box = (cluster.bounds.y, cluster.bounds.height);
+                    assert_eq!(
+                        line_box,
+                        (row_top(cluster.line)?, line),
+                        "{text:?} {cluster:?}"
+                    );
+                }
+                let rows = geometry.carets.last().map_or(0, |caret| caret.line + 1);
+                assert!(rows >= least_rows, "{text:?}: {rows} rows");
+                let height = shaper.measure(text, &style, width).height;
+                assert_eq!(height, row_top(rows)?, "{text:?}");
+            }
+        }
         Ok(())
     }
 
