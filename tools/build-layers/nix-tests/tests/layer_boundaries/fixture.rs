@@ -15,7 +15,7 @@ use tempfile::TempDir;
 
 const EXPRESSION: &str = "layer-derivations.nix";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Derivation {
     Registry,
@@ -24,33 +24,24 @@ pub enum Derivation {
     ReferenceFramework,
     Reference,
     Native,
-    WaylandInput,
-    AospRoundTrip,
-    SourceRules,
+    #[serde(untagged)]
+    Tool(String),
 }
 
 impl Derivation {
-    pub const ALL: [Self; 9] = [
+    const LAYERS: [Self; 6] = [
         Self::Registry,
         Self::Framework,
         Self::Engine,
         Self::ReferenceFramework,
         Self::Reference,
         Self::Native,
-        Self::WaylandInput,
-        Self::AospRoundTrip,
-        Self::SourceRules,
     ];
     pub const ON_ENGINE: [Self; 3] = [Self::Engine, Self::ReferenceFramework, Self::Reference];
     pub const OFF_ENGINE: [Self; 3] = [Self::Registry, Self::Framework, Self::Native];
-    pub const OFF_FRAMEWORK: [Self; 3] =
-        [Self::WaylandInput, Self::AospRoundTrip, Self::SourceRules];
 
-    pub fn above_engine() -> Vec<Self> {
-        Self::ALL
-            .into_iter()
-            .filter(|layer| *layer != Self::Engine)
-            .collect()
+    fn all(tools: &[Self]) -> Vec<Self> {
+        Self::LAYERS.into_iter().chain(tools.iter().cloned()).collect()
     }
 }
 
@@ -63,8 +54,9 @@ pub enum Variant {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-enum DirectoryKey {
+enum TreeKey {
     Directory,
+    ToolNames,
 }
 
 #[derive(Serialize)]
@@ -75,8 +67,10 @@ struct DerivationArguments<'arguments, Key> {
 }
 
 #[derive(Deserialize)]
-struct ReferenceDirectory {
+#[serde(rename_all = "camelCase")]
+struct Tree {
     directory: PathBuf,
+    tool_names: Vec<String>,
 }
 
 pub type Layers = BTreeMap<Derivation, String>;
@@ -110,6 +104,20 @@ impl From<std::io::Error> for LayerTestError {
 pub struct Base {
     pub layers: Layers,
     pub reference: PathBuf,
+    pub tools: Vec<Derivation>,
+}
+
+impl Base {
+    pub fn all(&self) -> Vec<Derivation> {
+        Derivation::all(&self.tools)
+    }
+
+    pub fn above_engine(&self) -> Vec<Derivation> {
+        self.all()
+            .into_iter()
+            .filter(|layer| *layer != Derivation::Engine)
+            .collect()
+    }
 }
 
 pub struct Fixture(TempDir);
@@ -136,37 +144,30 @@ impl Fixture {
         )
     }
 
-    pub fn all_layers(&self) -> Result<Layers, FixtureError> {
-        self.layers(Variant::Plain, &Derivation::ALL)
+    pub fn all_layers(&self) -> Result<Layers, LayerTestError> {
+        Ok(self.layers(Variant::Plain, &base()?.all())?)
     }
 
-    fn reference(&self) -> Result<PathBuf, LayerTestError> {
-        let reference: ReferenceDirectory = evaluate(
+    fn tree(&self) -> Result<Tree, FixtureError> {
+        evaluate(
             EXPRESSION,
             &DerivationArguments {
                 root: &self.root(),
                 variant: Variant::Plain,
-                keys: &[DirectoryKey::Directory],
+                keys: &[TreeKey::Directory, TreeKey::ToolNames],
             },
-        )?;
-        reference
-            .directory
-            .strip_prefix(self.root())
-            .map(Path::to_owned)
-            .map_err(|_outside| LayerTestError::ReferenceOutside {
-                directory: reference.directory.clone(),
-            })
+        )
     }
 
-    pub fn stale_layers(&self) -> Result<Vec<Derivation>, FixtureError> {
+    pub fn stale_layers(&self) -> Result<Vec<Derivation>, LayerTestError> {
         let mut stale = Vec::new();
-        for layer in Derivation::ALL {
-            match self.layers(Variant::Plain, &[layer]) {
+        for layer in base()?.all() {
+            match self.layers(Variant::Plain, std::slice::from_ref(&layer)) {
                 Ok(_) => {}
                 Err(FixtureError::Nix(NixError::Command(CommandError::Failed { .. }))) => {
                     stale.push(layer);
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.into()),
             }
         }
         Ok(stale)
@@ -215,9 +216,19 @@ impl Fixture {
 
 fn evaluate_base() -> Result<Base, LayerTestError> {
     let fixture = Fixture::new()?;
+    let tree = fixture.tree()?;
+    let reference = tree
+        .directory
+        .strip_prefix(fixture.root())
+        .map(Path::to_owned)
+        .map_err(|_outside| LayerTestError::ReferenceOutside {
+            directory: tree.directory.clone(),
+        })?;
+    let tools: Vec<_> = tree.tool_names.into_iter().map(Derivation::Tool).collect();
     Ok(Base {
-        layers: fixture.all_layers()?,
-        reference: fixture.reference()?,
+        layers: fixture.layers(Variant::Plain, &Derivation::all(&tools))?,
+        reference,
+        tools,
     })
 }
 

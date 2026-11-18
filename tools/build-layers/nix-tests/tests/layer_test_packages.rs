@@ -49,6 +49,8 @@ struct Example {
 #[serde(rename_all = "camelCase")]
 struct CheckPhases {
     native_names: Vec<String>,
+    members: Vec<String>,
+    checks: Vec<CheckPhase>,
     dependency_layers: Vec<CheckPhase>,
     support: CheckPhase,
     examples: BTreeMap<String, Example>,
@@ -102,5 +104,22 @@ fn every_local_crate_of_an_example_is_tested_once_in_the_whole_build() -> Result
             .collect();
         assert!(runs.values().all(|count| *count == 1), "{name}: {runs:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn every_workspace_member_is_tested_by_a_flake_check() -> Result<(), FixtureError> {
+    let phases = check_phases()?;
+    let tested: BTreeSet<&str> = phases
+        .checks
+        .iter()
+        .flat_map(CheckPhase::tested_packages)
+        .collect();
+    let untested: Vec<&String> = phases
+        .members
+        .iter()
+        .filter(|member| !tested.contains(member.as_str()))
+        .collect();
+    assert!(untested.is_empty(), "{untested:?}");
     Ok(())
 }

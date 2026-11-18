@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 const CONTRACT: &str = "nix/projection-contract.json";
-const COPIED_FILES: [&str; 4] = ["Cargo.toml", "Cargo.lock", "COPYING", "about.toml"];
+const COPIED_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "about.toml"];
 const COPIED_DIRECTORIES: [&str; 3] = ["crates", "examples", "tools"];
 const SKIPPED_NAMES: [&str; 2] = ["node_modules", "target"];
 const WRITABLE_DIRECTORY: u32 = 0o755;
@@ -54,19 +54,24 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), FixtureError> {
     Ok(())
 }
 
+fn create_parent(path: &Path, destination: &Path) -> Result<(), FixtureError> {
+    Ok(fs::create_dir_all(path.parent().unwrap_or(destination))?)
+}
+
 pub fn copy_repository(destination: &Path) -> Result<(), FixtureError> {
     let root = repository_root()?;
+    let contract = projection_contract()?;
     fs::create_dir(destination)?;
-    for name in COPIED_FILES {
+    for name in COPIED_FILES
+        .iter()
+        .copied()
+        .chain(contract.source_files.all().map(String::as_str))
+    {
+        create_parent(&destination.join(name), destination)?;
         copy_file(&root.join(name), &destination.join(name))?;
     }
-    let projections = projection_contract()?.projection_directory;
-    fs::create_dir_all(
-        destination
-            .join(&projections)
-            .parent()
-            .unwrap_or(destination),
-    )?;
+    let projections = contract.projection_directory;
+    create_parent(&destination.join(&projections), destination)?;
     for name in COPIED_DIRECTORIES
         .iter()
         .copied()

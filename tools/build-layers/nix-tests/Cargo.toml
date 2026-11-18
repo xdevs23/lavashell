@@ -17,3 +17,6 @@ serde_json.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+
+[dev-dependencies]
+syn.workspace = true

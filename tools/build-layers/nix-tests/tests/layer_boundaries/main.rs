@@ -51,9 +51,9 @@ fn reference_source(directory: &Path) -> PathBuf {
 
 #[test]
 fn changed_gui_tools_do_not_reach_the_engine() -> Result<(), LayerTestError> {
-    let tools = Fixture::new()?.layers(Variant::GuiTools, &Derivation::ALL)?;
+    let tools = Fixture::new()?.layers(Variant::GuiTools, &base()?.all())?;
     assert_unchanged(&tools, &[Derivation::Engine])?;
-    assert_changed(&tools, &Derivation::above_engine())
+    assert_changed(&tools, &base()?.above_engine())
 }
 
 #[test]
@@ -61,7 +61,8 @@ fn an_edit_of_the_reference_source_reaches_only_the_reference() -> Result<(), La
     let fixture = Fixture::new()?;
     append_newline(&reference_source(&fixture.root().join(&base()?.reference)))?;
     let current = fixture.all_layers()?;
-    let others: Vec<_> = Derivation::ALL
+    let others: Vec<_> = base()?
+        .all()
         .into_iter()
         .filter(|layer| *layer != Derivation::Reference)
         .collect();
@@ -76,7 +77,7 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
     assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
-    assert_unchanged(&current, &Derivation::OFF_FRAMEWORK)?;
+    assert_unchanged(&current, &base()?.tools)?;
     assert_changed(
         &current,
         &[
@@ -99,7 +100,7 @@ fn an_edit_of_the_error_chain_changes_the_packages_off_the_framework() -> Result
     )?;
     let current = fixture.all_layers()?;
     assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
-    assert_changed(&current, &Derivation::OFF_FRAMEWORK)
+    assert_changed(&current, &base()?.tools)
 }
 
 #[test]
@@ -157,7 +158,7 @@ fn a_registry_update_of_gui_crates_makes_the_projections_stale_and_leaves_the_en
 -> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     fixture.bump_workspace_dependency("zbus")?;
-    assert_eq!(fixture.stale_layers()?, Derivation::above_engine());
+    assert_eq!(fixture.stale_layers()?, base()?.above_engine());
     assert_unchanged(
         &fixture.layers(Variant::Plain, &[Derivation::Engine])?,
         &[Derivation::Engine],

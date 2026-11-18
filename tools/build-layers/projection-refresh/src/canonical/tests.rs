@@ -3,7 +3,7 @@ use super::{CRATES_IO, Seed, canonical_plan, materialize, verify_units};
 use crate::error::Error;
 use crate::files::read_toml;
 use crate::seed::{OriginalContract, SeedManifest};
-use lavashell_cargo_model::contract::{ProjectionContract, StubLayout};
+use lavashell_cargo_model::contract::{ProjectionContract, SourceFiles, StubLayout};
 use lavashell_cargo_model::dependency_kind::DependencyKind;
 use lavashell_cargo_model::lock::{CargoLock, LockReference, LockedPackage};
 use lavashell_cargo_model::manifest::{
@@ -43,6 +43,10 @@ fn contract() -> ProjectionContract {
         layers: vec![Layer::Engine, Layer::Registry],
         companions: Vec::new(),
         packaged_crates: BTreeMap::new(),
+        source_files: SourceFiles {
+            every_package: Vec::new(),
+            by_member: BTreeMap::new(),
+        },
         stub: StubLayout {
             version: "0.0.0".to_owned(),
             library: "src/lib.rs".to_owned(),

@@ -15,6 +15,9 @@ in
 projectedWorkspace: dummyMembers:
 let
   real = lib.subtractLists dummyMembers projectedWorkspace.members;
+  sourceFiles =
+    lib.optionals (real != [ ]) contract.sourceFiles.everyPackage
+    ++ lib.concatMap (member: contract.sourceFiles.byMember.${member} or [ ]) real;
   src = lib.cleanSourceWith {
     name = "source";
     src = root;
@@ -27,10 +30,9 @@ let
       && builtins.baseNameOf path != "node_modules"
       && (
         path == toString root
-        || (name == "COPYING" && real != [ ])
-        || lib.any (
-          member: lib.hasPrefix "${name}/" member || member == name || lib.hasPrefix "${member}/" name
-        ) real
+        || lib.any (kept: lib.hasPrefix "${name}/" kept || kept == name || lib.hasPrefix "${kept}/" name) (
+          real ++ sourceFiles
+        )
       );
   };
   manifests = lib.concatMapStrings (

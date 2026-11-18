@@ -9,16 +9,13 @@ let
   inherit (pkgs) lib;
   contract = import ./projection-contract.nix;
   types = import ./types.nix;
-  packagedDirectory = name: root + "/${contract.packagedCrates.${name}}";
   runnable = lib.filterAttrs (
     name: type:
     type == "directory"
     && builtins.pathExists (root + "/examples/${name}/Cargo.toml")
     && builtins.pathExists (root + "/examples/${name}/src/main.rs")
   ) (builtins.readDir (root + "/examples"));
-  directories = lib.mapAttrs (name: _: root + "/examples/${name}") runnable // {
-    wayland-input = packagedDirectory "wayland-input";
-  };
+  directories = lib.mapAttrs (name: _: root + "/examples/${name}") runnable;
   launches = {
     wayland-input = {
       kind = types.launchKinds.helper;
@@ -61,8 +58,8 @@ let
   inherit (sources) nativeDirectory;
   registry = artifacts.registry nativeDirectory;
   framework = artifacts.framework nativeDirectory [ registry ] { example = false; };
-  package =
-    name: directory:
+  packageSkippingTestsOf =
+    testedElsewhere: name: directory:
     let
       program = sources.packageName directory;
       library = !builtins.pathExists (directory + "/src/main.rs");
@@ -86,10 +83,13 @@ let
         }
         .${route};
       selected = artifacts.selectedPackages directory;
-      testPackages = lib.subtractLists (lib.concatMap artifacts.packagesTestedThrough [
-        framework
-        local
-      ]) closure;
+      testPackages = lib.subtractLists (
+        lib.concatMap artifacts.packagesTestedThrough [
+          framework
+          local
+        ]
+        ++ lib.concatMap (other: other.testPackages) testedElsewhere
+      ) closure;
     in
     rustPlatform.buildRustPackage (
       rustPackageDefaults
@@ -122,7 +122,7 @@ let
           + artifacts.copy [ local ]
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
-          inherit directory;
+          inherit directory testPackages;
           registryArtifacts = registry;
           engineArtifacts = engine;
           frameworkArtifacts = local;
@@ -130,19 +130,29 @@ let
         meta = rustPackageDefaults.meta // lib.optionalAttrs (!library) { mainProgram = program; };
       }
     );
-  packages = lib.mapAttrs package directories;
-  sourceRules = package "source-rules" (packagedDirectory "source-rules");
-  aospRoundTrip = package "aosp-round-trip" (packagedDirectory "aosp-round-trip");
-  bevy = package "bevy" (packagedDirectory "bevy");
+  testedElsewhere = {
+    native-harness = [
+      packagedCrates.wayland-input
+      packagedCrates.aosp-round-trip
+    ];
+  };
+  packagedCrates = lib.mapAttrs (
+    name: directory:
+    packageSkippingTestsOf (testedElsewhere.${name} or [ ]) name (root + "/${directory}")
+  ) contract.packagedCrates;
+  packages = lib.mapAttrs (packageSkippingTestsOf [ ]) directories // {
+    inherit (packagedCrates) wayland-input;
+  };
   examples = pkgs.symlinkJoin {
     name = "lavashell-examples-${sources.version}";
     paths = lib.attrValues packages;
+    passthru.packages = lib.attrValues packages;
     meta = rustPackageDefaults.meta;
   };
 in
 {
-  reference = bevy;
-  inherit buildLayers aospRoundTrip sourceRules;
+  reference = packagedCrates.bevy;
+  inherit buildLayers packagedCrates;
   packages = packages // {
     inherit examples;
   };
@@ -166,10 +176,10 @@ in
         python.types-psutil
       ]);
     in
-    {
+    packagedCrates
+    // {
       inherit registry framework examples;
       nix-tests = layerTools.nixTests;
-      inherit bevy;
       effect-removal = import ./effect-removal.nix {
         inherit
           pkgs
@@ -187,7 +197,7 @@ in
               toolPython
               pkgs.ruff
               rustPlatform.rust.cargo
-              sourceRules
+              packagedCrates.source-rules
             ];
           }
           ''

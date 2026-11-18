@@ -11,8 +11,15 @@
   "packagedCrates": {
     "aosp-round-trip": "tools/aosp-round-trip",
     "wayland-input": "tools/wayland-input",
+    "native-harness": "tools/native-harness",
     "source-rules": "tools/source-rules",
     "bevy": "crates/lavashell-bevy"
+  },
+  "sourceFiles": {
+    "everyPackage": ["COPYING"],
+    "byMember": {
+      "tools/native-harness": ["nix/app-declarations.json"]
+    }
   },
   "stub": {
     "version": "0.0.0",

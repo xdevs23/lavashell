@@ -406,6 +406,7 @@ dependencies = [
  "lavashell-command-output",
  "serde",
  "serde_json",
+ "syn",
  "tempfile",
  "thiserror",
  "toml",

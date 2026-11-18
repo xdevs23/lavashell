@@ -11,18 +11,24 @@ let
       inherit (pkgs) rustPlatform;
     }).examples;
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
-  examples = removeAttrs tree.packages [ "examples" ] // {
-    aosp-round-trip = tree.aospRoundTrip;
-    source-rules = tree.sourceRules;
-    bevy = tree.reference;
-  };
+  examples = removeAttrs tree.packages [ "examples" ] // tree.packagedCrates;
   checkOf = built: {
     inherit (built) drvPath doCheck cargoTestFlags;
   };
   layersThrough = layer: [ layer ] ++ lib.concatMap layersThrough layer.previous;
+  withLayers =
+    built:
+    [ built ] ++ lib.optionals (built ? frameworkArtifacts) (layersThrough built.frameworkArtifacts);
+  checkedDerivations = lib.concatMap (
+    check: lib.concatMap withLayers ([ check ] ++ check.packages or [ ])
+  ) (lib.attrValues tree.checks);
 in
 {
   inherit (workspaceCrates) nativeNames;
+  members = map (
+    member: workspaceCrates.packageName (root + "/${member}")
+  ) workspaceCrates.workspace.workspace.members;
+  checks = map checkOf (lib.filter (built: built ? cargoTestFlags) checkedDerivations);
   dependencyLayers = map checkOf (
     [ tree.checks.registry ]
     ++ lib.filter (engine: engine != null) (

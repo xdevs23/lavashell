@@ -25,16 +25,20 @@ let
       root = /. + input.root;
     }).examples;
   inherit (tree) reference;
+  tools = original.lib.filterAttrs (
+    _: package: package.directory != reference.directory
+  ) tree.packagedCrates;
 in
-original.lib.getAttrs input.keys {
-  registry = tree.checks.registry.drvPath;
-  framework = tree.checks.framework.drvPath;
-  engine = reference.engineArtifacts.drvPath;
-  referenceFramework = reference.frameworkArtifacts.drvPath;
-  reference = reference.drvPath;
-  native = tree.packages.interactions.drvPath;
-  waylandInput = tree.packages.wayland-input.drvPath;
-  aospRoundTrip = tree.aospRoundTrip.drvPath;
-  sourceRules = tree.sourceRules.drvPath;
-  directory = toString reference.directory;
-}
+original.lib.getAttrs input.keys (
+  {
+    registry = tree.checks.registry.drvPath;
+    framework = tree.checks.framework.drvPath;
+    engine = reference.engineArtifacts.drvPath;
+    referenceFramework = reference.frameworkArtifacts.drvPath;
+    reference = reference.drvPath;
+    native = tree.packages.interactions.drvPath;
+    directory = toString reference.directory;
+    toolNames = builtins.attrNames tools;
+  }
+  // builtins.mapAttrs (_: tool: tool.drvPath) tools
+)

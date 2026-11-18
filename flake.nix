@@ -94,7 +94,8 @@
         );
       aosp = import ./nix/aosp.nix {
         inherit toolchain root;
-        inherit (examples) buildLayers aospRoundTrip;
+        inherit (examples) buildLayers;
+        aospRoundTrip = examples.packagedCrates.aosp-round-trip;
         skia = aospSkia;
       };
       dependencies = import ./nix/dependency-check.nix {
