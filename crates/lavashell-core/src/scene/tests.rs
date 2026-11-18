@@ -141,6 +141,18 @@ fn resolving_a_style_scales_its_font_size_and_keeps_the_rest() -> TestResult {
 }
 
 #[test]
+fn a_line_height_keeps_its_ratio_to_the_font_size_under_every_text_scaling() -> TestResult {
+    let style = TextStyle::new("Inter", 16.sp(), Color::WHITE).line_height(24.sp())?;
+    let line_height =
+        |scaling: TextScaling| (style.clone().resolve(&scaling).line_height).map(LineHeight::get);
+    let linear = line_height(TextScaling::linear(1.3).required("scaling")?);
+    assert_f64_eq(linear.required("linear line height")?.get(), 31.2);
+    let table = TextScaling::table([(16.sp(), 28.dp())]).required("scaling")?;
+    assert_eq!(line_height(table), Some(42.dp()));
+    Ok(())
+}
+
+#[test]
 fn canvas_text_follows_the_text_size_setting() -> TestResult {
     let mut commands = Vec::new();
     Drawing::new(

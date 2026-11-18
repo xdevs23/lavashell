@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::geometry::Axis;
-use crate::scene::{DrawCommand, Icon, IconPath, Segment};
+use crate::geometry::{Axis, Color};
+use crate::scene::{DrawCommand, Icon, IconPath, Segment, TEXT_STYLE, TextStyle};
 use crate::ui::{IconOptions, IconStyle};
 
 static SQUARE: Icon = Icon {
@@ -46,5 +46,21 @@ fn the_options_of_an_icon_give_its_size_and_whether_it_fills_its_closed_paths() 
         Some(Size::new(40.dp(), 40.dp()))
     );
     assert_eq!(fills, 1);
+    Ok(())
+}
+
+#[test]
+fn a_line_icon_takes_the_line_height_of_its_text_style() -> TestResult {
+    let style = TextStyle::new("sans-serif", 16.sp(), Color::WHITE).line_height(30.sp())?;
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        ui.provide(&TEXT_STYLE, style.clone(), |ui| {
+            ui.icon(&SQUARE, IconOptions::default(), Modifier::new().tag("line"));
+        });
+    });
+    advance(&mut Scene::default(), &mut view, WINDOW_SIZE, 0)?;
+    assert_eq!(
+        view.bounds_of(&"line").map(Rect::size),
+        Some(Size::new(30.dp(), 30.dp()))
+    );
     Ok(())
 }

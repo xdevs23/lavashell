@@ -102,7 +102,7 @@ impl NodeSetting {
             }
             Self::FontSize(size) => {
                 let size = ui.local(&TEXT_SCALING).to_dp(*size);
-                change_text(node, |style| style.size = size)?;
+                change_text(node, |style| style.set_size(size))?;
             }
             Self::FontFamily(family) => {
                 change_text(node, |style| style.family.clone_from(family))?;

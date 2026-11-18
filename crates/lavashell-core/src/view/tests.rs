@@ -6,7 +6,7 @@ use crate::geometry::Viewport;
 use crate::input_method::{TextAction, TextHints};
 use crate::reactive::State;
 use crate::scene::tree::Change;
-use crate::scene::{DrawCommand, TEXT_STYLE, TextStyle};
+use crate::scene::{DrawCommand, LineHeight, TEXT_STYLE, TextStyle};
 use crate::shape::{Corners, Shape};
 use crate::test_error::{Exactly, Required, TestError, TestResult, WithoutFailures};
 use crate::ui::{Arrangement, Modifier, TextFieldOptions};
@@ -19,7 +19,8 @@ struct Metrics;
 
 impl TextMeasurer for Metrics {
     fn measure(&mut self, t: &str, s: &TextStyle<Dp>, w: Dp) -> Size {
-        Size::new(repeated(s.size * 0.5, t.len()).min(w), s.size * 1.3)
+        let line = s.line_height.map_or(s.size * 1.3, LineHeight::get);
+        Size::new(repeated(s.size * 0.5, t.len()).min(w), line)
     }
 }
 

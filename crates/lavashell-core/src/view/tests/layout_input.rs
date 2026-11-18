@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::geometry::{Axis, Color, Viewport};
-use crate::scene::DrawCommand;
+use crate::scene::{DrawCommand, TEXT_STYLE, TextStyle};
 
 const WINDOW: Viewport = Viewport::new(Size::new(Dp::new(100.0), Dp::new(100.0)), Density::ONE);
 
@@ -430,5 +430,18 @@ fn bounded_view_can_measure_natural_content_before_resize_while_clipping_input_t
     view.input(InputEvent::Press(point));
     view.input(InputEvent::Release(point));
     assert!(clicked.get());
+    Ok(())
+}
+
+#[test]
+fn a_font_size_modifier_scales_the_line_height_of_its_text_style() -> TestResult {
+    let style = TextStyle::new("sans-serif", 16.sp(), Color::WHITE).line_height(24.sp())?;
+    let mut view = View::new(crate::platform::fixture::facts(), move |ui| {
+        ui.provide(&TEXT_STYLE, style.clone(), |ui| {
+            ui.text("Title", Modifier::new().font_size(32.sp()).tag("title"));
+        });
+    });
+    advance_with(&mut Scene::default(), &mut view, WINDOW, &mut Metrics)?;
+    assert_eq!(view.tagged_bounds(&"title")?.height, 48.dp());
     Ok(())
 }

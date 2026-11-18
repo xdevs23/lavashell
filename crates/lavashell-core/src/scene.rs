@@ -5,11 +5,15 @@ use crate::image::{Image, ImageFit, StreamImage};
 use crate::local::Local;
 use crate::preferences::TextScaling;
 use crate::shape::{Corners, Radius, Shape};
-use crate::units::{Density, Dp, Em, NonNegativeDp, Sp};
+use crate::units::{Density, Dp, Em, NonNegativeDp, NumberError, Sp};
 
 mod font_weight;
 
 pub use font_weight::FontWeight;
+
+mod line_height;
+
+pub use line_height::LineHeight;
 
 mod icon;
 
@@ -81,11 +85,21 @@ mod sealed {
     impl Sealed for crate::units::Dp {}
 }
 
-pub trait FontSize: sealed::Sealed + Copy + std::fmt::Debug + PartialEq {}
+pub trait FontSize: sealed::Sealed + Copy + std::fmt::Debug + PartialEq {
+    fn number(self) -> f64;
+}
 
-impl FontSize for Sp {}
+impl FontSize for Sp {
+    fn number(self) -> f64 {
+        self.get()
+    }
+}
 
-impl FontSize for Dp {}
+impl FontSize for Dp {
+    fn number(self) -> f64 {
+        self.get()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -96,6 +110,7 @@ pub struct TextStyle<S: FontSize = Sp> {
     pub weight: FontWeight,
     pub max_lines: Option<usize>,
     pub letter_spacing: Em,
+    pub line_height: Option<LineHeight<S>>,
     pub alignment: TextAlignment,
     pub direction: ParagraphDirection,
     #[cfg_attr(
@@ -127,6 +142,7 @@ impl TextStyle {
             weight: FontWeight::NORMAL,
             max_lines: None,
             letter_spacing: Em::ZERO,
+            line_height: None,
             alignment: TextAlignment::Start,
             direction: ParagraphDirection::LeftToRight,
             spans: Vec::new(),
@@ -157,10 +173,17 @@ impl TextStyle {
         self
     }
 
+    pub fn line_height(mut self, line_height: Sp) -> Result<Self, NumberError> {
+        self.line_height = Some(LineHeight::try_new(line_height)?);
+        Ok(self)
+    }
+
     #[must_use]
     pub fn resolve(self, scaling: &TextScaling) -> TextStyle<Dp> {
+        let size = scaling.to_dp(self.size);
         TextStyle {
-            size: scaling.to_dp(self.size),
+            size,
+            line_height: (self.line_height).and_then(|height| height.rescale(self.size, size)),
             color: self.color,
             family: self.family,
             weight: self.weight,
@@ -175,6 +198,13 @@ impl TextStyle {
     #[must_use]
     pub fn resolve_unscaled(self) -> TextStyle<Dp> {
         self.resolve(&TextScaling::default())
+    }
+}
+
+impl TextStyle<Dp> {
+    pub(crate) fn set_size(&mut self, size: Dp) {
+        self.line_height = (self.line_height).and_then(|height| height.rescale(self.size, size));
+        self.size = size;
     }
 }
 
