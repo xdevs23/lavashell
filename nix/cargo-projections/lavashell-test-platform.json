@@ -358,6 +358,7 @@
           "lavashell-core",
           "lavashell-renderer",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "thiserror"
         ]
       },
@@ -365,14 +366,12 @@
         "name": "lavashell-renderer",
         "version": "0.1.0",
         "dependencies": [
-          "ash",
           "i_overlay",
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "log",
           "lru",
           "num-traits",
@@ -396,6 +395,7 @@
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "rustix",
@@ -422,6 +422,7 @@
           "lavashell-runtime",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "thiserror"
         ]
       },
@@ -432,6 +433,22 @@
           "ash",
           "lavashell-actor",
           "log",
+          "thiserror"
+        ]
+      },
+      {
+        "name": "lavashell-vulkan-renderer",
+        "version": "0.1.0",
+        "dependencies": [
+          "ash",
+          "lavashell-core",
+          "lavashell-effect-quality",
+          "lavashell-error-chain",
+          "lavashell-renderer",
+          "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "log",
+          "skia-safe",
           "thiserror"
         ]
       },
@@ -901,7 +918,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "faab4fd85e2fd0947d35557cf11612314204241cde25facc84981b6be2b58c2f",
+        "seedHash": "e4da3799c9343e9581b06c3b62400e0a476f86de87a3d87e831f58aeafad5d71",
         "plan": {
           "schema": 1,
           "selection": {
@@ -909,7 +926,8 @@
             "profile": "packaged",
             "packages": [
               "lavashell-test-platform",
-              "lavashell-renderer"
+              "lavashell-renderer",
+              "lavashell-vulkan-renderer"
             ],
             "features": []
           },
@@ -944,7 +962,8 @@
                 "crates/lavashell-platform",
                 "crates/lavashell-renderer",
                 "crates/lavashell-test-platform",
-                "crates/lavashell-vulkan"
+                "crates/lavashell-vulkan",
+                "crates/lavashell-vulkan-renderer"
               ]
             }
           },
@@ -1173,6 +1192,12 @@
                     "features": [],
                     "path": "../lavashell-vulkan"
                   },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -1212,16 +1237,6 @@
                   "default": []
                 },
                 "dependencies": {
-                  "ash": {
-                    "package": "ash",
-                    "default-features": false,
-                    "features": [
-                      "debug",
-                      "linked",
-                      "std"
-                    ],
-                    "version": "=0.38.0+1.3.281"
-                  },
                   "i_overlay": {
                     "package": "i_overlay",
                     "default-features": false,
@@ -1253,12 +1268,6 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
-                  },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
                   },
                   "log": {
                     "package": "log",
@@ -1370,6 +1379,12 @@
                     "features": [],
                     "path": "../lavashell-vulkan"
                   },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -1430,6 +1445,108 @@
                       "std"
                     ],
                     "version": "=0.4.34"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-vulkan-renderer",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-vulkan-renderer",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-effect-quality": {
+                    "package": "lavashell-effect-quality",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "skia-safe": {
+                    "package": "skia-safe",
+                    "default-features": false,
+                    "features": [
+                      "embed-icudtl",
+                      "ganesh",
+                      "jpeg",
+                      "no-compile",
+                      "pdf",
+                      "textlayout",
+                      "vulkan"
+                    ],
+                    "version": "=0.153.3"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -1744,6 +1861,7 @@
                   "lavashell-core",
                   "lavashell-renderer",
                   "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
                   "thiserror"
                 ]
               },
@@ -1751,13 +1869,11 @@
                 "name": "lavashell-renderer",
                 "version": "0.0.0",
                 "dependencies": [
-                  "ash",
                   "i_overlay",
                   "inventory",
                   "lavashell-core",
                   "lavashell-effect-quality",
                   "lavashell-error-chain",
-                  "lavashell-vulkan",
                   "log",
                   "lru",
                   "num-traits",
@@ -1774,6 +1890,7 @@
                   "lavashell-platform",
                   "lavashell-renderer",
                   "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
                   "thiserror"
                 ]
               },
@@ -1784,6 +1901,21 @@
                   "ash",
                   "lavashell-actor",
                   "log",
+                  "thiserror"
+                ]
+              },
+              {
+                "name": "lavashell-vulkan-renderer",
+                "version": "0.0.0",
+                "dependencies": [
+                  "ash",
+                  "lavashell-core",
+                  "lavashell-effect-quality",
+                  "lavashell-error-chain",
+                  "lavashell-renderer",
+                  "lavashell-vulkan",
+                  "log",
+                  "skia-safe",
                   "thiserror"
                 ]
               },

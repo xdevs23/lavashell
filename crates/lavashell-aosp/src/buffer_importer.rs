@@ -7,8 +7,9 @@ use crate::platform::{
     VulkanRenderer,
 };
 use crate::surface_stream::QueuedFrame;
-use lavashell_renderer::vulkan::Status;
-use lavashell_renderer::{Completions, FrameImporter, FrameSampler, ImportHandBack, StreamPixels};
+use lavashell_renderer::{
+    CompletionStatus, Completions, FrameImporter, FrameSampler, ImportHandBack, StreamPixels,
+};
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
@@ -29,7 +30,7 @@ impl Completions for HardwareBufferImporter {
         self.0.completion().map_err(Error::SubmitCompletion)
     }
 
-    fn status(&self, completion: &Completion) -> Result<Status, Error> {
+    fn status(&self, completion: &Completion) -> Result<CompletionStatus, Error> {
         completion.status().map_err(Error::CompletionStatus)
     }
 }

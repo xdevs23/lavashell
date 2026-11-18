@@ -1,63 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::effect_checks::{
+    assert_continuous_glass, assert_neutral_glass, draw, sample, sample_at_center,
+    sample_in_middle_row, stripes,
+};
 use crate::float_asserts::assert_f32_eq;
 use crate::test_error::TestError;
-use crate::test_surfaces::{
-    ChannelRounding, EFFECT_STRIPES, EFFECT_SURFACE, Pixels, float_pixel, linear_float_pixel,
-    linear_float_pixels,
-};
-use crate::{Error, Fonts, Painter};
+use crate::test_surfaces::{ChannelRounding, EFFECT_SURFACE, float_pixel};
 use lavashell_core::prelude::*;
 use skia_safe::{AlphaType, Surface};
 
 mod tangled;
 
 pub(crate) use tangled::tangle;
-
-pub(crate) fn sample(surface: &mut Surface, x: i32, y: i32) -> [f32; 4] {
-    linear_float_pixel(surface, x, y, AlphaType::Unpremul)
-}
-
-pub(crate) fn sample_in_middle_row(surface: &mut Surface, x: i32) -> [f32; 4] {
-    sample(surface, x, EFFECT_SURFACE.middle_row())
-}
-
-pub(crate) fn sample_at_center(surface: &mut Surface) -> [f32; 4] {
-    sample_in_middle_row(surface, EFFECT_SURFACE.middle_column())
-}
-
-pub(crate) fn linear_pixels(surface: &mut Surface) -> Pixels<[f32; 4]> {
-    linear_float_pixels(surface, AlphaType::Unpremul)
-}
-
-pub(crate) fn draw(
-    surface: &mut Surface,
-    paint: impl FnOnce(&mut Drawing<'_>),
-) -> Result<(), TestError> {
-    draw_with(
-        &mut Painter::new(&Fonts::new(), crate::UniformRange::VULKAN_REQUIRED)?,
-        surface,
-        paint,
-    )
-}
-
-pub(crate) fn draw_with(
-    painter: &mut Painter,
-    surface: &mut Surface,
-    paint: impl FnOnce(&mut Drawing<'_>),
-) -> Result<(), TestError> {
-    let mut commands = Vec::new();
-    let context = DrawContext::new(Viewport::new(EFFECT_SURFACE.size(), Density::ONE));
-    paint(&mut Drawing::new(
-        &mut commands,
-        EFFECT_SURFACE.bounds(),
-        &context,
-    ));
-    painter.paint_as_leaf(surface.canvas(), &commands, Density::ONE)
-}
-
-pub(crate) fn stripes(d: &mut Drawing<'_>) {
-    EFFECT_STRIPES.fill_stripes(d, [Color::WHITE, Color::rgb(0)]);
-}
 
 #[test]
 fn floating_point_paint_preserves_hdr_headroom_and_fractional_channels() -> Result<(), TestError> {
@@ -140,93 +94,10 @@ fn glass_dispersion_preserves_neutral_color_across_transparent_edges() -> Result
     assert_neutral_glass(&mut s)
 }
 
-fn assert_neutral_glass(s: &mut Surface) -> Result<(), TestError> {
-    let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
-    draw(s, |d| {
-        let Size { width, height } = EFFECT_SURFACE.size();
-        d.fill(Rect::new(0.dp(), 0.dp(), 20.dp(), height), Color::WHITE);
-        d.fill(
-            Rect::new(20.dp(), 0.dp(), width - 20.dp(), height),
-            Color::WHITE.with_alpha(0.25),
-        );
-        d.backdrop(
-            Rect::new(16.dp(), 4.dp(), 64.dp(), 40.dp()),
-            constant!(Backdrop::glass(
-                Dp::ZERO,
-                Glass {
-                    refraction: NonNegativeDp::ZERO,
-                    dispersion: constant!(NonNegativeDp::try_new(Dp::new(4.0))),
-                    rim: NonNegative::ZERO,
-                },
-            )),
-        );
-    })?;
-    let c = sample_in_middle_row(s, 17);
-    for channel in c {
-        assert!(
-            (channel - 1.0).abs() < 0.02,
-            "neutral edge gained a color fringe: {c:?}"
-        );
-    }
-    Ok(())
-}
-
 #[test]
 fn glass_refraction_is_continuous_across_corner_diagonals() -> Result<(), TestError> {
     let mut s = EFFECT_SURFACE.raster()?;
     assert_continuous_glass(&mut s)
-}
-
-fn assert_continuous_glass(s: &mut Surface) -> Result<(), TestError> {
-    for radius in [0.0, 12.0, 20.0] {
-        let Size { width, height } = EFFECT_SURFACE.size();
-        for end in [Point::new(width, 0.dp()), Point::new(0.dp(), height)] {
-            let _canvas_returned_for_chaining = s.canvas().clear(skia_safe::Color::TRANSPARENT);
-            let ramp = Gradient::linear(
-                Point::new(0.dp(), 0.dp()),
-                end,
-                &[
-                    Color::linear([0.05; 3], 1.0, Gamut::Srgb),
-                    Color::linear([0.95; 3], 1.0, Gamut::Srgb),
-                ],
-            )?
-            .interpolation(ColorInterpolation::LinearRgb);
-            draw(s, |d| {
-                d.fill(EFFECT_SURFACE.bounds(), ramp);
-                d.backdrop(
-                    Shape::rounded(
-                        Rect::new(16.dp(), 4.dp(), 64.dp(), 40.dp()),
-                        Dp::new(radius),
-                    ),
-                    constant!(Backdrop::glass(
-                        Dp::ZERO,
-                        Glass {
-                            refraction: constant!(NonNegativeDp::try_new(Dp::new(20.0))),
-                            dispersion: constant!(NonNegativeDp::try_new(Dp::new(0.7))),
-                            rim: constant!(NonNegative::try_new(0.14)),
-                        },
-                    )),
-                );
-            })?;
-            let pixels = linear_pixels(s);
-            let red = |x, y| pixels.at(x, y)[0];
-            for y in 18..31 {
-                for x in 26..70 {
-                    for (a, c) in [
-                        (red(x - 1, y), red(x + 1, y)),
-                        (red(x, y - 1), red(x, y + 1)),
-                    ] {
-                        let curvature = (a - 2.0 * red(x, y) + c).abs();
-                        assert!(
-                            curvature < 0.018,
-                            "lens seam at ({x}, {y}), radius {radius}, ramp {end:?}: {curvature}"
-                        );
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[test]
@@ -360,7 +231,7 @@ fn pq_conversion_uses_absolute_luminance_at_white_and_highlights() -> Result<(),
         );
     })?;
     let hdr10 = crate::color::output_color_space(OutputProfile::Hdr10)
-        .ok_or(Error::OutputColorSpace(OutputProfile::Hdr10))?;
+        .ok_or(TestError::Missing("output color space"))?;
     let (left_middle, right_middle) = (
         EFFECT_SURFACE.middle_column() / 2,
         EFFECT_SURFACE.middle_column() * 3 / 2,
@@ -376,35 +247,6 @@ fn pq_conversion_uses_absolute_luminance_at_white_and_highlights() -> Result<(),
         );
     }
     Ok(())
-}
-
-#[test]
-fn vulkan_f16_effects_preserve_hdr_headroom_and_sharp_foreground() -> Result<(), TestError> {
-    let mut painter = crate::VulkanRenderer::headless()?;
-    let mut s = painter.offscreen(EFFECT_SURFACE.pixel_size())?;
-    draw(&mut s, |d| {
-        d.fill(
-            EFFECT_SURFACE.bounds(),
-            Color::linear([2.0, 0.125, 0.5], 1.0, Gamut::Srgb),
-        );
-        d.backdrop(
-            Shape::rounded(Rect::new(16.dp(), 4.dp(), 64.dp(), 40.dp()), 8.dp()),
-            constant!(Backdrop::blur(Dp::new(3.0))),
-        );
-        d.fill(
-            Rect::new(40.dp(), 20.dp(), 4.dp(), 4.dp()),
-            Color::rgb(0x00ff_0000),
-        );
-    })?;
-    let hdr = sample_in_middle_row(&mut s, 24);
-    for (channel, expected) in hdr.into_iter().zip([2.0, 0.125]) {
-        let rounding = ChannelRounding::of(&s)?.after(3, expected);
-        assert!((f64::from(channel) - expected).abs() <= rounding, "{hdr:?}");
-    }
-    let fg = sample(&mut s, 41, 21);
-    assert!(fg[0] > 0.98 && fg[1] < 0.01);
-    assert_neutral_glass(&mut s)?;
-    assert_continuous_glass(&mut s)
 }
 
 #[test]

@@ -8,8 +8,8 @@ use lavashell_core::window::{WindowCapabilities, WindowState};
 use lavashell_platform::{
     Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec, WindowControlRequest,
 };
-use lavashell_renderer::NoStreams;
 use lavashell_vulkan::HeadlessWindow;
+use lavashell_vulkan_renderer::NoStreams;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

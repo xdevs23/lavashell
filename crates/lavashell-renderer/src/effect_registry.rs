@@ -11,6 +11,9 @@ pub use inventory;
 pub(crate) use planner::EffectPlanner;
 pub use planner::{EffectInput, QualityChange};
 
+#[cfg(all(feature = "backdrop", any(test, feature = "test-support")))]
+pub use backdrop::{cache_checks as backdrop_cache_checks, hole_checks as backdrop_hole_checks};
+
 use crate::destination::Destination;
 use crate::failure::Failures;
 use crate::field::FieldRoom;

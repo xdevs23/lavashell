@@ -5,12 +5,6 @@ use crate::test_error::TestError;
 use lavashell_core::prelude::NumberError;
 use std::{cell::RefCell, rc::Rc, sync::OnceLock};
 
-impl Failures {
-    pub(crate) fn count(&self, failure: DrawFailure) -> u64 {
-        self.0.borrow().get(&failure).copied().unwrap_or_default()
-    }
-}
-
 impl FailedDraw {
     pub(crate) fn cause(&self) -> Option<&Error> {
         self.cause.as_deref()

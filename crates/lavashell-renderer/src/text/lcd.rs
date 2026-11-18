@@ -21,8 +21,6 @@ fn scale(input: &RasterInput<'_>) -> Option<f32> {
 }
 
 #[cfg(test)]
-mod gpu_tests;
-#[cfg(test)]
 mod tests;
 
 impl TextRasterizer for OpaqueCoverage {

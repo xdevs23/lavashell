@@ -9,7 +9,7 @@ use lavashell_core::geometry::{PixelScale, Rect};
 use lavashell_core::prelude::{Density, Viewport};
 use lavashell_core::surface::{SurfaceChange, SurfaceId, SurfaceState};
 use lavashell_platform::Role;
-use lavashell_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
+use lavashell_vulkan_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 use sctk::reexports::client::protocol::{wl_compositor, wl_region, wl_surface};
 use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::reexports::protocols::ext::background_effect::v1::client::ext_background_effect_surface_v1;

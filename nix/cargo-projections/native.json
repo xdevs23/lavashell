@@ -1034,6 +1034,7 @@
           "lavashell-materials",
           "lavashell-renderer",
           "lavashell-runtime",
+          "lavashell-vulkan-renderer",
           "lavashell-wayland"
         ]
       },
@@ -1059,6 +1060,7 @@
           "lavashell-runtime",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "ndk",
           "ndk-sys",
@@ -1177,6 +1179,7 @@
           "lavashell-core",
           "lavashell-renderer",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "thiserror 2.0.21"
         ]
       },
@@ -1184,14 +1187,12 @@
         "name": "lavashell-renderer",
         "version": "0.1.0",
         "dependencies": [
-          "ash",
           "i_overlay",
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "log",
           "lru",
           "num-traits",
@@ -1215,6 +1216,7 @@
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "rustix",
@@ -1241,6 +1243,22 @@
         ]
       },
       {
+        "name": "lavashell-vulkan-renderer",
+        "version": "0.1.0",
+        "dependencies": [
+          "ash",
+          "lavashell-core",
+          "lavashell-effect-quality",
+          "lavashell-error-chain",
+          "lavashell-renderer",
+          "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "log",
+          "skia-safe",
+          "thiserror 2.0.21"
+        ]
+      },
+      {
         "name": "lavashell-wayland",
         "version": "0.1.0",
         "dependencies": [
@@ -1255,8 +1273,8 @@
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-platform",
-          "lavashell-renderer",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "quote",
@@ -2607,7 +2625,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "ebd16e83bf69abe23dbe2f655a7fc5fd4cca184bb932ff860fbb6c74aa7ea435",
+        "seedHash": "8e792feeb247d0e7bf6b28cba0fcfc20e3b32dc99eb00025698297d4893a58a5",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2615,7 +2633,8 @@
             "profile": "packaged",
             "packages": [
               "lavashell-example-support",
-              "lavashell-renderer"
+              "lavashell-renderer",
+              "lavashell-vulkan-renderer"
             ],
             "features": []
           },
@@ -2657,6 +2676,7 @@
                 "crates/lavashell-renderer",
                 "crates/lavashell-runtime",
                 "crates/lavashell-vulkan",
+                "crates/lavashell-vulkan-renderer",
                 "crates/lavashell-wayland",
                 "examples/copy-keys",
                 "examples/support"
@@ -2734,6 +2754,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-runtime"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
                   },
                   "lavashell-wayland": {
                     "package": "lavashell-wayland",
@@ -3302,6 +3328,12 @@
                     "features": [],
                     "path": "../lavashell-vulkan"
                   },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -3341,16 +3373,6 @@
                   "default": []
                 },
                 "dependencies": {
-                  "ash": {
-                    "package": "ash",
-                    "default-features": false,
-                    "features": [
-                      "debug",
-                      "linked",
-                      "std"
-                    ],
-                    "version": "=0.38.0+1.3.281"
-                  },
                   "i_overlay": {
                     "package": "i_overlay",
                     "default-features": false,
@@ -3384,12 +3406,6 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
-                  },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
                   },
                   "log": {
                     "package": "log",
@@ -3529,6 +3545,12 @@
                     ],
                     "path": "../lavashell-renderer"
                   },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
                   "log": {
                     "package": "log",
                     "default-features": false,
@@ -3650,6 +3672,110 @@
               ]
             },
             {
+              "member": "crates/lavashell-vulkan-renderer",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-vulkan-renderer",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-effect-quality": {
+                    "package": "lavashell-effect-quality",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "skia-safe": {
+                    "package": "skia-safe",
+                    "default-features": false,
+                    "features": [
+                      "embed-icudtl",
+                      "ganesh",
+                      "jpeg",
+                      "no-compile",
+                      "pdf",
+                      "textlayout",
+                      "vulkan"
+                    ],
+                    "version": "=0.153.3"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
               "member": "crates/lavashell-wayland",
               "manifest": {
                 "package": {
@@ -3743,20 +3869,17 @@
                     "features": [],
                     "path": "../lavashell-platform"
                   },
-                  "lavashell-renderer": {
-                    "package": "lavashell-renderer",
-                    "default-features": false,
-                    "features": [
-                      "backdrop",
-                      "default"
-                    ],
-                    "path": "../lavashell-renderer"
-                  },
                   "lavashell-vulkan": {
                     "package": "lavashell-vulkan",
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-vulkan"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
                   },
                   "log": {
                     "package": "log",
@@ -5016,6 +5139,7 @@
                   "lavashell-materials",
                   "lavashell-renderer",
                   "lavashell-runtime",
+                  "lavashell-vulkan-renderer",
                   "lavashell-wayland"
                 ]
               },
@@ -5131,6 +5255,7 @@
                   "lavashell-core",
                   "lavashell-renderer",
                   "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
                   "thiserror"
                 ]
               },
@@ -5138,13 +5263,11 @@
                 "name": "lavashell-renderer",
                 "version": "0.0.0",
                 "dependencies": [
-                  "ash",
                   "i_overlay",
                   "inventory",
                   "lavashell-core",
                   "lavashell-effect-quality",
                   "lavashell-error-chain",
-                  "lavashell-vulkan",
                   "log",
                   "lru",
                   "num-traits",
@@ -5165,6 +5288,7 @@
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
+                  "lavashell-vulkan-renderer",
                   "log",
                   "num-traits",
                   "rustix",
@@ -5183,6 +5307,21 @@
                 ]
               },
               {
+                "name": "lavashell-vulkan-renderer",
+                "version": "0.0.0",
+                "dependencies": [
+                  "ash",
+                  "lavashell-core",
+                  "lavashell-effect-quality",
+                  "lavashell-error-chain",
+                  "lavashell-renderer",
+                  "lavashell-vulkan",
+                  "log",
+                  "skia-safe",
+                  "thiserror"
+                ]
+              },
+              {
                 "name": "lavashell-wayland",
                 "version": "0.0.0",
                 "dependencies": [
@@ -5196,8 +5335,8 @@
                   "lavashell-build-script",
                   "lavashell-core",
                   "lavashell-platform",
-                  "lavashell-renderer",
                   "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
                   "log",
                   "num-traits",
                   "quote",

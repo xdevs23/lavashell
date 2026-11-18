@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_renderer::{NoStreams, Painter, StreamBackend, VulkanRenderer};
+use lavashell_renderer::{Painter, StreamBackend};
+use lavashell_vulkan_renderer::{NoStreams, VulkanRenderer};
 
 pub type StreamSetup<S> =
     Box<dyn FnOnce(&<S as StreamBackend>::Gpu) -> Result<S, <S as StreamBackend>::Error> + Send>;

@@ -25,11 +25,11 @@ use lavashell_platform::{
     PlatformRequest, SurfaceAttachment, SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
     no_streams,
 };
-use lavashell_renderer::{
-    DamageMode, Fonts, FrameTiming, HeadlessPresentation, NoStreams, PainterSetup, RendererSetup,
-    SurfaceControl,
-};
+use lavashell_renderer::{DamageMode, Fonts, FrameTiming};
 use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
+use lavashell_vulkan_renderer::{
+    HeadlessPresentation, NoStreams, PainterSetup, RendererSetup, SurfaceControl,
+};
 use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
 use std::convert::Infallible;

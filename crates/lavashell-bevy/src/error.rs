@@ -2,7 +2,7 @@
 use lavashell_core::id_counter::IdsExhausted;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::ApplyError;
-use lavashell_renderer::Error as RendererError;
+use lavashell_vulkan_renderer::Error as RendererError;
 use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
@@ -27,6 +27,8 @@ pub enum Error {
     OverlayTarget(#[source] RendererError),
     #[error("the overlay cannot draw")]
     OverlayDraw(#[source] RendererError),
+    #[error("the overlay cannot paint its scene")]
+    OverlayPaint(#[source] lavashell_renderer::Error),
     #[error("the choreographer or the scene builder of the overlay cannot start")]
     StartScene(#[source] lavashell_runtime::scene_pipeline::Error),
     #[error("the surface of the overlay could not get an id")]

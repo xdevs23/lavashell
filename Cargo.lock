@@ -2690,6 +2690,7 @@ dependencies = [
  "lavashell-materials",
  "lavashell-renderer",
  "lavashell-runtime",
+ "lavashell-vulkan-renderer",
  "lavashell-wayland",
 ]
 
@@ -2715,6 +2716,7 @@ dependencies = [
  "lavashell-runtime",
  "lavashell-test-fixtures",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "log",
  "ndk",
  "ndk-sys",
@@ -2752,6 +2754,7 @@ dependencies = [
  "lavashell-runtime",
  "lavashell-test-fixtures",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "log",
  "thiserror 2.0.21",
  "wgpu",
@@ -2990,6 +2993,7 @@ dependencies = [
  "lavashell-core",
  "lavashell-renderer",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "thiserror 2.0.21",
 ]
 
@@ -3007,14 +3011,12 @@ dependencies = [
 name = "lavashell-renderer"
 version = "0.1.0"
 dependencies = [
- "ash",
  "i_overlay",
  "inventory",
  "lavashell-core",
  "lavashell-effect-quality",
  "lavashell-error-chain",
  "lavashell-test-fixtures",
- "lavashell-vulkan",
  "log",
  "lru",
  "num-traits",
@@ -3049,6 +3051,7 @@ dependencies = [
  "lavashell-renderer",
  "lavashell-test-fixtures",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "log",
  "num-traits",
  "rustix",
@@ -3118,6 +3121,7 @@ dependencies = [
  "lavashell-runtime",
  "lavashell-test-fixtures",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "thiserror 2.0.21",
 ]
 
@@ -3128,6 +3132,22 @@ dependencies = [
  "ash",
  "lavashell-actor",
  "log",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "lavashell-vulkan-renderer"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "lavashell-core",
+ "lavashell-effect-quality",
+ "lavashell-error-chain",
+ "lavashell-renderer",
+ "lavashell-test-fixtures",
+ "lavashell-vulkan",
+ "log",
+ "skia-safe",
  "thiserror 2.0.21",
 ]
 
@@ -3146,8 +3166,8 @@ dependencies = [
  "lavashell-build-script",
  "lavashell-core",
  "lavashell-platform",
- "lavashell-renderer",
  "lavashell-vulkan",
+ "lavashell-vulkan-renderer",
  "log",
  "num-traits",
  "quote",

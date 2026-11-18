@@ -13,8 +13,8 @@ mod program;
 mod programs;
 mod room;
 mod sksl;
-#[cfg(test)]
-pub(crate) mod test_shapes;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_shapes;
 #[cfg(test)]
 mod tests;
 mod texture;

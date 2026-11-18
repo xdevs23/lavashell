@@ -4,7 +4,7 @@ use crate::{
 };
 use lavashell_actor::{Clock, Outlet, Receiver};
 use lavashell_core::surface::SurfaceId;
-use lavashell_renderer::{Attach, PresentationBackend, RendererStreams, SurfaceControl};
+use lavashell_vulkan_renderer::{Attach, PresentationBackend, RendererStreams, SurfaceControl};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

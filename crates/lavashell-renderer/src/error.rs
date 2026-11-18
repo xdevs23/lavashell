@@ -2,31 +2,20 @@
 use crate::failure::DrawFailure;
 use crate::fault::{DefectNotice, Fault};
 use crate::fonts::RegisteredFont;
-use ash::vk;
-use lavashell_core::prelude::{NumberError, OutputProfile, PixelSize};
+use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::FontWeight;
 use lavashell_effect_quality::EffectId;
-use lavashell_error_chain::message_chain;
+use lavashell_error_chain::InOrder;
 use skia_safe::gpu::DirectContextId;
 use std::collections::BTreeMap;
-use std::ffi::CStr;
-use std::fmt;
 use std::num::TryFromIntError;
 use std::path::PathBuf;
-use std::str::Utf8Error;
 
 const FONT_NEXT_STEP: &str = "register a different TrueType or OpenType font file under that alias";
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct SkslDiagnostic(pub(crate) String);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ContextState {
-    Usable,
-    DeviceLost,
-    OutOfMemory,
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -156,199 +145,16 @@ pub enum Error {
     },
     #[error("a shader float does not hold the count {0} exactly")]
     InexactShaderCount(usize),
-    #[error("cannot list the Vulkan instance extensions")]
-    InstanceExtensions(#[source] lavashell_vulkan::Error),
-    #[error("cannot create the Vulkan instance")]
-    Instance(#[source] lavashell_vulkan::Error),
-    #[error("cannot list the Vulkan physical devices")]
-    PhysicalDevices(#[source] lavashell_vulkan::Error),
-    #[error("cannot query a Vulkan physical device")]
-    PhysicalDevice(#[source] lavashell_vulkan::Error),
-    #[error("no Vulkan 1.1 device with a graphics queue suits the renderer")]
-    NoDevice,
-    #[error("cannot create the Vulkan device")]
-    Device(#[source] lavashell_vulkan::Error),
-    #[error("the Vulkan device reports no device-local memory heap")]
-    NoDeviceLocalHeap,
-    #[error("the Vulkan extension name {0:?} is not UTF-8")]
-    ExtensionName(&'static CStr, #[source] Utf8Error),
-    #[error("Skia cannot create a context on the Vulkan device")]
-    SkiaContext,
-    #[error("a Vulkan handle, version or queue family does not fit its Skia type")]
-    SkiaHandoff(#[source] TryFromIntError),
-    #[error("Skia abandoned its context after the loss of the Vulkan device and submits nothing")]
-    SkiaAbandoned,
-    #[error("cannot allocate the surface that tests the mask coverage of the device")]
-    CoverageSurface,
-    #[error("cannot read back the surface that tests the mask coverage of the device")]
-    CoverageReadback,
-    #[error("cannot create a GPU timer")]
-    CreateTimer(#[source] lavashell_vulkan::Error),
-    #[error("cannot start a GPU timer")]
-    StartTimer(#[source] lavashell_vulkan::Error),
-    #[error("cannot stop a GPU timer")]
-    StopTimer(#[source] lavashell_vulkan::Error),
-    #[error("cannot read a GPU timer")]
-    ReadTimer(#[source] lavashell_vulkan::Error),
-    #[error("cannot reset a GPU timer")]
-    ResetTimer(#[source] lavashell_vulkan::Error),
-    #[error("cannot submit the completion of GPU work")]
-    SubmitCompletion(#[source] lavashell_vulkan::Error),
-    #[error("cannot read the completion of GPU work")]
-    CompletionStatus(#[source] lavashell_vulkan::Error),
-    #[error("the Vulkan device cannot import foreign memory")]
-    ForeignExtensions(#[source] lavashell_vulkan::Error),
-    #[error("cannot export a scene image")]
-    ExportScene(#[source] lavashell_vulkan::Error),
-    #[error("an imported scene image of {0:?} cannot be sampled as sRGB RGBA")]
-    SceneFormat(vk::Format),
-    #[error("an imported scene image of {0:?} is too large for Skia")]
-    SceneSize(vk::Extent2D),
-    #[error("cannot import a scene image")]
-    ImportScene(#[source] lavashell_vulkan::Error),
-    #[error("cannot take a scene image over from its producer")]
-    AcquireScene(#[source] lavashell_vulkan::Error),
-    #[error("the scene image is imported again before the renderer handed it back")]
-    SceneInUse,
-    #[error("Skia cannot wrap an imported scene image")]
-    WrapScene,
-    #[error(
-        "Skia cannot move imported scene images into the layout of their release, which happens after the loss of \
-         the Vulkan device"
-    )]
-    HandBackScenes,
-    #[error("cannot hand a scene image back to its producer")]
-    ReleaseScene(#[source] lavashell_vulkan::Error),
-    #[error("cannot read the hand-back of a scene image to its producer")]
-    ReleaseSceneStatus(#[source] lavashell_vulkan::Error),
-    #[error("the scene mailbox has no room for another pending scene")]
-    SceneMailboxFull,
-    #[error("scene generation {generation} is not newer than the published generation {published}")]
-    StaleScene { generation: u64, published: u64 },
-    #[error("foreign memory of {0:?} is too large for Skia")]
-    ForeignSize(PixelSize),
-    #[error("cannot import foreign memory")]
-    ImportForeign(#[source] lavashell_vulkan::Error),
-    #[error("Skia cannot wrap imported foreign memory")]
-    WrapForeign,
-    #[error(
-        "Skia did not hand the frames of streams back to their producers, which happens after the loss of the \
-         Vulkan device"
-    )]
-    HandBackForeign,
-    #[error("cannot signal the release fence of the frames of streams")]
-    SignalRelease(#[source] lavashell_vulkan::Error),
-    #[error("embedded rendering needs Vulkan 1.1, and the host instance has {0:#x}")]
-    HostApiVersion(u32),
-    #[error("cannot create the semaphore that orders the host before the embedded renderer")]
-    ReadySemaphore(#[source] lavashell_vulkan::Error),
-    #[error("the embedded renderer cannot draw into {0:?}")]
-    EmbeddedFormat(vk::Format),
-    #[error("the embedded renderer cannot draw into an image of {0:?}")]
-    EmbeddedImageSize(PixelSize),
-    #[error("the host image to draw into is null")]
-    EmbeddedImageHandle,
-    #[error(
-        "the host image has {0:?}, and the embedded renderer needs color attachment and both transfer usages"
-    )]
-    EmbeddedImageUsage(vk::ImageUsageFlags),
-    #[error("Skia cannot take a host image in {0:?}")]
-    EmbeddedLayout(vk::ImageLayout),
-    #[error(
-        "Skia cannot wrap the host image of {format:?} with {usage:?} at {size:?}; its context is {context:?}"
-    )]
-    WrapHostImage {
-        format: vk::Format,
-        usage: vk::ImageUsageFlags,
-        size: PixelSize,
-        context: ContextState,
-    },
-    #[error("Skia cannot hand the host image back in {0:?}")]
-    EmbeddedReturnLayout(vk::ImageLayout),
-    #[error("Skia could not add a wait on the semaphore that the embedded draw waits for")]
-    WaitSemaphore,
-    #[error(
-        "cannot wait on the ready semaphore of a failed embedded draw, so the semaphore is still signaled"
-    )]
-    ConsumeReadySignal(#[source] lavashell_vulkan::Error),
-    #[error("Skia cannot submit the embedded draw")]
-    EmbeddedSubmit,
-    #[error("cannot create a Vulkan surface for the window")]
-    CreateSurface(#[source] lavashell_vulkan::Error),
-    #[error("cannot ask whether the graphics queue can present to the Vulkan surface")]
-    QuerySurfacePresentation(#[source] lavashell_vulkan::Error),
-    #[error("cannot read the capabilities of the Vulkan surface")]
-    QuerySurfaceCapabilities(#[source] lavashell_vulkan::Error),
-    #[error("cannot list the formats of the Vulkan surface")]
-    QuerySurfaceFormats(#[source] lavashell_vulkan::Error),
-    #[error("the graphics queue cannot present to the surface")]
-    SurfacePresentation,
-    #[error("the surface offers no SDR sRGB format")]
-    NoSurfaceFormat,
-    #[error("the surface offers no composite alpha mode that the target can use")]
-    NoCompositeAlpha,
-    #[error("cannot create the swapchain")]
-    CreateSwapchain(#[source] lavashell_vulkan::Error),
-    #[error("cannot create a semaphore of the swapchain")]
-    CreateSemaphore(#[source] lavashell_vulkan::Error),
-    #[error("the HDR mastering metadata is invalid")]
-    InvalidHdrMetadata,
-    #[error("the HDR mastering metadata lies beyond the range of a Vulkan float")]
-    HdrMetadataRange(#[source] DrawFailure),
-    #[error("cannot set the HDR mastering metadata of the swapchain")]
-    SetHdrMetadata(#[source] lavashell_vulkan::Error),
-    #[error("the surface target belongs to another renderer")]
-    ForeignTarget,
-    #[error("cannot wait for the previous frame of a swapchain slot")]
-    WaitFrame(#[source] lavashell_vulkan::Error),
-    #[error("cannot acquire a swapchain image")]
-    Acquire(#[source] lavashell_vulkan::Error),
-    #[error("Skia cannot draw into the swapchain format {0:?}")]
-    SwapchainFormat(vk::Format),
-    #[error("the swapchain extent is too large for Skia")]
-    SwapchainExtent(#[source] std::num::TryFromIntError),
-    #[error(
-        "the index of the acquired swapchain image lies beyond the address space of this platform"
-    )]
-    SwapchainImageIndex(#[source] TryFromIntError),
-    #[error("Skia cannot wrap the swapchain image; its context is {0:?}")]
-    WrapSwapchainImage(ContextState),
-    #[error("Skia cannot wait for the acquisition of the swapchain image")]
-    WaitAcquisition,
     #[error("Skia does not provide the working color space")]
     WorkingColorSpace,
-    #[error("Skia does not provide the color space of {0:?}")]
-    OutputColorSpace(OutputProfile),
-    #[error("the gain that maps the scene to scRGB lies beyond the range of a Skia scalar")]
-    OutputColorFilter(#[source] DrawFailure),
     #[error("the map from dp to output pixels lies beyond the range of Skia scalars")]
     OutputTransform(#[source] DrawFailure),
-    #[error("cannot allocate the floating-point working surface")]
-    WorkingSurface,
-    #[error("an offscreen surface of {0:?} is too large for Skia")]
-    OffscreenSize(PixelSize),
-    #[error("Skia cannot allocate an offscreen surface of {0:?}")]
-    OffscreenSurface(PixelSize),
     #[error("Skia cannot allocate the surface of a PNG export")]
     PngSurface,
     #[error("Skia cannot encode a PNG export")]
     EncodePng,
     #[error("Skia cannot read the pixels of a canvas")]
     ReadPixels,
-    #[error("Skia did not submit the semaphore that presentation waits for")]
-    PresentationSemaphore,
-    #[error("Skia cannot submit the frame")]
-    SubmitFrame,
-    #[error("cannot submit the completion of a frame")]
-    SignalFrame(#[source] lavashell_vulkan::Error),
-    #[error("cannot present a swapchain image")]
-    Present(#[source] lavashell_vulkan::Error),
-    #[error("the Vulkan device does not support VK_GOOGLE_display_timing")]
-    NoDisplayTiming,
-    #[error("the presentation time {0:?} is outside 1..=i64::MAX nanoseconds")]
-    PresentationTimeRange(std::time::Duration),
-    #[error("the surface requires an explicit timestamp on every frame after its first one")]
-    ExplicitTimestampRequired,
     #[error("{}", InOrder(.0))]
     Several(Vec<Error>),
 }
@@ -375,20 +181,6 @@ impl Error {
             }
             _ => Fault::OutsideThisBuild,
         }
-    }
-}
-
-struct InOrder<'a>(&'a [Error]);
-
-impl fmt::Display for InOrder<'_> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, failure) in self.0.iter().enumerate() {
-            if index > 0 {
-                formatter.write_str("; after that, ")?;
-            }
-            formatter.write_str(&message_chain(failure))?;
-        }
-        Ok(())
     }
 }
 
@@ -450,17 +242,17 @@ mod tests {
         none.add(Ok(()));
         assert!(none.into_result().is_ok());
         let mut one = FailureList::default();
-        one.add(Err(Error::WrapScene));
-        assert!(matches!(one.into_result(), Err(Error::WrapScene)));
+        one.add(Err(Error::ReadPixels));
+        assert!(matches!(one.into_result(), Err(Error::ReadPixels)));
         let mut several = FailureList::default();
-        several.push(Error::WrapScene);
+        several.push(Error::ReadPixels);
         several.push(Error::Several(vec![Error::EncodePng, Error::PngSurface]));
         let Err(Error::Several(errors)) = several.into_result() else {
             return Err(TestError::Unexpected("several failures"));
         };
         assert!(matches!(
             errors.as_slice(),
-            [Error::WrapScene, Error::EncodePng, Error::PngSurface]
+            [Error::ReadPixels, Error::EncodePng, Error::PngSurface]
         ));
         Ok(())
     }

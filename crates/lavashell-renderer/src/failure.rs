@@ -233,5 +233,12 @@ impl Failures {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
+impl Failures {
+    pub(crate) fn count(&self, failure: DrawFailure) -> u64 {
+        self.0.borrow().get(&failure).copied().unwrap_or_default()
+    }
+}
+
 #[cfg(test)]
 mod tests;

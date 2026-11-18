@@ -13,8 +13,9 @@ use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceId;
 use lavashell_renderer::{
-    Fonts, FrameDevice, FrameOutcome, Latch, Painter, Stream, StreamBackend, SurfaceFrame, skia,
+    Fonts, FrameDevice, Latch, Painter, Stream, StreamBackend, SurfaceFrame, skia,
 };
+use lavashell_vulkan_renderer::FrameOutcome;
 use std::sync::Arc;
 
 const RED: [u8; 4] = [255, 0, 0, 255];

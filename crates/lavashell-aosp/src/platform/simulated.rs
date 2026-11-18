@@ -16,10 +16,11 @@ pub(crate) use importer::{
 };
 use lavashell_actor::lock_ignoring_poison;
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::Error as RendererError;
 pub(crate) use lavashell_renderer::Sampling;
-use lavashell_renderer::{Fonts, FrameOutcome, Painter, UniformRange, skia};
+use lavashell_renderer::{Fonts, Painter, UniformRange, skia};
 use lavashell_vulkan::{Instance, Window};
+use lavashell_vulkan_renderer::Error as RendererError;
+use lavashell_vulkan_renderer::FrameOutcome;
 use reader::Queue;
 pub(crate) use reader::{Buffer, Event as StreamEvent, Producer, Writing};
 pub(crate) use simulation::Simulation;
@@ -162,7 +163,7 @@ impl VulkanRenderer {
         })
     }
 
-    pub fn painter(&self, fonts: &Fonts) -> Result<Painter, RendererError> {
+    pub fn painter(&self, fonts: &Fonts) -> Result<Painter, lavashell_renderer::Error> {
         Painter::new(fonts, self.uniform_range)
     }
 

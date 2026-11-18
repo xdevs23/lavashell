@@ -19,6 +19,7 @@ lavashell-core.workspace = true
 lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
+lavashell-vulkan-renderer.workspace = true
 log.workspace = true
 num-traits.workspace = true
 rustix = { workspace = true, features = ["event", "time"] }

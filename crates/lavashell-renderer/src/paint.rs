@@ -8,10 +8,14 @@ mod configuration;
 mod destination_tests;
 mod image;
 pub(crate) mod opacity;
+#[cfg(any(test, feature = "test-support"))]
+pub mod opacity_checks;
 #[cfg(test)]
 mod opacity_tests;
 mod outline;
 mod parent_copy;
+#[cfg(any(test, feature = "test-support"))]
+pub mod parent_copy_checks;
 #[cfg(test)]
 mod parent_copy_tests;
 mod private;
@@ -30,8 +34,8 @@ use crate::destination::{Destination, GroupOpacity};
 use crate::failure::{DrawFailure, FailedDraw, Failures};
 use crate::plan::{Area, Leaf};
 use crate::resources::ImageCache;
+use crate::scene_image::SceneImage;
 use crate::text::Shaper;
-use crate::vulkan::SceneImage;
 use brush::brush_paint;
 pub(crate) use brush::{color4f, solid};
 use lavashell_core::prelude::*;
@@ -46,7 +50,9 @@ pub(crate) use skia_geometry::{
 pub use skia_geometry::{skpoint, skrect};
 use skia_safe::{Canvas, IRect, PaintStyle, RoundOut};
 use std::collections::HashMap;
-pub use stream::{StreamFrames, StreamPixels, StreamRejection, UnsampledFormat};
+pub use stream::{
+    StreamFrames, StreamImportHandle, StreamPixels, StreamRejection, UnsampledFormat,
+};
 
 fn output_matrix(dp_to_output: &Affine) -> Result<skia_safe::Matrix, Error> {
     skmatrix(dp_to_output).map_err(Error::OutputTransform)
@@ -109,7 +115,8 @@ impl Painter {
         })
     }
 
-    pub(crate) fn with_raster_mode(mut self, mode: crate::raster::RasterMode) -> Self {
+    #[must_use]
+    pub fn with_raster_mode(mut self, mode: crate::raster::RasterMode) -> Self {
         self.resources.tiles = crate::raster::RasterCache::new(mode, self.failures.clone()).into();
         self
     }

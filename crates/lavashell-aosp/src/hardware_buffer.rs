@@ -3,11 +3,12 @@
 use ash::android::external_memory_android_hardware_buffer as hardware_buffer;
 use ash::vk;
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::{
-    Error as RendererError, ForeignAlpha, ForeignFormat, ForeignImporter, ForeignMemory,
-    ForeignMemoryDescription, VulkanRenderer,
-};
 use lavashell_vulkan::{Device, ExtensionSet};
+use lavashell_vulkan_renderer::Error as RendererError;
+use lavashell_vulkan_renderer::{
+    ForeignAlpha, ForeignFormat, ForeignImporter, ForeignMemory, ForeignMemoryDescription,
+    VulkanRenderer,
+};
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferRef};
 use std::ffi::CStr;
 use std::num::NonZeroU64;

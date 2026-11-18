@@ -3,7 +3,7 @@
 use crate::failure::DrawFailure;
 use num_traits::AsPrimitive;
 
-pub(crate) fn scalar(value: f64) -> Result<f32, DrawFailure> {
+pub fn scalar(value: f64) -> Result<f32, DrawFailure> {
     let narrowed: f32 = value.as_();
     if value.is_finite() && narrowed.is_infinite() {
         Err(DrawFailure::NumberRange)
@@ -12,7 +12,7 @@ pub(crate) fn scalar(value: f64) -> Result<f32, DrawFailure> {
     }
 }
 
-pub(crate) fn scalars<const N: usize>(values: [f64; N]) -> Result<[f32; N], DrawFailure> {
+pub fn scalars<const N: usize>(values: [f64; N]) -> Result<[f32; N], DrawFailure> {
     let mut narrowed = [0.0; N];
     for (slot, value) in narrowed.iter_mut().zip(values) {
         *slot = scalar(value)?;

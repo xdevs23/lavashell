@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use bevy::prelude::*;
 use lavashell_actor::{Latest, Publication, lock_ignoring_poison};
-use lavashell_renderer::ExternalImage;
-use lavashell_renderer::vulkan::SceneLease;
+use lavashell_vulkan_renderer::ExternalImage;
+use lavashell_vulkan_renderer::vulkan::SceneLease;
 use std::{
     sync::{
         Arc, Mutex,

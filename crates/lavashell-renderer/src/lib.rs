@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![forbid(unsafe_code)]
 
 pub mod color;
 mod compositing;
+mod damage;
 mod destination;
+#[cfg(any(test, feature = "test-support"))]
+pub mod effect_checks;
 pub mod effect_registry;
 mod effects;
 mod error;
@@ -21,43 +25,36 @@ mod repeated_leaves;
 mod resources;
 mod retention;
 mod scalar;
+mod scene_image;
 mod silhouette;
 pub mod source_filters;
-mod state;
 mod stream;
 pub mod text;
 mod text_alignment;
 mod text_cache;
-pub mod vulkan;
 
 pub use compositing::BlendSpace;
-pub use error::{ContextState, Error, FailureList, MultipleFailures, SkslDiagnostic};
+pub use damage::DamageMode;
+pub use error::{Error, FailureList, MultipleFailures, SkslDiagnostic};
 pub use failure::DrawFailure;
 pub use field::{FieldRoom, UniformRange};
 pub use fonts::{FontOrigin, Fonts, RegisteredFont};
-pub use gpu_timing::FrameTiming;
-pub use image::{Pixels, decode_image, encoded_image, raster_png};
+pub use gpu_timing::{Collected, FrameTiming, GpuSample, GpuSampleTimer, SampleKind, SampleTag};
+pub use image::{Pixels, decode_image, encoded_image, png_export_info, raster_png};
 pub use input_region::{InputSizeError, input_cells};
 pub use packet_cache::PacketCaching;
 pub use paint::{
-    OutlineError, Painter, StreamFrames, StreamPixels, StreamRejection, SurfaceFrame,
-    UnsampledFormat, outline_path, skpoint, skrect,
+    OutlineError, Painter, StreamFrames, StreamImportHandle, StreamPixels, StreamRejection,
+    SurfaceFrame, UnsampledFormat, outline_path, skpoint, skrect,
 };
+pub use raster::RasterMode;
+pub use scalar::{scalar, scalars};
+pub use scene_image::{SceneImage, SceneImageLease};
 pub use skia_safe as skia;
-pub use state::{
-    Attach, AttachError, CommitError, DamageMode, DrawError, Drawn, FrameError, PainterSetup,
-    PresentFrame, RendererSetup, RendererState, SceneSetup, StartError, StateError, SurfaceControl,
-};
 pub use stream::{
-    BufferQueue, Completions, FenceCopyError, FrameDevice, FrameImporter, FrameSampler,
-    FrameSource, ImportHandBack, Latch, LatchAccess, LatchedFrames, NoStreams, ProducedFrame,
-    RendererStreams, Stream, StreamBackend, Taken,
-};
-pub use vulkan::{
-    BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
-    ForeignImport, ForeignImporter, ForeignMemory, ForeignMemoryDescription, FrameOutcome,
-    HeadlessPresentation, PresentationBackend, ReadySignal, SampledMemory, Sampling, SurfaceAlpha,
-    SurfaceContents, SurfaceTarget, VulkanRenderer,
+    BufferQueue, CompletionStatus, Completions, FenceCopyError, FrameDevice, FrameImporter,
+    FrameSampler, FrameSource, ImportHandBack, Latch, LatchAccess, LatchedFrames, ProducedFrame,
+    Sampling, Stream, StreamBackend, Taken,
 };
 
 #[cfg(test)]
@@ -76,15 +73,21 @@ mod repeated_leaves_tests;
 mod retained_tests;
 #[cfg(test)]
 mod scaled_frame_tests;
-#[cfg(test)]
-mod surface_tests;
-#[cfg(test)]
-mod test_error;
-#[cfg(test)]
-mod test_font;
-#[cfg(test)]
-mod test_scenes;
-#[cfg(test)]
-mod test_surfaces;
+#[cfg(any(test, feature = "test-support"))]
+pub use field::test_shapes;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_damage;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_error;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_font;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_images;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_readings;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_scenes;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_surfaces;
 #[cfg(test)]
 mod test_variants;

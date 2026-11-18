@@ -6,6 +6,17 @@ mod paragraph;
 mod path;
 #[cfg(test)]
 mod tests;
+
+#[cfg(any(test, feature = "test-support"))]
+impl RasterCache {
+    pub(crate) fn images(&self) -> impl Iterator<Item = &Image> {
+        self.tiles.values().map(|tile| &tile.image)
+    }
+
+    pub(crate) fn pending_uploads(&self) -> crate::test_readings::TileUploads {
+        self.uploads.pending()
+    }
+}
 mod tiles;
 mod upload;
 
@@ -20,7 +31,7 @@ use skia_safe::{Canvas, Image};
 pub(crate) use tiles::Uncached;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RasterMode {
+pub enum RasterMode {
     Vector,
     Tiles,
 }

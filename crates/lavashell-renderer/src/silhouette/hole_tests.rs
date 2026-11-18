@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::effects_tests::{draw, sample};
+use crate::effect_checks::{draw, sample};
 use crate::failure::{DrawFailure, Failures};
 use crate::field::Route;
 use crate::field::test_shapes::{Distance, union};

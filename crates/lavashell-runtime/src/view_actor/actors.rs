@@ -8,7 +8,7 @@ use crate::scheduler::Redraw;
 use crate::scheduler_actor::{self, SchedulerThread};
 use lavashell_actor::{Clock, JoinError, Outlet, Sender};
 use lavashell_platform::{Platform, PlatformEvent, Reports, StreamSetup};
-use lavashell_renderer::RendererSetup;
+use lavashell_vulkan_renderer::RendererSetup;
 use std::sync::Arc;
 
 pub(super) struct Actors<P: Platform> {

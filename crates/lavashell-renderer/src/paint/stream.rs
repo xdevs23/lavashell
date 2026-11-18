@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #[cfg(test)]
-mod gpu_tests;
-#[cfg(test)]
 mod tests;
 
 use super::Painter;
 use super::image::draw_framed;
 use crate::failure::DrawFailure;
-use crate::vulkan::ForeignImport;
 use lavashell_core::prelude::*;
 use skia_safe::{Canvas, IPoint, IRect};
 use std::collections::BTreeMap;
@@ -25,12 +22,22 @@ struct BoundFrame {
     origin: IPoint,
 }
 
+pub trait StreamImportHandle {}
+
 pub struct StreamPixels {
-    pub(crate) image: skia_safe::Image,
-    pub(crate) import: Option<Rc<ForeignImport>>,
+    image: skia_safe::Image,
+    import: Option<Rc<dyn StreamImportHandle>>,
 }
 
 impl StreamPixels {
+    #[must_use]
+    pub fn imported(image: skia_safe::Image, import: Rc<dyn StreamImportHandle>) -> Self {
+        Self {
+            image,
+            import: Some(import),
+        }
+    }
+
     fn release(self) {
         let Self { image, import } = self;
         drop(image);

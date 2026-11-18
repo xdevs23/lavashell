@@ -1,15 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::super::{PixelGeometry, TextDestination};
-use super::tests::new_painter;
-use super::*;
+use super::super::{PixelGeometry, TextAntialiasing, TextDestination, TextRendering};
 use crate::test_error::TestError;
 use crate::test_font::probe_style_at;
-use crate::test_surfaces::{TestSurface, pixels};
+use crate::test_surfaces::TestSurface;
+use lavashell_core::prelude::*;
 use num_traits::ToPrimitive;
-use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
 use std::ops::Range;
 
-pub(super) const SAMPLE_SURFACE: TestSurface = TestSurface::new(900, 340);
+pub fn new_painter(geometry: PixelGeometry) -> Result<crate::Painter, TestError> {
+    let fonts = crate::test_font::test_font()?;
+    let mut painter = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?
+        .with_raster_mode(crate::raster::RasterMode::Tiles);
+    painter.set_text_rendering(
+        TextRendering {
+            antialiasing: TextAntialiasing::SubpixelApproximate,
+            ..Default::default()
+        },
+        TextDestination {
+            opaque: false,
+            geometry,
+        },
+    );
+    Ok(painter)
+}
+
+pub const SAMPLE_SURFACE: TestSurface = TestSurface::new(900, 340);
 const BACKDROPS: [Color; 3] = [
     Color::TRANSPARENT,
     Color::rgba(0x0011_111a, 245),
@@ -37,7 +52,7 @@ fn pixels_covering(start: f64, end: f64) -> Result<Range<u16>, TestError> {
     Ok(whole_pixel(start.floor())?..whole_pixel(end.ceil())?)
 }
 
-pub(super) fn transparent_backdrop_columns() -> Result<Range<u16>, TestError> {
+pub fn transparent_backdrop_columns() -> Result<Range<u16>, TestError> {
     let column = (BACKDROPS.iter())
         .position(|backdrop| *backdrop == Color::TRANSPARENT)
         .ok_or(TestError::Missing("transparent backdrop"))?;
@@ -45,15 +60,16 @@ pub(super) fn transparent_backdrop_columns() -> Result<Range<u16>, TestError> {
     pixels_covering(left, left + COLUMN_WIDTH)
 }
 
-pub(super) fn small_text_rows() -> Result<Range<u16>, TestError> {
+pub fn small_text_rows() -> Result<Range<u16>, TestError> {
     pixels_covering(0.0, LARGE_TEXT_TOP)
 }
 
-pub(super) fn large_text_rows() -> Result<Range<u16>, TestError> {
+pub fn large_text_rows() -> Result<Range<u16>, TestError> {
     pixels_covering(LARGE_TEXT_TOP, LARGE_TEXT_TOP + LARGE_TEXT_HEIGHT)
 }
 
-pub(super) fn commands() -> Vec<DrawCommand> {
+#[must_use]
+pub fn commands() -> Vec<DrawCommand> {
     let mut commands = Vec::new();
     for (background, column) in BACKDROPS.into_iter().zip(0_u8..) {
         let x = column_left(column).dp();
@@ -94,43 +110,4 @@ pub(super) fn commands() -> Vec<DrawCommand> {
         });
     }
     commands
-}
-
-#[test]
-fn translucent_coverage_samples_stay_premultiplied_and_differ_per_pixel_geometry()
--> Result<(), TestError> {
-    let commands = commands();
-    let mut painter = new_painter(PixelGeometry::None)?;
-    let mut gray = None;
-    for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
-        painter.set_text_rendering(
-            TextRendering {
-                antialiasing: TextAntialiasing::SubpixelApproximate,
-                ..Default::default()
-            },
-            TextDestination {
-                opaque: false,
-                geometry,
-            },
-        );
-        painter.set_blend_space(crate::BlendSpace::Srgb);
-        let info = ImageInfo::new(
-            SAMPLE_SURFACE.dimensions(),
-            ColorType::RGBA8888,
-            AlphaType::Premul,
-            ColorSpace::new_srgb(),
-        );
-        let mut target =
-            skia_safe::surfaces::raster(&info, None, None).ok_or(TestError::RasterSurface)?;
-        let _canvas_returned_for_chaining = target.canvas().clear(skia_safe::Color::TRANSPARENT);
-        painter.paint_as_leaf(target.canvas(), &commands, Density::ONE)?;
-        let bytes = pixels(&mut target);
-        assert!(bytes.iter().all(|p| p[..3].iter().all(|v| *v <= p[3])));
-        if let Some(gray) = &gray {
-            assert_ne!(gray, &bytes);
-        } else {
-            gray = Some(bytes);
-        }
-    }
-    Ok(())
 }

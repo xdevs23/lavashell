@@ -3,8 +3,9 @@ use crate::{Error, RecordedFrame};
 use lavashell_actor::{Merge, MergeEffect, Sender};
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::SurfaceId;
+use lavashell_renderer::Pixels;
 use lavashell_renderer::skia::Canvas;
-use lavashell_renderer::{FrameOutcome, Pixels, PresentFrame, SurfaceControl};
+use lavashell_vulkan_renderer::{FrameOutcome, PresentFrame, SurfaceControl};
 use std::cell::OnceCell;
 
 pub struct FrameCapture {

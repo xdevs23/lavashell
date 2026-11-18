@@ -6,11 +6,9 @@ mod release;
 pub use latched::LatchedFrames;
 
 use crate::error::MultipleFailures;
-use crate::vulkan::{Status, VulkanRenderer};
-use crate::{Painter, Sampling, StreamFrames, StreamPixels, StreamRejection};
+use crate::{Painter, StreamFrames, StreamPixels, StreamRejection};
 use lavashell_core::prelude::{PixelSize, Presented, StreamId, StreamImage};
 use skia_safe::IPoint;
-use std::convert::Infallible;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
@@ -62,13 +60,24 @@ pub trait FrameSource {
     ) -> impl Iterator<Item = Result<<Self::Frame as ProducedFrame>::BufferKey, Self::Error>>;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompletionStatus {
+    Pending,
+    Complete,
+}
+
 pub trait Completions {
     type Completion;
     type Error: std::error::Error + MultipleFailures + From<FenceCopyError> + 'static;
 
     fn completion(&self) -> Result<Self::Completion, Self::Error>;
 
-    fn status(&self, completion: &Self::Completion) -> Result<Status, Self::Error>;
+    fn status(&self, completion: &Self::Completion) -> Result<CompletionStatus, Self::Error>;
+}
+
+pub enum Sampling<S> {
+    Sampled(S),
+    Rejected(StreamRejection),
 }
 
 pub trait FrameSampler: Completions {
@@ -118,42 +127,6 @@ pub trait StreamBackend {
         tree: Presented<'_>,
         draw: impl FnOnce(FrameDevice<'_, Self::Gpu>) -> T,
     ) -> (T, Result<(), Self::Error>);
-}
-
-pub trait RendererStreams: StreamBackend<Gpu = VulkanRenderer, Error: Send> + 'static {}
-
-impl<S: StreamBackend<Gpu = VulkanRenderer, Error: Send> + 'static> RendererStreams for S {}
-
-#[derive(Default)]
-pub struct NoStreams {
-    frames: StreamFrames,
-}
-
-#[cfg(test)]
-impl NoStreams {
-    pub(crate) fn frames_mut(&mut self) -> &mut StreamFrames {
-        &mut self.frames
-    }
-}
-
-impl StreamBackend for NoStreams {
-    type Gpu = VulkanRenderer;
-    type Error = Infallible;
-
-    fn draw<T>(
-        &mut self,
-        gpu: &mut Self::Gpu,
-        painter: &mut Painter,
-        _: Presented<'_>,
-        draw: impl FnOnce(FrameDevice<'_, Self::Gpu>) -> T,
-    ) -> (T, Result<(), Infallible>) {
-        let device = FrameDevice {
-            gpu,
-            painter,
-            streams: &self.frames,
-        };
-        (draw(device), Ok(()))
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

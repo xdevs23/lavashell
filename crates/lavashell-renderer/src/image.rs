@@ -64,7 +64,8 @@ pub fn raster_png(
     Pixels::read(export.canvas())?.png()
 }
 
-pub(crate) fn png_export_info(dimensions: ISize) -> skia_safe::ImageInfo {
+#[must_use]
+pub fn png_export_info(dimensions: ISize) -> skia_safe::ImageInfo {
     skia_safe::ImageInfo::new_n32_premul(dimensions, skia_safe::ColorSpace::new_srgb())
 }
 

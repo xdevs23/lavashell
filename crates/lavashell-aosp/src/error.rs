@@ -6,7 +6,8 @@ use crate::platform::{PropertiesError, ReleaseError};
 use lavashell_core::prelude::StreamId;
 use lavashell_core::units::NumberError;
 use lavashell_error_chain::message_chain;
-use lavashell_renderer::{Error as RendererError, FenceCopyError, MultipleFailures};
+use lavashell_renderer::{FenceCopyError, MultipleFailures};
+use lavashell_vulkan_renderer::Error as RendererError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

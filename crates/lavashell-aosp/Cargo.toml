@@ -18,6 +18,7 @@ lavashell-core.workspace = true
 lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
+lavashell-vulkan-renderer.workspace = true
 lavashell-vulkan.workspace = true
 ndk.workspace = true
 ndk-sys.workspace = true
@@ -37,6 +38,7 @@ lavashell-core = { workspace = true, features = ["test-support"] }
 lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
+lavashell-vulkan-renderer.workspace = true
 lavashell-vulkan.workspace = true
 log.workspace = true
 num-traits.workspace = true

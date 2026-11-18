@@ -20,8 +20,9 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{ComponentFailure, InputEvent, View};
-use lavashell_renderer::vulkan::SceneSource;
-use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter, RendererSetup};
+use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter};
+use lavashell_vulkan_renderer::RendererSetup;
+use lavashell_vulkan_renderer::vulkan::SceneSource;
 use std::time::Duration;
 
 mod error;

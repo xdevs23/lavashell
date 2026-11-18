@@ -15,7 +15,7 @@ use lavashell_platform::{
     Readiness, Role, SurfaceAppearance, SurfaceRequest, SurfaceSpec, WatchEvent, WatchId,
     WatchRequest, WindowRole, no_streams,
 };
-use lavashell_renderer::HeadlessPresentation;
+use lavashell_vulkan_renderer::HeadlessPresentation;
 use rustix::event::{EventfdFlags, eventfd};
 use std::cell::Cell;
 use std::rc::Rc;

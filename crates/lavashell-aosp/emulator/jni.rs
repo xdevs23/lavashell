@@ -13,7 +13,8 @@ use lavashell_aosp::{
 };
 use lavashell_core::prelude::PixelSize;
 use lavashell_error_chain::message_chain;
-use lavashell_renderer::{ForeignFormat, skia};
+use lavashell_renderer::skia;
+use lavashell_vulkan_renderer::ForeignFormat;
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferRef};
 use ndk::media::image_reader::ImageFormat;
 

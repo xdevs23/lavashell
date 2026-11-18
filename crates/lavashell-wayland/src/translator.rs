@@ -31,7 +31,7 @@ use crate::sctk;
 use crate::wayland_presentation::WaylandPresentation;
 use lavashell_actor::SystemClock;
 use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks, no_streams};
-use lavashell_renderer::NoStreams;
+use lavashell_vulkan_renderer::NoStreams;
 use requests::{Requests, execute_arrived};
 use sctk::compositor::CompositorState;
 use sctk::data_device_manager::DataDeviceManagerState;

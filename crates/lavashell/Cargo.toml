@@ -16,6 +16,7 @@ lavashell-error-chain.workspace = true
 lavashell-components.workspace = true
 lavashell-keyboard.workspace = true
 lavashell-renderer.workspace = true
+lavashell-vulkan-renderer.workspace = true
 lavashell-runtime.workspace = true
 lavashell-materials.workspace = true
 

@@ -7,8 +7,8 @@ use lavashell_core::panel::{LayerLevel, PanelGeometry};
 use lavashell_core::surface::{ConfigureToken, SurfaceId};
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::window::WindowState;
-use lavashell_renderer::{Attach, SurfaceAlpha};
 use lavashell_vulkan::Window;
+use lavashell_vulkan_renderer::{Attach, SurfaceAlpha};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

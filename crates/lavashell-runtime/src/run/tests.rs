@@ -10,7 +10,7 @@ use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, PresentationFlag
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
 use lavashell_platform::{PlatformEvent, SurfaceEvent, SurfaceRequest, TimingEvent};
-use lavashell_renderer::{DrawError, FrameError, StateError};
+use lavashell_vulkan_renderer::{DrawError, FrameError, StateError};
 use std::panic::resume_unwind;
 use std::sync::mpsc;
 

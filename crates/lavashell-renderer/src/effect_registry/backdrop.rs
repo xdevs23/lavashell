@@ -328,7 +328,11 @@ fn composite(
     })
 }
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod cache_checks;
 mod glass;
+#[cfg(any(test, feature = "test-support"))]
+pub mod hole_checks;
 #[cfg(test)]
 mod hole_tests;
 #[cfg(test)]

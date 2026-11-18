@@ -42,7 +42,7 @@ impl AospStreams {
 
     #[cfg(target_os = "android")]
     #[must_use]
-    pub fn foreign_importer(&self) -> &lavashell_renderer::ForeignImporter {
+    pub fn foreign_importer(&self) -> &lavashell_vulkan_renderer::ForeignImporter {
         &self.frames.importer().0
     }
 }

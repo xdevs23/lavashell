@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::failure::FailedDraw;
-use crate::{DrawFailure, Error, InputSizeError, OutlineError, SkslDiagnostic, StreamRejection};
+use crate::{DrawFailure, Error, InputSizeError, OutlineError, SkslDiagnostic};
 use lavashell_core::prelude::NumberError;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::ApplyError;
@@ -12,17 +12,9 @@ use std::array::TryFromSliceError;
 use std::num::TryFromIntError;
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum TestError {
+pub enum TestError {
     #[error(transparent)]
     Renderer(#[from] Error),
-    #[error(transparent)]
-    State(#[from] crate::StateError),
-    #[error(transparent)]
-    StateDraw(#[from] crate::DrawError<std::convert::Infallible>),
-    #[error(transparent)]
-    StartWithStreams(#[from] crate::StartError<Error>),
-    #[error(transparent)]
-    StateCommit(#[from] crate::CommitError<std::convert::Infallible>),
     #[error(transparent)]
     Draw(#[from] FailedDraw),
     #[error(transparent)]
@@ -41,10 +33,6 @@ pub(crate) enum TestError {
     Outline(#[from] OutlineError),
     #[error(transparent)]
     InputSize(#[from] InputSizeError),
-    #[error(transparent)]
-    Vulkan(#[from] lavashell_vulkan::Error),
-    #[error("the stream frame is rejected: {0}")]
-    Rejected(StreamRejection),
     #[error(transparent)]
     Number(#[from] NumberError),
     #[error("a number does not fit its integer type")]

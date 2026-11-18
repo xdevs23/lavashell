@@ -11,7 +11,7 @@ use crate::native::{
 };
 use crate::sctk;
 use lavashell_platform::Reports;
-use lavashell_renderer::NoStreams;
+use lavashell_vulkan_renderer::NoStreams;
 use sctk::compositor::CompositorState;
 use sctk::output::OutputState;
 use sctk::reexports::calloop::{LoopHandle, RegistrationToken};

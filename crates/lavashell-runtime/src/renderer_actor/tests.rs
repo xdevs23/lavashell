@@ -9,11 +9,12 @@ use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
 use lavashell_platform::no_streams;
+use lavashell_renderer::Painter;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_renderer::{
-    Attach, HeadlessPresentation, NoStreams, Painter, PainterSetup, SurfaceAlpha,
-};
 use lavashell_vulkan::HeadlessWindow;
+use lavashell_vulkan_renderer::{
+    Attach, HeadlessPresentation, NoStreams, PainterSetup, SurfaceAlpha,
+};
 use std::sync::mpsc;
 
 const SURFACE_3: SurfaceId = SurfaceId::numbered(3);

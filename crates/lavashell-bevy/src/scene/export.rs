@@ -18,8 +18,8 @@ use bevy::{
         texture::GpuImage,
     },
 };
-use lavashell_renderer::vulkan::{CompletedRelease, PendingRelease, ReleaseProgress};
 use lavashell_vulkan::{Commands, Device, ExportableImage, Image, Status};
+use lavashell_vulkan_renderer::vulkan::{CompletedRelease, PendingRelease, ReleaseProgress};
 use std::{collections::BTreeMap, sync::Arc, time::Instant};
 
 type TargetId = bevy::asset::AssetId<bevy::image::Image>;
@@ -178,7 +178,7 @@ fn complete_export(
     Release::Released(commands)
 }
 
-fn end_failed_export(bridge: &SceneBridge, error: lavashell_renderer::Error) -> Error {
+fn end_failed_export(bridge: &SceneBridge, error: lavashell_vulkan_renderer::Error) -> Error {
     bridge.finish_export_unpublished();
     Error::ExportScene(error)
 }

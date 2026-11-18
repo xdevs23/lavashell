@@ -5,7 +5,8 @@ use lavashell_actor::Closed;
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::ApplyError;
 use lavashell_core::units::NumberError;
-use lavashell_renderer::{Error as RendererError, Latch};
+use lavashell_renderer::Latch;
+use lavashell_vulkan_renderer::Error as RendererError;
 use log::SetLoggerError;
 use std::num::TryFromIntError;
 
@@ -15,6 +16,8 @@ pub(crate) enum TestError {
     Adapter(#[from] Error),
     #[error("the simulated renderer failed")]
     Renderer(#[from] RendererError),
+    #[error("the painter of a test failed")]
+    Painter(#[from] lavashell_renderer::Error),
     #[error("the platform of the AOSP host failed")]
     Aosp(#[from] AospError),
     #[error("the mailbox of the reports closed")]

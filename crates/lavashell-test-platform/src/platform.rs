@@ -5,7 +5,7 @@ use crate::{Error, FrameCapture, HostScript, RecordedFrames};
 use lavashell_platform::{
     Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks, no_streams,
 };
-use lavashell_renderer::{HeadlessPresentation, NoStreams};
+use lavashell_vulkan_renderer::{HeadlessPresentation, NoStreams};
 use std::collections::BTreeSet;
 use std::sync::{Arc, mpsc};
 

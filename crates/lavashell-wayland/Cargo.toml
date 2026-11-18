@@ -12,7 +12,7 @@ workspace = true
 [dependencies]
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
-lavashell-renderer.workspace = true
+lavashell-vulkan-renderer.workspace = true
 lavashell-platform.workspace = true
 lavashell-vulkan.workspace = true
 ash.workspace = true

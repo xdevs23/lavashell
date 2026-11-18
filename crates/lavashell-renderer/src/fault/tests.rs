@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Fault;
 use crate::DrawFailure;
-use crate::error::{ContextState, Error, SkslDiagnostic};
+use crate::error::{Error, SkslDiagnostic};
 use crate::fonts::{FontOrigin, RegisteredFont};
 use crate::paint::StreamRejection;
 use crate::test_error::TestError;
 use crate::text::TextAntialiasing;
-use ash::vk;
 use lavashell_core::id_counter::IdsExhausted;
-use lavashell_core::prelude::{NumberError, OutputProfile, PixelSize};
+use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::FontWeight;
 use lavashell_effect_quality::EffectId;
 use std::num::TryFromIntError;
-use std::time::Duration;
 
 const DEFECT_NOTICE: &str = "This is a defect in this build of the renderer";
 
@@ -60,10 +58,6 @@ fn narrowing() -> Result<TryFromIntError, TestError> {
     (u8::try_from(u16::MAX).err()).ok_or(TestError::Unexpected("a narrowing error"))
 }
 
-fn vulkan() -> lavashell_vulkan::Error {
-    lavashell_vulkan::Error::MissingSwapchainMaintenance
-}
-
 fn font() -> RegisteredFont {
     RegisteredFont {
         alias: "sans".to_owned(),
@@ -78,11 +72,6 @@ fn program() -> String {
 fn diagnostic() -> SkslDiagnostic {
     SkslDiagnostic(String::new())
 }
-
-const SIZE: PixelSize = PixelSize {
-    width: 1,
-    height: 1,
-};
 
 #[test]
 fn a_font_program_or_text_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault()
@@ -147,11 +136,8 @@ fn a_font_program_or_text_error_shows_the_defect_notice_exactly_when_this_build_
 }
 
 #[test]
-fn an_image_device_or_timer_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault()
+fn an_image_or_shader_count_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault()
 -> Result<(), TestError> {
-    let not_utf8 = vec![u8::MAX];
-    let utf8 =
-        (std::str::from_utf8(&not_utf8).err()).ok_or(TestError::Unexpected("a UTF-8 error"))?;
     assert_shows_the_defect_notice_exactly_when_this_build_is_at_fault(vec![
         Error::DecodeImage,
         Error::NumberImageSurface(IdsExhausted),
@@ -174,116 +160,18 @@ fn an_image_device_or_timer_error_shows_the_defect_notice_exactly_when_this_buil
             source: DrawFailure::NumberRange,
         },
         Error::InexactShaderCount(1),
-        Error::InstanceExtensions(vulkan()),
-        Error::Instance(vulkan()),
-        Error::PhysicalDevices(vulkan()),
-        Error::PhysicalDevice(vulkan()),
-        Error::NoDevice,
-        Error::Device(vulkan()),
-        Error::NoDeviceLocalHeap,
-        Error::ExtensionName(c"VK_KHR_surface", utf8),
-        Error::SkiaContext,
-        Error::SkiaHandoff(narrowing()?),
-        Error::SkiaAbandoned,
-        Error::CoverageSurface,
-        Error::CoverageReadback,
-        Error::CreateTimer(vulkan()),
-        Error::StartTimer(vulkan()),
-        Error::StopTimer(vulkan()),
-        Error::ReadTimer(vulkan()),
-        Error::ResetTimer(vulkan()),
     ]);
     Ok(())
 }
 
 #[test]
-fn a_scene_stream_or_embedding_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault() {
+fn a_color_space_or_export_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault() {
     assert_shows_the_defect_notice_exactly_when_this_build_is_at_fault(vec![
-        Error::SubmitCompletion(vulkan()),
-        Error::CompletionStatus(vulkan()),
-        Error::ForeignExtensions(vulkan()),
-        Error::ExportScene(vulkan()),
-        Error::SceneFormat(vk::Format::UNDEFINED),
-        Error::SceneSize(vk::Extent2D::default()),
-        Error::ImportScene(vulkan()),
-        Error::AcquireScene(vulkan()),
-        Error::SceneInUse,
-        Error::WrapScene,
-        Error::HandBackScenes,
-        Error::ReleaseScene(vulkan()),
-        Error::ReleaseSceneStatus(vulkan()),
-        Error::SceneMailboxFull,
-        Error::StaleScene {
-            generation: 1,
-            published: 2,
-        },
-        Error::ForeignSize(SIZE),
-        Error::ImportForeign(vulkan()),
-        Error::WrapForeign,
-        Error::HandBackForeign,
-        Error::SignalRelease(vulkan()),
-        Error::HostApiVersion(0),
-        Error::ReadySemaphore(vulkan()),
-        Error::EmbeddedFormat(vk::Format::UNDEFINED),
-        Error::EmbeddedImageSize(SIZE),
-        Error::EmbeddedImageHandle,
-        Error::EmbeddedImageUsage(vk::ImageUsageFlags::empty()),
-        Error::EmbeddedLayout(vk::ImageLayout::UNDEFINED),
-        Error::WrapHostImage {
-            format: vk::Format::UNDEFINED,
-            usage: vk::ImageUsageFlags::empty(),
-            size: SIZE,
-            context: ContextState::Usable,
-        },
-        Error::EmbeddedReturnLayout(vk::ImageLayout::UNDEFINED),
-        Error::WaitSemaphore,
-        Error::ConsumeReadySignal(vulkan()),
-        Error::EmbeddedSubmit,
-    ]);
-}
-
-#[test]
-fn a_surface_or_frame_error_shows_the_defect_notice_exactly_when_this_build_is_at_fault()
--> Result<(), TestError> {
-    assert_shows_the_defect_notice_exactly_when_this_build_is_at_fault(vec![
-        Error::CreateSurface(vulkan()),
-        Error::QuerySurfacePresentation(vulkan()),
-        Error::QuerySurfaceCapabilities(vulkan()),
-        Error::QuerySurfaceFormats(vulkan()),
-        Error::SurfacePresentation,
-        Error::NoSurfaceFormat,
-        Error::NoCompositeAlpha,
-        Error::CreateSwapchain(vulkan()),
-        Error::CreateSemaphore(vulkan()),
-        Error::InvalidHdrMetadata,
-        Error::HdrMetadataRange(DrawFailure::NumberRange),
-        Error::SetHdrMetadata(vulkan()),
-        Error::ForeignTarget,
-        Error::WaitFrame(vulkan()),
-        Error::Acquire(vulkan()),
-        Error::SwapchainFormat(vk::Format::UNDEFINED),
-        Error::SwapchainExtent(narrowing()?),
-        Error::SwapchainImageIndex(narrowing()?),
-        Error::WrapSwapchainImage(ContextState::DeviceLost),
-        Error::WaitAcquisition,
         Error::WorkingColorSpace,
-        Error::OutputColorSpace(OutputProfile::Srgb),
-        Error::OutputColorFilter(DrawFailure::NumberRange),
-        Error::WorkingSurface,
-        Error::OffscreenSize(SIZE),
-        Error::OffscreenSurface(SIZE),
         Error::PngSurface,
         Error::EncodePng,
         Error::ReadPixels,
-        Error::PresentationSemaphore,
-        Error::SubmitFrame,
-        Error::SignalFrame(vulkan()),
-        Error::Present(vulkan()),
-        Error::NoDisplayTiming,
-        Error::PresentationTimeRange(Duration::ZERO),
-        Error::ExplicitTimestampRequired,
-        Error::Several(vec![Error::WrapScene, Error::EncodePng]),
-        Error::Several(vec![Error::WrapScene, Error::SubpixelTileSize]),
+        Error::Several(vec![Error::ReadPixels, Error::EncodePng]),
+        Error::Several(vec![Error::ReadPixels, Error::SubpixelTileSize]),
     ]);
-    Ok(())
 }

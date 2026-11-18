@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::BandEdges;
-use crate::effects_tests::{
-    draw, draw_with, linear_pixels, sample, sample_at_center, sample_in_middle_row, stripes, tangle,
+use crate::effect_checks::{
+    draw, draw_with, linear_pixels, sample, sample_at_center, sample_in_middle_row, stripes,
 };
+use crate::effects_tests::tangle;
 use crate::failure::Failures;
 use crate::field::Band;
 use crate::field::Route;

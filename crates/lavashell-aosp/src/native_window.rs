@@ -2,7 +2,7 @@
 use crate::Error;
 use crate::platform::ndk;
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::SurfaceControl;
+use lavashell_vulkan_renderer::SurfaceControl;
 use std::convert::Infallible;
 
 #[derive(Clone)]

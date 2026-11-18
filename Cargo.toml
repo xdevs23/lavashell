@@ -10,6 +10,7 @@ members = [
     "crates/lavashell-keyboard",
     "crates/lavashell-vulkan",
     "crates/lavashell-renderer",
+    "crates/lavashell-vulkan-renderer",
     "crates/lavashell-platform",
     "crates/lavashell-runtime",
     "crates/lavashell-wayland",
@@ -79,6 +80,7 @@ lavashell-error-chain = { path = "crates/lavashell-error-chain" }
 lavashell-components = { path = "crates/lavashell-components" }
 lavashell-vulkan = { path = "crates/lavashell-vulkan" }
 lavashell-renderer = { path = "crates/lavashell-renderer" }
+lavashell-vulkan-renderer = { path = "crates/lavashell-vulkan-renderer" }
 lavashell-platform = { path = "crates/lavashell-platform" }
 lavashell-runtime = { path = "crates/lavashell-runtime" }
 lavashell-wayland = { path = "crates/lavashell-wayland" }

@@ -38,7 +38,7 @@ fn coverage_remains_data_and_foreground_uses_destination_color_management() -> R
             AlphaType::Premul,
             Some(
                 crate::color::output_color_space(profile)
-                    .ok_or(Error::OutputColorSpace(profile))?,
+                    .ok_or(TestError::Missing("output color space"))?,
             ),
         );
         for gamut in [Gamut::Srgb, Gamut::DisplayP3] {

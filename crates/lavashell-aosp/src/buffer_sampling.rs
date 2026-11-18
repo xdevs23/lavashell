@@ -6,7 +6,8 @@ use crate::platform::{
     ForeignImporter, HardwareBufferMemory, PropertiesError, SampledMemory, Sampling,
 };
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::{ForeignAlpha, StreamRejection};
+use lavashell_renderer::StreamRejection;
+use lavashell_vulkan_renderer::ForeignAlpha;
 use std::collections::BTreeSet;
 
 struct HardwareBufferDescription {

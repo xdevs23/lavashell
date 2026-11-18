@@ -10,10 +10,6 @@ use lavashell_core::units::DpExt;
 use skia_safe::{Color, Paint, Rect, Vector};
 
 impl RasterCache {
-    pub(crate) fn images(&self) -> impl Iterator<Item = &Image> {
-        self.tiles.values().map(|tile| &tile.image)
-    }
-
     fn bytes(&self) -> usize {
         self.tiles.values().map(|tile| tile.bytes).sum()
     }

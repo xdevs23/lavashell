@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Completions, FenceCopyError, ProducedFrame};
+use super::{CompletionStatus, Completions, FenceCopyError, ProducedFrame};
 use crate::error::FailureList;
-use crate::vulkan::Status;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
@@ -99,11 +98,11 @@ impl<C: Completions, F: ProducedFrame> ReleaseTracker<C, F> {
         for held in std::mem::take(&mut self.held) {
             let status = match &held.work {
                 Work::Submitted(completion) => completions.status(completion),
-                Work::Unknown => Ok(Status::Pending),
+                Work::Unknown => Ok(CompletionStatus::Pending),
             };
             match status {
-                Ok(Status::Complete) => held.finish(),
-                Ok(Status::Pending) => self.held.push(held),
+                Ok(CompletionStatus::Complete) => held.finish(),
+                Ok(CompletionStatus::Pending) => self.held.push(held),
                 Err(error) => {
                     failures.push(error);
                     self.held.push(held);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{draw, linear_pixels, stripes};
+use crate::effect_checks::{draw, linear_pixels, stripes};
 use crate::test_error::TestError;
 use crate::test_surfaces::EFFECT_SURFACE;
 use crate::{Fonts, Painter};

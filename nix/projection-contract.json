@@ -7,7 +7,7 @@
   "frameworkRoot": "lavashell-core",
   "nativeDirectory": "examples/support",
   "layers": ["engine", "registry"],
-  "companions": ["lavashell-renderer"],
+  "companions": ["lavashell-renderer", "lavashell-vulkan-renderer"],
   "packagedCrates": {
     "aosp-round-trip": "tools/aosp-round-trip",
     "wayland-input": "tools/wayland-input",

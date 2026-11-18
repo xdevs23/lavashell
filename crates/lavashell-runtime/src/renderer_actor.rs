@@ -10,12 +10,13 @@ use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{Platform, StreamSetup, StreamTask, SurfaceAttachment};
+use lavashell_renderer::StreamBackend;
 use lavashell_renderer::skia::Path;
 use lavashell_renderer::text::TextRendering;
-use lavashell_renderer::vulkan::PresentationBackend;
-use lavashell_renderer::{
+use lavashell_vulkan_renderer::vulkan::PresentationBackend;
+use lavashell_vulkan_renderer::{
     CommitError, DrawError, Drawn, PresentFrame, RendererSetup, RendererState, RendererStreams,
-    StartError, StateError, StreamBackend, SurfaceContents, SurfaceControl,
+    StartError, StateError, SurfaceContents, SurfaceControl,
 };
 use std::fmt;
 use std::sync::{Arc, mpsc};

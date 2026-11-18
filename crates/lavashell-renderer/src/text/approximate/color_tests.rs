@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::super::PixelGeometry;
-use super::tests::{new_painter, target};
+use super::samples::new_painter;
+use super::tests::target;
 use super::*;
 use crate::test_error::TestError;
 use crate::test_font::probe_style;

@@ -7,9 +7,8 @@ use lavashell_aosp::{
     MotionEvent, NativeWindow, StreamFormat, SurfaceStream,
 };
 use lavashell_core::prelude::*;
-use lavashell_renderer::{
-    ForeignAlpha, ForeignFormat, ForeignImporter, ForeignMemory, Latch, Painter, Stream, skia,
-};
+use lavashell_renderer::{Latch, Painter, Stream, skia};
+use lavashell_vulkan_renderer::{ForeignAlpha, ForeignFormat, ForeignImporter, ForeignMemory};
 use ndk::hardware_buffer::{HardwareBuffer, HardwareBufferRef, HardwareBufferUsage};
 use ndk::media::image_reader::{AcquireResult, Image, ImageFormat, ImageReader};
 use rustix::event::{PollFd, PollFlags, poll};

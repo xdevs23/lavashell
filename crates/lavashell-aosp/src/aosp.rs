@@ -8,7 +8,7 @@ use crate::presentation::AospPresentation;
 use crate::streams::AospStreams;
 use lavashell_actor::SystemClock;
 use lavashell_platform::{Capability, Connection, HostFacts, Platform, PlatformLinks, StreamSetup};
-use lavashell_renderer::VulkanRenderer;
+use lavashell_vulkan_renderer::VulkanRenderer;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

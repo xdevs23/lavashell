@@ -3,9 +3,9 @@ use crate::hardware_buffer::HardwareBufferMemory;
 use crate::native_window::NativeWindow;
 use ash::khr::android_surface;
 use ash::vk;
-use lavashell_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
-use lavashell_renderer::{ForeignMemory, PresentationBackend};
 use lavashell_vulkan::{ExtensionSet, Features, Instance, PhysicalDevice, Window};
+use lavashell_vulkan_renderer::vulkan::FOREIGN_IMPORT_EXTENSIONS;
+use lavashell_vulkan_renderer::{ForeignMemory, PresentationBackend};
 use std::ffi::CStr;
 use std::sync::Arc;
 

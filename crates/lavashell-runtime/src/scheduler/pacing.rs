@@ -3,7 +3,7 @@ use super::{FrameKind, FrameSequence, Redraw, ViewState};
 use lavashell_core::frame::{
     FrameClock, FrameMetrics, FrameTime, PresentationTracker, PresentedFrame,
 };
-use lavashell_renderer::FrameOutcome;
+use lavashell_vulkan_renderer::FrameOutcome;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Default)]

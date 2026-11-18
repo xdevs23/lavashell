@@ -12,7 +12,7 @@ use lavashell_platform::{
     DeviceEvent, PlatformEvent, PlatformLinks, PlatformRequest, Role, SurfaceEvent, SurfaceRequest,
     TimingEvent,
 };
-use lavashell_renderer::NoStreams;
+use lavashell_vulkan_renderer::NoStreams;
 use std::collections::BTreeSet;
 use std::time::Duration;
 

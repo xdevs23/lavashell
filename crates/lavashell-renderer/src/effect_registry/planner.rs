@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{DrawTarget, EffectRegistry, EffectRequest, ShapePainter, SurfaceAccess};
-use crate::failure::DrawFailure;
-use crate::gpu_timing::GpuTiming;
-use crate::{
-    Painter,
-    destination::Destination,
-    vulkan::{GpuSample, SampleKind, SampleTag},
-};
+use crate::gpu_timing::{GpuSample, SampleKind, SampleOutcome, SampleTag};
+use crate::{Painter, destination::Destination};
 use lavashell_core::scene::tree::{NodeKey, Presented};
 use lavashell_core::scene::{Affine, DrawCommand};
 use lavashell_core::surface::{PerSurface, SurfaceId};
@@ -16,7 +11,6 @@ use lavashell_effect_quality::{
 };
 use skia_safe::Canvas;
 use std::collections::BTreeMap;
-use timing::GpuSpan;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectInput {
@@ -146,14 +140,11 @@ impl Painter {
         dp_to_output: Affine,
     ) -> QualityChange {
         self.frame = frame;
-        let collected = (self.gpu_timing.as_mut())
-            .map(GpuTiming::collect)
+        let failures = &self.failures;
+        let samples = (self.gpu_timing.as_mut())
+            .map(|timing| timing.collect(failures))
             .unwrap_or_default();
-        for failure in &collected.failures {
-            self.failures
-                .record_caused(DrawFailure::GpuTimestamp, failure);
-        }
-        for sample in collected.samples {
+        for sample in samples {
             self.effect_planner.record_draw_time(sample);
         }
         self.effect_planner.inputs.clear();
@@ -310,20 +301,17 @@ impl Painter {
         };
         let registry = &mut self.effect_registry;
         let mut render = || registry.render(effect, canvas, &request);
-        let profiler = (self.gpu_timing.as_mut())
-            .filter(|_| timed)
-            .map(GpuTiming::profiler);
-        let span = profiler.and_then(|profiler| GpuSpan::new(canvas, profiler));
+        let timing = (self.gpu_timing.as_mut()).filter(|_| timed);
+        let timed_context = timing.zip(canvas.direct_context());
         let tag = SampleTag {
             kind: SampleKind::Effect(DrawTimeKey { draw: id, variant }),
             surface,
             frame: self.frame,
         };
-        match span {
-            Some(mut span) => {
-                if let Err(cause) = span.time(tag, render) {
-                    self.failures
-                        .record_caused(DrawFailure::GpuTimestamp, &cause);
+        match timed_context {
+            Some((timing, mut context)) => {
+                match timing.time(&mut context, tag, &mut render, &self.failures) {
+                    SampleOutcome::Recorded | SampleOutcome::Lost => {}
                 }
             }
             None => render(),
@@ -353,7 +341,7 @@ impl Painter {
         let Some(timing) = self.gpu_timing.as_mut() else {
             return;
         };
-        let Some(mut span) = GpuSpan::new(canvas, timing.profiler()) else {
+        let Some(mut context) = canvas.direct_context() else {
             return;
         };
         let Some(copy) = blank_copy(&mut self.effect_planner.blank_copy, canvas) else {
@@ -382,13 +370,10 @@ impl Painter {
                 frame: self.frame,
             };
             let registry = &mut self.effect_registry;
-            match span.time(tag, || registry.render(effect, blank, &request)) {
-                Ok(()) => draw_times.await_first_measurement(key),
-                Err(cause) => {
-                    self.failures
-                        .record_caused(DrawFailure::GpuTimestamp, &cause);
-                    draw_times.mark_unmeasurable(key);
-                }
+            let mut render = || registry.render(effect, blank, &request);
+            match timing.time(&mut context, tag, &mut render, &self.failures) {
+                SampleOutcome::Recorded => draw_times.await_first_measurement(key),
+                SampleOutcome::Lost => draw_times.mark_unmeasurable(key),
             }
         }
         let _canvas_returned_for_chaining = blank.restore_to_count(saved);
@@ -414,4 +399,3 @@ fn blank_copy<'a>(
 mod draw_time_tests;
 #[cfg(test)]
 mod storage_tests;
-mod timing;

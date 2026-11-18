@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_error::TestError;
-use crate::{Error, Painter, StreamFrames};
+use crate::{Error, Painter, SceneImage, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId, SceneTree};
 use lavashell_core::surface::SurfaceId;
@@ -8,11 +8,10 @@ use lavashell_test_fixtures::{WithoutFailures, show_all};
 use skia_safe::Canvas;
 use std::time::Duration;
 
-pub(crate) const TEST_SURFACE: SurfaceId = SurfaceId::numbered(0);
-pub(crate) const BACKGROUND_STRIPE_COLORS: [Color; 2] =
-    [Color::rgb(0x0011_2255), Color::rgb(0x00fe_ddaa)];
+pub const TEST_SURFACE: SurfaceId = SurfaceId::numbered(0);
+pub const BACKGROUND_STRIPE_COLORS: [Color; 2] = [Color::rgb(0x0011_2255), Color::rgb(0x00fe_ddaa)];
 
-pub(crate) fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> Change {
+pub fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> Change {
     Change::Insert {
         id: SceneNodeId(id),
         parent: parent.map(SceneNodeId),
@@ -21,9 +20,7 @@ pub(crate) fn insert(id: u64, parent: Option<u64>, index: usize, node: Node) -> 
     }
 }
 
-pub(crate) fn leaves(
-    packets: impl IntoIterator<Item = Packet>,
-) -> Result<SceneSnapshot, TestError> {
+pub fn leaves(packets: impl IntoIterator<Item = Packet>) -> Result<SceneSnapshot, TestError> {
     let changes = (1_u64..)
         .zip(packets.into_iter().enumerate())
         .map(|(id, (index, packet))| insert(id, None, index, Node::Leaf(Content::Packet(packet))));
@@ -32,7 +29,7 @@ pub(crate) fn leaves(
     Ok(tree.snapshot())
 }
 
-pub(crate) fn paint(
+pub fn paint(
     painter: &mut Painter,
     canvas: &Canvas,
     scene: &SceneSnapshot,
@@ -42,7 +39,7 @@ pub(crate) fn paint(
 }
 
 impl Painter {
-    pub(crate) fn paint_as_leaf(
+    pub fn paint_as_leaf(
         &mut self,
         canvas: &Canvas,
         commands: &[DrawCommand],
@@ -51,7 +48,7 @@ impl Painter {
         self.paint_streams_as_leaf(canvas, commands, density, &StreamFrames::default())
     }
 
-    pub(crate) fn paint_streams_as_leaf(
+    pub fn paint_streams_as_leaf(
         &mut self,
         canvas: &Canvas,
         commands: &[DrawCommand],
@@ -65,7 +62,7 @@ impl Painter {
     }
 }
 
-pub(crate) fn paint_damage(
+pub fn paint_damage(
     painter: &mut Painter,
     surface: SurfaceId,
     canvas: &Canvas,
@@ -88,11 +85,12 @@ pub(crate) fn paint_damage(
     Ok(())
 }
 
-pub(crate) fn commands(scene: &SceneSnapshot) -> Vec<DrawCommand> {
+#[must_use]
+pub fn commands(scene: &SceneSnapshot) -> Vec<DrawCommand> {
     scene.at(Duration::ZERO).leaf_commands().cloned().collect()
 }
 
-pub(crate) fn framed_commands(
+pub fn framed_commands(
     view: &mut View,
     viewport: Viewport,
     painter: &mut Painter,
@@ -100,4 +98,26 @@ pub(crate) fn framed_commands(
     let mut builder = SceneBuilder::default();
     (view.frame_into(viewport, &mut painter.shaper, &mut builder)).without_failures()?;
     Ok(commands(&builder.snapshot()))
+}
+
+pub fn paint_scene_image(
+    painter: &mut Painter,
+    canvas: &Canvas,
+    scene: &SceneImage,
+    damage: Rect,
+) -> Result<(), Error> {
+    let tree = SceneTree::default();
+    painter.paint_surface(
+        canvas,
+        SurfaceFrame {
+            surface: TEST_SURFACE,
+            tree: tree.at(Duration::ZERO),
+            dp_to_output: Affine::IDENTITY,
+            damage: Some(damage),
+            clear: skia_safe::Color::TRANSPARENT,
+            scene: Some(scene),
+            shape: None,
+            streams: &StreamFrames::default(),
+        },
+    )
 }

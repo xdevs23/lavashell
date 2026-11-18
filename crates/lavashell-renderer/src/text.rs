@@ -32,6 +32,9 @@ pub(crate) use raster::{Coverage, Drawn, Rasterizers};
 pub(crate) use raster::{RasterInput, TextRasterizer};
 pub(crate) use scope::{SavedScope, Scopes};
 pub use shaper::Shaper;
+
+#[cfg(any(test, feature = "test-support"))]
+pub use approximate::samples as approximate_samples;
 use shaper::{FaceShare, WeightRendering};
 use skia_safe::textlayout::Paragraph;
 
@@ -266,8 +269,8 @@ fn centered(
 mod canvas_tests;
 #[cfg(test)]
 mod retention_tests;
-#[cfg(test)]
-pub(crate) mod sample_fixtures;
+#[cfg(any(test, feature = "test-support"))]
+pub mod sample_fixtures;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

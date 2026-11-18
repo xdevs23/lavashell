@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::effect_registry::QualityChange;
+use crate::test_damage::{
+    SURFACE, card, damage_frames, full_damage_then_cuts, packet, repainted_pixels_on,
+};
 use crate::test_error::TestError;
 use crate::test_scenes::{BACKGROUND_STRIPE_COLORS, TEST_SURFACE, insert, leaves, paint_damage};
-use crate::test_surfaces::{StripedSurface, TestSurface, pixels};
+use crate::test_surfaces::{StripedSurface, pixels};
 use crate::{Error, Fonts, Painter, StreamFrames, SurfaceFrame};
 use lavashell_core::prelude::*;
 use lavashell_core::retained::UnbalancedRestore;
@@ -14,15 +17,7 @@ use lavashell_test_fixtures::{WithoutFailures, show_all};
 use std::sync::Arc;
 use std::time::Duration;
 
-const SURFACE: TestSurface = TestSurface::new(240, 120);
 const STRIPES: StripedSurface = SURFACE.striped(10);
-
-fn packet(rect: Rect, paint: impl FnOnce(&mut Drawing<'_>)) -> Result<Packet, UnbalancedRestore> {
-    let mut commands = Vec::new();
-    let context = DrawContext::new(Viewport::new(rect.size(), Density::ONE));
-    paint(&mut Drawing::new(&mut commands, rect, &context));
-    Packet::new(Arc::from(commands))
-}
 
 fn top_leaf(id: u64, index: usize, packet: Packet) -> Change {
     insert(id, None, index, Node::Leaf(Content::Packet(packet)))
@@ -47,58 +42,6 @@ fn repainted_pixels(
     frames: impl IntoIterator<Item = (SceneSnapshot, Rect)>,
 ) -> Result<Vec<u64>, TestError> {
     repainted_pixels_on(&mut SURFACE.raster()?, painter, shape, frames)
-}
-
-fn repainted_pixels_on(
-    target: &mut skia_safe::Surface,
-    painter: &mut Painter,
-    shape: Option<&skia_safe::Path>,
-    frames: impl IntoIterator<Item = (SceneSnapshot, Rect)>,
-) -> Result<Vec<u64>, TestError> {
-    (frames.into_iter())
-        .map(|(tree, damage)| -> Result<u64, TestError> {
-            let before = painter.render_stats().damaged_pixels;
-            let frame = SurfaceFrame {
-                surface: TEST_SURFACE,
-                tree: tree.at(Duration::ZERO),
-                dp_to_output: Affine::IDENTITY,
-                damage: Some(damage),
-                clear: skia_safe::Color::TRANSPARENT,
-                scene: None,
-                shape,
-                streams: &StreamFrames::default(),
-            };
-            painter.paint_surface(target.canvas(), frame)?;
-            Ok(painter.render_stats().damaged_pixels - before)
-        })
-        .collect()
-}
-
-fn damage_frames(
-    damages: [Rect; 4],
-    make_packets: impl Fn() -> Result<Vec<Packet>, UnbalancedRestore>,
-) -> Result<Vec<(SceneSnapshot, Rect)>, TestError> {
-    let mut frames = Vec::new();
-    for damage in damages {
-        frames.push((leaves(make_packets()?)?, damage));
-    }
-    Ok(frames)
-}
-
-const DAMAGE_CUTTING_LEAVES: Rect =
-    Rect::new(Dp::new(30.0), Dp::new(10.0), Dp::new(80.0), Dp::new(10.0));
-
-fn full_damage_then_cuts() -> [Rect; 4] {
-    [
-        SURFACE.bounds(),
-        DAMAGE_CUTTING_LEAVES,
-        DAMAGE_CUTTING_LEAVES,
-        DAMAGE_CUTTING_LEAVES,
-    ]
-}
-
-fn card(rect: Rect) -> Result<Packet, UnbalancedRestore> {
-    packet(SURFACE.bounds(), |d| d.fill(rect, Color::rgb(0x002a_4d8f)))
 }
 
 fn glass(rect: Rect) -> Result<Packet, UnbalancedRestore> {
@@ -257,31 +200,6 @@ fn a_leaf_with_a_changing_packet_neither_fills_nor_widens_the_damage() -> Result
     let (cut, stable_and_cut) = (80 * 10, 110 * 41);
     assert_eq!(shown, [SURFACE.pixel_count(), stable_and_cut, cut, cut]);
     assert_eq!(painter.render_stats().cache_misses, 1);
-    Ok(())
-}
-
-#[test]
-fn a_stable_leaf_without_cache_room_neither_fills_nor_widens_the_damage() -> Result<(), TestError> {
-    let first = card(Rect::new(0.dp(), 0.dp(), 40.dp(), 40.dp()))?;
-    let second = card(Rect::new(100.dp(), 0.dp(), 40.dp(), 40.dp()))?;
-    let mut gpu = crate::VulkanRenderer::headless()?;
-    let mut painter = gpu.painter(&Fonts::new())?;
-    let frames = damage_frames(full_damage_then_cuts(), || {
-        Ok(vec![first.clone(), second.clone()])
-    })?;
-    let mut target = gpu.offscreen(SURFACE.pixel_size())?;
-    let one_copy = 40 * 40 * target.image_info().bytes_per_pixel();
-    target
-        .canvas()
-        .direct_context()
-        .ok_or(TestError::Missing("GPU context of the canvas"))?
-        .set_resource_cache_limit(one_copy);
-    let shown = repainted_pixels_on(&mut target, &mut painter, None, frames)?;
-    let (cut, first_and_cut) = (80 * 10, 110 * 41);
-    assert_eq!(shown, [SURFACE.pixel_count(), first_and_cut, cut, cut]);
-    let stats = painter.render_stats();
-    assert_eq!((stats.cache_misses, stats.cache_hits), (1, 2));
-    assert_eq!(stats.uncached_leaves, 2 + 3);
     Ok(())
 }
 

@@ -9,6 +9,7 @@ pub use lavashell_keyboard as keyboard;
 pub use lavashell_materials as materials;
 pub use lavashell_renderer as renderer;
 pub use lavashell_runtime::{Capability, RunError as PlatformRunError, SetupError, run};
+pub use lavashell_vulkan_renderer as vulkan_renderer;
 
 #[cfg_attr(target_os = "android", path = "selected/aosp.rs")]
 #[cfg_attr(target_os = "linux", path = "selected/wayland.rs")]
@@ -29,7 +30,7 @@ pub mod prelude {
     };
     pub use lavashell_core::panel::LayerLevel;
     pub use lavashell_core::prelude::*;
-    pub use lavashell_renderer::{Fonts, Painter, VulkanRenderer};
+    pub use lavashell_renderer::{Fonts, Painter};
     pub use lavashell_runtime::App;
     pub use lavashell_runtime::clipboard::{Clipboard, Error as ClipboardError};
     pub use lavashell_runtime::drag::Error as DragError;
@@ -42,4 +43,5 @@ pub mod prelude {
     pub use lavashell_runtime::view_actions::ViewActions;
     pub use lavashell_runtime::watches::Error as WatchError;
     pub use lavashell_runtime::window::Window;
+    pub use lavashell_vulkan_renderer::VulkanRenderer;
 }

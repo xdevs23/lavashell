@@ -19,7 +19,7 @@ use lavashell_core::view::{TextMeasurer, View};
 use lavashell_platform::{
     Capability, FocusGrabEvent, FocusGrabRequest, KeyboardMode, SurfaceEvent, SurfaceRequest,
 };
-use lavashell_renderer::{FrameOutcome, SurfaceContents};
+use lavashell_vulkan_renderer::{FrameOutcome, SurfaceContents};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 

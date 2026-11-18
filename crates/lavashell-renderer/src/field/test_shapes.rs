@@ -5,11 +5,11 @@ use crate::test_error::TestError;
 use lavashell_core::prelude::*;
 use lavashell_core::shape::{Hollow, PointsError};
 
-pub(crate) fn star(points: u16, inner: f64) -> Result<Shape, PointsError> {
+pub fn star(points: u16, inner: f64) -> Result<Shape, PointsError> {
     Ok(Shape::Contour(star_polygon(points, inner)?))
 }
 
-pub(crate) fn star_polygon(points: u16, inner: f64) -> Result<Polygon, PointsError> {
+pub fn star_polygon(points: u16, inner: f64) -> Result<Polygon, PointsError> {
     polygon((0..points).map(|i| {
         let angle = std::f64::consts::TAU * f64::from(i) / f64::from(points);
         let radius = if i % 2 == 0 { 50.0 } else { inner };
@@ -20,7 +20,7 @@ pub(crate) fn star_polygon(points: u16, inner: f64) -> Result<Polygon, PointsErr
     }))
 }
 
-pub(crate) fn ellipse(points: u16, bounds: Rect) -> Result<Shape, PointsError> {
+pub fn ellipse(points: u16, bounds: Rect) -> Result<Shape, PointsError> {
     let outline = polygon((0..points).map(|i| {
         let angle = std::f64::consts::TAU * f64::from(i) / f64::from(points);
         Point::new(
@@ -35,14 +35,14 @@ fn polygon(points: impl Iterator<Item = Point>) -> Result<Polygon, PointsError> 
     Polygon::new(points.collect::<Vec<_>>())
 }
 
-pub(crate) fn union(
+pub fn union(
     members: impl IntoIterator<Item = UnionMember>,
     spacing: Dp,
 ) -> Result<Shape, TestError> {
     Shape::union(members, NonNegativeDp::saturating(spacing)?).ok_or(TestError::NoMembers)
 }
 
-pub(crate) trait Distance {
+pub trait Distance {
     fn distance(&self, p: Point) -> f64;
 }
 
@@ -131,6 +131,7 @@ fn smooth_min(a: f64, b: f64, k: f64) -> f64 {
     a.min(b) - h * h * k * SMOOTH_MIN_QUADRATIC_FACTOR
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::float_asserts::same_at;

@@ -4,11 +4,11 @@ use super::image::{HardwareBuffer, HardwareBufferFormat};
 use super::reader::{Event, Log, signalled_fence};
 use super::{Gpu, VulkanRenderer};
 use lavashell_core::prelude::PixelSize;
-use lavashell_renderer::Error as RendererError;
-use lavashell_renderer::vulkan::Status;
 use lavashell_renderer::{
-    ForeignAlpha, Sampling, StreamPixels, StreamRejection, UnsampledFormat, skia,
+    CompletionStatus, Sampling, StreamPixels, StreamRejection, UnsampledFormat, skia,
 };
+use lavashell_vulkan_renderer::Error as RendererError;
+use lavashell_vulkan_renderer::ForeignAlpha;
 use std::os::fd::OwnedFd;
 use std::rc::Rc;
 
@@ -72,12 +72,12 @@ pub enum ReleaseError {
 pub struct Completion(Rc<Gpu>);
 
 impl Completion {
-    pub fn status(&self) -> Result<Status, RendererError> {
+    pub fn status(&self) -> Result<CompletionStatus, RendererError> {
         self.0.reachable()?;
         Ok(if self.0.busy.get() {
-            Status::Pending
+            CompletionStatus::Pending
         } else {
-            Status::Complete
+            CompletionStatus::Complete
         })
     }
 }

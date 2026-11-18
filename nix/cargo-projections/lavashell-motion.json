@@ -1090,6 +1090,7 @@
           "lavashell-materials",
           "lavashell-renderer",
           "lavashell-runtime",
+          "lavashell-vulkan-renderer",
           "lavashell-wayland"
         ]
       },
@@ -1115,6 +1116,7 @@
           "lavashell-runtime",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "ndk",
           "ndk-sys",
@@ -1302,6 +1304,7 @@
           "lavashell-core",
           "lavashell-renderer",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "thiserror 2.0.21"
         ]
       },
@@ -1309,14 +1312,12 @@
         "name": "lavashell-renderer",
         "version": "0.1.0",
         "dependencies": [
-          "ash",
           "i_overlay",
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "log",
           "lru",
           "num-traits",
@@ -1340,6 +1341,7 @@
           "lavashell-renderer",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "rustix",
@@ -1378,6 +1380,7 @@
           "lavashell-runtime",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "thiserror 2.0.21"
         ]
       },
@@ -1388,6 +1391,22 @@
           "ash",
           "lavashell-actor",
           "log",
+          "thiserror 2.0.21"
+        ]
+      },
+      {
+        "name": "lavashell-vulkan-renderer",
+        "version": "0.1.0",
+        "dependencies": [
+          "ash",
+          "lavashell-core",
+          "lavashell-effect-quality",
+          "lavashell-error-chain",
+          "lavashell-renderer",
+          "lavashell-test-fixtures",
+          "lavashell-vulkan",
+          "log",
+          "skia-safe",
           "thiserror 2.0.21"
         ]
       },
@@ -1406,8 +1425,8 @@
           "lavashell-build-script",
           "lavashell-core",
           "lavashell-platform",
-          "lavashell-renderer",
           "lavashell-vulkan",
+          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "quote",

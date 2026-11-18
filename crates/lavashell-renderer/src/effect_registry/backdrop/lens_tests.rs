@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::tests::background;
+use super::cache_checks::background;
 use super::*;
 use crate::destination::Destination;
+use crate::effect_checks::stripes;
 use crate::effect_registry::SurfaceAccess;
-use crate::effects_tests::stripes;
 use crate::failure::{DrawFailure, Failures};
 use crate::field::test_shapes::{Distance, ellipse, union};
 use crate::resources::PaintResources;
@@ -64,7 +64,7 @@ fn glass_pixels(
     };
     let effect = Backdrop::glass(Dp::ZERO, glass)?;
     let mut s = EFFECT_SURFACE.raster()?;
-    crate::effects_tests::draw_with(painter, &mut s, |d| {
+    crate::effect_checks::draw_with(painter, &mut s, |d| {
         stripes(d);
         if destination == Destination::Layer {
             d.commands.push(DrawCommand::Opacity(0.5));
@@ -77,7 +77,7 @@ fn glass_pixels(
             d.restore();
         }
     })?;
-    Ok(crate::effects_tests::linear_pixels(&mut s).map(|[red, ..]| *red))
+    Ok(crate::effect_checks::linear_pixels(&mut s).map(|[red, ..]| *red))
 }
 
 fn changed(

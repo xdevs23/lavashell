@@ -17,7 +17,7 @@ use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
 use lavashell_platform::{PanelRequest, Platform, PlatformRequest};
-use lavashell_renderer::{Drawn, FrameOutcome, SurfaceContents};
+use lavashell_vulkan_renderer::{Drawn, FrameOutcome, SurfaceContents};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]

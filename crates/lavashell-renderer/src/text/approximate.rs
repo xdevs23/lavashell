@@ -10,13 +10,11 @@ use skia_safe::Color4f;
 mod blend;
 #[cfg(test)]
 mod color_tests;
-#[cfg(test)]
-mod gpu_tests;
 mod masks;
 #[cfg(test)]
 mod policy_tests;
-#[cfg(test)]
-mod samples;
+#[cfg(any(test, feature = "test-support"))]
+pub mod samples;
 #[cfg(test)]
 mod state_tests;
 #[cfg(test)]

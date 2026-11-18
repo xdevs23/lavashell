@@ -20,7 +20,7 @@ use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
 use lavashell_platform::{Capability, Platform, PlatformLinks};
-use lavashell_renderer::RendererSetup;
+use lavashell_vulkan_renderer::RendererSetup;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::Arc;

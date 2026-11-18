@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::PlatformRunError;
-use lavashell::renderer::{StartError, StateError};
+use lavashell::vulkan_renderer::{StartError, StateError};
 use lavashell_actor::SpawnError;
 use lavashell_example_support::{ExampleError, NextStep};
 use lavashell_runtime::RendererError;

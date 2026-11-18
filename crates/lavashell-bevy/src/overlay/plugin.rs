@@ -23,7 +23,8 @@ use bevy::{
 use lavashell_actor::Latest;
 use lavashell_core::prelude::PixelSize;
 use lavashell_error_chain::message_chain;
-use lavashell_renderer::{BorrowedImage, EmbeddedVulkanRenderer, Fonts, Painter, ReadySignal};
+use lavashell_renderer::{Fonts, Painter};
+use lavashell_vulkan_renderer::{BorrowedImage, EmbeddedVulkanRenderer, ReadySignal};
 use std::{cell::RefCell, sync::Arc, time::Instant};
 
 pub struct LavashellOverlayPlugin {
@@ -56,8 +57,8 @@ impl Command<Result<(), Error>> for InstallOverlay {
         // the device refuses an app with pipelined rendering.
         let device = unsafe { self.shared_device.open(world) }?;
         // SAFETY: `EmbeddedVulkanRenderer::new` needs the promise that the queue of the device is serialized, because
-        // no type of wgpu proves it. The embedded API of lavashell-renderer has no safe constructor for a device
-        // created by a host. The queue supports graphics, because wgpu draws on it. The contract of
+        // no type of wgpu proves it. The embedded API of lavashell-vulkan-renderer has no safe constructor for a
+        // device created by a host. The queue supports graphics, because wgpu draws on it. The contract of
         // `LavashellOverlayPlugin::new` serializes the submissions of Bevy with every call of the renderer. The
         // renderer is called only in the overlay node and when it is dropped.
         let gpu =
@@ -131,8 +132,8 @@ impl GpuOverlay {
     ) -> Result<(), Error> {
         let Self { gpu, painter, .. } = self;
         // SAFETY: `draw` needs promises about the state of an image of the host and about the order of the queue,
-        // because no type of wgpu proves them. The embedded API of lavashell-renderer has no safe draw into a borrowed
-        // image. The image is the main texture of the view, which exists for the whole frame. The submission just
+        // because no type of wgpu proves them. The embedded API of lavashell-vulkan-renderer has no safe draw into a
+        // borrowed image. The image is the main texture of the view, which exists for the whole frame. The submission just
         // before signals the ready semaphore and leaves the image in COLOR_TARGET, the state declared by
         // `borrowed_image`. The next submission of wgpu runs after the draw on the same queue, as the contract of
         // `LavashellOverlayPlugin::new` requires. Skia returns the image in the layout that the tracker of wgpu
@@ -147,8 +148,8 @@ impl GpuOverlay {
                 )
             })
         }
-        .and_then(|painted| painted)
-        .map_err(Error::OverlayDraw)
+        .map_err(Error::OverlayDraw)?
+        .map_err(Error::OverlayPaint)
     }
 
     fn report(&self, sequence: u64, result: Result<OverlayTiming, Error>) {

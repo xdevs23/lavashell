@@ -2,11 +2,11 @@
 
 use crate::Error;
 use ash::vk;
-use lavashell_renderer::vulkan::{PendingRelease, SceneLease};
 use lavashell_vulkan::{
     Commands, ExportableImage, Image, ImageState, QueueFamily, Recorded, Recording, Status,
     Submitted,
 };
+use lavashell_vulkan_renderer::vulkan::{PendingRelease, SceneLease};
 use std::sync::Arc;
 
 const RELEASED: ImageState = ImageState::new(vk::ImageLayout::GENERAL, QueueFamily::External);

@@ -8,82 +8,94 @@ use skia_safe::{
 };
 use std::num::NonZeroUsize;
 
-pub(crate) const EFFECT_SURFACE: TestSurface = TestSurface::new(96, 48);
-pub(crate) const EFFECT_STRIPES: StripedSurface = EFFECT_SURFACE.striped(4);
-pub(crate) const WIDE_SURFACE: TestSurface = TestSurface::new(64, 30);
+pub const EFFECT_SURFACE: TestSurface = TestSurface::new(96, 48);
+pub const EFFECT_STRIPES: StripedSurface = EFFECT_SURFACE.striped(4);
+pub const WIDE_SURFACE: TestSurface = TestSurface::new(64, 30);
 
 #[derive(Clone, Copy)]
-pub(crate) struct TestSurface {
+pub struct TestSurface {
     width: u16,
     height: u16,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct StripedSurface {
+pub struct StripedSurface {
     surface: TestSurface,
     stripe_width: u16,
 }
 
 impl TestSurface {
-    pub(crate) const fn new(width: u16, height: u16) -> Self {
+    #[must_use]
+    pub const fn new(width: u16, height: u16) -> Self {
         Self { width, height }
     }
 
-    pub(crate) const fn striped(self, stripe_width: u16) -> StripedSurface {
+    #[must_use]
+    pub const fn striped(self, stripe_width: u16) -> StripedSurface {
         StripedSurface {
             surface: self,
             stripe_width,
         }
     }
 
-    pub(crate) fn dimensions(self) -> ISize {
+    #[must_use]
+    pub fn dimensions(self) -> ISize {
         ISize::new(i32::from(self.width), i32::from(self.height))
     }
 
-    pub(crate) fn size(self) -> Size {
+    #[must_use]
+    pub fn size(self) -> Size {
         Size::new(
             Dp::new(f64::from(self.width)),
             Dp::new(f64::from(self.height)),
         )
     }
 
-    pub(crate) fn bounds(self) -> Rect {
+    #[must_use]
+    pub fn bounds(self) -> Rect {
         Rect::from_size(self.size())
     }
 
-    pub(crate) fn center(self) -> Point {
+    #[must_use]
+    pub fn center(self) -> Point {
         self.bounds().center()
     }
 
-    pub(crate) fn pixel_size(self) -> PixelSize {
+    #[must_use]
+    pub fn pixel_size(self) -> PixelSize {
         PixelSize::new(u32::from(self.width), u32::from(self.height))
     }
 
-    pub(crate) fn pixel_count(self) -> u64 {
+    #[must_use]
+    pub fn pixel_count(self) -> u64 {
         u64::from(self.width) * u64::from(self.height)
     }
 
-    pub(crate) fn raster(self) -> Result<Surface, TestError> {
+    pub fn raster(self) -> Result<Surface, TestError> {
         let ISize { width, height } = self.dimensions();
         surface(width, height)
     }
 
-    pub(crate) fn middle_column(self) -> i32 {
+    #[must_use]
+    pub fn middle_column(self) -> i32 {
         i32::from(self.width / 2)
     }
 
-    pub(crate) fn middle_row(self) -> i32 {
+    #[must_use]
+    pub fn middle_row(self) -> i32 {
         i32::from(self.height / 2)
     }
 
-    pub(crate) fn pixel_distance_from_center(self, (x, y): (u16, u16)) -> f64 {
+    #[must_use]
+    pub fn pixel_distance_from_center(self, (x, y): (u16, u16)) -> f64 {
         let center = self.center();
         (f64::from(x) + 0.5 - center.x.get()).hypot(f64::from(y) + 0.5 - center.y.get())
     }
 }
 
 impl StripedSurface {
-    pub(crate) fn stripe_at(self, x: Dp) -> Rect {
+    #[must_use]
+    pub fn stripe_at(self, x: Dp) -> Rect {
         Rect::new(
             x,
             Dp::ZERO,
@@ -92,20 +104,21 @@ impl StripedSurface {
         )
     }
 
-    pub(crate) fn stripes<C: Copy>(self, [even, odd]: [C; 2]) -> impl Iterator<Item = (Rect, C)> {
+    pub fn stripes<C: Copy>(self, [even, odd]: [C; 2]) -> impl Iterator<Item = (Rect, C)> {
         (0..self.surface.width / self.stripe_width).map(move |stripe| {
             let x = Dp::new(f64::from(stripe * self.stripe_width));
             (self.stripe_at(x), if stripe % 2 == 0 { even } else { odd })
         })
     }
 
-    pub(crate) fn fill_stripes(self, d: &mut Drawing<'_>, colors: [Color; 2]) {
+    pub fn fill_stripes(self, d: &mut Drawing<'_>, colors: [Color; 2]) {
         for (stripe, color) in self.stripes(colors) {
             d.fill(stripe, color);
         }
     }
 
-    pub(crate) fn stripe_fills(self, colors: [Color; 2]) -> Vec<DrawCommand> {
+    #[must_use]
+    pub fn stripe_fills(self, colors: [Color; 2]) -> Vec<DrawCommand> {
         let mut commands = Vec::new();
         let context = DrawContext::new(Viewport::new(self.surface.size(), Density::ONE));
         self.fill_stripes(
@@ -116,14 +129,14 @@ impl StripedSurface {
     }
 }
 
-pub(crate) fn working_info(
+pub fn working_info(
     dimensions: impl Into<ISize>,
     color_type: ColorType,
 ) -> Result<ImageInfo, TestError> {
     Ok(crate::color::working_image_info(dimensions)?.with_color_type(color_type))
 }
 
-pub(crate) fn surface(width: i32, height: i32) -> Result<Surface, TestError> {
+pub fn surface(width: i32, height: i32) -> Result<Surface, TestError> {
     let mut surface = skia_safe::surfaces::raster(
         &working_info((width, height), ColorType::RGBAF16)?,
         None,
@@ -135,7 +148,7 @@ pub(crate) fn surface(width: i32, height: i32) -> Result<Surface, TestError> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct Pixels<P> {
+pub struct Pixels<P> {
     width: usize,
     pixels: Vec<P>,
 }
@@ -153,22 +166,23 @@ impl<P: Copy> Pixels<P> {
         }
     }
 
-    pub(crate) fn at(&self, x: u16, y: u16) -> P {
+    #[must_use]
+    pub fn at(&self, x: u16, y: u16) -> P {
         self.pixels[usize::from(y) * self.width + usize::from(x)]
     }
 
-    pub(crate) fn iter(&self) -> std::slice::Iter<'_, P> {
+    pub fn iter(&self) -> std::slice::Iter<'_, P> {
         self.pixels.iter()
     }
 }
 
 impl<P> Pixels<P> {
-    pub(crate) fn rows(&self) -> Result<std::slice::Chunks<'_, P>, TestError> {
+    pub fn rows(&self) -> Result<std::slice::Chunks<'_, P>, TestError> {
         let width = NonZeroUsize::new(self.width).ok_or(TestError::Missing("pixel columns"))?;
         Ok(self.pixels.chunks(width.get()))
     }
 
-    pub(crate) fn positioned(&self) -> Result<impl Iterator<Item = ((u16, u16), &P)>, TestError> {
+    pub fn positioned(&self) -> Result<impl Iterator<Item = ((u16, u16), &P)>, TestError> {
         let rows = self.rows()?;
         let (columns, row_count) = (u16::try_from(self.width)?, u16::try_from(rows.len())?);
         Ok((0..row_count)
@@ -176,24 +190,21 @@ impl<P> Pixels<P> {
             .flat_map(move |(y, row)| (0..columns).zip(row).map(move |(x, pixel)| ((x, y), pixel))))
     }
 
-    pub(crate) fn map<Q>(&self, convert: impl FnMut(&P) -> Q) -> Pixels<Q> {
+    pub fn map<Q>(&self, convert: impl FnMut(&P) -> Q) -> Pixels<Q> {
         Pixels {
             width: self.width,
             pixels: self.pixels.iter().map(convert).collect(),
         }
     }
 
-    pub(crate) fn try_map<Q, E>(
-        &self,
-        convert: impl FnMut(&P) -> Result<Q, E>,
-    ) -> Result<Pixels<Q>, E> {
+    pub fn try_map<Q, E>(&self, convert: impl FnMut(&P) -> Result<Q, E>) -> Result<Pixels<Q>, E> {
         Ok(Pixels {
             width: self.width,
             pixels: self.pixels.iter().map(convert).collect::<Result<_, _>>()?,
         })
     }
 
-    pub(crate) fn zipped<'pixels, Q>(
+    pub fn zipped<'pixels, Q>(
         &'pixels self,
         other: &'pixels Pixels<Q>,
     ) -> Result<Pixels<(&'pixels P, &'pixels Q)>, TestError> {
@@ -211,12 +222,13 @@ impl<P> Pixels<P> {
 }
 
 impl<C, const N: usize> Pixels<[C; N]> {
-    pub(crate) fn channels(&self) -> &[C] {
+    #[must_use]
+    pub fn channels(&self) -> &[C] {
         self.pixels.as_flattened()
     }
 }
 
-pub(crate) fn channel_differences<const N: usize>(
+pub fn channel_differences<const N: usize>(
     pixel: &[u8; N],
     other: &[u8; N],
 ) -> impl Iterator<Item = u8> {
@@ -224,7 +236,7 @@ pub(crate) fn channel_differences<const N: usize>(
 }
 
 impl<const N: usize> Pixels<[u8; N]> {
-    pub(crate) fn largest_channel_difference(&self, other: &Self) -> Result<u8, TestError> {
+    pub fn largest_channel_difference(&self, other: &Self) -> Result<u8, TestError> {
         (self.zipped(other)?.iter())
             .flat_map(|(a, b)| channel_differences(a, b))
             .max()
@@ -233,10 +245,7 @@ impl<const N: usize> Pixels<[u8; N]> {
 }
 
 impl<const N: usize> Pixels<[f32; N]> {
-    pub(crate) fn positions_differing_in_bits(
-        &self,
-        other: &Self,
-    ) -> Result<Vec<(u16, u16)>, TestError> {
+    pub fn positions_differing_in_bits(&self, other: &Self) -> Result<Vec<(u16, u16)>, TestError> {
         Ok((self.zipped(other)?.positioned()?)
             .filter(|(_, (a, b))| a.map(f32::to_bits) != b.map(f32::to_bits))
             .map(|(position, _)| position)
@@ -253,7 +262,7 @@ impl<'pixels, P> IntoIterator for &'pixels Pixels<P> {
     }
 }
 
-pub(crate) fn srgb_info(dimensions: impl Into<ISize>) -> ImageInfo {
+pub fn srgb_info(dimensions: impl Into<ISize>) -> ImageInfo {
     ImageInfo::new(
         dimensions,
         ColorType::RGBA8888,
@@ -262,7 +271,7 @@ pub(crate) fn srgb_info(dimensions: impl Into<ISize>) -> ImageInfo {
     )
 }
 
-pub(crate) fn float_info(
+pub fn float_info(
     dimensions: impl Into<ISize>,
     alpha: AlphaType,
     color_space: Option<ColorSpace>,
@@ -270,12 +279,12 @@ pub(crate) fn float_info(
     ImageInfo::new(dimensions, ColorType::RGBAF32, alpha, color_space)
 }
 
-pub(crate) fn pixels(surface: &mut Surface) -> Pixels<[u8; 4]> {
+pub fn pixels(surface: &mut Surface) -> Pixels<[u8; 4]> {
     let info = srgb_info(surface.image_info().dimensions());
     decode_rgba8(&info, &pixels_as(surface, &info))
 }
 
-pub(crate) fn float_pixels(
+pub fn float_pixels(
     surface: &mut Surface,
     alpha: AlphaType,
     color_space: Option<ColorSpace>,
@@ -288,12 +297,14 @@ fn read_float_pixels(surface: &mut Surface, info: &ImageInfo) -> Pixels<[f32; 4]
     decode_floats(info, &pixels_as(surface, info))
 }
 
-pub(crate) fn image_pixels(image: &Image, alpha: AlphaType) -> Pixels<[u8; 4]> {
+#[must_use]
+pub fn image_pixels(image: &Image, alpha: AlphaType) -> Pixels<[u8; 4]> {
     let info = srgb_info(image.dimensions()).with_alpha_type(alpha);
     decode_rgba8(&info, &image_bytes(image, &info))
 }
 
-pub(crate) fn image_float_pixels(
+#[must_use]
+pub fn image_float_pixels(
     image: &Image,
     alpha: AlphaType,
     color_space: Option<ColorSpace>,
@@ -302,10 +313,7 @@ pub(crate) fn image_float_pixels(
     decode_floats(&info, &image_bytes(image, &info))
 }
 
-pub(crate) fn encoded_pixels(
-    encoded: &[u8],
-    alpha: AlphaType,
-) -> Result<Pixels<[u8; 4]>, TestError> {
+pub fn encoded_pixels(encoded: &[u8], alpha: AlphaType) -> Result<Pixels<[u8; 4]>, TestError> {
     let image = Image::from_encoded(Data::new_copy(encoded)).ok_or(crate::Error::DecodeImage)?;
     Ok(image_pixels(&image, alpha))
 }
@@ -322,32 +330,27 @@ fn image_bytes(image: &Image, info: &ImageInfo) -> Vec<u8> {
     bytes
 }
 
-pub(crate) fn alpha_pixels(surface: &mut Surface) -> Pixels<u8> {
+pub fn alpha_pixels(surface: &mut Surface) -> Pixels<u8> {
     let info = ImageInfo::new_a8(surface.image_info().dimensions());
     Pixels::decoded(&info, &pixels_as(surface, &info), |[alpha]: &[u8; 1]| {
         *alpha
     })
 }
 
-pub(crate) fn working_pixels(surface: &mut Surface) -> Result<Pixels<[f32; 4]>, TestError> {
+pub fn working_pixels(surface: &mut Surface) -> Result<Pixels<[f32; 4]>, TestError> {
     let info = working_info(surface.image_info().dimensions(), ColorType::RGBAF32)?;
     Ok(read_float_pixels(surface, &info))
 }
 
-pub(crate) fn linear_float_pixels(surface: &mut Surface, alpha: AlphaType) -> Pixels<[f32; 4]> {
+pub fn linear_float_pixels(surface: &mut Surface, alpha: AlphaType) -> Pixels<[f32; 4]> {
     float_pixels(surface, alpha, Some(ColorSpace::new_srgb_linear()))
 }
 
-pub(crate) fn linear_float_pixel(
-    surface: &mut Surface,
-    x: i32,
-    y: i32,
-    alpha: AlphaType,
-) -> [f32; 4] {
+pub fn linear_float_pixel(surface: &mut Surface, x: i32, y: i32, alpha: AlphaType) -> [f32; 4] {
     float_pixel(surface, (x, y), alpha, Some(ColorSpace::new_srgb_linear()))
 }
 
-pub(crate) fn float_pixel(
+pub fn float_pixel(
     surface: &mut Surface,
     position: (i32, i32),
     alpha: AlphaType,
@@ -367,7 +370,7 @@ fn pixels_at(surface: &mut Surface, info: &ImageInfo, origin: (i32, i32)) -> Vec
     bytes
 }
 
-pub(crate) fn drawn_pixels(
+pub fn drawn_pixels(
     surface: TestSurface,
     color_type: ColorType,
     alpha: AlphaType,
@@ -384,7 +387,7 @@ pub(crate) fn drawn_pixels(
     Ok(pixels(&mut drawn_surface(&info, props, backdrop, paint)?))
 }
 
-pub(crate) fn drawn_surface(
+pub fn drawn_surface(
     info: &ImageInfo,
     props: Option<&SurfaceProps>,
     backdrop: skia_safe::Color,
@@ -396,34 +399,32 @@ pub(crate) fn drawn_surface(
     Ok(surface)
 }
 
-pub(crate) fn lcd_destination() -> TextDestination {
+#[must_use]
+pub fn lcd_destination() -> TextDestination {
     TextDestination {
         opaque: true,
         geometry: PixelGeometry::Rgb,
     }
 }
 
-pub(crate) fn has_colored_fringe(image: &Pixels<[u8; 4]>) -> bool {
+#[must_use]
+pub fn has_colored_fringe(image: &Pixels<[u8; 4]>) -> bool {
     image
         .iter()
         .any(|pixel| pixel[0] != pixel[1] || pixel[1] != pixel[2])
 }
 
-pub(crate) fn unpremultiplied_pixel(surface: &mut Surface, x: i32, y: i32) -> [u8; 4] {
+pub fn unpremultiplied_pixel(surface: &mut Surface, x: i32, y: i32) -> [u8; 4] {
     rgba8_pixel(surface, (x, y), AlphaType::Unpremul)
 }
 
-pub(crate) fn rgba8_pixel(
-    surface: &mut Surface,
-    position: (i32, i32),
-    alpha: AlphaType,
-) -> [u8; 4] {
+pub fn rgba8_pixel(surface: &mut Surface, position: (i32, i32), alpha: AlphaType) -> [u8; 4] {
     let info = ImageInfo::new((1, 1), ColorType::RGBA8888, alpha, None);
     decode_rgba8(&info, &pixels_at(surface, &info, position)).at(0, 0)
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct ChannelRounding {
+pub struct ChannelRounding {
     step: f64,
 }
 
@@ -434,6 +435,7 @@ impl ChannelRounding {
         Ok(Self { step })
     }
 
+    #[must_use]
     pub fn after(self, stores: u8, expected: f64) -> f64 {
         f64::from(stores) * self.step * expected.abs().max(1.0)
     }
@@ -452,7 +454,7 @@ fn floats<const N: usize>(bytes: &[u8]) -> [f32; N] {
     std::array::from_fn(|index| f32::from_ne_bytes(numbers[index]))
 }
 
-pub(crate) fn pattern(surface: TestSurface) -> Result<Image, TestError> {
+pub fn pattern(surface: TestSurface) -> Result<Image, TestError> {
     let rows = u8::try_from(surface.height)?;
     let columns = u8::try_from(surface.width)?;
     let pixels: Vec<u8> = (0..rows)
