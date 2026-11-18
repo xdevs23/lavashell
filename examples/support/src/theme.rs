@@ -2,6 +2,7 @@
 use crate::{Error, icon, lucide};
 use clap::ValueEnum;
 use lavashell::core::platform::COLOR_SCHEME;
+use lavashell::enum_values::enum_with_values;
 use lavashell::prelude::*;
 
 mod words {
@@ -9,12 +10,16 @@ mod words {
 }
 use words::{CopyKey, copy};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
-pub enum ThemeChoice {
-    #[default]
-    System,
-    Light,
-    Dark,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+    pub enum ThemeChoice {
+        #[default]
+        System,
+        Light,
+        Dark,
+    }
+
+    pub const ALL;
 }
 
 impl ThemeChoice {

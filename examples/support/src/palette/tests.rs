@@ -20,7 +20,7 @@ fn contrast(first: Color, second: Color) -> f64 {
 
 #[test]
 fn text_stays_readable_on_the_surfaces_it_is_drawn_on() {
-    for scheme in [ColorScheme::Dark, ColorScheme::Light] {
+    for scheme in ColorScheme::ALL {
         let palette = TealPalette::of(scheme);
         let surfaces = [
             palette.background,

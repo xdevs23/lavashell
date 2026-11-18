@@ -4,6 +4,7 @@ use crate::geometry::Color;
 use crate::local::Local;
 use crate::units::{Dp, Sp};
 use icu_locale_core::LanguageIdentifier;
+use lavashell_enum_values::enum_with_values;
 use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -44,10 +45,14 @@ impl KeyRepeat {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ColorScheme {
-    Light,
-    Dark,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum ColorScheme {
+        Light,
+        Dark,
+    }
+
+    pub const ALL;
 }
 
 impl ColorScheme {

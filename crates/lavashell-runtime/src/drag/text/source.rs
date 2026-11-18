@@ -39,8 +39,7 @@ impl NativeSources {
             return None;
         }
         let actions = DragActions::new(
-            [DragAction::Copy, DragAction::Move]
-                .into_iter()
+            (DragAction::ALL.into_iter())
                 .filter(|action| *action == DragAction::Copy || source.can_move()),
         );
         let data = TransferData::text(source.text());

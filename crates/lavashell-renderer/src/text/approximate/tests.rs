@@ -282,7 +282,7 @@ fn translucent_coverage_samples_stay_premultiplied_and_differ_per_pixel_geometry
     let commands = commands();
     let mut painter = new_painter(PixelGeometry::None)?;
     let mut gray = None;
-    for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
+    for geometry in PixelGeometry::ALL {
         painter.set_text_rendering(
             TextRendering {
                 antialiasing: TextAntialiasing::SubpixelApproximate,

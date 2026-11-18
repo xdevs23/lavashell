@@ -4,6 +4,7 @@ use crate::failure::Failures;
 use crate::field::{FieldRoom, Fields};
 use crate::raster::{RasterCache, RasterMode, resource_cache_limit};
 use lavashell_core::surface::{PerSurface, SurfaceId};
+use lavashell_enum_values::enum_with_values;
 use skia_safe::Canvas;
 use std::cell::{Cell, RefCell};
 
@@ -13,14 +14,14 @@ pub(crate) struct PaintResources {
     pub held: HeldImages,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ImageCache {
-    Packets,
-    Backdrops,
-}
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) enum ImageCache {
+        Packets,
+        Backdrops,
+    }
 
-impl ImageCache {
-    const ALL: [Self; 2] = [Self::Packets, Self::Backdrops];
+    const ALL;
 }
 
 #[derive(Default)]

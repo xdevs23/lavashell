@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use ash::vk;
+use lavashell_enum_values::enum_with_values;
 use num_traits::ToPrimitive;
 
 const ROUNDING: f64 = 0.5;
@@ -13,11 +14,15 @@ pub enum Error {
     Range(vk::SamplerYcbcrRange),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Model {
-    Bt601,
-    Bt709,
-    Bt2020,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Model {
+        Bt601,
+        Bt709,
+        Bt2020,
+    }
+
+    pub const ALL;
 }
 
 impl Model {
@@ -44,10 +49,14 @@ impl TryFrom<vk::SamplerYcbcrModelConversion> for Model {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Range {
-    Full,
-    Narrow,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Range {
+        Full,
+        Narrow,
+    }
+
+    pub const ALL;
 }
 
 impl Range {
@@ -275,9 +284,8 @@ mod tests {
 
     #[test]
     fn decoding_the_codes_returns_the_color_within_the_tolerance() -> Result<(), TestError> {
-        let conversions = [Model::Bt601, Model::Bt709, Model::Bt2020]
-            .into_iter()
-            .flat_map(|model| [Range::Full, Range::Narrow].map(|range| (model, range)));
+        let conversions =
+            (Model::ALL.into_iter()).flat_map(|model| Range::ALL.map(|range| (model, range)));
         for (model, range) in conversions {
             let conversion = Conversion::new(model, range);
             let [luma, chroma] = range.codes();

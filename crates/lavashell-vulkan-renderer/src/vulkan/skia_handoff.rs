@@ -2,6 +2,7 @@
 
 use crate::{ContextState, Error};
 use ash::vk::{self, Handle};
+use lavashell_enum_values::enum_with_values;
 use lavashell_renderer::RasterMode;
 use lavashell_vulkan::Device;
 use skia_safe::gpu::{self, DirectContext, SurfaceOrigin, vk as skvk};
@@ -251,74 +252,71 @@ impl std::ops::DerefMut for SkiaContext {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct SkiaFormat {
-    pub vulkan: vk::Format,
-    pub skia: skvk::Format,
-    pub color_type: ColorType,
-    pub linear: bool,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) enum SkiaFormat {
+        Bgra8,
+        Rgba8,
+        Srgba8,
+        Rgb10A2,
+        Bgr10A2,
+        Rgba16,
+        Rgba16Float,
+    }
+
+    const ALL;
 }
 
 impl SkiaFormat {
-    pub const BGRA8: Self = Self {
-        vulkan: vk::Format::B8G8R8A8_UNORM,
-        skia: skvk::Format::B8G8R8A8_UNORM,
-        color_type: ColorType::BGRA8888,
-        linear: false,
-    };
-    pub const RGBA8: Self = Self {
-        vulkan: vk::Format::R8G8B8A8_UNORM,
-        skia: skvk::Format::R8G8B8A8_UNORM,
-        color_type: ColorType::RGBA8888,
-        linear: false,
-    };
-    pub const SRGBA8: Self = Self {
-        vulkan: vk::Format::R8G8B8A8_SRGB,
-        skia: skvk::Format::R8G8B8A8_SRGB,
-        color_type: ColorType::SRGBA8888,
-        linear: true,
-    };
-    pub const RGB10_A2: Self = Self {
-        vulkan: vk::Format::A2B10G10R10_UNORM_PACK32,
-        skia: skvk::Format::A2B10G10R10_UNORM_PACK32,
-        color_type: ColorType::RGBA1010102,
-        linear: false,
-    };
-    pub const BGR10_A2: Self = Self {
-        vulkan: vk::Format::A2R10G10B10_UNORM_PACK32,
-        skia: skvk::Format::A2R10G10B10_UNORM_PACK32,
-        color_type: ColorType::BGRA1010102,
-        linear: false,
-    };
-    pub const RGBA16: Self = Self {
-        vulkan: vk::Format::R16G16B16A16_UNORM,
-        skia: skvk::Format::R16G16B16A16_UNORM,
-        color_type: ColorType::R16G16B16A16UNorm,
-        linear: false,
-    };
-    pub const RGBA16_FLOAT: Self = Self {
-        vulkan: vk::Format::R16G16B16A16_SFLOAT,
-        skia: skvk::Format::R16G16B16A16_SFLOAT,
-        color_type: ColorType::RGBAF16,
-        linear: true,
-    };
+    pub const fn vulkan(self) -> vk::Format {
+        match self {
+            Self::Bgra8 => vk::Format::B8G8R8A8_UNORM,
+            Self::Rgba8 => vk::Format::R8G8B8A8_UNORM,
+            Self::Srgba8 => vk::Format::R8G8B8A8_SRGB,
+            Self::Rgb10A2 => vk::Format::A2B10G10R10_UNORM_PACK32,
+            Self::Bgr10A2 => vk::Format::A2R10G10B10_UNORM_PACK32,
+            Self::Rgba16 => vk::Format::R16G16B16A16_UNORM,
+            Self::Rgba16Float => vk::Format::R16G16B16A16_SFLOAT,
+        }
+    }
 
-    const ALL: [Self; 7] = [
-        Self::BGRA8,
-        Self::RGBA8,
-        Self::SRGBA8,
-        Self::RGB10_A2,
-        Self::BGR10_A2,
-        Self::RGBA16,
-        Self::RGBA16_FLOAT,
-    ];
+    pub const fn skia(self) -> skvk::Format {
+        match self {
+            Self::Bgra8 => skvk::Format::B8G8R8A8_UNORM,
+            Self::Rgba8 => skvk::Format::R8G8B8A8_UNORM,
+            Self::Srgba8 => skvk::Format::R8G8B8A8_SRGB,
+            Self::Rgb10A2 => skvk::Format::A2B10G10R10_UNORM_PACK32,
+            Self::Bgr10A2 => skvk::Format::A2R10G10B10_UNORM_PACK32,
+            Self::Rgba16 => skvk::Format::R16G16B16A16_UNORM,
+            Self::Rgba16Float => skvk::Format::R16G16B16A16_SFLOAT,
+        }
+    }
+
+    pub const fn color_type(self) -> ColorType {
+        match self {
+            Self::Bgra8 => ColorType::BGRA8888,
+            Self::Rgba8 => ColorType::RGBA8888,
+            Self::Srgba8 => ColorType::SRGBA8888,
+            Self::Rgb10A2 => ColorType::RGBA1010102,
+            Self::Bgr10A2 => ColorType::BGRA1010102,
+            Self::Rgba16 => ColorType::R16G16B16A16UNorm,
+            Self::Rgba16Float => ColorType::RGBAF16,
+        }
+    }
+
+    const fn is_linear(self) -> bool {
+        match self {
+            Self::Srgba8 | Self::Rgba16Float => true,
+            Self::Bgra8 | Self::Rgba8 | Self::Rgb10A2 | Self::Bgr10A2 | Self::Rgba16 => false,
+        }
+    }
 
     pub fn of(format: vk::Format) -> Option<Self> {
-        Self::ALL.into_iter().find(|known| known.vulkan == format)
+        Self::ALL.into_iter().find(|known| known.vulkan() == format)
     }
 
     pub fn color_space(self) -> ColorSpace {
-        if self.linear {
+        if self.is_linear() {
             ColorSpace::new_srgb_linear()
         } else {
             ColorSpace::new_srgb()
@@ -412,7 +410,7 @@ mod tests {
         let core_formats = 0..=vk::Format::ASTC_12X12_SRGB_BLOCK.as_raw();
         let mapped = core_formats
             .filter_map(|raw| {
-                SkiaFormat::of(vk::Format::from_raw(raw)).map(|known| (raw, known.skia))
+                SkiaFormat::of(vk::Format::from_raw(raw)).map(|known| (raw, known.skia()))
             })
             .inspect(|&(raw, skia)| assert_eq!(i64::from(raw), skia as i64))
             .count();

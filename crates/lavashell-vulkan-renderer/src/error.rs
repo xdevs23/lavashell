@@ -171,8 +171,6 @@ pub enum Error {
     WaitFrame(#[source] lavashell_vulkan::Error),
     #[error("cannot acquire a swapchain image")]
     Acquire(#[source] lavashell_vulkan::Error),
-    #[error("Skia cannot draw into the swapchain format {0:?}")]
-    SwapchainFormat(vk::Format),
     #[error("the swapchain extent is too large for Skia")]
     SwapchainExtent(#[source] std::num::TryFromIntError),
     #[error(

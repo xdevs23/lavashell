@@ -1130,6 +1130,7 @@
           "lavashell-components",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-keyboard",
           "lavashell-materials",
@@ -1155,6 +1156,7 @@
           "jni",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
@@ -1265,6 +1267,7 @@
         "dependencies": [
           "icu_locale_core",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ]
@@ -1287,7 +1290,8 @@
         "name": "lavashell-materials",
         "version": "0.1.0",
         "dependencies": [
-          "lavashell-core"
+          "lavashell-core",
+          "lavashell-enum-values"
         ]
       },
       {
@@ -1311,6 +1315,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
           "log",
@@ -1369,6 +1374,7 @@
           "ash",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",

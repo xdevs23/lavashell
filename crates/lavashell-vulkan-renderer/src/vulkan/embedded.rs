@@ -179,7 +179,7 @@ impl EmbeddedVulkanRenderer {
         let image = SkiaImage {
             image: target.image,
             layout,
-            format: format.skia,
+            format: format.skia(),
             usage: target.usage,
             queue_family: self.context.device().queue_family(),
             conversion: None,
@@ -193,7 +193,7 @@ impl EmbeddedVulkanRenderer {
             context,
             &backend,
             SurfaceOrigin::TopLeft,
-            format.color_type,
+            format.color_type(),
             Some(format.color_space()),
             None,
         )

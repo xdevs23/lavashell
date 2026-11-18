@@ -338,7 +338,7 @@ fn appearances(play: &mut Play) {
 fn the_theme_switch_in_the_taskbar_changes_the_theme() -> Result<(), Error> {
     let demo = Demo::new(ThemeChoice::Dark)?;
     let mut steps = Play::new(demo.clone());
-    for choice in [ThemeChoice::Light, ThemeChoice::System, ThemeChoice::Dark] {
+    for choice in ThemeChoice::ALL {
         steps.push(settled(), move |view, _, _| Ok(click(view, choice)?));
         steps.check(settled(), move |_, _, demo| {
             assert_eq!(demo.theme.choice(), choice);

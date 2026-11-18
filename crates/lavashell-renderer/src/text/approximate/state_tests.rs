@@ -49,7 +49,10 @@ fn approximate_policy_refreshes_existing_retained_and_persistent_text_without_ch
     )?;
     let gray = pixels(&mut persistent);
     let compositions = view.stats().root_compositions;
-    for geometry in [PixelGeometry::Rgb, PixelGeometry::Bgr, PixelGeometry::None] {
+    let ending_with_none = (PixelGeometry::ALL.into_iter())
+        .filter(|geometry| *geometry != PixelGeometry::None)
+        .chain([PixelGeometry::None]);
+    for geometry in ending_with_none {
         assert!(!view.needs_frame());
         painter.set_text_rendering(
             TextRendering {

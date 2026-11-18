@@ -27,6 +27,7 @@ rustix = { workspace = true, features = ["event"] }
 thiserror.workspace = true
 
 [target.'cfg(target_os = "android")'.dev-dependencies]
+lavashell-enum-values.workspace = true
 lavashell-runtime.workspace = true
 lavashell-test-fixtures.workspace = true
 
@@ -35,6 +36,7 @@ ash.workspace = true
 icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core = { workspace = true, features = ["test-support"] }
+lavashell-enum-values.workspace = true
 lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true

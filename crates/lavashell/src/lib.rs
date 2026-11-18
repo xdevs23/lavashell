@@ -4,6 +4,7 @@
 pub use lavashell_components as components;
 pub use lavashell_core as core;
 pub use lavashell_effect_quality as effect_quality;
+pub use lavashell_enum_values as enum_values;
 pub use lavashell_error_chain as error_chain;
 pub use lavashell_keyboard as keyboard;
 pub use lavashell_materials as materials;

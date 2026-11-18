@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Constraints, Point, Rect, Scale, Size, Span};
 use crate::units::Dp;
+use lavashell_enum_values::enum_with_values;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Axis {
-    Horizontal,
-    Vertical,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub enum Axis {
+        Horizontal,
+        Vertical,
+    }
+
+    pub const ALL;
 }
 
 impl Axis {

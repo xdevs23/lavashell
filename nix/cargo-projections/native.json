@@ -1029,6 +1029,7 @@
           "lavashell-components",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-keyboard",
           "lavashell-materials",
@@ -1054,6 +1055,7 @@
           "jni",
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
@@ -1149,6 +1151,7 @@
         "dependencies": [
           "icu_locale_core",
           "lavashell-core",
+          "lavashell-enum-values",
           "lavashell-test-fixtures",
           "thiserror 2.0.21"
         ]
@@ -1171,7 +1174,8 @@
         "name": "lavashell-materials",
         "version": "0.1.0",
         "dependencies": [
-          "lavashell-core"
+          "lavashell-core",
+          "lavashell-enum-values"
         ]
       },
       {
@@ -1195,6 +1199,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
           "log",
@@ -1253,6 +1258,7 @@
           "ash",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
@@ -2630,7 +2636,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "7a8ffe83b25a805587ad4711bc79512f84ca119577eccf95d5e2db2ba1be7de4",
+        "seedHash": "a5fbbae39deb82cb62d6eb09ae26bb21e9832298a520f5987450f82ed42996e5",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2727,6 +2733,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
@@ -3120,6 +3132,12 @@
                     ],
                     "path": "../lavashell-core"
                   },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -3294,6 +3312,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   }
                 }
               },
@@ -3431,6 +3455,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
@@ -3743,6 +3773,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
@@ -5171,6 +5207,7 @@
                   "lavashell-components",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "lavashell-keyboard",
                   "lavashell-materials",
@@ -5263,6 +5300,7 @@
                 "dependencies": [
                   "icu_locale_core",
                   "lavashell-core",
+                  "lavashell-enum-values",
                   "thiserror"
                 ]
               },
@@ -5284,7 +5322,8 @@
                 "name": "lavashell-materials",
                 "version": "0.0.0",
                 "dependencies": [
-                  "lavashell-core"
+                  "lavashell-core",
+                  "lavashell-enum-values"
                 ]
               },
               {
@@ -5308,6 +5347,7 @@
                   "inventory",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "log",
                   "lru",
@@ -5354,6 +5394,7 @@
                   "ash",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",

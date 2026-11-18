@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::layouts::{Currency, Layout};
 use lavashell_core::prelude::{Dp, Insets, Key as KeyCode, Point, Rect};
+use lavashell_enum_values::enum_with_values;
 use std::iter::repeat_n;
 
 pub(crate) const GAP: Dp = Dp::new(8.0);
@@ -20,11 +21,15 @@ pub(crate) fn row_numbers() -> impl Iterator<Item = f64> {
     (0_u32..).map(f64::from).take_while(|row| *row < ROWS)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Page {
-    Letters,
-    Symbols,
-    MoreSymbols,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(crate) enum Page {
+        Letters,
+        Symbols,
+        MoreSymbols,
+    }
+
+    pub(crate) const ALL;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -322,7 +327,7 @@ mod tests {
         let layouts = ShippedLayouts::load()?.all();
         for layout in layouts {
             for configured in [&layouts[..1], &layouts[..]] {
-                for page in [Page::Letters, Page::Symbols, Page::MoreSymbols] {
+                for page in Page::ALL {
                     let board = Board::new(layout, page, configured);
                     for row in &board.rows {
                         let gap = (spans(row) - board.columns).abs();
@@ -341,7 +346,7 @@ mod tests {
     #[test]
     fn every_page_has_the_rows_of_the_panel() -> Result<(), LayoutError> {
         for layout in ShippedLayouts::load()?.all() {
-            for page in [Page::Letters, Page::Symbols, Page::MoreSymbols] {
+            for page in Page::ALL {
                 let board = Board::new(layout, page, &[]);
                 assert_eq!(
                     count_f64(board.rows.len()),
@@ -363,7 +368,7 @@ mod tests {
     fn a_top_row_of_the_fewest_letters_leaves_the_space_bar_a_column() -> Result<(), LayoutError> {
         let narrow = Layout::new(abc(["abcdefg", "hijklm", "nop"]))?;
         assert_eq!(count_f64(narrow.rows()[0].chars().count()), Ok(MIN_TOP_ROW));
-        for page in [Page::Letters, Page::Symbols, Page::MoreSymbols] {
+        for page in Page::ALL {
             let board = Board::new(&narrow, page, &[&narrow, &narrow]);
             let space = (board.rows.iter().flatten())
                 .find(|slot| slot.key == Some(Key::Space))

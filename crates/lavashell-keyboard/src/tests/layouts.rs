@@ -2,8 +2,6 @@
 use super::*;
 use crate::board::{Board, Key as Cap, Page};
 
-const PAGES: [Page; 3] = [Page::Letters, Page::Symbols, Page::MoreSymbols];
-
 const QWERTY: [&str; 3] = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 
 fn static_layout(
@@ -42,7 +40,7 @@ fn offered(host: &mut Host, name: &str) -> Result<Vec<String>, TestError> {
 fn every_row_of_every_page_spans_the_columns_of_its_top_row() -> Result<(), TestError> {
     let shipped = shipped()?;
     for layout in shipped.all() {
-        for (page, layouts) in PAGES
+        for (page, layouts) in Page::ALL
             .into_iter()
             .flat_map(|page| [(page, vec![layout]), (page, vec![layout, &shipped.english])])
         {

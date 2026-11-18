@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 lavashell-core.workspace = true
+lavashell-enum-values.workspace = true

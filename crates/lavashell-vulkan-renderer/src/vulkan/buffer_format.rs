@@ -20,7 +20,7 @@ pub struct ForeignFormat {
 impl ForeignFormat {
     #[must_use]
     pub fn image_format(&self) -> ImageFormat {
-        if self.format == SkiaFormat::RGBA8.vulkan {
+        if self.format == SkiaFormat::Rgba8.vulkan() {
             ImageFormat::Known(self.format)
         } else {
             ImageFormat::External
@@ -46,7 +46,7 @@ pub(super) enum ImportFormat {
 impl ImportFormat {
     pub fn skia_format(self) -> skvk::Format {
         match self {
-            Self::Rgba => SkiaFormat::RGBA8.skia,
+            Self::Rgba => SkiaFormat::Rgba8.skia(),
             Self::External(_) => skvk::Format::UNDEFINED,
         }
     }

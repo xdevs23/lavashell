@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{CopyKey, Error};
+use lavashell::enum_values::enum_with_values;
 use lavashell::prelude::*;
 use lavashell_example_support::{
     HARBOR_LIGHTS, SampleTrack, Theme, ThemeChoice, UNDERTOW, icon, lucide,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum App {
-    Navigation,
-    Music,
-    Radio,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub enum App {
+        Navigation,
+        Music,
+        Radio,
+    }
+
+    pub const ALL;
 }
 
 impl App {
-    pub const ALL: [Self; 3] = [Self::Navigation, Self::Music, Self::Radio];
-
     #[must_use]
     pub fn label(self) -> CopyKey {
         match self {

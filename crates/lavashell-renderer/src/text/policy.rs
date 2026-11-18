@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_enum_values::enum_with_values;
 use skia_safe::FontHinting;
 use skia_safe::font::Edging;
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
@@ -41,12 +42,16 @@ pub enum TextAntialiasing {
     SubpixelApproximate,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum PixelGeometry {
-    #[default]
-    None,
-    Rgb,
-    Bgr,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub enum PixelGeometry {
+        #[default]
+        None,
+        Rgb,
+        Bgr,
+    }
+
+    pub(crate) const ALL;
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -156,7 +161,7 @@ mod tests {
             antialiasing: TextAntialiasing::Subpixel,
             ..Default::default()
         };
-        for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
+        for geometry in PixelGeometry::ALL {
             for opaque in [false, true] {
                 let target = TextDestination { opaque, geometry };
                 let enabled = opaque && geometry != PixelGeometry::None;
@@ -186,7 +191,7 @@ mod tests {
             ..Default::default()
         };
         for opaque in [true, false] {
-            for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
+            for geometry in PixelGeometry::ALL {
                 let destination = TextDestination { opaque, geometry };
                 assert_eq!(
                     policy.for_destination(destination).antialiasing,

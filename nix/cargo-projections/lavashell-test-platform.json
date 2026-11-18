@@ -374,6 +374,7 @@
           "inventory",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-test-fixtures",
           "log",
@@ -447,6 +448,7 @@
           "ash",
           "lavashell-core",
           "lavashell-effect-quality",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
@@ -923,7 +925,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "96b13b1c33fa5e4c5ef065cfff8a5807f733621d1f15d5c8c5c2449cc8cfa0e1",
+        "seedHash": "489a5a7b1937523b183bcf54b70d644c00dd7550b605d8451b756f81c685ffbd",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1294,6 +1296,12 @@
                     "features": [],
                     "path": "../lavashell-effect-quality"
                   },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
                     "default-features": false,
@@ -1534,6 +1542,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
                   },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
@@ -1914,6 +1928,7 @@
                   "inventory",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "log",
                   "lru",
@@ -1952,6 +1967,7 @@
                   "ash",
                   "lavashell-core",
                   "lavashell-effect-quality",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",

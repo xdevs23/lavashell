@@ -37,7 +37,7 @@ pub(super) enum ScrollStyle {
 
 impl View {
     pub(super) fn wheel(&mut self, at: Point, delta: Point) {
-        for axis in [Axis::Horizontal, Axis::Vertical] {
+        for axis in Axis::ALL {
             self.wheel_along(at, axis, axis.coordinate(delta));
         }
     }

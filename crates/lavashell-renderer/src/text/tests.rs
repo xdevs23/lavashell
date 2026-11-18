@@ -167,7 +167,7 @@ fn lcd_requires_an_opaque_target_and_survives_the_tiled_backend() -> Result<(), 
         antialiasing: TextAntialiasing::Subpixel,
         ..Default::default()
     };
-    for geometry in [PixelGeometry::None, PixelGeometry::Rgb, PixelGeometry::Bgr] {
+    for geometry in PixelGeometry::ALL {
         for opaque in [false, true] {
             let target = TextDestination { opaque, geometry };
             let mut direct = crate::Painter::new(&fonts, crate::UniformRange::VULKAN_REQUIRED)?;

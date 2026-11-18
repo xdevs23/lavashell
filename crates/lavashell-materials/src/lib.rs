@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 use lavashell_core::prelude::*;
+use lavashell_enum_values::enum_with_values;
 
 const WARM_NEUTRAL_HUE: f64 = 80.0;
 
@@ -41,26 +42,21 @@ impl TreatmentParameters {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SurfaceTreatment {
-    RefractiveGlass,
-    FrostedGlass,
-    Translucent,
-    Paper,
-    Ceramic,
-    BrushedMetal,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum SurfaceTreatment {
+        RefractiveGlass,
+        FrostedGlass,
+        Translucent,
+        Paper,
+        Ceramic,
+        BrushedMetal,
+    }
+
+    pub const ALL;
 }
 
 impl SurfaceTreatment {
-    pub const ALL: [Self; 6] = [
-        Self::RefractiveGlass,
-        Self::FrostedGlass,
-        Self::Translucent,
-        Self::Paper,
-        Self::Ceramic,
-        Self::BrushedMetal,
-    ];
-
     #[must_use]
     pub const fn parameters(self) -> TreatmentParameters {
         let (blur, opacity, refraction) = match self {

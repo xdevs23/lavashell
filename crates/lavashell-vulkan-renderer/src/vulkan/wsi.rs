@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use super::SkiaFormat;
 use crate::Error;
 use ash::vk;
 use lavashell_core::color;
@@ -9,8 +10,8 @@ use lavashell_vulkan::{
     Chromaticity, Device, ExtensionSet, MasteringDisplay, Semaphore, Submission, Swapchain,
     SwapchainRequest, Window,
 };
+use skia_safe::Surface;
 use skia_safe::gpu::vk as skvk;
-use skia_safe::{ColorType, Surface};
 use std::sync::Arc;
 
 mod draw;
@@ -60,7 +61,7 @@ struct Chain {
     swapchain: Swapchain,
     next_slot: usize,
     layouts: Vec<skvk::ImageLayout>,
-    color: ColorType,
+    format: SkiaFormat,
     requested_size: PixelSize,
     info: OutputInfo,
     working: Option<Surface>,
@@ -155,7 +156,10 @@ impl SurfaceTarget {
             crate::color::select(&formats, self.request).ok_or(Error::NoSurfaceFormat)?;
         let request = SwapchainRequest {
             min_image_count: image_count(&capabilities),
-            format: selected.format,
+            format: vk::SurfaceFormatKHR {
+                format: selected.format.vulkan(),
+                color_space: selected.color_space,
+            },
             extent: extent(&capabilities, size),
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::TRANSFER_SRC
@@ -196,7 +200,7 @@ impl SurfaceTarget {
             slots,
             next_slot: 0,
             layouts: vec![skvk::ImageLayout::UNDEFINED; images],
-            color: selected.color,
+            format: selected.format,
             requested_size: size,
             info: selected.info,
             working: None,

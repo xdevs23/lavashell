@@ -2,12 +2,11 @@
 use crate::vulkan::SkiaFormat;
 use ash::vk;
 use lavashell_core::prelude::*;
-use skia_safe::ColorType;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Selection {
-    pub format: vk::SurfaceFormatKHR,
-    pub color: ColorType,
+    pub format: SkiaFormat,
+    pub color_space: vk::ColorSpaceKHR,
     pub info: OutputInfo,
 }
 
@@ -45,16 +44,16 @@ pub(crate) fn select(
 ) -> Option<Selection> {
     let candidates: &[Candidate] = match request.precision {
         Precision::Eight => &[
-            Candidate::unorm(SkiaFormat::BGRA8, 8, 8),
-            Candidate::unorm(SkiaFormat::RGBA8, 8, 8),
+            Candidate::unorm(SkiaFormat::Bgra8, 8, 8),
+            Candidate::unorm(SkiaFormat::Rgba8, 8, 8),
         ],
         Precision::Ten => &[
-            Candidate::unorm(SkiaFormat::RGB10_A2, 10, 2),
-            Candidate::unorm(SkiaFormat::BGR10_A2, 10, 2),
+            Candidate::unorm(SkiaFormat::Rgb10A2, 10, 2),
+            Candidate::unorm(SkiaFormat::Bgr10A2, 10, 2),
         ],
-        Precision::Twelve => &[Candidate::unorm(SkiaFormat::RGBA16, 16, 16)],
+        Precision::Twelve => &[Candidate::unorm(SkiaFormat::Rgba16, 16, 16)],
         Precision::Float16 => &[Candidate {
-            format: SkiaFormat::RGBA16_FLOAT,
+            format: SkiaFormat::Rgba16Float,
             color_bits: 16,
             alpha_bits: 16,
             floating_point: true,
@@ -65,17 +64,13 @@ pub(crate) fn select(
         && (request.profile != OutputProfile::ScRgb || request.precision == Precision::Float16);
     if coherent {
         for candidate in candidates {
-            let format = candidate.format;
             if formats.iter().any(|v| {
-                (v.format == format.vulkan || v.format == vk::Format::UNDEFINED)
+                (v.format == candidate.format.vulkan() || v.format == vk::Format::UNDEFINED)
                     && v.color_space == color_space(request.profile)
             }) {
                 return Some(Selection {
-                    format: vk::SurfaceFormatKHR {
-                        format: format.vulkan,
-                        color_space: color_space(request.profile),
-                    },
-                    color: format.color_type,
+                    format: candidate.format,
+                    color_space: color_space(request.profile),
                     info: OutputInfo {
                         requested: request,
                         profile: request.profile,

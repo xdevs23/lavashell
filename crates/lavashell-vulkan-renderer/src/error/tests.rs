@@ -106,7 +106,6 @@ fn an_error_of_the_vulkan_renderer_does_not_show_the_defect_notice() -> Result<(
         Error::ForeignTarget,
         Error::WaitFrame(vulkan_error()),
         Error::Acquire(vulkan_error()),
-        Error::SwapchainFormat(vk::Format::UNDEFINED),
         Error::SwapchainExtent(narrowing_error()?),
         Error::SwapchainImageIndex(narrowing_error()?),
         Error::WrapSwapchainImage(ContextState::DeviceLost),

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::Error;
 use crate::vulkan::skia_handoff::{
-    SkiaFormat, SkiaImage, backend_semaphore, context_state, gpu_render_target, image_info,
+    SkiaImage, backend_semaphore, context_state, gpu_render_target, image_info,
 };
 use ash::vk;
 use lavashell_core::prelude::{OutputProfile, PixelSize};
@@ -149,14 +149,11 @@ impl SurfaceTarget {
         extent: (i32, i32),
         context: &mut DirectContext,
     ) -> Result<Surface, Error> {
-        let request = chain.swapchain.request();
-        let format = SkiaFormat::of(request.format.format)
-            .ok_or(Error::SwapchainFormat(request.format.format))?;
         let skia = SkiaImage {
             image: chain.swapchain.images()[image],
             layout: chain.layouts[image],
-            format: format.skia,
-            usage: request.usage,
+            format: chain.format.skia(),
+            usage: chain.swapchain.request().usage,
             queue_family: self.device.queue_family(),
             conversion: None,
         };
@@ -171,7 +168,7 @@ impl SurfaceTarget {
             context,
             &backend,
             SurfaceOrigin::TopLeft,
-            chain.color,
+            chain.format.color_type(),
             Some(output_space),
             None,
         )
