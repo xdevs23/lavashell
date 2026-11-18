@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Failure, findings, safe};
+use super::{Failure, findings, findings_with_libraries, safe};
 use crate::error::Error;
 use crate::findings::Rule;
 
@@ -19,11 +19,12 @@ fn an_array_of_every_variant_of_an_enum_of_the_crate_is_reported() -> Result<(),
         "    const ALL: [Self; 2] = [Self::Bottom, Self::Top];\n",
         "}\n",
     ));
-    let edges = "fn run() {\n    for edge in [crate::Edge::Top, Edge::Bottom] {}\n}\n";
+    let edges =
+        "use super::Edge;\nfn run() {\n    for edge in [crate::Edge::Top, Edge::Bottom] {}\n}\n";
     assert_eq!(
         findings(&[("src/lib.rs", &root), ("src/edges.rs", edges)])?,
         [
-            hand_written("src/edges.rs", 2, "Edge"),
+            hand_written("src/edges.rs", 3, "Edge"),
             hand_written("src/lib.rs", 5, "Edge"),
         ]
     );
@@ -56,11 +57,18 @@ fn a_full_list_of_an_enum_declared_inside_a_macro_is_reported() -> Result<(), Fa
 }
 
 #[test]
-fn a_full_list_of_an_enum_of_another_crate_is_reported() -> Result<(), Failure> {
+fn a_full_list_is_reported_only_for_an_enum_of_a_repository_crate() -> Result<(), Failure> {
     let core = safe("pub enum Edge { Top, Bottom }\n");
-    let shell = safe("use core::Edge;\nfn run() { let _edges = [Edge::Top, Edge::Bottom]; }\n");
+    let shell = safe(concat!(
+        "use edge_core::Edge;\n",
+        "fn run() { let _edges = [Edge::Top, Edge::Bottom]; }\n",
+        "fn other() { use other_crate::Edge; let _edges = [Edge::Top, Edge::Bottom]; }\n",
+    ));
     assert_eq!(
-        findings(&[("core/src/lib.rs", &core), ("shell/src/lib.rs", &shell)])?,
+        findings_with_libraries(
+            &[("core/src/lib.rs", &core), ("shell/src/lib.rs", &shell)],
+            &[("edge_core", "core/src/lib.rs")],
+        )?,
         [hand_written("shell/src/lib.rs", 3, "Edge")]
     );
     Ok(())
@@ -155,16 +163,133 @@ fn a_bare_name_that_two_glob_imported_enums_declare_is_not_checked() -> Result<(
 }
 
 #[test]
-fn a_list_of_an_outside_enum_named_like_a_declared_enum_is_reported() -> Result<(), Failure> {
+fn a_list_of_an_outside_enum_named_like_a_declared_enum_is_accepted() -> Result<(), Failure> {
     let text = safe(concat!(
         "pub enum Ordering { Less, Equal, Greater }\n",
         "fn run() {\n",
         "    let _outside = [std::cmp::Ordering::Less, std::cmp::Ordering::Equal, std::cmp::Ordering::Greater];\n",
         "}\n",
+        "fn imported() { use std::cmp::Ordering; let _outside = [Ordering::Less, Ordering::Equal, Ordering::Greater]; }\n",
+        "fn globbed() { use std::cmp::Ordering::*; let _outside = [Less, Equal, Greater]; }\n",
+        "fn aliased() { type Order = std::cmp::Ordering; let _outside = [Order::Less, Order::Equal, Order::Greater]; }\n",
     ));
+    assert_eq!(findings(&[("src/lib.rs", &text)])?, []);
+    Ok(())
+}
+
+#[test]
+fn a_use_or_type_item_applies_only_inside_its_module_or_block() -> Result<(), Failure> {
+    let text = safe(concat!(
+        "pub enum Side { Top, Bottom }\n",
+        "mod sides;\n",
+        "use Side as S;\n",
+        "fn imported() { use Side::*; type Alias = Side; }\n",
+        "fn bare() { let _sides = [Top, Bottom]; let _aliased = [Alias::Top, Alias::Bottom]; }\n",
+        "mod nested { const SIDES: [S; 2] = [S::Top, S::Bottom]; }\n",
+        "fn inherited() { let _sides = [S::Top, S::Bottom]; }\n",
+        "fn through_module() { let _sides = [sides::Side::Top, sides::Side::Bottom]; }\n",
+    ));
+    let sides = "pub use super::Side;\n";
     assert_eq!(
-        findings(&[("src/lib.rs", &text)])?,
-        [hand_written("src/lib.rs", 4, "Ordering")]
+        findings(&[("src/lib.rs", &text), ("src/sides.rs", sides)])?,
+        [
+            hand_written("src/lib.rs", 8, "Side"),
+            hand_written("src/lib.rs", 9, "Side"),
+        ]
     );
+    Ok(())
+}
+
+#[test]
+fn a_use_of_a_sibling_module_path_refers_to_the_enum_of_that_module() -> Result<(), Failure> {
+    let root = safe(concat!(
+        "mod sides;\n",
+        "use sides::Side;\n",
+        "fn run() { let _sides = [Side::Top, Side::Bottom]; }\n",
+    ));
+    let sides =
+        "pub enum Side { Top, Bottom }\nconst ALL: [Side; 2] = [Side::Top, Side::Bottom];\n";
+    assert_eq!(
+        findings(&[("src/lib.rs", &root), ("src/sides.rs", sides)])?,
+        [
+            hand_written("src/lib.rs", 4, "Side"),
+            hand_written("src/sides.rs", 2, "Side"),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_name_that_an_outside_import_supplies_is_accepted() -> Result<(), Failure> {
+    let root = safe(concat!(
+        "mod other;\n",
+        "mod globbed;\n",
+        "mod tests;\n",
+        "pub use std::cmp::Ordering;\n",
+        "use Ordering::*;\n",
+        "trait Listed { const ALL: [Self; 3]; }\n",
+        "fn bare() { let _outside = [Less, Equal, Greater]; }\n",
+        "fn exported() { let _outside = [crate::Ordering::Less, crate::Ordering::Equal, crate::Ordering::Greater]; }\n",
+        "impl Listed for Ordering { const ALL: [Self; 3] = [Self::Less, Self::Equal, Self::Greater]; }\n",
+    ));
+    let other = "pub enum Ordering { Less, Equal, Greater }\n";
+    let globbed = concat!(
+        "use std::cmp::*;\n",
+        "fn run() { let _outside = [Ordering::Less, Ordering::Equal, Ordering::Greater]; }\n",
+        "impl super::Listed for std::cmp::Ordering {\n",
+        "    const ALL: [Self; 3] = [Self::Less, Self::Equal, Self::Greater];\n",
+        "}\n",
+    );
+    let tests = "use super::*;\nfn run() { let _outside = [Ordering::Less, Ordering::Equal, Ordering::Greater]; }\n";
+    assert_eq!(
+        findings(&[
+            ("src/lib.rs", &root),
+            ("src/other.rs", other),
+            ("src/globbed.rs", globbed),
+            ("src/tests.rs", tests),
+        ])?,
+        []
+    );
+    Ok(())
+}
+
+#[test]
+fn a_name_that_a_repository_item_supplies_is_reported_next_to_an_outside_glob()
+-> Result<(), Failure> {
+    let root = safe(concat!(
+        "mod other;\n",
+        "mod tests;\n",
+        "use std::cmp::*;\n",
+        "pub enum Ordering { Less, Equal, Greater }\n",
+        "fn run() { let _orderings = [Ordering::Less, Ordering::Equal, Ordering::Greater]; }\n",
+        "trait Listed { const ALL: [Self; 3]; }\n",
+        "use other::Ordering as O;\n",
+        "impl Listed for O { const ALL: [Self; 3] = [Self::Less, Self::Equal, Self::Greater]; }\n",
+    ));
+    let other = "pub enum Ordering { Less, Equal, Greater }\n";
+    let tests = "use super::*;\nfn run() { let _orderings = [Ordering::Less, Ordering::Equal, Ordering::Greater]; }\n";
+    assert_eq!(
+        findings(&[
+            ("src/lib.rs", &root),
+            ("src/other.rs", other),
+            ("src/tests.rs", tests),
+        ])?,
+        [
+            hand_written("src/lib.rs", 6, "Ordering"),
+            hand_written("src/lib.rs", 9, "Ordering"),
+            hand_written("src/tests.rs", 2, "Ordering"),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_list_is_matched_to_the_enum_of_its_own_module_only() -> Result<(), Failure> {
+    let text = safe(concat!(
+        "mod wide { pub enum Side { Top, Bottom, Left } }\n",
+        "mod narrow { pub enum Side { Top, Bottom } }\n",
+        "const SOME: [wide::Side; 2] = [wide::Side::Top, wide::Side::Bottom];\n",
+    ));
+    assert_eq!(findings(&[("src/lib.rs", &text)])?, []);
     Ok(())
 }

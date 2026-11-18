@@ -74,6 +74,13 @@ pub enum Error {
     CrateRoot { path: PathBuf },
     #[error("the crate {root} must define {name} in exactly one file")]
     Definition { root: PathBuf, name: &'static str },
+    #[error("{manifest} gives the crate name {name} to both {first} and {second}")]
+    AmbiguousCrateName {
+        manifest: PathBuf,
+        name: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
     #[error("{path} has no parent directory")]
     NoParentDirectory { path: PathBuf },
     #[error("{declared_in} declares the module {module}, whose file does not exist")]

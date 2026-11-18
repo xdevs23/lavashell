@@ -10,7 +10,7 @@ fn repository_findings(
 ) -> Result<Vec<(String, Option<usize>, Rule)>, Failure> {
     findings_of(files, |root| {
         let files = read_repository_files(root)?;
-        let reports = repository_reports(&files, root, &[])?;
+        let reports = repository_reports(&files, root, &[], &std::iter::empty().collect())?;
         Ok(Report {
             checked: files.len(),
             findings: reports

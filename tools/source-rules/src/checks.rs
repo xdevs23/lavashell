@@ -7,6 +7,7 @@ use crate::enum_value_lists::hand_written_value_lists;
 use crate::error::Error;
 use crate::findings::{Finding, Report};
 use crate::languages::RUST;
+use crate::metadata::ExternPreludes;
 use crate::modules::{Crate, Source, Sources};
 use crate::python_place::{PYTHON_DIRECTORY, python_place_report};
 use crate::renderer_test_fixtures::RENDERER_TEST_RULES;
@@ -51,9 +52,13 @@ pub fn repository_reports(
     files: &[RepositoryFile],
     root: &Path,
     crate_roots: &[PathBuf],
+    extern_preludes: &ExternPreludes,
 ) -> Result<Vec<(RuleSet, Report)>, Error> {
     Ok(vec![
-        (RuleSet::Rust, rust_report(files, crate_roots)?),
+        (
+            RuleSet::Rust,
+            rust_report(files, crate_roots, extern_preludes)?,
+        ),
         (RuleSet::FileKind, unknown_kind_report(files)),
         (
             RuleSet::PythonPlace,
@@ -78,7 +83,11 @@ pub fn workspace_reports(
     ])
 }
 
-pub fn rust_report(files: &[RepositoryFile], crate_roots: &[PathBuf]) -> Result<Report, Error> {
+pub fn rust_report(
+    files: &[RepositoryFile],
+    crate_roots: &[PathBuf],
+    extern_preludes: &ExternPreludes,
+) -> Result<Report, Error> {
     let sources = parse_rust_files(files)?;
     let mut findings = Vec::new();
     for source in sources.values() {
@@ -87,17 +96,24 @@ pub fn rust_report(files: &[RepositoryFile], crate_roots: &[PathBuf]) -> Result<
             source: error,
         })?);
     }
-    findings.extend(hand_written_value_lists(&sources)?);
-    for root in crate_roots {
-        let crate_files = Crate::read(root, &sources)?;
+    let crates = (crate_roots.iter())
+        .map(|root| Crate::read(root, &sources))
+        .collect::<Result<Vec<_>, Error>>()?;
+    findings.extend(hand_written_value_lists(
+        extern_preludes,
+        &sources,
+        &crates,
+    )?);
+    for crate_files in &crates {
+        let root = &crate_files.root.path;
         findings.extend(
-            missing_forbid(&crate_files).map_err(|source| Error::ParseSource {
+            missing_forbid(crate_files).map_err(|source| Error::ParseSource {
                 path: root.clone(),
                 source,
             })?,
         );
         for rule in CRATE_RULES.iter().filter(|rule| root.ends_with(rule.root)) {
-            findings.extend((rule.findings)(&crate_files)?);
+            findings.extend((rule.findings)(crate_files)?);
         }
     }
     findings.sort_by(|first, second| (&first.path, first.line).cmp(&(&second.path, second.line)));

@@ -5,11 +5,13 @@ use crate::error::Error;
 use crate::findings::{Report, Rule};
 use crate::metadata::nested_workspace_directories;
 use crate::repository_files::read_repository_files;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf, StripPrefixError};
 
 mod copy_catalogs;
 mod crate_manifests;
 mod enum_value_lists;
+mod metadata;
 mod renderer_test_fixtures;
 mod repository_files;
 mod vulkan_free_crates;
@@ -21,6 +23,8 @@ pub(super) enum Failure {
     Write(#[from] std::io::Error),
     #[error("the test crate cannot be checked")]
     Check(#[from] Error),
+    #[error("the cargo metadata of the test cannot be read")]
+    Metadata(#[from] serde_json::Error),
     #[error("{path} is not inside the test directory")]
     OutsideDirectory {
         path: PathBuf,
@@ -30,8 +34,25 @@ pub(super) enum Failure {
 }
 
 fn findings(files: &[(&str, &str)]) -> Result<Vec<(String, Option<usize>, Rule)>, Failure> {
+    findings_with_libraries(files, &[])
+}
+
+fn findings_with_libraries(
+    files: &[(&str, &str)],
+    libraries: &[(&str, &str)],
+) -> Result<Vec<(String, Option<usize>, Rule)>, Failure> {
     findings_of(files, |root| {
-        rust_report(&read_repository_files(root)?, &[root.join(files[0].0)])
+        let prelude: BTreeMap<String, PathBuf> = (libraries.iter())
+            .map(|(name, path)| ((*name).to_owned(), root.join(path)))
+            .collect();
+        let extern_preludes = (files.iter())
+            .map(|(path, _)| (root.join(path), prelude.clone()))
+            .collect();
+        rust_report(
+            &read_repository_files(root)?,
+            &[root.join(files[0].0)],
+            &extern_preludes,
+        )
     })
 }
 

@@ -18,11 +18,13 @@ struct Pending {
     declared_in: PathBuf,
     path: PathBuf,
     children: PathBuf,
+    module_path: Vec<String>,
     test_only: bool,
 }
 
 pub struct Module<'sources> {
     pub source: &'sources Source,
+    pub path: Vec<String>,
     pub test_only: bool,
 }
 
@@ -36,6 +38,7 @@ struct ModuleScope<'path> {
     file: &'path Path,
     children: &'path Path,
     path_base: &'path Path,
+    module_path: &'path [String],
     test_only: bool,
 }
 
@@ -50,6 +53,7 @@ impl<'sources> Crate<'sources> {
             file: root,
             children: directory,
             path_base: directory,
+            module_path: &[],
             test_only: false,
         };
         declared_files(&root_source.syntax.items, scope, sources, &mut pending)?;
@@ -63,11 +67,13 @@ impl<'sources> Crate<'sources> {
                 file: &file.path,
                 children: &file.children,
                 path_base: parent(&file.path)?,
+                module_path: &file.module_path,
                 test_only: file.test_only,
             };
             declared_files(&source.syntax.items, scope, sources, &mut pending)?;
             modules.push(Module {
                 source,
+                path: file.module_path,
                 test_only: file.test_only,
             });
         }
@@ -79,6 +85,11 @@ impl<'sources> Crate<'sources> {
 
     pub fn sources(&self) -> impl Iterator<Item = &Source> {
         std::iter::once(self.root).chain(self.modules.iter().map(|module| module.source))
+    }
+
+    pub fn sources_by_module_path(&self) -> impl Iterator<Item = (&[String], &'sources Source)> {
+        std::iter::once((&[][..], self.root))
+            .chain((self.modules.iter()).map(|module| (module.path.as_slice(), module.source)))
     }
 }
 
@@ -102,6 +113,11 @@ fn declared_files(
             ..scope
         };
         let name = module.ident.unraw().to_string();
+        let module_path = [scope.module_path, std::slice::from_ref(&name)].concat();
+        let scope = ModuleScope {
+            module_path: &module_path,
+            ..scope
+        };
         let paths = path_attributes(&module.attrs).map_err(unparsed)?;
         if let Some((_, inline)) = &module.content {
             let directory = scope
@@ -122,6 +138,7 @@ fn declared_files(
                     declared_in: scope.file.to_path_buf(),
                     children: parent(&path)?.to_path_buf(),
                     path,
+                    module_path: module_path.clone(),
                     test_only: scope.test_only,
                 });
             }
@@ -137,6 +154,7 @@ fn named_file(scope: ModuleScope<'_>, name: String, sources: &Sources) -> Result
             declared_in: scope.file.to_path_buf(),
             path: file,
             children: scope.children.join(&name),
+            module_path: scope.module_path.to_vec(),
             test_only: scope.test_only,
         });
     }
@@ -146,6 +164,7 @@ fn named_file(scope: ModuleScope<'_>, name: String, sources: &Sources) -> Result
             declared_in: scope.file.to_path_buf(),
             children: parent(&file)?.to_path_buf(),
             path: file,
+            module_path: scope.module_path.to_vec(),
             test_only: scope.test_only,
         });
     }

@@ -1,56 +1,90 @@
 // SPDX-License-Identifier: GPL-3.0-only
-mod imports;
+mod names;
 
 use crate::error::Error;
 use crate::findings::{Finding, Rule};
-use crate::modules::{Source, Sources};
+use crate::metadata::ExternPreludes;
+use crate::modules::{Crate, Source, Sources};
 use crate::rules::contains_template_variable;
-use imports::Imports;
+use names::{EnumKey, ModuleKey, Named, RepositoryNames, Scopes, Variant, name_of, path_names};
 use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+use std::path::Path;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
 use syn::token::Brace;
 use syn::visit::{self, Visit};
 use syn::{
-    Attribute, Expr, ExprArray, Ident, ItemEnum, ItemImpl, ItemTrait, Macro, MacroDelimiter, Token,
-    Type, braced,
+    Attribute, Block, Expr, ExprArray, Ident, ItemEnum, ItemImpl, ItemMod, ItemTrait, Macro,
+    MacroDelimiter, Stmt, Token, Type, braced,
 };
 
 type Variants = BTreeSet<String>;
 
-pub fn hand_written_value_lists(sources: &Sources) -> Result<Vec<Finding>, Error> {
-    let mut declarations = EnumDeclarations::default();
-    for source in sources.values() {
-        declarations.read(source)?;
+pub fn hand_written_value_lists(
+    extern_preludes: &ExternPreludes,
+    sources: &Sources,
+    crates: &[Crate<'_>],
+) -> Result<Vec<Finding>, Error> {
+    let modules = sources_by_module(sources, crates);
+    let mut names = RepositoryNames::new(extern_preludes);
+    for (module, source) in &modules {
+        DeclarationReader {
+            names: &mut names,
+            module: module.clone(),
+            unparsed: None,
+        }
+        .read(source)?;
     }
-    Ok(sources
-        .values()
-        .flat_map(|source| {
+    let lines: BTreeSet<(&Path, usize, String)> = (modules.iter())
+        .flat_map(|(module, source)| {
             let mut lists = ValueLists {
-                declarations: &declarations,
-                imports: Imports::read(&source.syntax),
-                impl_type: None,
+                scopes: names.scopes_of(module),
+                self_type: None,
                 lines: Vec::new(),
             };
             lists.visit_file(&source.syntax);
-            lists.lines.into_iter().map(|(line, enum_name)| Finding {
-                path: source.path.clone(),
-                line: Some(line),
-                rule: Rule::HandWrittenEnumValues { enum_name },
-            })
+            (lists.lines.into_iter())
+                .map(|(line, enum_name)| (source.path.as_path(), line, enum_name))
+        })
+        .collect();
+    Ok((lines.into_iter())
+        .map(|(path, line, enum_name)| Finding {
+            path: path.to_path_buf(),
+            line: Some(line),
+            rule: Rule::HandWrittenEnumValues { enum_name },
         })
         .collect())
 }
 
-#[derive(Default)]
-struct EnumDeclarations {
-    enums: BTreeMap<String, Vec<Variants>>,
+fn sources_by_module<'sources>(
+    sources: &'sources Sources,
+    crates: &[Crate<'sources>],
+) -> Vec<(ModuleKey, &'sources Source)> {
+    let in_crates: Vec<_> = (crates.iter())
+        .flat_map(|crate_files| {
+            (crate_files.sources_by_module_path())
+                .map(|(path, source)| (ModuleKey::new(&crate_files.root.path, path), source))
+        })
+        .collect();
+    let in_a_crate: BTreeSet<&Path> = (in_crates.iter())
+        .map(|(_, source)| source.path.as_path())
+        .collect();
+    let outside_crates = (sources.values())
+        .filter(|source| !in_a_crate.contains(source.path.as_path()))
+        .map(|source| (ModuleKey::new(&source.path, &[]), source));
+    in_crates.into_iter().chain(outside_crates).collect()
+}
+
+struct DeclarationReader<'names, 'libraries> {
+    names: &'names mut RepositoryNames<'libraries>,
+    module: ModuleKey,
     unparsed: Option<syn::Error>,
 }
 
-impl EnumDeclarations {
-    fn read(&mut self, source: &Source) -> Result<(), Error> {
+impl DeclarationReader<'_, '_> {
+    fn read(mut self, source: &Source) -> Result<(), Error> {
+        self.names.record_module(&self.module, &source.syntax.items);
         self.visit_file(&source.syntax);
         self.unparsed.take().map_or(Ok(()), |error| {
             Err(Error::ParseSource {
@@ -61,26 +95,23 @@ impl EnumDeclarations {
     }
 
     fn record<'variant>(&mut self, name: &Ident, variants: impl Iterator<Item = &'variant Ident>) {
-        self.enums
-            .entry(name.to_string())
-            .or_default()
-            .push(variants.map(Ident::to_string).collect());
-    }
-
-    fn declares(&self, enum_name: &str, variants: &Variants) -> bool {
-        self.enums
-            .get(enum_name)
-            .is_some_and(|declared| declared.contains(variants))
-    }
-
-    fn declares_variant(&self, enum_name: &str, variant: &str) -> bool {
-        self.enums
-            .get(enum_name)
-            .is_some_and(|declared| declared.iter().any(|variants| variants.contains(variant)))
+        self.names.record_enum(
+            EnumKey::new(&self.module, name_of(name)),
+            variants.map(name_of).collect(),
+        );
     }
 }
 
-impl<'ast> Visit<'ast> for EnumDeclarations {
+impl<'ast> Visit<'ast> for DeclarationReader<'_, '_> {
+    fn visit_item_mod(&mut self, item: &'ast ItemMod) {
+        let module = self.module.child(&name_of(&item.ident));
+        let items = item.content.as_ref().map_or(&[][..], |(_, items)| items);
+        self.names.record_module(&module, items);
+        let enclosing = std::mem::replace(&mut self.module, module);
+        visit::visit_item_mod(self, item);
+        self.module = enclosing;
+    }
+
     fn visit_item_enum(&mut self, item: &'ast ItemEnum) {
         self.record(
             &item.ident,
@@ -152,10 +183,9 @@ fn skip_token(input: ParseStream<'_>) -> syn::Result<()> {
     Ok(())
 }
 
-struct ValueLists<'declarations> {
-    declarations: &'declarations EnumDeclarations,
-    imports: Imports,
-    impl_type: Option<String>,
+struct ValueLists<'repository> {
+    scopes: Scopes<'repository>,
+    self_type: Option<Named>,
     lines: Vec<(usize, String)>,
 }
 
@@ -194,44 +224,23 @@ impl ValueLists<'_> {
         let named = (elements.into_iter())
             .map(|element| self.variant_named_by(element))
             .collect::<Option<Vec<_>>>()?;
-        let enum_name = &named.first()?.0;
-        let variants: Variants = named.iter().map(|(_, variant)| variant.clone()).collect();
-        let one_enum = named.iter().all(|(name, _)| name == enum_name);
+        let enum_key = &named.first()?.enum_key;
+        let variants: Variants = named.iter().map(|variant| variant.name.clone()).collect();
+        let one_enum = named.iter().all(|variant| variant.enum_key == *enum_key);
         let each_variant_once = variants.len() == named.len();
-        (one_enum && each_variant_once && self.declarations.declares(enum_name, &variants))
-            .then(|| enum_name.clone())
+        (one_enum && each_variant_once && self.scopes.declares(enum_key, &variants))
+            .then(|| enum_key.name.clone())
     }
 
-    fn variant_named_by(&self, element: &Expr) -> Option<(String, String)> {
+    fn variant_named_by(&self, element: &Expr) -> Option<Variant> {
         let Expr::Path(path) = element else {
             return None;
         };
-        let mut segments = path
-            .path
-            .segments
-            .iter()
-            .map(|segment| segment.ident.to_string());
-        let first = segments.next()?;
-        let start = if first == "Self" {
-            vec![self.impl_type.clone()?]
-        } else {
-            self.imports.path_named_by(&first)
-        };
-        let resolved: Vec<String> = start.into_iter().chain(segments).collect();
-        match resolved.as_slice() {
-            [variant] => Some((self.glob_enum_declaring(variant)?, variant.clone())),
-            [.., enum_name, variant] => Some((enum_name.clone(), variant.clone())),
-            [] => None,
-        }
-    }
-
-    fn glob_enum_declaring(&self, variant: &str) -> Option<String> {
-        let mut enums = (self.imports.glob_items())
-            .filter(|enum_name| self.declarations.declares_variant(enum_name, variant))
-            .collect::<BTreeSet<_>>()
-            .into_iter();
-        match (enums.next(), enums.next()) {
-            (Some(only), None) => Some(only.to_owned()),
+        match self
+            .scopes
+            .resolve(&path_names(&path.path), self.self_type.as_ref())
+        {
+            Named::Variant(variant) => Some(variant),
             _ => None,
         }
     }
@@ -240,18 +249,35 @@ impl ValueLists<'_> {
 impl<'ast> Visit<'ast> for ValueLists<'_> {
     fn visit_item_impl(&mut self, item: &'ast ItemImpl) {
         let implemented = match &*item.self_ty {
-            Type::Path(path) => path.path.segments.last().map(|last| last.ident.to_string()),
+            Type::Path(path) => Some(self.scopes.resolve(&path_names(&path.path), None)),
             _ => None,
         };
-        let enclosing = std::mem::replace(&mut self.impl_type, implemented);
+        let enclosing = std::mem::replace(&mut self.self_type, implemented);
         visit::visit_item_impl(self, item);
-        self.impl_type = enclosing;
+        self.self_type = enclosing;
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast ItemMod) {
+        let module_scopes = self.scopes.child_module(&item.ident);
+        let enclosing = std::mem::replace(&mut self.scopes, module_scopes);
+        visit::visit_item_mod(self, item);
+        self.scopes = enclosing;
+    }
+
+    fn visit_block(&mut self, block: &'ast Block) {
+        let items = block.stmts.iter().filter_map(|statement| match statement {
+            Stmt::Item(item) => Some(item),
+            _ => None,
+        });
+        self.scopes.enter_block(items);
+        visit::visit_block(self, block);
+        self.scopes.leave_block();
     }
 
     fn visit_item_trait(&mut self, item: &'ast ItemTrait) {
-        let enclosing = self.impl_type.take();
+        let enclosing = self.self_type.take();
         visit::visit_item_trait(self, item);
-        self.impl_type = enclosing;
+        self.self_type = enclosing;
     }
 
     fn visit_expr_array(&mut self, array: &'ast ExprArray) {
