@@ -4,7 +4,7 @@ use crate::local::Local;
 use crate::preferences::{
     CONTRAST, PreferenceValues, REDUCED_MOTION, REDUCED_TRANSPARENCY, TEXT_SCALING,
 };
-use crate::window::{WINDOW, WindowHandle, WindowState};
+use crate::window::{WINDOW, WindowHandle};
 
 impl View {
     pub fn provide<T: Clone + PartialEq + 'static>(&self, key: &'static Local<T>, value: T) {
@@ -18,7 +18,7 @@ impl View {
         self.provide(&CONTRAST, values.contrast);
     }
 
-    pub fn provide_window(&self, state: WindowState) {
-        self.provide(&WINDOW, Some(WindowHandle::new(state)));
+    pub fn provide_window(&self, window: WindowHandle) {
+        self.provide(&WINDOW, Some(window));
     }
 }

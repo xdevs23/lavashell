@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::frame::FrameTime;
 use lavashell_core::surface::SurfaceId;
+use lavashell_platform::WindowControlRequest;
 use std::collections::BTreeMap;
 
 pub struct RecordedFrames {
     frames: Vec<RecordedFrame>,
     app_ids: BTreeMap<SurfaceId, String>,
+    window_requests: Vec<WindowControlRequest>,
 }
 
 #[derive(Clone)]
@@ -16,8 +18,16 @@ pub struct RecordedFrame {
 }
 
 impl RecordedFrames {
-    pub(crate) fn new(frames: Vec<RecordedFrame>, app_ids: BTreeMap<SurfaceId, String>) -> Self {
-        Self { frames, app_ids }
+    pub(crate) fn new(
+        frames: Vec<RecordedFrame>,
+        app_ids: BTreeMap<SurfaceId, String>,
+        window_requests: Vec<WindowControlRequest>,
+    ) -> Self {
+        Self {
+            frames,
+            app_ids,
+            window_requests,
+        }
     }
 
     #[must_use]
@@ -31,6 +41,11 @@ impl RecordedFrames {
                 .get(&frame.surface)
                 .is_some_and(|id| id == app_id)
         })
+    }
+
+    #[must_use]
+    pub fn window_requests(&self) -> &[WindowControlRequest] {
+        &self.window_requests
     }
 
     #[must_use]

@@ -25,6 +25,7 @@ use crate::scene_pipeline::BuilderReport;
 use crate::scheduler::{Redraw, SchedulerInput, SchedulerOutput};
 use crate::session_lock::LockConfiguration;
 use crate::view_actions::ActionQueue;
+use crate::window_requests::to_window_control_request;
 use actors::{ActorSetup, ActorStops, Actors};
 use lavashell_actor::{Clock, Closed, Merge, MergeEffect, Outlet, Sender};
 use lavashell_platform::{
@@ -309,7 +310,16 @@ impl<P: Platform> ViewActor<P> {
         for request in self.surfaces.focus_grab_requests() {
             self.request(PlatformRequest::FocusGrab(request))?;
         }
-        Ok(())
+        self.send_window_requests()
+    }
+
+    fn send_window_requests(&self) -> Result<(), ViewError> {
+        let requests = self.surfaces.records().take_window_requests();
+        (requests.into_iter())
+            .filter_map(|(surface, request)| {
+                to_window_control_request(surface, request, self.input.last_press(surface))
+            })
+            .try_for_each(|control| self.request(PlatformRequest::WindowControl(control)))
     }
 
     fn handle(&mut self, input: ViewInput) -> Result<(), ViewError> {

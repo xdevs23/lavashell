@@ -66,9 +66,11 @@ fn button(pointer: PointerDevice, button: Button, state: PressState, at: Point) 
 fn primary_press(pointer: PointerDevice, surface: SurfaceId, at: Point) -> RoutedInput {
     RoutedInput::PrimaryPress {
         surface,
-        pointer,
+        press: PointerPress {
+            pointer,
+            serial: SERIAL,
+        },
         at,
-        serial: SERIAL,
     }
 }
 
@@ -211,6 +213,61 @@ fn a_removed_pointer_cancels_its_interaction_with_every_surface() {
         at: at(2, 2),
     };
     assert_eq!(router.route(motion), []);
+}
+
+#[test]
+fn a_surface_remembers_the_last_press_of_any_button_until_its_pointer_goes() {
+    let mut router = InputRouter::new(None);
+    let secondary = DeviceEvent::Button {
+        pointer: TABLET,
+        button: Button::Secondary,
+        state: PressState::Pressed,
+        at: at(2, 2),
+        serial: InputSerial(8),
+    };
+    let _routed_input_is_not_needed = route_all(
+        &mut router,
+        [
+            enter(MOUSE, WINDOW, at(1, 1)),
+            button(MOUSE, Button::Primary, PressState::Pressed, at(1, 1)),
+            button(MOUSE, Button::Primary, PressState::Released, at(1, 1)),
+            enter(TABLET, WINDOW, at(2, 2)),
+            secondary,
+            button(TABLET, Button::Secondary, PressState::Released, at(2, 2)),
+        ],
+    );
+    let tablet_press = PointerPress {
+        pointer: TABLET,
+        serial: InputSerial(8),
+    };
+    assert_eq!(router.last_press(WINDOW), Some(tablet_press));
+    assert_eq!(router.last_press(PANEL), None);
+    let _cancels_are_not_needed = router.route(DeviceEvent::PointerRemoved(TABLET));
+    assert_eq!(router.last_press(WINDOW), None);
+}
+
+#[test]
+fn a_surface_remembers_only_a_press_over_it_and_forgets_it_with_the_surface() {
+    let mut router = InputRouter::new(None);
+    let press = || button(MOUSE, Button::Secondary, PressState::Pressed, at(1, 1));
+    let _routed_input_is_not_needed = route_all(
+        &mut router,
+        [
+            enter(MOUSE, WINDOW, at(1, 1)),
+            DeviceEvent::PointerLeave { pointer: MOUSE },
+            press(),
+        ],
+    );
+    assert_eq!(router.last_press(WINDOW), None);
+    let _routed_input_is_not_needed =
+        route_all(&mut router, [enter(MOUSE, WINDOW, at(1, 1)), press()]);
+    let mouse_press = PointerPress {
+        pointer: MOUSE,
+        serial: SERIAL,
+    };
+    assert_eq!(router.last_press(WINDOW), Some(mouse_press));
+    router.forget_surface(WINDOW);
+    assert_eq!(router.last_press(WINDOW), None);
 }
 
 #[test]
@@ -383,8 +440,10 @@ fn a_primary_press_in_the_drag_region_starts_a_move_of_the_window_in_place_of_th
     (view.frame_into(viewport, &mut NoText, &mut RecordedScene::default())).without_failures()?;
     let begin_move = WindowControlRequest::BeginMove {
         surface,
-        pointer: MOUSE,
-        serial: SERIAL,
+        press: PointerPress {
+            pointer: MOUSE,
+            serial: SERIAL,
+        },
     };
     let in_region = primary_press(MOUSE, surface, at(5, 2));
     assert!(matches!(

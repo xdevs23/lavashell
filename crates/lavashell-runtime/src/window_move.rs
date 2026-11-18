@@ -4,7 +4,7 @@ use crate::run::RuntimeSetup;
 use crate::surface_records::SurfaceRecords;
 use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{Capability, InputSerial, PointerDevice, WindowControlRequest};
+use lavashell_platform::{Capability, PointerPress, WindowControlRequest};
 
 inventory::submit! { Subsystem { capability: Capability::WindowMove, used: has_drag_region } }
 
@@ -15,13 +15,9 @@ fn has_drag_region(setup: &RuntimeSetup) -> bool {
 pub(crate) fn begin_move(
     records: &SurfaceRecords,
     surface: SurfaceId,
-    pointer: PointerDevice,
+    press: PointerPress,
     at: Point,
-    serial: InputSerial,
 ) -> Option<WindowControlRequest> {
-    (records.in_drag_region(surface, at)).then_some(WindowControlRequest::BeginMove {
-        surface,
-        pointer,
-        serial,
-    })
+    (records.in_drag_region(surface, at))
+        .then_some(WindowControlRequest::BeginMove { surface, press })
 }

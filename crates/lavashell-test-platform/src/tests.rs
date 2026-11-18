@@ -19,6 +19,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 mod paced;
+mod window_requests;
 
 const APP_ID: &str = "test.app";
 const KEYBOARD: KeyboardDevice = KeyboardDevice(1);

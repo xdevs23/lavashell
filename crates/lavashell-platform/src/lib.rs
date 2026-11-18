@@ -36,7 +36,7 @@ pub use event::PlatformEvent;
 pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice,
-    PressState,
+    PointerPress, PressState,
 };
 pub use output::{OutputEvent, OutputId};
 pub use panel::{KeyboardMode, PanelRequest};

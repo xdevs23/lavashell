@@ -15,7 +15,7 @@ use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::surface::{SurfaceId, SurfaceIds};
 use lavashell_core::units::{Density, Dp};
 use lavashell_core::view::{Proposal, TextMeasurer, View};
-use lavashell_core::window::WindowState;
+use lavashell_core::window::{WindowRequest, WindowRequestQueue, WindowState};
 use lavashell_platform::{SettingsEvent, SurfaceEvent, SurfaceRequest};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -29,6 +29,7 @@ struct Record {
     lifecycle: Lifecycle,
     drag_region: Option<DragRegion>,
     accessibility: SurfaceAccessibility,
+    window_requests: Option<WindowRequestQueue>,
 }
 
 impl Record {
@@ -38,7 +39,10 @@ impl Record {
             height.unwrap_or(self.size.height),
         );
         if let Some(state) = window {
-            self.view.provide_window(state);
+            let requests = self
+                .window_requests
+                .get_or_insert_with(WindowRequestQueue::default);
+            self.view.provide_window(requests.handle(state));
         }
         self.lifecycle = Lifecycle::Configured;
         self.view.invalidate();
@@ -98,6 +102,7 @@ impl SurfaceRecords {
             lifecycle: Lifecycle::Waiting,
             drag_region,
             accessibility: SurfaceAccessibility::new(accessible_name),
+            window_requests: None,
         };
         let _replaced_record = self.records.insert(id, record);
         Ok(id)
@@ -114,6 +119,7 @@ impl SurfaceRecords {
             } => record.configure(width, height, window),
             SurfaceEvent::Closed => {
                 record.lifecycle = Lifecycle::Closing;
+                record.window_requests = None;
                 return Some(SurfaceRequest::Destroy(surface));
             }
             SurfaceEvent::DensityChanged(density) => record.change_density(density),
@@ -174,6 +180,16 @@ impl SurfaceRecords {
         self.open_record(surface).is_some_and(|record| {
             (record.drag_region.as_ref()).is_some_and(|region| region(at, record.size))
         })
+    }
+
+    pub(crate) fn take_window_requests(&self) -> Vec<(SurfaceId, WindowRequest)> {
+        (self.open_records())
+            .flat_map(|(surface, record)| {
+                (record.window_requests.iter())
+                    .flat_map(WindowRequestQueue::take)
+                    .map(move |request| (surface, request))
+            })
+            .collect()
     }
 
     #[must_use]

@@ -3,7 +3,7 @@ use crate::capture::CaptureMode;
 use crate::clock::VirtualClock;
 use crate::screen::Screen;
 use crate::script::Step;
-use crate::windows::Windows;
+use crate::windows::{WindowRecording, Windows};
 use crate::{Error, FrameCapture, FrameInterval, RecordedFrames, is_at_rest};
 use lavashell_actor::{Clock, mailbox};
 use lavashell_core::frame::PresentationFlags;
@@ -52,7 +52,8 @@ impl Session {
     }
 
     pub(crate) fn into_frames(self) -> RecordedFrames {
-        RecordedFrames::new(self.screen.into_recorded(), self.windows.into_app_ids())
+        let WindowRecording { app_ids, requests } = self.windows.into_recorded();
+        RecordedFrames::new(self.screen.into_recorded(), app_ids, requests)
     }
 
     pub(crate) fn play(&mut self, steps: Vec<Step>) -> Result<(), Error> {
@@ -194,6 +195,7 @@ impl Session {
                 self.windows.destroy(reports, surface);
                 self.screen.remove(surface);
             }
+            PlatformRequest::WindowControl(request) => self.windows.control(reports, request)?,
             PlatformRequest::Surface(SurfaceRequest::Release(_)) | PlatformRequest::Input(_) => {}
             request => return Err(Error::Unsupported(Box::new(request))),
         }

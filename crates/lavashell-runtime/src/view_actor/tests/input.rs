@@ -9,7 +9,7 @@ use lavashell_core::ui::InputModifiers;
 use lavashell_core::view::InputEvent;
 use lavashell_platform::{
     AccessibilityRequest, Button, ClipboardEvent, ClipboardRequest, DeviceEvent, FormatId,
-    InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice, PressState,
+    InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice, PointerPress, PressState,
     WindowControlRequest,
 };
 use std::cell::RefCell;
@@ -142,8 +142,10 @@ fn begins_move(request: &PlatformRequest) -> bool {
         request,
         PlatformRequest::WindowControl(WindowControlRequest::BeginMove {
             surface: WINDOW,
-            pointer: POINTER,
-            ..
+            press: PointerPress {
+                pointer: POINTER,
+                ..
+            },
         })
     )
 }

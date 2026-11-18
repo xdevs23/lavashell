@@ -46,6 +46,7 @@ mod view_actor;
 pub mod watches;
 pub mod window;
 mod window_move;
+mod window_requests;
 
 pub use app::{App, SetupError};
 pub use lavashell_platform::Capability;

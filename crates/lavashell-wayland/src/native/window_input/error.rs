@@ -4,8 +4,10 @@ use lavashell_platform::PointerDevice;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WindowControlError {
-    #[error("the runtime requested a window move for the pointer {0:?}, which belongs to no seat")]
+    #[error(
+        "the runtime requested a window control for the pointer {0:?}, which does not belong to a seat"
+    )]
     NoSeat(PointerDevice),
-    #[error("the runtime requested a window move for the surface {0:?}, which is not a window")]
+    #[error("the runtime requested a window control for the surface {0:?}, which is not a window")]
     NotAWindow(SurfaceId),
 }

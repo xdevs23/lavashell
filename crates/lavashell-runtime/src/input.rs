@@ -8,7 +8,7 @@ use lavashell_core::ui::InputModifiers;
 use lavashell_core::view::InputEvent;
 use lavashell_platform::{
     Button, DeviceEvent, InputRequest, InputSerial, KeyboardDevice, PlatformRequest, PointerDevice,
-    PressState,
+    PointerPress, PressState,
 };
 use std::collections::BTreeMap;
 use touch::TouchPoints;
@@ -26,9 +26,8 @@ pub(crate) enum RoutedInput {
     },
     PrimaryPress {
         surface: SurfaceId,
-        pointer: PointerDevice,
+        press: PointerPress,
         at: Point,
-        serial: InputSerial,
     },
     Cancel {
         surface: SurfaceId,
@@ -44,18 +43,17 @@ impl RoutedInput {
                 input,
                 pointer,
             } => deliver_input(records, surface, input, pointer),
-            Self::PrimaryPress {
-                surface,
-                pointer,
-                at,
-                serial,
-            } => match begin_move(records, surface, pointer, at, serial) {
-                Some(request) => {
-                    cancel_pointer(records, surface);
-                    Some(PlatformRequest::WindowControl(request))
+            Self::PrimaryPress { surface, press, at } => {
+                match begin_move(records, surface, press, at) {
+                    Some(request) => {
+                        cancel_pointer(records, surface);
+                        Some(PlatformRequest::WindowControl(request))
+                    }
+                    None => {
+                        deliver_input(records, surface, InputEvent::Press(at), Some(press.pointer))
+                    }
                 }
-                None => deliver_input(records, surface, InputEvent::Press(at), Some(pointer)),
-            },
+            }
             Self::Cancel { surface, .. } => {
                 cancel_pointer(records, surface);
                 None
@@ -98,6 +96,7 @@ struct KeyboardState {
 pub(crate) struct InputRouter {
     pointers: BTreeMap<PointerDevice, SurfaceId>,
     interactions: BTreeMap<SurfaceId, PointerDevice>,
+    last_presses: BTreeMap<SurfaceId, PointerPress>,
     keyboards: BTreeMap<KeyboardDevice, KeyboardState>,
     touches: TouchPoints,
     filter: Option<InputFilter>,
@@ -109,6 +108,7 @@ impl InputRouter {
         Self {
             pointers: BTreeMap::new(),
             interactions: BTreeMap::new(),
+            last_presses: BTreeMap::new(),
             keyboards: BTreeMap::new(),
             touches: TouchPoints::default(),
             filter,
@@ -205,8 +205,14 @@ impl InputRouter {
         self.interactions.get(&surface).copied()
     }
 
+    #[must_use]
+    pub fn last_press(&self, surface: SurfaceId) -> Option<PointerPress> {
+        self.last_presses.get(&surface).copied()
+    }
+
     pub fn forget_surface(&mut self, surface: SurfaceId) {
         let _pointer_of_ended_interaction = self.interactions.remove(&surface);
+        let _press_on_forgotten_surface = self.last_presses.remove(&surface);
         self.pointers.retain(|_, &mut under| under != surface);
         self.touches.forget_surface(surface);
     }
@@ -258,13 +264,14 @@ impl InputRouter {
             PressState::Pressed => Interaction::TakesOver,
             PressState::Released => Interaction::OnlyInteracting,
         };
+        let press = PointerPress { pointer, serial };
+        if let (PressState::Pressed, Some(&surface)) = (state, self.pointers.get(&pointer)) {
+            let _earlier_press_on_surface = self.last_presses.insert(surface, press);
+        }
         self.route_pointer(pointer, interaction, |surface| match (button, state) {
-            (Button::Primary, PressState::Pressed) => Some(RoutedInput::PrimaryPress {
-                surface,
-                pointer,
-                at,
-                serial,
-            }),
+            (Button::Primary, PressState::Pressed) => {
+                Some(RoutedInput::PrimaryPress { surface, press, at })
+            }
             (Button::Primary, PressState::Released) => Some(input_with_pointer(
                 surface,
                 InputEvent::Release(at),
@@ -324,6 +331,8 @@ impl InputRouter {
             .collect();
         self.interactions
             .retain(|_, &mut interacting| interacting != pointer);
+        self.last_presses
+            .retain(|_, press| press.pointer != pointer);
         cancels
     }
 }

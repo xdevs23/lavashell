@@ -16,6 +16,12 @@ pub struct KeyboardDevice(pub u64);
 pub struct InputSerial(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PointerPress {
+    pub pointer: PointerDevice,
+    pub serial: InputSerial,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Button {
     Primary,
     Secondary,

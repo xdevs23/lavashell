@@ -15,6 +15,8 @@ pub enum Error {
     Press { key: Key },
     #[error("no open window has the app id {app_id}")]
     NoWindow { app_id: String },
+    #[error("the test platform has not opened surface {} as a window", surface.get())]
+    NotAWindow { surface: SurfaceId },
     #[error("frames keep arriving at {time:?} on the virtual clock, so the run never finishes")]
     NoRest { time: Duration },
     #[error("cannot read the pixels of the frame painted by surface {}", surface.get())]

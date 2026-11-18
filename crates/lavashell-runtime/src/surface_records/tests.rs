@@ -8,9 +8,9 @@ use crate::test_host::empty_view;
 use crate::view_actor::ViewError;
 use lavashell_core::prelude::{Modifier, PixelSize};
 use lavashell_core::units::DpExt;
-use lavashell_core::window::{WINDOW, WindowHandle};
+use lavashell_core::window::{WINDOW, WindowCapabilities, WindowHandle, WindowRequestRefusal};
 use lavashell_test_fixtures::{NoText, RecordedScene, WithoutFailures};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -105,7 +105,7 @@ fn only_a_window_configure_hands_a_window_to_the_view() -> TestResult {
     let read = Rc::new(Cell::new(None));
     let reader = read.clone();
     let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
-        reader.set(Some(ui.local(&WINDOW).map(WindowHandle::state)));
+        reader.set(Some(ui.local(&WINDOW).as_ref().map(WindowHandle::state)));
     });
     let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
     assert_eq!(records.handle(surface, configure(None)), None);
@@ -124,6 +124,62 @@ fn only_a_window_configure_hands_a_window_to_the_view() -> TestResult {
     assert_eq!(records.handle(surface, configure), None);
     frame(&mut records, surface)?;
     assert_eq!(read.get(), Some(Some(maximized)));
+    Ok(())
+}
+
+#[test]
+fn a_request_from_the_view_comes_out_once_with_the_surface_of_its_window() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let view = View::new(lavashell_test_fixtures::facts(), |ui| {
+        if let Some(window) = ui.local(&WINDOW) {
+            assert_eq!(window.request(WindowRequest::Minimize), Ok(()));
+        }
+    });
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let offering = WindowState {
+        capabilities: WindowCapabilities::all(),
+        ..WindowState::default()
+    };
+    let configure = SurfaceEvent::Configured {
+        width: None,
+        height: None,
+        token: None,
+        window: Some(offering),
+    };
+    assert_eq!(records.handle(surface, configure), None);
+    frame(&mut records, surface)?;
+    assert_eq!(
+        records.take_window_requests(),
+        [(surface, WindowRequest::Minimize)]
+    );
+    assert_eq!(records.take_window_requests(), []);
+    Ok(())
+}
+
+#[test]
+fn a_window_handle_refuses_requests_once_the_compositor_closed_the_window() -> TestResult {
+    let mut records = SurfaceRecords::new(PreferenceOverrides::default());
+    let window = Rc::new(RefCell::new(None));
+    let composed = Rc::clone(&window);
+    let view = View::new(lavashell_test_fixtures::facts(), move |ui| {
+        *composed.borrow_mut() = ui.local(&WINDOW);
+    });
+    let surface = records.open(view, Size::new(10.dp(), 10.dp()), Density::ONE, None, None)?;
+    let offering = WindowState {
+        capabilities: WindowCapabilities::all(),
+        ..WindowState::default()
+    };
+    let configure = SurfaceEvent::Configured {
+        width: None,
+        height: None,
+        token: None,
+        window: Some(offering),
+    };
+    assert_eq!(records.handle(surface, configure), None);
+    frame(&mut records, surface)?;
+    assert!(records.handle(surface, SurfaceEvent::Closed).is_some());
+    let answer = (window.borrow().as_ref()).map(|window| window.request(WindowRequest::Minimize));
+    assert_eq!(answer, Some(Err(WindowRequestRefusal::WindowClosed)));
     Ok(())
 }
 

@@ -27,6 +27,10 @@ pub(crate) fn to_protocol_surface_size(size: Size) -> Option<(i32, i32)> {
     Some((extent(size.width)?, extent(size.height)?))
 }
 
+pub(crate) fn to_protocol_position(point: Point) -> Option<(i32, i32)> {
+    round_to_i32(point.x).zip(round_to_i32(point.y))
+}
+
 pub(crate) fn to_protocol_size(size: Size) -> Option<(u32, u32)> {
     round_to_u32(size.width).zip(round_to_u32(size.height))
 }

@@ -5,7 +5,10 @@ use lavashell_actor::Sender;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::{WindowCapabilities, WindowState};
-use lavashell_platform::{Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec};
+use lavashell_platform::{
+    PlatformRequest, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec,
+    WindowControlRequest,
+};
 use lavashell_renderer::NoStreams;
 use lavashell_vulkan::HeadlessWindow;
 use std::collections::BTreeMap;
@@ -13,12 +16,19 @@ use std::sync::Arc;
 
 type TestReports = Reports<FrameCapture, NoStreams>;
 
+pub(crate) struct WindowRecording {
+    pub app_ids: BTreeMap<SurfaceId, String>,
+    pub requests: Vec<WindowControlRequest>,
+}
+
 pub(crate) struct Windows {
     density: Density,
     capture: CaptureMode,
     shown_by_controls: Sender<ShownFrame>,
     open: Vec<(SurfaceId, Role)>,
     app_ids: BTreeMap<SurfaceId, String>,
+    states: BTreeMap<SurfaceId, WindowState>,
+    recorded_requests: Vec<WindowControlRequest>,
 }
 
 impl Windows {
@@ -29,6 +39,8 @@ impl Windows {
             shown_by_controls,
             open: Vec::new(),
             app_ids: BTreeMap::new(),
+            states: BTreeMap::new(),
+            recorded_requests: Vec::new(),
         }
     }
 
@@ -47,15 +59,19 @@ impl Windows {
         let attach = spec.attach(surface, Arc::new(HeadlessWindow), control);
         reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
         reports.report((surface, SurfaceEvent::DensityChanged(self.density)));
+        let window = opened_window_state(&spec.role);
         reports.report((
             surface,
             SurfaceEvent::Configured {
                 width: Some(spec.size.width),
                 height: Some(spec.size.height),
                 token: None,
-                window: opened_window_state(&spec.role),
+                window,
             },
         ));
+        if let Some(state) = window {
+            let _created_once = self.states.insert(surface, state);
+        }
         if let Role::Window(window) = &spec.role {
             let _created_once = self.app_ids.insert(surface, window.app_id.clone());
         }
@@ -64,11 +80,60 @@ impl Windows {
 
     pub(crate) fn destroy(&mut self, reports: &TestReports, surface: SurfaceId) {
         self.open.retain(|&(window, _)| window != surface);
+        let _state_of_destroyed_window = self.states.remove(&surface);
         reports.attach(SurfaceAttachment::Detach(surface));
     }
 
-    pub(crate) fn into_app_ids(self) -> BTreeMap<SurfaceId, String> {
-        self.app_ids
+    pub(crate) fn control(
+        &mut self,
+        reports: &TestReports,
+        request: WindowControlRequest,
+    ) -> Result<(), Error> {
+        match request {
+            WindowControlRequest::SetMaximized { surface, maximized } => {
+                self.reconfigure(reports, surface, |state| WindowState { maximized, ..state })?;
+            }
+            WindowControlRequest::SetFullscreen {
+                surface,
+                fullscreen,
+            } => self.reconfigure(reports, surface, |state| WindowState {
+                fullscreen,
+                ..state
+            })?,
+            WindowControlRequest::Minimize { .. } | WindowControlRequest::ShowMenu { .. } => {
+                self.recorded_requests.push(request);
+            }
+            WindowControlRequest::BeginMove { .. } => {
+                let unsupported = PlatformRequest::WindowControl(request);
+                return Err(Error::Unsupported(Box::new(unsupported)));
+            }
+        }
+        Ok(())
+    }
+
+    fn reconfigure(
+        &mut self,
+        reports: &TestReports,
+        surface: SurfaceId,
+        change: impl FnOnce(WindowState) -> WindowState,
+    ) -> Result<(), Error> {
+        let state = (self.states.get_mut(&surface)).ok_or(Error::NotAWindow { surface })?;
+        *state = change(*state);
+        let configure = SurfaceEvent::Configured {
+            width: None,
+            height: None,
+            token: None,
+            window: Some(*state),
+        };
+        reports.report((surface, configure));
+        Ok(())
+    }
+
+    pub(crate) fn into_recorded(self) -> WindowRecording {
+        WindowRecording {
+            app_ids: self.app_ids,
+            requests: self.recorded_requests,
+        }
     }
 
     pub(crate) fn surfaces(&self) -> impl Iterator<Item = SurfaceId> {

@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::Translator;
 use crate::accessibility::Bridge;
+use crate::logical::to_protocol_position;
 use crate::native::{
     Control, LayerTarget, NativeRole, OwnedWlSurface, RoleControl, Surface, SurfaceExtensions,
     SurfaceObjects, initial_role_state, protocol_serial,
 };
+use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
 use crate::{Error, LayerError, WindowControlError};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{
-    AccessibilityRequest, PanelRequest, Role, SurfaceAttachment, SurfaceEvent, SurfaceRequest,
-    SurfaceSpec, WindowControlRequest,
+    AccessibilityRequest, PanelRequest, PointerPress, Role, SurfaceAttachment, SurfaceEvent,
+    SurfaceRequest, SurfaceSpec, WindowControlRequest,
 };
+use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_surface;
 use std::sync::Arc;
 
@@ -66,20 +69,52 @@ impl Translator {
         request: WindowControlRequest,
     ) -> Result<(), Error> {
         match request {
-            WindowControlRequest::BeginMove {
+            WindowControlRequest::BeginMove { surface, press } => {
+                self.control_window(surface, |known| {
+                    let (seat, serial) = self.press_seat(press)?;
+                    Ok(known.begin_move(surface, seat, serial)?)
+                })
+            }
+            WindowControlRequest::SetMaximized { surface, maximized } => {
+                self.control_window(surface, |known| Ok(known.set_maximized(surface, maximized)?))
+            }
+            WindowControlRequest::Minimize { surface } => {
+                self.control_window(surface, |known| Ok(known.minimize(surface)?))
+            }
+            WindowControlRequest::SetFullscreen {
                 surface,
-                pointer,
-                serial,
-            } => {
-                let serial = protocol_serial(serial)?;
-                let Some(known) = self.surfaces.live(surface) else {
-                    return Ok(());
-                };
-                let seat = (self.devices.pointer_seat(pointer))
-                    .ok_or(WindowControlError::NoSeat(pointer))?;
-                Ok(known.begin_move(surface, seat, serial)?)
+                fullscreen,
+            } => self.control_window(surface, |known| {
+                Ok(known.set_fullscreen(surface, fullscreen)?)
+            }),
+            WindowControlRequest::ShowMenu { surface, press, at } => {
+                self.control_window(surface, |known| {
+                    let Some(position) = to_protocol_position(at) else {
+                        log::warn!(
+                            "the window menu of {surface:?} does not open: {at:?} does not fit the 32-bit coordinates of the protocol"
+                        );
+                        return Ok(());
+                    };
+                    let (seat, serial) = self.press_seat(press)?;
+                    Ok(known.show_window_menu(surface, seat, serial, position)?)
+                })
             }
         }
+    }
+
+    fn press_seat(&self, press: PointerPress) -> Result<(&WlSeat, ProtocolSerial), Error> {
+        let serial = protocol_serial(press.serial)?;
+        let seat = (self.devices.pointer_seat(press.pointer))
+            .ok_or(WindowControlError::NoSeat(press.pointer))?;
+        Ok((seat, serial))
+    }
+
+    fn control_window(
+        &self,
+        surface: SurfaceId,
+        control: impl FnOnce(&Surface) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        (self.surfaces.live(surface)).map_or(Ok(()), control)
     }
 
     fn create_surface(&mut self, surface: SurfaceId, spec: &SurfaceSpec) -> Result<(), Error> {
