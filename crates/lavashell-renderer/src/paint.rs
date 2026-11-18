@@ -115,6 +115,10 @@ impl Painter {
         })
     }
 
+    pub fn without_device(registry: &crate::Fonts) -> Result<Self, crate::Error> {
+        Self::new(registry, crate::UniformRange::VULKAN_REQUIRED)
+    }
+
     #[must_use]
     pub fn with_raster_mode(mut self, mode: crate::raster::RasterMode) -> Self {
         self.resources.tiles = crate::raster::RasterCache::new(mode, self.failures.clone()).into();

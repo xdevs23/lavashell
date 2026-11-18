@@ -47,7 +47,7 @@ pub fn raster_png(
         .map_err(Error::NumberImageSurface)?;
     let mut surface = skia_safe::surfaces::raster(&info, None, None).ok_or(Error::RasterSurface)?;
     let _canvas_returned_for_chaining = surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-    crate::Painter::new(fonts, crate::UniformRange::VULKAN_REQUIRED)?.paint_scene(
+    crate::Painter::without_device(fonts)?.paint_scene(
         surface.canvas(),
         image_surface,
         tree,
