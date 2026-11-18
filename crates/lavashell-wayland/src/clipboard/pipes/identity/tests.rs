@@ -11,7 +11,7 @@ fn real_pipe_ends_match_and_unrelated_pipes_do_not() -> Result<(), TestError> {
     let identity = PipeIdentity::read(&reader).ok_or(PipesTestError::NotPipe)?;
     assert!(PipeIdentity::read(&writer) == Some(identity));
     assert!(PipeIdentity::read(&other) != Some(identity));
-    let executable = std::env::current_exe().map_err(TestError::CurrentExecutable)?;
+    let executable = lavashell_test_fixtures::test_bus::current_test_executable()?;
     let executable = std::fs::File::open(executable).map_err(PipesTestError::OpenExecutable)?;
     assert!(PipeIdentity::read(&executable).is_none());
     Ok(())

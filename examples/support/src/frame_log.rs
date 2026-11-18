@@ -24,7 +24,7 @@ fn logged(app: App, observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result<(),
 }
 
 fn on_platform(app: App) -> Result<(), Error> {
-    lavashell::run::<Platform>(app, ()).map_err(Error::App)
+    lavashell::run::<Platform>(app, lavashell::setup()).map_err(Error::App)
 }
 
 pub struct FrameLog {

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
-use crate::test_error::TestError;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use test_error::TestBusError;
 
-pub(crate) mod test_error;
+mod error;
+
+pub use error::TestBusError;
 
 const CHILD_MARKER: &str = "LAVASHELL_PRIVATE_BUS_CHILD";
 
@@ -22,10 +22,14 @@ impl Drop for BusProcess {
     }
 }
 
-pub(crate) fn run(
+pub fn current_test_executable() -> Result<PathBuf, TestBusError> {
+    std::env::current_exe().map_err(TestBusError::FindTestExecutable)
+}
+
+pub fn run<E: From<TestBusError>>(
     address_variables: &[&str],
-    child: fn() -> Result<(), TestError>,
-) -> Result<(), TestError> {
+    child: fn() -> Result<(), E>,
+) -> Result<(), E> {
     if std::env::var_os(CHILD_MARKER).is_some() {
         return child();
     }
@@ -49,7 +53,7 @@ pub(crate) fn run(
     if read == 0 {
         return Err(TestBusError::NoBusAddress.into());
     }
-    let executable = std::env::current_exe().map_err(TestError::CurrentExecutable)?;
+    let executable = current_test_executable()?;
     let result = Command::new(executable)
         .args(["--exact", &test, "--test-threads=1"])
         .env(CHILD_MARKER, "1")

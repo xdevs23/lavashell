@@ -1028,6 +1028,7 @@
           "lavashell-aosp",
           "lavashell-components",
           "lavashell-core",
+          "lavashell-desktop",
           "lavashell-effect-quality",
           "lavashell-enum-values",
           "lavashell-error-chain",
@@ -1103,6 +1104,48 @@
           "thiserror 2.0.21",
           "toml",
           "zeroize"
+        ]
+      },
+      {
+        "name": "lavashell-desktop",
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-desktop-settings",
+          "lavashell-desktop-settings-freedesktop"
+        ]
+      },
+      {
+        "name": "lavashell-desktop-portal",
+        "version": "0.1.0",
+        "dependencies": [
+          "futures-lite",
+          "lavashell-test-fixtures",
+          "thiserror 2.0.21",
+          "zbus"
+        ]
+      },
+      {
+        "name": "lavashell-desktop-settings",
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-platform"
+        ]
+      },
+      {
+        "name": "lavashell-desktop-settings-freedesktop",
+        "version": "0.1.0",
+        "dependencies": [
+          "calloop",
+          "futures-lite",
+          "lavashell-core",
+          "lavashell-desktop-portal",
+          "lavashell-desktop-settings",
+          "lavashell-error-chain",
+          "lavashell-platform",
+          "lavashell-test-fixtures",
+          "log",
+          "thiserror 2.0.21",
+          "zbus"
         ]
       },
       {
@@ -1283,7 +1326,9 @@
           "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
+          "lavashell-desktop-settings",
           "lavashell-platform",
+          "lavashell-test-fixtures",
           "lavashell-vulkan",
           "lavashell-vulkan-renderer",
           "log",
@@ -2636,7 +2681,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "240e0da1e79f37dae0b83293f64d757e14bc0ef979ea76bf6e6785515ed31412",
+        "seedHash": "04a9b34d5e7c272a4b157443620edb7b03abf6e989cb32ea0a4a1c8a9d2fe659",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2678,6 +2723,10 @@
                 "crates/lavashell-build-script",
                 "crates/lavashell-components",
                 "crates/lavashell-core",
+                "crates/lavashell-desktop",
+                "crates/lavashell-desktop-portal",
+                "crates/lavashell-desktop-settings",
+                "crates/lavashell-desktop-settings-freedesktop",
                 "crates/lavashell-effect-quality",
                 "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
@@ -2727,6 +2776,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop": {
+                    "package": "lavashell-desktop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop"
                   },
                   "lavashell-effect-quality": {
                     "package": "lavashell-effect-quality",
@@ -3003,6 +3058,219 @@
                       "default"
                     ],
                     "version": "=1.9.1"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-desktop",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-desktop",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
+                  },
+                  "lavashell-desktop-settings-freedesktop": {
+                    "package": "lavashell-desktop-settings-freedesktop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings-freedesktop"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-desktop-portal",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-desktop-portal",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "zbus": {
+                    "package": "zbus",
+                    "default-features": false,
+                    "features": [
+                      "async-executor",
+                      "async-fs",
+                      "async-io",
+                      "async-lock",
+                      "async-process",
+                      "async-task",
+                      "blocking"
+                    ],
+                    "version": "=5.19.0"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-desktop-settings",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-desktop-settings",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-desktop-settings-freedesktop",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-desktop-settings-freedesktop",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop-portal": {
+                    "package": "lavashell-desktop-portal",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-portal"
+                  },
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
                   }
                 }
               },
@@ -3894,20 +4162,6 @@
                     ],
                     "version": "=0.14.4"
                   },
-                  "futures-lite": {
-                    "package": "futures-lite",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "default",
-                      "fastrand",
-                      "futures-io",
-                      "parking",
-                      "race",
-                      "std"
-                    ],
-                    "version": "=2.6.1"
-                  },
                   "icu_locale_core": {
                     "package": "icu_locale_core",
                     "default-features": false,
@@ -3929,6 +4183,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
                   },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
@@ -4024,20 +4284,6 @@
                     "default-features": false,
                     "features": [],
                     "version": "=0.31.11"
-                  },
-                  "zbus": {
-                    "package": "zbus",
-                    "default-features": false,
-                    "features": [
-                      "async-executor",
-                      "async-fs",
-                      "async-io",
-                      "async-lock",
-                      "async-process",
-                      "async-task",
-                      "blocking"
-                    ],
-                    "version": "=5.19.0"
                   }
                 },
                 "build-dependencies": {
@@ -5200,6 +5446,7 @@
                 "dependencies": [
                   "lavashell-components",
                   "lavashell-core",
+                  "lavashell-desktop",
                   "lavashell-effect-quality",
                   "lavashell-enum-values",
                   "lavashell-error-chain",
@@ -5246,6 +5493,43 @@
                   "serde",
                   "thiserror",
                   "zeroize"
+                ]
+              },
+              {
+                "name": "lavashell-desktop",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-desktop-settings",
+                  "lavashell-desktop-settings-freedesktop"
+                ]
+              },
+              {
+                "name": "lavashell-desktop-portal",
+                "version": "0.0.0",
+                "dependencies": [
+                  "futures-lite",
+                  "thiserror",
+                  "zbus"
+                ]
+              },
+              {
+                "name": "lavashell-desktop-settings",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-platform"
+                ]
+              },
+              {
+                "name": "lavashell-desktop-settings-freedesktop",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-core",
+                  "lavashell-desktop-portal",
+                  "lavashell-desktop-settings",
+                  "lavashell-error-chain",
+                  "lavashell-platform",
+                  "log",
+                  "thiserror"
                 ]
               },
               {
@@ -5405,11 +5689,11 @@
                   "accesskit_unix",
                   "ash",
                   "calloop",
-                  "futures-lite",
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-build-script",
                   "lavashell-core",
+                  "lavashell-desktop-settings",
                   "lavashell-platform",
                   "lavashell-vulkan",
                   "lavashell-vulkan-renderer",
@@ -5421,8 +5705,7 @@
                   "sys-locale",
                   "thiserror",
                   "wayland-backend",
-                  "wayland-scanner",
-                  "zbus"
+                  "wayland-scanner"
                 ]
               },
               {

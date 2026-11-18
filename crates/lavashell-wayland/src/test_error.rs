@@ -25,8 +25,6 @@ pub(crate) enum TestError {
     ObjectPath(#[from] zbus::zvariant::Error),
     #[error("the address of the session bus is not set")]
     BusAddress(#[from] VarError),
-    #[error("the path of the test executable is unknown")]
-    CurrentExecutable(#[source] io::Error),
     #[error("the fixture received no message")]
     Receive(#[from] mpsc::RecvError),
     #[error("a number could not be converted")]
@@ -48,9 +46,7 @@ pub(crate) enum TestError {
     #[error(transparent)]
     PipesTest(#[from] crate::clipboard::pipes::test_error::PipesTestError),
     #[error(transparent)]
-    PreferencesTest(#[from] crate::preferences::test_error::PreferencesTestError),
-    #[error(transparent)]
-    TestBus(#[from] crate::test_bus::test_error::TestBusError),
+    TestBus(#[from] lavashell_test_fixtures::test_bus::TestBusError),
     #[error(transparent)]
     WireTest(#[from] crate::native::wire_messages::test_error::WireTestError),
 }

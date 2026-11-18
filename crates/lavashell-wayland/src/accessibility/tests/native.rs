@@ -7,6 +7,7 @@ use atspi_common::{State, StateSet};
 use futures_lite::StreamExt;
 use futures_lite::future::block_on;
 use lavashell_actor::{Closed, Receiver};
+use lavashell_test_fixtures::test_bus;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use zbus::zvariant::{OwnedObjectPath, Type};
@@ -79,7 +80,7 @@ impl Registry {
 
 #[test]
 fn atspi_clients_read_the_tree_and_send_actions_through_the_bridge() -> Result<(), TestError> {
-    crate::test_bus::run(&["DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS"], || {
+    test_bus::run(&["DBUS_SESSION_BUS_ADDRESS", "AT_SPI_BUS_ADDRESS"], || {
         block_on(child())
     })
 }

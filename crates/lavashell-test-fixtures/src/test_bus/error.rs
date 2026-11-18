@@ -3,13 +3,15 @@ use std::io;
 use std::process::ExitStatus;
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum TestBusError {
+pub enum TestBusError {
     #[error("the dbus-daemon could not start")]
     StartBusDaemon(#[source] io::Error),
     #[error("the address of the private bus could not be read")]
     ReadBusAddress(#[source] io::Error),
     #[error("the dbus-daemon printed no address")]
     NoBusAddress,
+    #[error("the path to the test executable is unknown")]
+    FindTestExecutable(#[source] io::Error),
     #[error("the child test could not run")]
     RunChildTest(#[source] io::Error),
     #[error("the thread of the test has no name to run the child test by")]

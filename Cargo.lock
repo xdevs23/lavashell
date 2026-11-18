@@ -2684,6 +2684,7 @@ dependencies = [
  "lavashell-aosp",
  "lavashell-components",
  "lavashell-core",
+ "lavashell-desktop",
  "lavashell-effect-quality",
  "lavashell-enum-values",
  "lavashell-error-chain",
@@ -2803,6 +2804,48 @@ dependencies = [
  "lavashell",
  "lavashell-example-support",
  "lavashell-lucide",
+]
+
+[[package]]
+name = "lavashell-desktop"
+version = "0.1.0"
+dependencies = [
+ "lavashell-desktop-settings",
+ "lavashell-desktop-settings-freedesktop",
+]
+
+[[package]]
+name = "lavashell-desktop-portal"
+version = "0.1.0"
+dependencies = [
+ "futures-lite",
+ "lavashell-test-fixtures",
+ "thiserror 2.0.21",
+ "zbus",
+]
+
+[[package]]
+name = "lavashell-desktop-settings"
+version = "0.1.0"
+dependencies = [
+ "lavashell-platform",
+]
+
+[[package]]
+name = "lavashell-desktop-settings-freedesktop"
+version = "0.1.0"
+dependencies = [
+ "calloop",
+ "futures-lite",
+ "lavashell-core",
+ "lavashell-desktop-portal",
+ "lavashell-desktop-settings",
+ "lavashell-error-chain",
+ "lavashell-platform",
+ "lavashell-test-fixtures",
+ "log",
+ "thiserror 2.0.21",
+ "zbus",
 ]
 
 [[package]]
@@ -3178,7 +3221,9 @@ dependencies = [
  "lavashell-actor",
  "lavashell-build-script",
  "lavashell-core",
+ "lavashell-desktop-settings",
  "lavashell-platform",
+ "lavashell-test-fixtures",
  "lavashell-vulkan",
  "lavashell-vulkan-renderer",
  "log",

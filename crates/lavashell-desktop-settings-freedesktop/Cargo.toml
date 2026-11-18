@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-desktop-settings-freedesktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+lavashell-core.workspace = true
+lavashell-desktop-portal.workspace = true
+lavashell-desktop-settings.workspace = true
+lavashell-error-chain.workspace = true
+lavashell-platform.workspace = true
+log.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+calloop = { workspace = true, features = ["executor"] }
+futures-lite.workspace = true
+lavashell-desktop-portal = { workspace = true, features = ["test-support"] }
+lavashell-test-fixtures.workspace = true
+zbus = { workspace = true, features = ["async-io"] }

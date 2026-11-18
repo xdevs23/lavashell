@@ -6,10 +6,8 @@ mod error;
 mod focus_grab;
 mod logical;
 mod native;
-mod preferences;
 mod protocol_serial;
-#[cfg(test)]
-mod test_bus;
+mod setup;
 #[cfg(test)]
 mod test_error;
 mod translator;
@@ -28,6 +26,7 @@ pub use native::session_lock::SessionLockError;
 pub use native::startup::WindowError;
 pub use native::watch::WatchError;
 pub use native::window_input::WindowControlError;
+pub use setup::WaylandSetup;
 pub use translator::ConnectionError;
 pub use translator::EventLoopError;
 pub use translator::Wayland;

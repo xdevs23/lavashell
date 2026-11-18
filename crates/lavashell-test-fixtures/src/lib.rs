@@ -3,6 +3,7 @@
 
 mod frames;
 mod scene;
+pub mod test_bus;
 mod text;
 
 pub use frames::{FrameFailure, WithoutFailures, failure_causes};

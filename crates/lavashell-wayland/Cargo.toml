@@ -14,6 +14,7 @@ lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-vulkan-renderer.workspace = true
 lavashell-platform.workspace = true
+lavashell-desktop-settings.workspace = true
 lavashell-vulkan.workspace = true
 ash.workspace = true
 smithay-client-toolkit.workspace = true
@@ -26,10 +27,8 @@ rustix = { workspace = true, features = ["fs", "pipe", "time"] }
 accesskit.workspace = true
 accesskit_unix.workspace = true
 calloop = { workspace = true, features = ["executor"] }
-futures-lite.workspace = true
 icu_locale_core.workspace = true
 sys-locale.workspace = true
-zbus = { workspace = true, features = ["async-io"] }
 
 [build-dependencies]
 lavashell-build-script.workspace = true
@@ -38,5 +37,8 @@ thiserror.workspace = true
 
 [dev-dependencies]
 atspi-common.workspace = true
+futures-lite.workspace = true
 lavashell-core = { workspace = true, features = ["test-support"] }
+lavashell-test-fixtures.workspace = true
 serde.workspace = true
+zbus = { workspace = true, features = ["async-io"] }

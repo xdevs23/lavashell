@@ -69,6 +69,7 @@ impl Translator {
             compositor,
             shm,
             presentation,
+            settings,
         } = wayland;
         let qh = queue.handle();
         let seats = SeatState::new(&globals, &qh);
@@ -77,7 +78,7 @@ impl Translator {
             .map_err(|failure| EventLoopError::WatchConnection(failure.error))?;
         let mut sources = vec![connection_source];
         let view = ViewLink::new(links.view.clone());
-        sources.extend(install_preferences(&loop_handle, &view)?);
+        sources.push(install_preferences(&loop_handle, &view, settings)?);
         Ok(Self {
             focus_grabs,
             sources,
