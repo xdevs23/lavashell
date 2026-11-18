@@ -3,7 +3,7 @@
 /result-*
 *.apk
 /.cache
-/target
+target
 /examples/node_modules
 __pycache__/
 *.py[cod]

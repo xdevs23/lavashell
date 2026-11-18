@@ -41,7 +41,10 @@ impl Derivation {
     pub const OFF_ENGINE: [Self; 3] = [Self::Registry, Self::Framework, Self::Native];
 
     fn all(tools: &[Self]) -> Vec<Self> {
-        Self::LAYERS.into_iter().chain(tools.iter().cloned()).collect()
+        Self::LAYERS
+            .into_iter()
+            .chain(tools.iter().cloned())
+            .collect()
     }
 }
 

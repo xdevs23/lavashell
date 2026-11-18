@@ -147,6 +147,7 @@
         // aospSkiaBuilds
         // {
           dependencies = dependencies.check;
+          rustfmt = import ./nix/rustfmt-check.nix { inherit pkgs root rust; };
         };
       devShells.${system} = {
         aosp = aosp.shell;

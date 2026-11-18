@@ -6,7 +6,11 @@
   vendor,
 }:
 let
-  workspace = "tools/build-layers";
+  workspace =
+    (import ./cargo-workspaces.nix {
+      inherit (pkgs) lib;
+      inherit root;
+    }).buildLayers;
   directory = root + "/${workspace}";
   testPackage = "lavashell-nix-tests";
   clippy = import ./cargo-clippy.nix { inherit pkgs; };

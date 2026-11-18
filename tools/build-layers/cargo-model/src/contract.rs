@@ -28,7 +28,9 @@ pub struct SourceFiles {
 
 impl SourceFiles {
     pub fn all(&self) -> impl Iterator<Item = &String> {
-        self.every_package.iter().chain(self.by_member.values().flatten())
+        self.every_package
+            .iter()
+            .chain(self.by_member.values().flatten())
     }
 }
 

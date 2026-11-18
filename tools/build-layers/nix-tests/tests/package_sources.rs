@@ -63,7 +63,10 @@ fn rust_files(directory: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
         let path = entry?.path();
         if path.is_dir() {
             files.extend(rust_files(&path)?);
-        } else if path.extension().is_some_and(|extension| extension == RUST_EXTENSION) {
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == RUST_EXTENSION)
+        {
             files.push(path);
         }
     }

@@ -49,18 +49,26 @@ let
         # https://rustsec.org/advisories/RUSTSEC-2026-0372.html
         "RUSTSEC-2026-0372"
       ];
-  workspaces = [
-    {
-      manifest = "Cargo.toml";
+  auditPolicies = {
+    main = {
       ignoredAdvisories = zbusAdvisories;
       licenses = { };
-    }
-    {
-      manifest = "tools/build-layers/Cargo.toml";
+    };
+    buildLayers = {
       ignoredAdvisories = [ ];
       licenses.unused-allowed-license = "allow";
-    }
-  ];
+    };
+  };
+  workspaceDirectories = import ./cargo-workspaces.nix { inherit lib root; };
+  workspaces =
+    assert lib.assertMsg (lib.attrNames auditPolicies == lib.attrNames workspaceDirectories)
+      "nix/dependency-check.nix sets audit policies for ${toString (lib.attrNames auditPolicies)}, while nix/cargo-workspaces.nix lists ${toString (lib.attrNames workspaceDirectories)}";
+    lib.sort sourceRootFirst (
+      lib.mapAttrsToList (
+        name: directory: auditPolicies.${name} // { inherit directory; }
+      ) workspaceDirectories
+    );
+  sourceRootFirst = workspace: other: workspace.directory == "." && other.directory != ".";
   rules =
     yankSettings: workspace:
     (pkgs.formats.toml { }).generate "deny.toml" {
@@ -81,7 +89,7 @@ let
   denyCommands =
     yankSettings: checks:
     lib.concatMapStrings (workspace: ''
-      cargo deny --locked --manifest-path ${workspace.manifest} --config ${rules yankSettings workspace} \
+      cargo deny --locked --manifest-path ${workspace.directory}/Cargo.toml --config ${rules yankSettings workspace} \
         check --deny warnings ${checks}
     '') workspaces;
 in
@@ -91,9 +99,7 @@ in
     src = root;
     cargoDeps = pkgs.symlinkJoin {
       name = "cargo-vendor-dir";
-      paths = map (
-        workspace: sources.vendor (root + "/${dirOf workspace.manifest}/Cargo.lock")
-      ) workspaces;
+      paths = map (workspace: sources.vendor (root + "/${workspace.directory}/Cargo.lock")) workspaces;
     };
     nativeBuildInputs = [
       rustPlatform.cargoSetupHook
