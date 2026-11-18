@@ -4,10 +4,17 @@ use std::process::ExitStatus;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("cargo metadata cannot be started")]
-    StartMetadata(#[source] std::io::Error),
-    #[error("cargo metadata exited with {0}")]
-    Metadata(ExitStatus),
+    #[error("cargo metadata cannot be started in {directory}")]
+    StartMetadata {
+        directory: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("cargo metadata in {directory} exited with {status}")]
+    Metadata {
+        directory: PathBuf,
+        status: ExitStatus,
+    },
     #[error("the output of cargo metadata cannot be read")]
     ReadMetadata(#[source] serde_json::Error),
     #[error("{path} cannot be read")]

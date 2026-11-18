@@ -2,13 +2,15 @@
 // https://doc.rust-lang.org/cargo/reference/manifest.html
 use crate::error::Error;
 use crate::findings::{Finding, Report, Rule};
+use crate::metadata::MANIFEST;
+use cargo_workspaces::CargoWorkspaces;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+mod cargo_workspaces;
 mod vulkan_free;
 
-const MANIFEST: &str = "Cargo.toml";
 const EXACT_VERSION_PREFIX: char = '=';
 
 #[derive(Deserialize)]
@@ -18,8 +20,56 @@ struct WorkspaceManifest {
 
 #[derive(Deserialize)]
 struct Workspace {
+    #[serde(default)]
     members: Vec<String>,
+    #[serde(default)]
     dependencies: BTreeMap<String, DependencyEntry>,
+    package: Option<WorkspacePackage>,
+    lints: Option<BTreeMap<String, BTreeMap<String, LintSetting>>>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum InheritedTable {
+    Package,
+    Lints,
+}
+
+#[derive(Clone, Copy)]
+struct RootTables<'a> {
+    workspace: &'a Workspace,
+    inherited: &'a [InheritedTable],
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct WorkspacePackage {
+    version: Option<String>,
+    edition: Option<String>,
+    license: Option<String>,
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(untagged)]
+enum LintSetting {
+    Level(LintLevel),
+    Detailed(DetailedLintSetting),
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct DetailedLintSetting {
+    level: LintLevel,
+    priority: Option<i64>,
+}
+
+#[derive(Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum LintLevel {
+    Allow,
+    Warn,
+    Deny,
+    Forbid,
 }
 
 #[derive(Deserialize)]
@@ -133,6 +183,34 @@ impl Inheritable {
     }
 }
 
+impl InheritedTable {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Package => "package",
+            Self::Lints => "lints",
+        }
+    }
+}
+
+impl Workspace {
+    fn differs_in(&self, root: &Self, table: InheritedTable) -> bool {
+        match table {
+            InheritedTable::Package => self.package != root.package,
+            InheritedTable::Lints => self.lints != root.lints,
+        }
+    }
+}
+
+impl<'a> RootTables<'a> {
+    fn copy_rules(self, workspace: &'a Workspace) -> impl Iterator<Item = Rule> + 'a {
+        (self.inherited.iter())
+            .filter(move |table| workspace.differs_in(self.workspace, **table))
+            .map(|table| Rule::DifferentWorkspaceTable {
+                table: table.name(),
+            })
+    }
+}
+
 impl MemberManifest {
     fn build_dependencies(&self) -> impl Iterator<Item = &str> {
         std::iter::once(&self.tables)
@@ -175,9 +253,35 @@ fn read_manifest<Manifest: for<'de> Deserialize<'de>>(path: &Path) -> Result<Man
     })
 }
 
-pub fn crate_report(root: &Path) -> Result<Report, Error> {
-    let workspace_path = root.join(MANIFEST);
-    let workspace = read_manifest::<WorkspaceManifest>(&workspace_path)?.workspace;
+pub fn crate_report(root: &Path, nested_directories: &[PathBuf]) -> Result<Report, Error> {
+    let listing = CargoWorkspaces::read(root)?;
+    let root_workspace = read_workspace(root)?;
+    let root_tables = RootTables {
+        workspace: &root_workspace,
+        inherited: &listing.inherited_tables,
+    };
+    let mut report = workspace_report(root, &root_workspace, root_tables)?;
+    for directory in nested_directories {
+        let nested_report = workspace_report(directory, &read_workspace(directory)?, root_tables)?;
+        report.findings.extend(nested_report.findings);
+        report.checked += nested_report.checked;
+    }
+    report
+        .findings
+        .extend(listing.findings(root, nested_directories));
+    Ok(report)
+}
+
+fn read_workspace(directory: &Path) -> Result<Workspace, Error> {
+    Ok(read_manifest::<WorkspaceManifest>(&directory.join(MANIFEST))?.workspace)
+}
+
+fn workspace_report(
+    directory: &Path,
+    workspace: &Workspace,
+    root_tables: RootTables<'_>,
+) -> Result<Report, Error> {
+    let workspace_path = directory.join(MANIFEST);
     let listed_paths: BTreeSet<&str> = workspace
         .dependencies
         .values()
@@ -196,7 +300,8 @@ pub fn crate_report(root: &Path) -> Result<Report, Error> {
                 .map(|member| Rule::UnlistedMember {
                     member: member.clone(),
                 }),
-        );
+        )
+        .chain(root_tables.copy_rules(workspace));
     let mut findings: Vec<Finding> = workspace_rules
         .map(|rule| Finding {
             path: workspace_path.clone(),
@@ -206,7 +311,7 @@ pub fn crate_report(root: &Path) -> Result<Report, Error> {
         .collect();
     let members = (workspace.members.iter())
         .map(|member| {
-            let path = root.join(member).join(MANIFEST);
+            let path = directory.join(member).join(MANIFEST);
             read_manifest(&path).map(|manifest: MemberManifest| (path, manifest))
         })
         .collect::<Result<Vec<(PathBuf, MemberManifest)>, Error>>()?;
@@ -217,7 +322,7 @@ pub fn crate_report(root: &Path) -> Result<Report, Error> {
             rule,
         }));
     }
-    findings.extend(vulkan_free::vulkan_findings(root, &members)?);
+    findings.extend(vulkan_free::vulkan_findings(directory, &members)?);
     Ok(Report {
         findings,
         checked: workspace.members.len() + 1,

@@ -6,11 +6,8 @@
   vendor,
 }:
 let
-  workspace =
-    (import ./cargo-workspaces.nix {
-      inherit (pkgs) lib;
-      inherit root;
-    }).buildLayers;
+  cargoWorkspaces = pkgs.lib.importTOML ./cargo-workspaces.toml;
+  workspace = cargoWorkspaces.directories.buildLayers;
   directory = root + "/${workspace}";
   manifest = pkgs.lib.importTOML (directory + "/Cargo.toml");
   pathDependencies = map (dependency: directory + "/${dependency.path}") (
@@ -19,7 +16,9 @@ let
     )
   );
   inheritedRootManifest = (pkgs.formats.toml { }).generate "Cargo.toml" {
-    workspace = { inherit ((pkgs.lib.importTOML (root + "/Cargo.toml")).workspace) package lints; };
+    workspace =
+      pkgs.lib.getAttrs cargoWorkspaces.inherited-tables
+        (pkgs.lib.importTOML (root + "/Cargo.toml")).workspace;
   };
   testPackage = "lavashell-nix-tests";
   clippy = import ./cargo-clippy.nix { inherit pkgs; };

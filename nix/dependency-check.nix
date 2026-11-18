@@ -59,10 +59,10 @@ let
       licenses.unused-allowed-license = "allow";
     };
   };
-  workspaceDirectories = import ./cargo-workspaces.nix { inherit lib root; };
+  workspaceDirectories = (lib.importTOML ./cargo-workspaces.toml).directories;
   workspaces =
     assert lib.assertMsg (lib.attrNames auditPolicies == lib.attrNames workspaceDirectories)
-      "nix/dependency-check.nix sets audit policies for ${toString (lib.attrNames auditPolicies)}, while nix/cargo-workspaces.nix lists ${toString (lib.attrNames workspaceDirectories)}";
+      "nix/dependency-check.nix sets audit policies for ${toString (lib.attrNames auditPolicies)}, while nix/cargo-workspaces.toml lists ${toString (lib.attrNames workspaceDirectories)}";
     lib.sort sourceRootFirst (
       lib.mapAttrsToList (
         name: directory: auditPolicies.${name} // { inherit directory; }

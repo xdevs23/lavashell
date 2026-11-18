@@ -27,9 +27,10 @@ mod tests;
 use checks::{repository_reports, workspace_reports};
 use error::Error;
 use lavashell_error_chain::message_chain;
-use metadata::Workspace;
+use metadata::{Workspace, crate_roots_of_every_workspace, nested_workspace_directories};
 use next_steps::next_step;
 use repository_files::read_repository_files;
+use std::path::Path;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -43,11 +44,13 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<ExitCode, Error> {
-    let workspace = Workspace::read()?;
-    let root = &workspace.workspace_root;
+    let root_workspace = Workspace::read(Path::new("."))?;
+    let root = &root_workspace.workspace_root;
     let files = read_repository_files(root)?;
-    let mut reports = repository_reports(&files, root, &workspace.crate_roots())?;
-    reports.extend(workspace_reports(&files, root)?);
+    let nested_directories = nested_workspace_directories(&files, root)?;
+    let crate_roots = crate_roots_of_every_workspace(&root_workspace, &nested_directories)?;
+    let mut reports = repository_reports(&files, root, &crate_roots)?;
+    reports.extend(workspace_reports(&files, root, &nested_directories)?);
     let findings: Vec<_> = reports
         .iter()
         .flat_map(|(_, report)| &report.findings)

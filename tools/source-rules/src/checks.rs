@@ -70,9 +70,10 @@ pub fn repository_reports(
 pub fn workspace_reports(
     files: &[RepositoryFile],
     root: &Path,
+    nested_directories: &[PathBuf],
 ) -> Result<Vec<(RuleSet, Report)>, Error> {
     Ok(vec![
-        (RuleSet::Crate, crate_report(root)?),
+        (RuleSet::Crate, crate_report(root, nested_directories)?),
         (RuleSet::Copy, copy_report(files, root)?),
     ])
 }

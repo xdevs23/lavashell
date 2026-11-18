@@ -26,10 +26,10 @@ struct LockedPackage {
 type BuildGraph<'a> = BTreeMap<&'a str, BTreeSet<&'a str>>;
 
 pub(super) fn vulkan_findings(
-    root: &Path,
+    directory: &Path,
     members: &[(PathBuf, MemberManifest)],
 ) -> Result<Vec<Finding>, Error> {
-    let lockfile: Lockfile = read_manifest(&root.join(LOCKFILE))?;
+    let lockfile: Lockfile = read_manifest(&directory.join(LOCKFILE))?;
     let mut graph = BuildGraph::new();
     for package in &lockfile.package {
         let names =

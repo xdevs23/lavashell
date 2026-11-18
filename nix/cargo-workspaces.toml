@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+inherited-tables = ["package", "lints"]
+
+[directories]
+main = "."
+buildLayers = "tools/build-layers"

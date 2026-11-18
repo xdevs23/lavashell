@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::checks::rust_report;
+use crate::crate_manifests::crate_report;
 use crate::error::Error;
 use crate::findings::{Report, Rule};
+use crate::metadata::nested_workspace_directories;
 use crate::repository_files::read_repository_files;
 use std::path::{Path, PathBuf, StripPrefixError};
 
@@ -11,6 +13,7 @@ mod enum_value_lists;
 mod renderer_test_fixtures;
 mod repository_files;
 mod vulkan_free_crates;
+mod workspace_crate_roots;
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum Failure {
@@ -30,6 +33,16 @@ fn findings(files: &[(&str, &str)]) -> Result<Vec<(String, Option<usize>, Rule)>
     findings_of(files, |root| {
         rust_report(&read_repository_files(root)?, &[root.join(files[0].0)])
     })
+}
+
+pub(super) const CARGO_WORKSPACES: &str = "nix/cargo-workspaces.toml";
+
+pub(super) const ROOT_WORKSPACE_LISTING: &str =
+    "inherited-tables = [\"package\", \"lints\"]\n\n[directories]\nmain = \".\"\n";
+
+pub(super) fn crate_report_of_every_workspace(root: &Path) -> Result<Report, Error> {
+    let files = read_repository_files(root)?;
+    crate_report(root, &nested_workspace_directories(&files, root)?)
 }
 
 pub(super) fn findings_of(

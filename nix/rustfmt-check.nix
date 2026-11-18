@@ -11,6 +11,6 @@ pkgs.runCommand "lavashell-rustfmt" { nativeBuildInputs = [ rust ]; } ''
   cd ${root}
   ${lib.concatMapStrings (directory: ''
     cargo fmt --all --check --manifest-path ${lib.escapeShellArg "${directory}/Cargo.toml"}
-  '') (lib.attrValues (import ./cargo-workspaces.nix { inherit lib root; }))}
+  '') (lib.attrValues (lib.importTOML ./cargo-workspaces.toml).directories)}
   touch "$out"
 ''

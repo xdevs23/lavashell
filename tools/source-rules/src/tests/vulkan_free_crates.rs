@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{Failure, findings_of};
-use crate::crate_manifests::crate_report;
+use super::{
+    CARGO_WORKSPACES, Failure, ROOT_WORKSPACE_LISTING, crate_report_of_every_workspace, findings_of,
+};
 use crate::findings::Rule;
 
 const WORKSPACE: &str = r#"
@@ -52,8 +53,9 @@ fn findings(core: &str, middle: &str) -> Result<Vec<(String, Rule)>, Failure> {
             ("Cargo.lock", LOCKFILE),
             ("crates/lavashell-core/Cargo.toml", &core),
             ("crates/middle/Cargo.toml", &middle),
+            (CARGO_WORKSPACES, ROOT_WORKSPACE_LISTING),
         ],
-        crate_report,
+        crate_report_of_every_workspace,
     )?
     .into_iter()
     .map(|(path, _, rule)| (path, rule))

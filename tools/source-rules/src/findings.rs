@@ -20,6 +20,9 @@ pub enum Rule {
     PythonOutsidePlace { directory: &'static str },
     InexactWorkspaceDependency { name: String },
     UnlistedMember { member: String },
+    UnlistedWorkspace { listing: &'static str },
+    ListedWithoutWorkspace { directory: String },
+    DifferentWorkspaceTable { table: &'static str },
     OwnDependency { name: String },
     OwnVersion,
     OwnEdition,
@@ -90,6 +93,18 @@ impl fmt::Display for Rule {
             Self::UnlistedMember { member } => write!(
                 formatter,
                 "add the member {member} to the workspace dependencies as a path entry",
+            ),
+            Self::UnlistedWorkspace { listing } => write!(
+                formatter,
+                "list the directory of this Cargo workspace in the directories of {listing}",
+            ),
+            Self::ListedWithoutWorkspace { directory } => write!(
+                formatter,
+                "remove the directory {directory}, which has no Cargo.toml with a [workspace] table",
+            ),
+            Self::DifferentWorkspaceTable { table } => write!(
+                formatter,
+                "copy workspace.{table} of the root Cargo.toml unchanged, which a nested workspace cannot inherit",
             ),
             Self::OwnDependency { name } => write!(
                 formatter,

@@ -17,8 +17,8 @@ impl fmt::Display for NextStep {
                 "Run the source rules inside `nix develop`, which provides cargo."
             }
             Self::FixCargoWorkspace => concat!(
-                "Make `cargo metadata --no-deps --offline` succeed in the repository, ",
-                "then run the source rules again.",
+                "Make `cargo metadata --no-deps --offline --locked` succeed ",
+                "in the directory named above, then run the source rules again.",
             ),
             Self::FixNamedFile => {
                 "Correct or remove the file named above, then run the source rules again."
@@ -36,8 +36,8 @@ impl fmt::Display for NextStep {
 
 pub fn next_step(error: &Error) -> NextStep {
     match error {
-        Error::StartMetadata(_) => NextStep::EnterDevelopmentShell,
-        Error::Metadata(_) => NextStep::FixCargoWorkspace,
+        Error::StartMetadata { .. } => NextStep::EnterDevelopmentShell,
+        Error::Metadata { .. } => NextStep::FixCargoWorkspace,
         Error::ReadSource { .. }
         | Error::ParseSource { .. }
         | Error::ParsePatch { .. }
