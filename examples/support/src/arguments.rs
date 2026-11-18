@@ -3,10 +3,8 @@ use crate::{Error, ThemeChoice};
 use clap::{ArgMatches, Args, Command, parser::ValueSource};
 use lavashell::prelude::*;
 use lavashell::renderer::DamageMode;
-use lavashell_test_platform::FrameInterval;
 use std::{
     ffi::{OsStr, OsString},
-    path::PathBuf,
     time::Duration,
 };
 
@@ -111,66 +109,23 @@ impl SizeArguments {
     }
 }
 
-#[derive(clap::Args, Clone, Debug)]
-pub struct RecordingArguments {
-    #[arg(
-        long,
-        value_name = "DIRECTORY",
-        requires = "frame_rate",
-        help = "Write each recorded frame as a numbered PNG file into this directory"
-    )]
-    frames: Option<PathBuf>,
-    #[arg(
-        long,
-        value_name = "HZ",
-        value_parser = frame_interval,
-        requires = "frames",
-        help = "Frames per second of the recording"
-    )]
-    frame_rate: Option<FrameInterval>,
-}
-
-pub struct Recording {
-    pub directory: PathBuf,
-    pub interval: FrameInterval,
-}
-
-impl RecordingArguments {
-    #[must_use]
-    pub fn recording(&self) -> Option<Recording> {
-        Some(Recording {
-            directory: self.frames.clone()?,
-            interval: self.frame_rate?,
-        })
-    }
-}
-
-fn number(value: &str) -> Result<f64, Error> {
+pub fn parse_number(value: &str) -> Result<f64, Error> {
     value.parse::<f64>().map_err(Error::Number)
 }
 
 fn text_scale(value: &str) -> Result<TextScaling, Error> {
-    let factor = number(value)?;
+    let factor = parse_number(value)?;
     TextScaling::linear(factor).ok_or(Error::TextScale)
 }
 
 fn seconds(value: &str) -> Result<Duration, Error> {
-    let seconds = number(value)?;
+    let seconds = parse_number(value)?;
     Duration::try_from_secs_f64(seconds).map_err(Error::Seconds)
 }
 
 fn length(value: &str) -> Result<NonNegativeDp, Error> {
-    let length = number(value)?;
+    let length = parse_number(value)?;
     NonNegativeDp::try_new(Dp::new(length)).map_err(Error::Length)
-}
-
-fn frame_interval(value: &str) -> Result<FrameInterval, Error> {
-    let rate = number(value)?;
-    if !(rate.is_finite() && rate > 0.0) {
-        return Err(Error::FrameRate);
-    }
-    let interval = Duration::try_from_secs_f64(rate.recip()).map_err(Error::Seconds)?;
-    FrameInterval::new(interval).ok_or(Error::FrameRate)
 }
 
 #[cfg(test)]

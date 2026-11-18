@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
-use lavashell_example_support::testing::{
-    RecordedFrame, Shaping, capture_path, click, control, drag, write_first_frames,
-};
-use lavashell_example_support::{Start, Steps, ThemeChoice, default_app, node};
-use lavashell_motion::{CopyKey, Error, Tag, app, copy, model::Demo, ui::WINDOW};
+use lavashell_example_recordings::{RecordedFrame, Start, Steps, capture_path, write_first_frames};
+use lavashell_example_support::testing::{Shaping, click, control, drag};
+use lavashell_example_support::{ThemeChoice, default_app, node};
+use lavashell_motion::{CopyKey, Error as MotionError, Tag, app, copy, model::Demo, ui::WINDOW};
 use std::{cell::Cell, path::Path, rc::Rc, time::Duration};
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Demo(#[from] MotionError),
+    #[error(transparent)]
+    Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Recording(#[from] lavashell_example_recordings::Error),
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Capture {
@@ -21,7 +30,7 @@ fn play(play: Play, demo: &Demo) -> Result<Vec<(Capture, RecordedFrame)>, Error>
     let failure = Rc::new(Cell::new(None));
     let failed = Rc::clone(&failure);
     let app = app(default_app()?, demo, WINDOW, false, move |error| {
-        failed.set(Some(Error::Motion(error)));
+        failed.set(Some(Error::Demo(MotionError::Motion(error))));
     })?;
     let played = play.play(app, Density::ONE);
     failure.take().map_or(played, Err)
@@ -249,8 +258,8 @@ fn reduced_motion(play: &mut Play) {
     });
     play.mark(Start::NEXT, Capture::Interactions);
     play.push(Start::NEXT, |view, _, demo| {
-        demo.set_reduced(false).map_err(Error::Motion)?;
-        demo.restart().map_err(Error::Motion)?;
+        demo.set_reduced(false).map_err(MotionError::Motion)?;
+        demo.restart().map_err(MotionError::Motion)?;
         view.provide(&REDUCED_MOTION, true);
         Ok(())
     });
@@ -323,7 +332,7 @@ fn the_back_gesture_sets_the_crossing_progress_also_backwards_and_snaps_with_red
         Ok(())
     });
     steps.push(Start::NEXT, |_, _, demo| {
-        demo.set_reduced(true).map_err(Error::Motion)
+        Ok(demo.set_reduced(true).map_err(MotionError::Motion)?)
     });
     steps.push(Start::NEXT, |view, _, demo| {
         let at = back_gesture(view)?;

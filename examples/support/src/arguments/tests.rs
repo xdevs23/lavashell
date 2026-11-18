@@ -6,8 +6,6 @@ use clap::{CommandFactory, Parser};
 enum TestError {
     #[error("the arguments are not accepted")]
     Parse(#[from] clap::Error),
-    #[error("the arguments give no recording")]
-    NoRecording,
 }
 
 #[derive(Parser)]
@@ -16,8 +14,6 @@ struct Options {
     example: ExampleArguments,
     #[command(flatten)]
     size: SizeArguments,
-    #[command(flatten)]
-    recording: RecordingArguments,
 }
 
 fn parse(arguments: &[&str]) -> Result<Options, clap::Error> {
@@ -54,10 +50,6 @@ fn invalid_values_are_rejected() {
         &["--width=1", "--height=wide"],
         &["--text-scale=0"],
         &["--exit-after=-1"],
-        &["--frames=out", "--frame-rate=0"],
-        &["--frames=out", "--frame-rate=-30"],
-        &["--frames=out", "--frame-rate=inf"],
-        &["--frames=out", "--frame-rate=1e10"],
     ] {
         assert!(parse(arguments).is_err(), "{arguments:?} was accepted");
     }
@@ -72,18 +64,5 @@ fn a_size_takes_both_sides_or_none() -> Result<(), TestError> {
         parsed.size.size(),
         Some(Size::new(Dp::new(1024.0), Dp::new(600.0)))
     );
-    Ok(())
-}
-
-#[test]
-fn a_recording_takes_a_directory_and_a_frame_rate() -> Result<(), TestError> {
-    assert!(parse(&["--frames", "out"]).is_err());
-    assert!(parse(&["--frame-rate", "30"]).is_err());
-    let recording = parse(&["--frames", "out", "--frame-rate", "4"])?
-        .recording
-        .recording()
-        .ok_or(TestError::NoRecording)?;
-    assert_eq!(recording.directory, PathBuf::from("out"));
-    assert_eq!(recording.interval.get(), Duration::from_millis(250));
     Ok(())
 }

@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{
-    CopyKey, Error, app, copy,
-    model::{Demo, docked},
-    scene::{self, FIELD},
-    stage::{self, QUERY, finger, tap, tap_field_end},
-};
+pub mod stage;
+
+use crate::Error;
+use crate::{Recording, Steps, write_capture};
 use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
-use lavashell_example_support::{Recording, Steps, ThemeChoice, default_app, write_capture};
+use lavashell_example_support::{ThemeChoice, default_app};
+use lavashell_on_screen_keyboard::{
+    CopyKey, app, copy,
+    model::{Demo, docked},
+    scene::{self, FIELD},
+};
 use lavashell_test_platform::{HostScript, RecordedFrame};
+use stage::{QUERY, finger, tap, tap_field_end};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 #[derive(Clone, Copy)]

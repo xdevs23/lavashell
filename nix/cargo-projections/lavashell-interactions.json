@@ -1230,12 +1230,9 @@
           "clap",
           "csv",
           "lavashell",
-          "lavashell-actor",
           "lavashell-core",
           "lavashell-example-copy-keys",
           "lavashell-lucide",
-          "lavashell-runtime",
-          "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"
         ]
@@ -1346,20 +1343,6 @@
         "version": "0.1.0",
         "dependencies": [
           "lavashell-core",
-          "thiserror 2.0.21"
-        ]
-      },
-      {
-        "name": "lavashell-test-platform",
-        "version": "0.1.0",
-        "dependencies": [
-          "lavashell-actor",
-          "lavashell-core",
-          "lavashell-platform",
-          "lavashell-renderer",
-          "lavashell-runtime",
-          "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "thiserror 2.0.21"
         ]
       },

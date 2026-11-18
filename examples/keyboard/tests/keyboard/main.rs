@@ -5,13 +5,17 @@ mod placement;
 
 use lavashell::keyboard::ShippedLayouts;
 use lavashell::prelude::*;
-use lavashell_example_support::testing::{RecordedFrame, capture_path, click, write_first_frames};
-use lavashell_example_support::{Start, Steps, ThemeChoice, default_app, node};
+use lavashell_example_recordings::Error;
+use lavashell_example_recordings::keyboard::stage::{
+    QUERY, finger, key, key_bounds, key_name, panel, tap, tap_field_end, touch,
+};
+use lavashell_example_recordings::{RecordedFrame, Start, Steps, capture_path, write_first_frames};
+use lavashell_example_support::testing::click;
+use lavashell_example_support::{ThemeChoice, default_app, node};
 use lavashell_on_screen_keyboard::{
-    CopyKey, Error, app, copy,
+    CopyKey, Error as KeyboardError, app, copy,
     model::Demo,
     scene::{self, FIELD},
-    stage::{QUERY, finger, key, key_bounds, key_name, panel, tap, tap_field_end, touch},
 };
 use std::path::Path;
 
@@ -87,12 +91,12 @@ fn capture(group: &str, parts: impl FnOnce(&mut Play)) -> Result<(), Error> {
     let shots = (play(steps, &demo)?.into_iter())
         .map(|(name, frame)| (capture_path(&captures, &name), frame))
         .collect();
-    Ok(write_first_frames(shots)?)
+    write_first_frames(shots)
 }
 
 #[test]
 fn the_keyboard_shows_types_shifts_and_switches_pages_and_appearances() -> Result<(), Error> {
-    let shipped = ShippedLayouts::load()?;
+    let shipped = ShippedLayouts::load().map_err(KeyboardError::Layouts)?;
     capture("basics", |play| {
         show(play);
         typing(play);
@@ -104,7 +108,7 @@ fn the_keyboard_shows_types_shifts_and_switches_pages_and_appearances() -> Resul
 
 #[test]
 fn the_keyboard_switches_layouts_and_offers_further_letters() -> Result<(), Error> {
-    let shipped = ShippedLayouts::load()?;
+    let shipped = ShippedLayouts::load().map_err(KeyboardError::Layouts)?;
     capture("layouts", |play| {
         focused(play);
         layouts::layouts(play, shipped);

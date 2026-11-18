@@ -58,6 +58,7 @@ let
       projection,
       previous ? [ ],
       dummyPackages,
+      testedByOtherPackages ? [ ],
       configuration,
       validateEngine ? false,
     }:
@@ -65,7 +66,7 @@ let
       names = sources.crateNames projection.crates;
       selected = projection.selectedPackages or (selectedPackages directory);
       testPackages = lib.subtractLists (
-        dummyPackages ++ lib.concatMap packagesTestedThrough previous
+        dummyPackages ++ testedByOtherPackages ++ lib.concatMap packagesTestedThrough previous
       ) names;
       checked = testPackages != [ ];
     in
@@ -129,6 +130,7 @@ in
     {
       example ? true,
       validateEngine ? false,
+      testedByOtherPackages ? [ ],
     }:
     let
       root = sources.packageName directory;
@@ -139,6 +141,7 @@ in
         directory
         previous
         validateEngine
+        testedByOtherPackages
         ;
       projection = sources.project directory;
       source = if example then sources.frameworkSource directory else sources.sourceFor directory;

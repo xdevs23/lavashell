@@ -13,7 +13,9 @@
     "wayland-input": "tools/wayland-input",
     "native-harness": "tools/native-harness",
     "source-rules": "tools/source-rules",
-    "bevy": "crates/lavashell-bevy"
+    "bevy": "crates/lavashell-bevy",
+    "test-platform": "crates/lavashell-test-platform",
+    "recordings": "examples/recordings"
   },
   "sourceFiles": {
     "everyPackage": ["COPYING"],

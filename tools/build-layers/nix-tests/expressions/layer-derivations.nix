@@ -25,8 +25,9 @@ let
       root = /. + input.root;
     }).examples;
   inherit (tree) reference;
+  types = import (/. + input.nix + "/types.nix");
   tools = original.lib.filterAttrs (
-    _: package: package.directory != reference.directory
+    _: package: (package.route or null) == types.layerRoutes.registryOnly
   ) tree.packagedCrates;
 in
 original.lib.getAttrs input.keys (

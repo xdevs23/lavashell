@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 use clap::Parser;
-use lavashell_example_support::{ExampleArguments, RecordingArguments, SizeArguments};
+use lavashell_example_support::{ExampleArguments, SizeArguments};
 use lavashell_on_screen_keyboard::{Error, model::Demo, scene};
 use std::process::ExitCode;
 
@@ -14,8 +14,6 @@ struct Arguments {
     size: SizeArguments,
     #[arg(long)]
     fullscreen: bool,
-    #[command(flatten)]
-    recording: RecordingArguments,
 }
 
 fn main() -> ExitCode {
@@ -24,13 +22,6 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
-    if let Some(recording) = arguments.recording.recording() {
-        return lavashell_on_screen_keyboard::recording::record(
-            &recording,
-            arguments.example.theme(),
-        );
-    }
-
     let demo = Demo::new(arguments.example.theme())?;
     let size = arguments.size.size().unwrap_or_else(scene::screen);
     let app = arguments.example.app()?;

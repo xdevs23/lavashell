@@ -16,6 +16,10 @@ let
     && builtins.pathExists (root + "/examples/${name}/src/main.rs")
   ) (builtins.readDir (root + "/examples"));
   directories = lib.mapAttrs (name: _: root + "/examples/${name}") runnable;
+  packagedDirectories = lib.mapAttrs (_: directory: root + "/${directory}") contract.packagedCrates;
+  packageRoots = map sources.packageName (
+    lib.attrValues directories ++ lib.attrValues packagedDirectories
+  );
   launches = {
     wayland-input = {
       kind = types.launchKinds.helper;
@@ -73,12 +77,15 @@ let
       withEngine = route == types.layerRoutes.frameworkWithEngine;
       engine = if withEngine then artifacts.engine directory else null;
       requirements = requirementsOf dependencies;
+      testedByOtherPackages =
+        lib.remove program packageRoots ++ lib.concatMap (other: other.testPackages) testedElsewhere;
       local =
         {
           ${types.layerRoutes.registryOnly} = artifacts.registry directory;
           ${types.layerRoutes.framework} = framework;
           ${types.layerRoutes.frameworkWithEngine} = artifacts.framework directory [ framework engine ] {
             validateEngine = true;
+            inherit testedByOtherPackages;
           };
         }
         .${route};
@@ -88,7 +95,7 @@ let
           framework
           local
         ]
-        ++ lib.concatMap (other: other.testPackages) testedElsewhere
+        ++ testedByOtherPackages
       ) closure;
     in
     rustPlatform.buildRustPackage (
@@ -122,7 +129,7 @@ let
           + artifacts.copy [ local ]
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
-          inherit directory testPackages;
+          inherit directory route testPackages;
           registryArtifacts = registry;
           engineArtifacts = engine;
           frameworkArtifacts = local;
@@ -131,15 +138,11 @@ let
       }
     );
   testedElsewhere = {
-    native-harness = [
-      packagedCrates.wayland-input
-      packagedCrates.aosp-round-trip
-    ];
+    native-harness = [ packagedCrates.aosp-round-trip ];
   };
   packagedCrates = lib.mapAttrs (
-    name: directory:
-    packageSkippingTestsOf (testedElsewhere.${name} or [ ]) name (root + "/${directory}")
-  ) contract.packagedCrates;
+    name: packageSkippingTestsOf (testedElsewhere.${name} or [ ]) name
+  ) packagedDirectories;
   packages = lib.mapAttrs (packageSkippingTestsOf [ ]) directories // {
     inherit (packagedCrates) wayland-input;
   };

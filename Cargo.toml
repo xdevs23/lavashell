@@ -21,6 +21,7 @@ members = [
     "crates/lavashell-test-platform",
     "crates/lavashell-build-script",
     "examples/support",
+    "examples/recordings",
     "examples/copy-keys",
     "examples/counter",
     "examples/music-player",
@@ -87,6 +88,7 @@ lavashell-test-fixtures = { path = "crates/lavashell-test-fixtures" }
 lavashell-test-platform = { path = "crates/lavashell-test-platform" }
 lavashell-build-script = { path = "crates/lavashell-build-script" }
 lavashell-example-support = { path = "examples/support" }
+lavashell-example-recordings = { path = "examples/recordings" }
 lavashell-example-copy-keys = { path = "examples/copy-keys" }
 lavashell-bevy = { path = "crates/lavashell-bevy" }
 lavashell-counter = { path = "examples/counter" }

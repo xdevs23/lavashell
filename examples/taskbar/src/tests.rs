@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
     CopyKey, Error,
+    autoplay::pause,
     islands::Island,
     look::{SCREEN, SPACING},
     model::{App, Taskbar},
-    pause, player,
+    player,
     script::{CUES, Cue, Script},
     tag::Tag,
 };
 use lavashell::prelude::*;
-use lavashell_example_support::testing::{
-    capture_path, click, control, interaction, write_first_frames,
-};
-use lavashell_example_support::{FrameInterval, Start, Steps, ThemeChoice, default_app};
+use lavashell_example_recordings::{FrameInterval, Start, Steps, capture_path, write_first_frames};
+use lavashell_example_support::testing::{click, control, interaction};
+use lavashell_example_support::{ThemeChoice, default_app};
 use std::cell::{Cell, RefCell};
-use std::{collections::BTreeSet, path::PathBuf, rc::Rc, time::Duration};
+use std::{path::PathBuf, rc::Rc, time::Duration};
 
 const ISLANDS: [Island; 3] = [Island::Apps, Island::Media, Island::Status];
 
@@ -26,6 +26,8 @@ enum TestError {
     Taskbar(#[from] Error),
     #[error(transparent)]
     Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Recording(#[from] lavashell_example_recordings::Error),
     #[error("cannot find the test binary, beside which the captures are written")]
     TestBinary(#[source] std::io::Error),
 }
@@ -45,7 +47,7 @@ struct Play {
 }
 
 fn taskbar_app(taskbar: &Taskbar) -> Result<lavashell::prelude::App, TestError> {
-    Ok(player::app(default_app()?, taskbar, SCREEN, false)?)
+    Ok(player::app(default_app()?, taskbar, Some(SCREEN), false)?)
 }
 
 impl Play {
@@ -368,16 +370,5 @@ fn reduced_motion_keeps_each_cue_on_screen_as_long_as_its_motion_takes() -> Resu
         start = Start::after(moving);
     }
     let _frames_of_the_cues = steps.play(taskbar_app(&taskbar)?, Density::ONE)?;
-    Ok(())
-}
-
-#[test]
-fn a_recording_shows_every_cue_in_at_least_one_frame() -> Result<(), Error> {
-    let interval = constant!(FrameInterval::per_second(10));
-    let shown: BTreeSet<_> = (player::record_cues(interval, SCREEN, ThemeChoice::System)?
-        .into_iter())
-    .map(|(cue, _)| cue)
-    .collect();
-    assert_eq!(shown, (0..CUES.len()).collect());
     Ok(())
 }

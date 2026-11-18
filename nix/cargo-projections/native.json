@@ -1129,12 +1129,9 @@
           "clap",
           "csv",
           "lavashell",
-          "lavashell-actor",
           "lavashell-core",
           "lavashell-example-copy-keys",
           "lavashell-lucide",
-          "lavashell-runtime",
-          "lavashell-test-platform",
           "serde",
           "thiserror 2.0.21"
         ]
@@ -1230,20 +1227,6 @@
         "version": "0.1.0",
         "dependencies": [
           "lavashell-core",
-          "thiserror 2.0.21"
-        ]
-      },
-      {
-        "name": "lavashell-test-platform",
-        "version": "0.1.0",
-        "dependencies": [
-          "lavashell-actor",
-          "lavashell-core",
-          "lavashell-platform",
-          "lavashell-renderer",
-          "lavashell-runtime",
-          "lavashell-test-fixtures",
-          "lavashell-vulkan",
           "thiserror 2.0.21"
         ]
       },
@@ -2624,7 +2607,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "3feae413ea6f25cd9417c4b21b30705c8a7dd3104555ab3623a8b4085e77dfa7",
+        "seedHash": "ebd16e83bf69abe23dbe2f655a7fc5fd4cca184bb932ff860fbb6c74aa7ea435",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2673,7 +2656,6 @@
                 "crates/lavashell-platform",
                 "crates/lavashell-renderer",
                 "crates/lavashell-runtime",
-                "crates/lavashell-test-platform",
                 "crates/lavashell-vulkan",
                 "crates/lavashell-wayland",
                 "examples/copy-keys",
@@ -3607,77 +3589,6 @@
               ]
             },
             {
-              "member": "crates/lavashell-test-platform",
-              "manifest": {
-                "package": {
-                  "name": "lavashell-test-platform",
-                  "version": "0.0.0",
-                  "edition": "2024",
-                  "autobins": false,
-                  "autotests": false,
-                  "autoexamples": false,
-                  "autobenches": false,
-                  "build": false
-                },
-                "lib": {
-                  "path": "src/lib.rs"
-                },
-                "features": {},
-                "dependencies": {
-                  "lavashell-actor": {
-                    "package": "lavashell-actor",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-actor"
-                  },
-                  "lavashell-core": {
-                    "package": "lavashell-core",
-                    "default-features": false,
-                    "features": [
-                      "serde"
-                    ],
-                    "path": "../lavashell-core"
-                  },
-                  "lavashell-platform": {
-                    "package": "lavashell-platform",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-platform"
-                  },
-                  "lavashell-renderer": {
-                    "package": "lavashell-renderer",
-                    "default-features": false,
-                    "features": [
-                      "backdrop",
-                      "default"
-                    ],
-                    "path": "../lavashell-renderer"
-                  },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
-                  },
-                  "thiserror": {
-                    "package": "thiserror",
-                    "default-features": false,
-                    "features": [
-                      "default",
-                      "std"
-                    ],
-                    "version": "=2.0.21"
-                  }
-                }
-              },
-              "targets": [
-                {
-                  "path": "src/lib.rs",
-                  "main": false
-                }
-              ]
-            },
-            {
               "member": "crates/lavashell-vulkan",
               "manifest": {
                 "package": {
@@ -4088,12 +3999,6 @@
                     "features": [],
                     "path": "../../crates/lavashell"
                   },
-                  "lavashell-actor": {
-                    "package": "lavashell-actor",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../../crates/lavashell-actor"
-                  },
                   "lavashell-core": {
                     "package": "lavashell-core",
                     "default-features": false,
@@ -4107,18 +4012,6 @@
                     "default-features": false,
                     "features": [],
                     "path": "../../crates/lavashell-lucide"
-                  },
-                  "lavashell-runtime": {
-                    "package": "lavashell-runtime",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../../crates/lavashell-runtime"
-                  },
-                  "lavashell-test-platform": {
-                    "package": "lavashell-test-platform",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../../crates/lavashell-test-platform"
                   },
                   "serde": {
                     "package": "serde",
@@ -5191,12 +5084,9 @@
                   "clap",
                   "csv",
                   "lavashell",
-                  "lavashell-actor",
                   "lavashell-core",
                   "lavashell-example-copy-keys",
                   "lavashell-lucide",
-                  "lavashell-runtime",
-                  "lavashell-test-platform",
                   "serde",
                   "thiserror"
                 ]
@@ -5280,18 +5170,6 @@
                   "rustix",
                   "thiserror",
                   "unicode-segmentation"
-                ]
-              },
-              {
-                "name": "lavashell-test-platform",
-                "version": "0.0.0",
-                "dependencies": [
-                  "lavashell-actor",
-                  "lavashell-core",
-                  "lavashell-platform",
-                  "lavashell-renderer",
-                  "lavashell-vulkan",
-                  "thiserror"
                 ]
               },
               {

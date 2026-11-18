@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use crate::frame_log::record;
+use crate::frame_recorder::record;
 use lavashell::core::frame::FrameTime;
 use lavashell::core::surface::SurfaceId;
 use lavashell::prelude::*;
@@ -13,7 +13,7 @@ use std::{cell::RefCell, cmp::Ordering, mem, rc::Rc, time::Duration};
 pub struct Steps<C, L, E> {
     context: Rc<C>,
     waiting: VecDeque<Step<C, L, E>>,
-    pub(crate) links: PacedLinks,
+    links: PacedLinks,
 }
 
 pub struct Start {
@@ -142,6 +142,11 @@ impl<C: 'static, L: Clone + 'static, E: From<Error> + 'static> Steps<C, L, E> {
 
     pub fn mark_sequence(&mut self, start: Start, label: L) {
         self.add(start, Work::Mark(label, MarkRecording::EveryFrame));
+    }
+
+    pub fn play(self, app: App, density: Density) -> Result<Vec<(L, RecordedFrame)>, E> {
+        let script = HostScript::new(density).record_paced(self.links.clone());
+        self.record(app, script)
     }
 
     pub fn record(self, app: App, script: HostScript) -> Result<Vec<(L, RecordedFrame)>, E> {

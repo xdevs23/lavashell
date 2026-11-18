@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Error, FONT_DIRECTORY};
-use lavashell::PlatformRunError;
-use lavashell::renderer::{StartError, StateError};
-use lavashell_actor::SpawnError;
-use lavashell_runtime::RendererError;
 use std::fmt;
 
 pub enum NextStep {
@@ -64,17 +60,9 @@ impl ExampleError for Error {
     fn next_step(&self) -> NextStep {
         match self {
             Self::FontDirectory | Self::Fonts(_) => NextStep::EnterDevelopmentShell,
-            Self::Record(PlatformRunError::StartRenderer(SpawnError::Start(
-                RendererError::Start(StartError::State(StateError::CreateRenderer(_))),
-            ))) => NextStep::ProvideVulkanDriver,
             Self::App(_) => NextStep::StartInWaylandSession,
-            Self::Number(_)
-            | Self::TextScale
-            | Self::Seconds(_)
-            | Self::Length(_)
-            | Self::FrameRate => NextStep::CorrectOptions,
-            Self::CreateDirectory { .. } | Self::WriteCapture { .. } => {
-                NextStep::ChooseWritableCapture
+            Self::Number(_) | Self::TextScale | Self::Seconds(_) | Self::Length(_) => {
+                NextStep::CorrectOptions
             }
             Self::CreateFrameLog(_) | Self::WriteFrameReport(_) | Self::FlushFrameLog(_) => {
                 NextStep::ChooseWritableFrameLog
@@ -85,16 +73,7 @@ impl ExampleError for Error {
             | Self::MissingControl(_)
             | Self::MissingNode { .. }
             | Self::Setup(_)
-            | Self::Record(_)
-            | Self::NotServed(_)
-            | Self::Press(_)
-            | Self::UnplayedSteps(_)
-            | Self::UnreadDelay
-            | Self::NothingShown { .. }
             | Self::Icon(_) => NextStep::ReportDefect,
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

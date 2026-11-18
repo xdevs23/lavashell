@@ -3,12 +3,13 @@ use super::{Play, platform, query, settled, shot, showing, touch_key};
 use icu_locale_core::langid;
 use lavashell::keyboard::{Layout, ShippedLayouts};
 use lavashell::prelude::*;
-use lavashell_example_support::{Start, node};
-use lavashell_on_screen_keyboard::{
-    CopyKey, Error, copy,
-    model::Demo,
-    stage::{QUERY, finger, key_bounds, tap, tap_at, touch},
+use lavashell_example_recordings::Error;
+use lavashell_example_recordings::Start;
+use lavashell_example_recordings::keyboard::stage::{
+    QUERY, finger, key_bounds, tap, tap_at, touch,
 };
+use lavashell_example_support::node;
+use lavashell_on_screen_keyboard::{CopyKey, copy, model::Demo};
 use std::{cell::Cell, rc::Rc};
 
 fn tap_globe(view: &mut View, _: Viewport, _: &Demo) -> Result<(), Error> {

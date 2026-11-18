@@ -1,92 +1,72 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use crate::error::reject_failures;
 use lavashell::renderer::FrameTiming;
 use lavashell::{core::frame::PresentationFlag, prelude::*};
-use lavashell_test_platform::{HostScript, RecordedFrames, ScriptedHost, TestPlatform};
 use serde::Serialize;
-use std::{cell::RefCell, ffi::OsStr, rc::Rc};
+use std::{
+    cell::RefCell,
+    ffi::{OsStr, OsString},
+    rc::Rc,
+};
 
 pub fn run(app: App) -> Result<(), Error> {
-    logged(app, None, on_platform)
+    logged(app, None)
 }
 
 pub fn run_observed(app: App, observer: impl FnMut(FrameReport) + 'static) -> Result<(), Error> {
-    logged(app, Some(Box::new(observer)), on_platform)
+    logged(app, Some(Box::new(observer)))
 }
 
-pub(crate) fn record(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
-    serve(script, |host| {
-        reject_component_failures(app, |app| {
-            logged(app, None, |app| on_test_platform(app, host))
-        })
-    })
-}
-
-pub(crate) fn record_unlogged(app: App, script: HostScript) -> Result<RecordedFrames, Error> {
-    serve(script, |host| {
-        reject_component_failures(app, |app| on_test_platform(app, host))
-    })
-}
-
-fn serve(
-    script: HostScript,
-    run: impl FnOnce(ScriptedHost) -> Result<(), Error>,
-) -> Result<RecordedFrames, Error> {
-    let (ran, frames) = script.serve(run);
-    ran?;
-    frames.map_err(Error::NotServed)
-}
-
-fn on_test_platform(app: App, host: ScriptedHost) -> Result<(), Error> {
-    lavashell::run::<TestPlatform>(app, host).map_err(Error::Record)
-}
-
-fn reject_component_failures(
-    app: App,
-    run: impl FnOnce(App) -> Result<(), Error>,
-) -> Result<(), Error> {
-    let failures = Rc::new(RefCell::new(Vec::new()));
-    let observed = Rc::clone(&failures);
-    run(app.failure_observer(move |_, failure| observed.borrow_mut().push(failure)))?;
-    reject_failures(failures.take())
+fn logged(app: App, observer: Option<Box<dyn FnMut(FrameReport)>>) -> Result<(), Error> {
+    let (app, log) = FrameLog::observed(app, observer);
+    on_platform(app)?;
+    log.write()
 }
 
 fn on_platform(app: App) -> Result<(), Error> {
     lavashell::run::<Platform>(app, ()).map_err(Error::App)
 }
 
-fn logged(
-    app: App,
-    mut observer: Option<Box<dyn FnMut(FrameReport)>>,
-    run: impl FnOnce(App) -> Result<(), Error>,
-) -> Result<(), Error> {
-    let path = std::env::var_os("LAVASHELL_FRAME_LOG");
-    let reports = Rc::new(RefCell::new(Vec::new()));
-    let log = path.is_some().then(|| reports.clone());
-    let app = if log.is_some() {
-        app.frame_timing(FrameTiming::Measured)
-    } else {
-        app
-    };
-    let app = if observer.is_some() || log.is_some() {
-        app.frame_observer(move |report| {
-            if let Some(observer) = &mut observer {
-                observer(report);
-            }
-            if let Some(log) = &log {
-                log.borrow_mut().push(report);
-            }
-        })
-    } else {
-        app
-    };
+pub struct FrameLog {
+    path: Option<OsString>,
+    reports: Rc<RefCell<Vec<FrameReport>>>,
+}
 
-    run(app)?;
+impl FrameLog {
+    #[must_use]
+    pub fn start(app: App) -> (App, Self) {
+        Self::observed(app, None)
+    }
 
-    match path {
-        Some(path) => write_frame_reports(&path, &reports.borrow()),
-        None => Ok(()),
+    fn observed(app: App, mut observer: Option<Box<dyn FnMut(FrameReport)>>) -> (App, Self) {
+        let path = std::env::var_os("LAVASHELL_FRAME_LOG");
+        let reports = Rc::new(RefCell::new(Vec::new()));
+        let log = path.is_some().then(|| reports.clone());
+        let app = if log.is_some() {
+            app.frame_timing(FrameTiming::Measured)
+        } else {
+            app
+        };
+        let app = if observer.is_some() || log.is_some() {
+            app.frame_observer(move |report| {
+                if let Some(observer) = &mut observer {
+                    observer(report);
+                }
+                if let Some(log) = &log {
+                    log.borrow_mut().push(report);
+                }
+            })
+        } else {
+            app
+        };
+        (app, Self { path, reports })
+    }
+
+    pub fn write(self) -> Result<(), Error> {
+        match self.path {
+            Some(path) => write_frame_reports(&path, &self.reports.borrow()),
+            None => Ok(()),
+        }
     }
 }
 

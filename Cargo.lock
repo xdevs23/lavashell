@@ -2822,18 +2822,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-example-recordings"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "lavashell",
+ "lavashell-actor",
+ "lavashell-core",
+ "lavashell-example-support",
+ "lavashell-materials-example",
+ "lavashell-music-player",
+ "lavashell-on-screen-keyboard",
+ "lavashell-runtime",
+ "lavashell-taskbar",
+ "lavashell-test-platform",
+ "png",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "lavashell-example-support"
 version = "0.1.0"
 dependencies = [
  "clap",
  "csv",
  "lavashell",
- "lavashell-actor",
  "lavashell-core",
  "lavashell-example-copy-keys",
  "lavashell-lucide",
- "lavashell-runtime",
- "lavashell-test-platform",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -2891,6 +2907,7 @@ dependencies = [
  "clap",
  "lavashell",
  "lavashell-example-copy-keys",
+ "lavashell-example-recordings",
  "lavashell-example-support",
  "thiserror 2.0.21",
 ]
@@ -2902,6 +2919,7 @@ dependencies = [
  "clap",
  "lavashell",
  "lavashell-example-copy-keys",
+ "lavashell-example-recordings",
  "lavashell-example-support",
  "thiserror 2.0.21",
 ]
@@ -2913,6 +2931,7 @@ dependencies = [
  "clap",
  "lavashell",
  "lavashell-example-copy-keys",
+ "lavashell-example-recordings",
  "lavashell-example-support",
  "rand 0.10.3",
  "thiserror 2.0.21",
@@ -2943,8 +2962,8 @@ dependencies = [
  "icu_locale_core",
  "lavashell",
  "lavashell-example-copy-keys",
+ "lavashell-example-recordings",
  "lavashell-example-support",
- "lavashell-test-platform",
  "thiserror 2.0.21",
 ]
 
@@ -3064,8 +3083,8 @@ dependencies = [
  "clap",
  "lavashell",
  "lavashell-example-copy-keys",
+ "lavashell-example-recordings",
  "lavashell-example-support",
- "lavashell-test-platform",
  "thiserror 2.0.21",
 ]
 

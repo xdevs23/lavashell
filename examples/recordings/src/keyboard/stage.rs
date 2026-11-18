@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{
-    Error,
-    model::Demo,
-    scene::{FIELD, FIELD_TEXT},
-};
+use crate::Error;
 use lavashell::core::accessibility::AccessibleNode;
 use lavashell::prelude::*;
 use lavashell_example_support::node;
+use lavashell_on_screen_keyboard::{
+    model::Demo,
+    scene::{FIELD, FIELD_TEXT},
+};
 
 pub const QUERY: &str = "mara vale glasshouse live at the harbour sessions extended";
 

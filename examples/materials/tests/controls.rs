@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 use lavashell::{materials::SurfaceTreatment, prelude::*};
-use lavashell_example_support::testing::{
-    Shaping, capture_path, click, control, drag, write_first_frames,
-};
-use lavashell_example_support::{Start, Steps, ThemeChoice, default_app};
+use lavashell_example_recordings::{Start, Steps, capture_path, write_first_frames};
+use lavashell_example_support::testing::{Shaping, click, control, drag};
+use lavashell_example_support::{ThemeChoice, default_app};
 use lavashell_materials_example::{
-    CopyKey, Error, Tag, app,
+    CopyKey, Tag, app,
     model::{Demo, Run},
 };
 use std::path::{Path, PathBuf};
 use std::{cell::Cell, rc::Rc};
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    Materials(#[from] lavashell_materials_example::Error),
+    #[error(transparent)]
+    Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Recording(#[from] lavashell_example_recordings::Error),
+}
 
 type Play = Steps<Demo, PathBuf, Error>;
 

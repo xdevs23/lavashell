@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
-use lavashell_example_support::testing::{
-    Shaping, capture_path, click, control, write_first_frames,
-};
-use lavashell_example_support::{Start, Steps, Theme, ThemeChoice, at_rest, default_app, node};
+use lavashell_example_recordings::{Start, Steps, at_rest, capture_path, write_first_frames};
+use lavashell_example_support::testing::{Shaping, click, control};
+use lavashell_example_support::{Theme, ThemeChoice, default_app, node};
 use lavashell_music_player::{
-    Error, app,
+    app,
     music::{self, AlbumId, CopyKey, PLAYER_HEIGHT, Tag, TrackId, copy},
 };
 use std::collections::BTreeSet;
@@ -14,6 +13,16 @@ use std::path::{Path, PathBuf};
 use std::{cell::Cell, rc::Rc};
 
 const WINDOW: Size = Size::new(Dp::new(1400.0), Dp::new(1000.0));
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error(transparent)]
+    MusicPlayer(#[from] lavashell_music_player::Error),
+    #[error(transparent)]
+    Example(#[from] lavashell_example_support::Error),
+    #[error(transparent)]
+    Recording(#[from] lavashell_example_recordings::Error),
+}
 
 type Play = Steps<State<music::Model>, PathBuf, Error>;
 
@@ -43,7 +52,7 @@ fn record(play: Play, app: App) -> Result<(), Error> {
 
 fn library(model: &State<music::Model>, size: Size) -> Result<App, Error> {
     let theme = Theme::new(ThemeChoice::System)?;
-    app(default_app()?, model, &theme, Some(size))
+    Ok(app(default_app()?, model, &theme, Some(size))?)
 }
 
 fn painted_texts(
@@ -215,7 +224,8 @@ fn panel_reaches_the_library() -> Result<(), Error> {
         Window::new(copy(CopyKey::Title), "lavashell.music.panel")
             .size(WINDOW.width, PLAYER_HEIGHT),
         move |ui| music::panel(ui, &shown, &theme, icons),
-    )?;
+    )
+    .map_err(lavashell_example_support::Error::Setup)?;
     let is_library =
         |view: &View| (view.bounds_of(&Tag::Navigation(CopyKey::NavFavorites))).is_some();
     let mut play = Play::new(model);

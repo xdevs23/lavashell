@@ -19,18 +19,22 @@ pub const ISLAND_RADIUS: Dp = Dp::new(BUTTON_RADIUS.get() + ISLAND_PADDING.get()
 pub const SPACING: Dp = Dp::new(28.0);
 pub const SCREEN: Size = Size::new(Dp::new(1280.0), Dp::new(720.0));
 
+#[must_use]
 pub fn spring() -> Spring {
     spring!(Duration::from_millis(620), 0.72)
 }
 
+#[must_use]
 pub fn body() -> TextStyle {
     TextStyle::new(BODY, 15.sp(), INK)
 }
 
+#[must_use]
 pub fn title() -> TextStyle {
     TextStyle::new(DISPLAY, 24.sp(), INK).weight(FontWeight::BOLD)
 }
 
+#[must_use]
 pub fn glass(scheme: ColorScheme) -> Material {
     const LENS: Glass = Glass {
         refraction: constant!(NonNegativeDp::try_new(Dp::new(22.0))),
@@ -51,6 +55,7 @@ pub fn glass(scheme: ColorScheme) -> Material {
         )))
 }
 
+#[must_use]
 pub fn slot(accent: Color) -> StateStyles {
     styles(move |state| {
         let appearance = common(state);
@@ -63,10 +68,12 @@ pub fn slot(accent: Color) -> StateStyles {
     })
 }
 
+#[must_use]
 pub fn media() -> StateStyles {
     styles(|state| lit(state.selected, App::Music.accent(), common(state)))
 }
 
+#[must_use]
 pub fn status() -> StateStyles {
     styles(|state| {
         InteractionAppearance::default()

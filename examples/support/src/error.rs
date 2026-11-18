@@ -3,7 +3,7 @@ use lavashell::core::ui::NodeTag;
 use lavashell::core::view::{ComponentFailure, FrameError};
 use lavashell::prelude::{NumberError, Role};
 use lavashell::renderer::Error as RendererError;
-use std::{num::ParseFloatError, path::PathBuf, time::TryFromFloatSecsError};
+use std::{num::ParseFloatError, time::TryFromFloatSecsError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -16,18 +16,6 @@ pub enum Error {
     Fonts(#[source] RendererError),
     #[error("cannot create the shaper that measures the text of a view")]
     Shaper(#[source] RendererError),
-    #[error("cannot create the directory {}", path.display())]
-    CreateDirectory {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("cannot write the capture {}", path.display())]
-    WriteCapture {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
     #[error("cannot show the frame of the view")]
     Frame(#[source] FrameError),
     #[error("a component of the view failed in a frame")]
@@ -40,18 +28,6 @@ pub enum Error {
     Setup(#[from] lavashell::SetupError),
     #[error("the app failed")]
     App(#[source] lavashell::RunError),
-    #[error("the app failed on the test platform")]
-    Record(#[source] lavashell::PlatformRunError<lavashell_test_platform::TestPlatform>),
-    #[error("the test platform returned no recorded frames")]
-    NotServed(#[source] lavashell_test_platform::Error),
-    #[error("the recording came to rest with {0} steps left to play")]
-    UnplayedSteps(usize),
-    #[error("the test platform cannot press the keys of a step")]
-    Press(#[source] lavashell_test_platform::Error),
-    #[error("the view does not give a delay for the next step")]
-    UnreadDelay,
-    #[error("the window {app_id} did not show a frame")]
-    NothingShown { app_id: String },
     #[error("cannot create the frame log")]
     CreateFrameLog(#[source] csv::Error),
     #[error("cannot write a frame report to the frame log")]
@@ -66,15 +42,11 @@ pub enum Error {
     Seconds(#[source] TryFromFloatSecsError),
     #[error("a length must be finite and at least zero")]
     Length(#[source] NumberError),
-    #[error("a frame rate must be finite, above zero and at most one frame per nanosecond")]
-    FrameRate,
     #[error("cannot decode an icon of the example")]
     Icon(#[source] lavashell_lucide::Error),
 }
 
-pub(crate) fn reject_failures(
-    failures: impl IntoIterator<Item = ComponentFailure>,
-) -> Result<(), Error> {
+pub fn reject_failures(failures: impl IntoIterator<Item = ComponentFailure>) -> Result<(), Error> {
     let failures: Vec<_> = failures.into_iter().collect();
     if failures.is_empty() {
         Ok(())

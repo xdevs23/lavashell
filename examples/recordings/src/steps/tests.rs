@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::platform;
+use lavashell_example_support::platform;
 use std::cell::Cell;
 
 fn timing(sequence: u64, milliseconds: u64) -> FrameTime {
@@ -270,7 +270,8 @@ fn play_labeled_times(
     app.window(
         Window::new("test", "test.steps").size(10.dp(), 10.dp()),
         |_| {},
-    )?;
+    )
+    .map_err(lavashell_example_support::Error::Setup)?;
     Ok((steps.play(app, Density::ONE)?.into_iter())
         .map(|(label, frame)| (label, frame.time.presentation))
         .collect())

@@ -15,6 +15,7 @@ pub enum App {
 impl App {
     pub const ALL: [Self; 3] = [Self::Navigation, Self::Music, Self::Radio];
 
+    #[must_use]
     pub fn label(self) -> CopyKey {
         match self {
             Self::Navigation => CopyKey::Navigation,
@@ -23,6 +24,7 @@ impl App {
         }
     }
 
+    #[must_use]
     pub fn accent(self) -> Color {
         match self {
             Self::Navigation => Color::oklch(0.627, 0.141, 148.0),
@@ -41,6 +43,7 @@ pub enum Playlist {
 }
 
 impl Playlist {
+    #[must_use]
     pub fn current(self) -> SampleTrack {
         match self {
             Self::Undertow => UNDERTOW,
@@ -94,6 +97,7 @@ impl Icons {
         })
     }
 
+    #[must_use]
     pub fn of(self, app: App) -> &'static Icon {
         match app {
             App::Navigation => self.navigation,

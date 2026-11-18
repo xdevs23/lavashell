@@ -2,11 +2,11 @@
 use super::{Play, near, set, settled, shot};
 use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
+use lavashell_example_recordings::Error;
+use lavashell_example_recordings::keyboard::stage::{QUERY, finger, key, panel};
 use lavashell_on_screen_keyboard::{
-    Error,
     model::{Demo, docked},
     scene::{self, FIELD},
-    stage::{QUERY, finger, key, panel},
 };
 
 fn docked_at(panel: Rect, side: Side) -> bool {

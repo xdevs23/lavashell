@@ -1,28 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
-mod profile;
-
 use clap::Parser;
 use lavashell_example_support::ExampleArguments;
-use lavashell_materials_example::{
-    APP_ID, Error,
-    model::{Demo, Run},
-};
-use profile::Profile;
-use std::{path::PathBuf, process::ExitCode};
+use lavashell_materials_example::{Error, OutputArguments, build_app, model::Run};
+use std::process::ExitCode;
 
 #[derive(Parser)]
 struct Arguments {
     #[command(flatten)]
     example: ExampleArguments,
-    #[arg(long)]
-    fullscreen: bool,
+    #[command(flatten)]
+    output: OutputArguments,
     #[arg(long)]
     autoplay: bool,
-    #[arg(long, value_enum, default_value_t = Profile::Srgb)]
-    profile: Profile,
-    #[arg(long, value_name = "FILE")]
-    screenshot: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -31,21 +21,9 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Error> {
     let arguments = Arguments::parse();
-    let run = match arguments.screenshot {
-        Some(_) => Run::Screenshot,
-        None => Run::Live {
-            autoplay: arguments.autoplay,
-        },
+    let run = Run::Live {
+        autoplay: arguments.autoplay,
     };
-    let demo = Demo::new(run, arguments.example.theme())?;
-    demo.request.set(arguments.profile.request());
-
-    let app = arguments.example.app()?;
-    let app = lavashell_materials_example::app(app, &demo, None, arguments.fullscreen)?;
-    if let Some(path) = &arguments.screenshot {
-        return Ok(lavashell_example_support::write_screenshot(
-            app, APP_ID, path,
-        )?);
-    }
+    let app = build_app(&arguments.example, arguments.output, run)?;
     Ok(lavashell_example_support::run(app)?)
 }

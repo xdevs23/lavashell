@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
-use lavashell_example_support::{ThemeChoice, default_app, write_screenshot};
+use lavashell_example_recordings::{Error, write_screenshot};
+use lavashell_example_support::{ThemeChoice, default_app};
 use lavashell_materials_example::{
-    APP_ID, Error, app,
+    APP_ID, app,
     model::{Demo, Run},
 };
 use std::path::Path;

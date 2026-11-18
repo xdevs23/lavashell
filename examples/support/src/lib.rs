@@ -2,7 +2,6 @@
 #![forbid(unsafe_code)]
 mod arguments;
 mod breakpoint;
-mod capture;
 mod cover;
 mod error;
 mod frame_log;
@@ -11,25 +10,21 @@ mod palette;
 mod platform;
 mod report;
 mod samples;
-mod steps;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod theme;
 
-pub use arguments::{ExampleArguments, Recording, RecordingArguments, SizeArguments};
+pub use arguments::{ExampleArguments, SizeArguments, parse_number};
 pub use breakpoint::{Breakpoint, Layout};
-pub use capture::{write_capture, write_screenshot};
 pub use cover::cover;
-pub use error::Error;
-pub use frame_log::{run, run_observed};
+pub use error::{Error, reject_failures};
+pub use frame_log::{FrameLog, run, run_observed};
 pub use lavashell_lucide as lucide;
-pub use lavashell_test_platform::FrameInterval;
 pub use next_steps::{ExampleError, NextStep};
 pub use palette::{TEAL_PALETTE, TealPalette};
 pub use platform::platform;
 pub use report::{exit_code, report, report_failure};
 pub use samples::{HARBOR_LIGHTS, SampleTrack, UNDERTOW};
-pub use steps::{Start, Steps, at_rest};
 pub use theme::{Theme, ThemeChoice, ThemeSwitchColors};
 
 use lavashell::core::accessibility::AccessibleNode;

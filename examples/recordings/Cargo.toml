@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[package]
+name = "lavashell-example-recordings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+clap.workspace = true
+lavashell.workspace = true
+lavashell-actor.workspace = true
+lavashell-example-support.workspace = true
+lavashell-materials-example.workspace = true
+lavashell-music-player.workspace = true
+lavashell-on-screen-keyboard.workspace = true
+lavashell-runtime.workspace = true
+lavashell-taskbar.workspace = true
+lavashell-test-platform.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lavashell-core = { workspace = true, features = ["test-support"] }
+png.workspace = true

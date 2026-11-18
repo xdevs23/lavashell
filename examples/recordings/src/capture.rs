@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
-use crate::frame_log::record_unlogged;
+use crate::frame_recorder::record_unlogged;
 use lavashell::prelude::{App, Density};
-use lavashell_test_platform::{HostScript, PacedLinks};
-use std::path::Path;
+use lavashell_test_platform::{HostScript, PacedLinks, RecordedFrame};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 pub fn write_capture(path: impl AsRef<Path>, png: &[u8]) -> Result<(), Error> {
     let path = path.as_ref();
@@ -19,6 +20,11 @@ pub fn write_capture(path: impl AsRef<Path>, png: &[u8]) -> Result<(), Error> {
     })
 }
 
+#[must_use]
+pub fn capture_path(directory: impl AsRef<Path>, name: &str) -> PathBuf {
+    directory.as_ref().join(format!("{name}.png"))
+}
+
 pub fn write_screenshot(app: App, app_id: &str, path: &Path) -> Result<(), Error> {
     let script = HostScript::new(Density::ONE).record_paced(PacedLinks::default());
     let frames = record_unlogged(app, script)?;
@@ -28,4 +34,12 @@ pub fn write_screenshot(app: App, app_id: &str, path: &Path) -> Result<(), Error
             app_id: app_id.to_owned(),
         }),
     }
+}
+
+pub fn write_first_frames(frames: Vec<(PathBuf, RecordedFrame)>) -> Result<(), Error> {
+    let mut first = BTreeMap::new();
+    for (path, frame) in frames {
+        let _first_frame_kept = first.entry(path).or_insert(frame.png);
+    }
+    (first.into_iter()).try_for_each(|(path, png)| write_capture(path, &png))
 }
