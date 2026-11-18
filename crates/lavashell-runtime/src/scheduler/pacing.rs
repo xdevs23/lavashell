@@ -18,6 +18,9 @@ enum Stage {
         display_ready: bool,
     },
     Shown,
+    Unrendered {
+        next_refresh: Option<Duration>,
+    },
 }
 
 #[derive(Debug, Default)]
@@ -55,7 +58,11 @@ impl Pacing {
             Stage::Composing { frame } if sequence >= Some(FrameSequence(frame.sequence)) => {
                 Some(self.render(frame))
             }
-            Stage::Ready | Stage::Composing { .. } | Stage::Drawing { .. } | Stage::Shown => {
+            Stage::Ready
+            | Stage::Composing { .. }
+            | Stage::Drawing { .. }
+            | Stage::Shown
+            | Stage::Unrendered { .. } => {
                 self.undrawn = true;
                 None
             }
@@ -71,7 +78,10 @@ impl Pacing {
     }
 
     pub fn start_commit(&mut self) -> bool {
-        let free = matches!(self.stage, Stage::Ready | Stage::Shown);
+        let free = matches!(
+            self.stage,
+            Stage::Ready | Stage::Shown | Stage::Unrendered { .. }
+        );
         let starts = self.uncommitted && free && !self.committing;
         if starts {
             self.uncommitted = false;
@@ -97,7 +107,11 @@ impl Pacing {
                 sequence,
                 display_ready,
             } if sequence == frame.sequence => display_ready,
-            Stage::Ready | Stage::Composing { .. } | Stage::Drawing { .. } | Stage::Shown => {
+            Stage::Ready
+            | Stage::Composing { .. }
+            | Stage::Drawing { .. }
+            | Stage::Shown
+            | Stage::Unrendered { .. } => {
                 return None;
             }
         };
@@ -119,6 +133,16 @@ impl Pacing {
         }
     }
 
+    pub fn unrendered(&mut self, frame: FrameTime) {
+        if let Stage::Drawing { sequence, .. } = self.stage
+            && sequence == frame.sequence
+        {
+            let next_refresh = frame.refresh.map(|refresh| frame.now + refresh);
+            self.stage = Stage::Unrendered { next_refresh };
+            self.uncommitted = true;
+        }
+    }
+
     pub fn display_ready(
         &mut self,
         redraw: Redraw,
@@ -132,7 +156,7 @@ impl Pacing {
                     display_ready: true,
                 };
             }
-            Stage::Ready | Stage::Composing { .. } => {}
+            Stage::Ready | Stage::Composing { .. } | Stage::Unrendered { .. } => {}
         }
         self.start_wanted(redraw, now)
     }
@@ -160,7 +184,11 @@ impl Pacing {
 
     pub fn wake(&self, now: Duration) -> Option<Duration> {
         let change = self.next_change.map(|change| self.clock.start_for(change));
-        [self.deadline, change]
+        let refresh = match self.stage {
+            Stage::Unrendered { next_refresh } => next_refresh,
+            Stage::Ready | Stage::Composing { .. } | Stage::Drawing { .. } | Stage::Shown => None,
+        };
+        [self.deadline, change, refresh]
             .into_iter()
             .flatten()
             .filter(|wake| *wake > now)
@@ -168,9 +196,18 @@ impl Pacing {
     }
 
     fn start_wanted(&mut self, redraw: Redraw, now: Duration) -> Option<(FrameKind, FrameTime)> {
-        if !matches!(self.stage, Stage::Ready) {
-            return None;
-        }
+        let redraw = match self.stage {
+            Stage::Ready => redraw,
+            Stage::Unrendered { .. } if self.uncommitted => return None,
+            Stage::Unrendered {
+                next_refresh: Some(next_refresh),
+            } if next_refresh <= now => redraw,
+            Stage::Unrendered { next_refresh: None } => Redraw::OnChange,
+            Stage::Unrendered { .. }
+            | Stage::Composing { .. }
+            | Stage::Drawing { .. }
+            | Stage::Shown => return None,
+        };
         let kind = match (self.wanted?, redraw) {
             (ViewState::Unconfigured, _) => None,
             (ViewState::Changed, _) | (ViewState::Unchanged, Redraw::Continuous) => {

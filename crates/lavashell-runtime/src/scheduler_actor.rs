@@ -103,6 +103,7 @@ impl Merge for SchedulerItem {
             | SchedulerInput::StateChanged(_)
             | SchedulerInput::Committed(_)
             | SchedulerInput::Rendered { .. }
+            | SchedulerInput::Unrendered { .. }
             | SchedulerInput::Closed(_) => MergeEffect::Appends,
         }
     }

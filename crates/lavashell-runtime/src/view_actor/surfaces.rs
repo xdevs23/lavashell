@@ -4,7 +4,6 @@ use super::open_surfaces::Opening;
 use super::panels::{OPENING_LENGTH, opening_size};
 use crate::layer_surface::LayerSurface;
 use crate::panels::Panel;
-use crate::rendered_platform::RenderedPlatform;
 use crate::scheduler::SchedulerInput;
 use crate::session_lock::LockStep;
 use crate::view_actor::ViewError;
@@ -14,11 +13,11 @@ use lavashell_core::output::OutputRequest;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{
-    OutputId, PanelRole, PlatformRequest, Role, SessionLockRequest, SurfaceAppearance,
+    OutputId, PanelRole, Platform, PlatformRequest, Role, SessionLockRequest, SurfaceAppearance,
     SurfaceRequest, SurfaceSpec,
 };
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn open_window(&mut self, window: Window, mut view: View) -> Result<(), ViewError> {
         let spec = window.spec(&mut view, &mut self.shaper)?;
         let opening = Opening {

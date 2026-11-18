@@ -10,7 +10,7 @@ use lavashell_core::transfer::TransferError;
 use lavashell_core::units::NumberError;
 use lavashell_core::view::FrameError;
 use lavashell_test_fixtures::FrameFailure;
-use lavashell_vulkan_renderer::NoStreams;
+use lavashell_vulkan_renderer::HeadlessBackend;
 use rustix::io::Errno;
 use std::io;
 use std::sync::Arc;
@@ -65,11 +65,13 @@ pub(crate) enum TestError {
     #[error("the scheduler could not start or stop")]
     SchedulerActor(#[from] crate::scheduler_actor::Error),
     #[error("the renderer could not start")]
-    RendererStart(#[from] SpawnError<RendererError<NoControl, NoStreams>>),
+    RendererStart(#[from] SpawnError<RendererError<NoControl, HeadlessBackend>>),
     #[error("the renderer failed")]
-    RendererJoin(#[from] JoinError<RendererError<NoControl, NoStreams>>),
+    RendererJoin(#[from] JoinError<RendererError<NoControl, HeadlessBackend>>),
     #[error("the renderer stopped")]
     RendererStopped(#[from] RendererStopped),
+    #[error("a painter could not be created")]
+    Painter(#[from] lavashell_renderer::Error),
     #[error("the scene pipeline failed to start")]
     ScenePipeline(#[from] crate::scene_pipeline::Error),
     #[error("the scene pipeline stopped with a failure")]

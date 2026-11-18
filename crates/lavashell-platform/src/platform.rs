@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    Attach, Backend, Capability, OutputId, PlatformEvent, PlatformRequest, StreamTask,
-    SurfaceControl, TimingEvent,
+    Attach, Backend, Capability, OutputId, PlatformEvent, PlatformRequest, RendererBackend,
+    StreamTask, SurfaceControl, TimingEvent,
 };
 use lavashell_actor::{Clock, Outlet, Receiver};
 use lavashell_core::surface::SurfaceId;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub trait Platform: Sized + Send + 'static {
     type Setup;
     type Error: std::error::Error + Send + 'static;
-    type Backend: Backend;
+    type Backend: RendererBackend;
     type Control: SurfaceControl + Send + 'static;
 
     fn connect(setup: Self::Setup) -> Result<Connection<Self>, Self::Error>;
@@ -23,7 +23,7 @@ pub trait Platform: Sized + Send + 'static {
 
 pub struct Connection<P: Platform> {
     pub platform: P,
-    pub backend: P::Backend,
+    pub backend: Option<P::Backend>,
     pub host: HostFacts,
     pub clock: Arc<dyn Clock>,
 }

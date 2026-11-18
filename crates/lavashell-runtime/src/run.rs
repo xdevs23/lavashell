@@ -2,30 +2,29 @@
 
 use crate::app::App;
 use crate::clipboard::ClipboardTransfers;
+use crate::controls_actor::PlatformControlsError;
 use crate::deadline_receiver::DeadlineReceiver;
 use crate::drag::Drags;
 use crate::input::InputFilter;
 use crate::layer_surface::LayerSurface;
 use crate::observers::Observers;
 use crate::panels::PanelsPerOutput;
-use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::PlatformRendererError;
 use crate::run_end::RunEnd;
 use crate::session_lock::LockConfiguration;
 use crate::view_actions::ActionQueue;
-use crate::view_actor::{Connected, StopNotice, Stopped, ViewActor, ViewError, ViewInput};
+use crate::view_actor::{Connected, StopNotice, Stopped, ViewActor, ViewError};
 use crate::watches::Watches;
 use crate::window::Window;
 use crate::{logging, registry, scene_pipeline};
 use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
-use lavashell_platform::{Capability, PlatformLinks};
-use lavashell_vulkan_renderer::RendererSetup;
+use lavashell_platform::{Capability, Platform, PlatformLinks, RendererSetup};
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::Arc;
-use std::{io, thread};
+use std::{convert, io, thread};
 
 pub(crate) enum SurfaceSetup {
     Window(Window, View),
@@ -61,7 +60,7 @@ impl RuntimeSetup {
 }
 
 #[derive(thiserror::Error)]
-pub enum RunError<P: RenderedPlatform> {
+pub enum RunError<P: Platform> {
     #[error("the app has not added a window, a layer or a session lock")]
     NoSurfaces,
     #[error(
@@ -80,6 +79,12 @@ pub enum RunError<P: RenderedPlatform> {
     StartRenderer(#[source] SpawnError<PlatformRendererError<P>>),
     #[error("the renderer failed")]
     RunRenderer(#[source] JoinError<PlatformRendererError<P>>),
+    #[error("the surface controls kept without a renderer could not start")]
+    StartControls(#[source] SpawnError<PlatformControlsError<P>>),
+    #[error("the surface controls kept without a renderer failed")]
+    RunControls(#[source] JoinError<PlatformControlsError<P>>),
+    #[error("the painter that sets up how text is shaped without a renderer could not be created")]
+    CreatePainter(#[source] lavashell_renderer::Error),
     #[error("the shaper that measures text for the views could not be created")]
     CreateShaper(#[source] lavashell_renderer::Error),
     #[error("the choreographer or the scene builder failed")]
@@ -88,7 +93,7 @@ pub enum RunError<P: RenderedPlatform> {
     View(#[from] ViewError),
 }
 
-impl<P: RenderedPlatform> fmt::Debug for RunError<P> {
+impl<P: Platform> fmt::Debug for RunError<P> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (name, field): (&str, Option<&dyn fmt::Debug>) = match self {
             Self::NoSurfaces => ("NoSurfaces", None),
@@ -98,6 +103,9 @@ impl<P: RenderedPlatform> fmt::Debug for RunError<P> {
             Self::PlatformPanicked => ("PlatformPanicked", None),
             Self::StartRenderer(error) => ("StartRenderer", Some(error)),
             Self::RunRenderer(error) => ("RunRenderer", Some(error)),
+            Self::StartControls(error) => ("StartControls", Some(error)),
+            Self::RunControls(error) => ("RunControls", Some(error)),
+            Self::CreatePainter(error) => ("CreatePainter", Some(error)),
             Self::CreateShaper(error) => ("CreateShaper", Some(error)),
             Self::SceneFailed(error) => ("SceneFailed", Some(error)),
             Self::View(error) => ("View", Some(error)),
@@ -110,18 +118,27 @@ impl<P: RenderedPlatform> fmt::Debug for RunError<P> {
     }
 }
 
-pub fn run<P: RenderedPlatform>(app: App, platform_setup: P::Setup) -> Result<(), RunError<P>> {
+pub fn run<P: Platform>(app: App, platform_setup: P::Setup) -> Result<(), RunError<P>> {
+    run_with_backend::<P>(app, platform_setup, convert::identity)
+}
+
+pub fn run_with_backend<P: Platform>(
+    app: App,
+    platform_setup: P::Setup,
+    configure_backend: impl FnOnce(P::Backend) -> P::Backend,
+) -> Result<(), RunError<P>> {
     logging::install_default_logger();
     let setup = app.into_setup();
     if !setup.has_surfaces() {
         return Err(RunError::NoSurfaces);
     }
-    drive::<P>(setup, platform_setup)
+    drive::<P>(setup, platform_setup, configure_backend)
 }
 
-pub(crate) fn drive<P: RenderedPlatform>(
+pub(crate) fn drive<P: Platform>(
     setup: RuntimeSetup,
     platform_setup: P::Setup,
+    configure_backend: impl FnOnce(P::Backend) -> P::Backend,
 ) -> Result<(), RunError<P>> {
     let connection = P::connect(platform_setup).map_err(RunError::Platform)?;
     let clock = connection.clock;
@@ -135,12 +152,12 @@ pub(crate) fn drive<P: RenderedPlatform>(
         DeadlineReceiver::new(inputs, clock.as_ref()).map_err(ViewError::DeadlineReceiver)?;
     let (requests, platform_requests) = mailbox();
     let connected = Connected {
-        backend: connection.backend,
+        backend: connection.backend.map(configure_backend),
         host: connection.host,
         clock: Arc::clone(&clock),
     };
     let mut view = ViewActor::<P>::start(setup, &offered, connected, requests, &inbox)?;
-    let reports = (view.reports(inbox.outlet(ViewInput::Platform))).map_err(ViewError::from)?;
+    let reports = view.reports(&inbox).map_err(ViewError::from)?;
     let links = PlatformLinks {
         reports,
         requests: platform_requests,
@@ -159,6 +176,7 @@ pub(crate) fn drive<P: RenderedPlatform>(
     let (ran, stops) = view.stop(&inputs, ran);
     drop(inputs);
     let renderer = stops.renderer.map_err(RunError::RunRenderer);
+    let controls = stops.controls.map_err(RunError::RunControls);
     let scheduler = stops
         .scheduler
         .map_err(|error| RunError::View(ViewError::SchedulerActor(error)));
@@ -168,10 +186,15 @@ pub(crate) fn drive<P: RenderedPlatform>(
         Err(_panic) => Err(RunError::PlatformPanicked),
     };
     let Err(error) = ran else {
-        return renderer.and(scheduler).and(scene).and(platform);
+        return renderer
+            .and(controls)
+            .and(scheduler)
+            .and(scene)
+            .and(platform);
     };
     let stopped = match error {
         ViewError::Stopped(Stopped::Renderer) => renderer,
+        ViewError::Stopped(Stopped::Controls) => controls,
         ViewError::Stopped(Stopped::Scene) => scene,
         ViewError::Stopped(Stopped::Scheduler) => scheduler,
         ViewError::Stopped(Stopped::Platform) => platform,

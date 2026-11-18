@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::cpu_time::{CpuStamp, CpuTiming};
 use crate::failures::log_failure_to_stop;
-use crate::rendered_platform::{PlatformStreams, WindowAttachment};
 use crate::surface_slots::BuiltSurface;
 use lavashell_actor::{
     Actor, Clock, Closed, Flow, Handle, JoinError, Merge, MergeEffect, Outlet, Sender, SpawnError,
@@ -10,21 +9,19 @@ use lavashell_actor::{
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{Platform, PresentFrame, StreamTask, SurfaceAttachment, SurfaceControl};
-use lavashell_renderer::StreamBackend;
+use lavashell_platform::{
+    Backend, Drawn, Platform, PresentFrame, RendererBackend, RendererSetup, StreamTask,
+    SurfaceAttachment, SurfaceContents, SurfaceControl, SurfaceRenderer,
+};
 use lavashell_renderer::skia::Path;
 use lavashell_renderer::text::TextRendering;
-use lavashell_vulkan_renderer::{
-    CommitError, DrawError, Drawn, RendererBackend, RendererSetup, RendererState, RendererStreams,
-    StartError, StateError, SurfaceContents,
-};
 use std::fmt;
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
-pub enum RendererInput<C: SurfaceControl, S> {
-    Surface(WindowAttachment<C>),
-    Streams(StreamTask<S>),
+pub enum RendererInput<C: SurfaceControl, B: RendererBackend> {
+    Surface(SurfaceAttachment<C, B::Surface>),
+    Streams(StreamTask<B::Streams>),
     Outline {
         surface: SurfaceId,
         outline: Option<Path>,
@@ -50,7 +47,7 @@ pub enum RendererKey {
     AdvanceScene,
 }
 
-impl<C: SurfaceControl, S> Merge for RendererInput<C, S> {
+impl<C: SurfaceControl, B: RendererBackend> Merge for RendererInput<C, B> {
     type Key = RendererKey;
 
     fn effect(&self) -> MergeEffect<RendererKey> {
@@ -85,7 +82,28 @@ pub struct Rendered {
     pub cpu_time: Option<Duration>,
 }
 
-pub type PlatformRendererError<P> = RendererError<<P as Platform>::Control, PlatformStreams<P>>;
+pub type PlatformRendererError<P> =
+    RendererError<<P as Platform>::Control, <P as Platform>::Backend>;
+
+type StartedRenderer<C, B> = <B as RendererBackend>::Renderer<C>;
+
+type SurfaceError<C, B> = <StartedRenderer<C, B> as SurfaceRenderer<
+    C,
+    <B as Backend>::Surface,
+    <B as Backend>::Streams,
+>>::Error;
+
+type SurfaceDrawError<C, B> = <StartedRenderer<C, B> as SurfaceRenderer<
+    C,
+    <B as Backend>::Surface,
+    <B as Backend>::Streams,
+>>::DrawError;
+
+type SurfaceCommitError<C, B> = <StartedRenderer<C, B> as SurfaceRenderer<
+    C,
+    <B as Backend>::Surface,
+    <B as Backend>::Streams,
+>>::CommitError;
 
 pub type RendererObserver = Box<dyn FnMut(RendererOutput) -> Result<(), Closed> + Send>;
 
@@ -94,24 +112,24 @@ pub type RendererObserver = Box<dyn FnMut(RendererOutput) -> Result<(), Closed> 
 pub struct RendererStopped;
 
 #[derive(thiserror::Error)]
-pub enum RendererError<C: SurfaceControl, S: StreamBackend> {
+pub enum RendererError<C: SurfaceControl, B: RendererBackend> {
     #[error("the renderer could not start")]
-    Start(#[source] StartError<S::Error>),
+    Start(#[source] B::StartError),
     #[error("a surface could not be attached")]
-    Attach(#[source] StateError),
+    Attach(#[source] SurfaceError<C, B>),
     #[error("the outline of a surface could not be set")]
-    Outline(#[source] StateError),
+    Outline(#[source] SurfaceError<C, B>),
     #[error("a frame could not be drawn")]
-    Draw(#[source] DrawError<C::Error, S::Error>),
+    Draw(#[source] SurfaceDrawError<C, B>),
     #[error("the contents of a drawn surface could not be checked")]
-    ReadContents(#[source] StateError),
+    ReadContents(#[source] SurfaceError<C, B>),
     #[error("the state of a surface could not be committed without a frame")]
-    CommitState(#[source] CommitError<C::Error>),
+    CommitState(#[source] SurfaceCommitError<C, B>),
     #[error("the scene source could not advance")]
-    AdvanceScene(#[source] StateError),
+    AdvanceScene(#[source] SurfaceError<C, B>),
 }
 
-impl<C: SurfaceControl, S: StreamBackend> fmt::Debug for RendererError<C, S> {
+impl<C: SurfaceControl, B: RendererBackend> fmt::Debug for RendererError<C, B> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (name, source): (&str, &dyn fmt::Debug) = match self {
             Self::Start(error) => ("Start", error),
@@ -126,36 +144,36 @@ impl<C: SurfaceControl, S: StreamBackend> fmt::Debug for RendererError<C, S> {
     }
 }
 
-pub struct Renderer<C, S>
+pub struct Renderer<C, B>
 where
     C: SurfaceControl + Send + 'static,
-    S: RendererStreams,
+    B: RendererBackend,
 {
-    running: Option<Running<C, S>>,
+    running: Option<Running<C, B>>,
     text_rendering: TextRendering,
 }
 
-struct Running<C, S>
+struct Running<C, B>
 where
     C: SurfaceControl + Send + 'static,
-    S: RendererStreams,
+    B: RendererBackend,
 {
-    inbox: Sender<RendererInput<C, S>>,
-    actor: Handle<RendererActor<C, S>>,
+    inbox: Sender<RendererInput<C, B>>,
+    actor: Handle<RendererActor<C, B>>,
 }
 
-impl<C, S> Renderer<C, S>
+impl<C, B> Renderer<C, B>
 where
     C: SurfaceControl + Send + 'static,
-    S: RendererStreams,
+    B: RendererBackend,
 {
     pub fn start(
-        backend: impl RendererBackend<Streams = S>,
+        backend: B,
         setup: RendererSetup,
         clock: Arc<dyn Clock>,
         cpu_timing: CpuTiming,
         observer: RendererObserver,
-    ) -> Result<Self, SpawnError<RendererError<C, S>>> {
+    ) -> Result<Self, SpawnError<RendererError<C, B>>> {
         let (inbox, receiver) = mailbox_on(clock.as_ref());
         let (rendering, started_rendering) = mpsc::sync_channel(1);
         let actor = spawn("renderer", receiver, move || {
@@ -182,28 +200,30 @@ where
         self.text_rendering
     }
 
-    pub(crate) fn attachments(&self) -> Result<Outlet<WindowAttachment<C>>, RendererStopped> {
+    pub(crate) fn attachments(
+        &self,
+    ) -> Result<Outlet<SurfaceAttachment<C, B::Surface>>, RendererStopped> {
         self.outlet(RendererInput::Surface)
     }
 
-    pub(crate) fn stream_tasks(&self) -> Result<Outlet<StreamTask<S>>, RendererStopped> {
+    pub(crate) fn stream_tasks(&self) -> Result<Outlet<StreamTask<B::Streams>>, RendererStopped> {
         self.outlet(RendererInput::Streams)
     }
 
     fn outlet<U: 'static>(
         &self,
-        convert: fn(U) -> RendererInput<C, S>,
+        convert: fn(U) -> RendererInput<C, B>,
     ) -> Result<Outlet<U>, RendererStopped> {
         let running = self.running.as_ref().ok_or(RendererStopped)?;
         Ok(running.inbox.outlet(convert))
     }
 
-    pub fn send(&self, input: RendererInput<C, S>) -> Result<(), RendererStopped> {
+    pub fn send(&self, input: RendererInput<C, B>) -> Result<(), RendererStopped> {
         let running = self.running.as_ref().ok_or(RendererStopped)?;
         running.inbox.push(input).map_err(|Closed| RendererStopped)
     }
 
-    pub fn stop(&mut self) -> Result<(), JoinError<RendererError<C, S>>> {
+    pub fn stop(&mut self) -> Result<(), JoinError<RendererError<C, B>>> {
         let Some(Running { inbox, actor }) = self.running.take() else {
             return Ok(());
         };
@@ -213,32 +233,32 @@ where
     }
 }
 
-impl<C, S> Drop for Renderer<C, S>
+impl<C, B> Drop for Renderer<C, B>
 where
     C: SurfaceControl + Send + 'static,
-    S: RendererStreams,
+    B: RendererBackend,
 {
     fn drop(&mut self) {
         log_failure_to_stop(self.stop());
     }
 }
 
-struct RendererActor<C: SurfaceControl, S> {
-    state: RendererState<C, S>,
+struct RendererActor<C: SurfaceControl, B: RendererBackend> {
+    state: StartedRenderer<C, B>,
     clock: Arc<dyn Clock>,
     cpu_timing: CpuTiming,
     observer: RendererObserver,
 }
 
-impl<C, S> Actor for RendererActor<C, S>
+impl<C, B> Actor for RendererActor<C, B>
 where
     C: SurfaceControl + Send + 'static,
-    S: RendererStreams,
+    B: RendererBackend,
 {
-    type Input = RendererInput<C, S>;
-    type Error = RendererError<C, S>;
+    type Input = RendererInput<C, B>;
+    type Error = RendererError<C, B>;
 
-    fn handle(&mut self, input: RendererInput<C, S>) -> Result<Flow, RendererError<C, S>> {
+    fn handle(&mut self, input: RendererInput<C, B>) -> Result<Flow, RendererError<C, B>> {
         let deadline = self.state.scene_deadline();
         let output = match input {
             RendererInput::Surface(attachment) => self.attachment(attachment)?,
@@ -274,19 +294,18 @@ where
     }
 }
 
-impl<C, S> RendererActor<C, S>
+impl<C, B> RendererActor<C, B>
 where
     C: SurfaceControl,
-    S: RendererStreams,
+    B: RendererBackend,
 {
     fn attachment(
         &mut self,
-        attachment: WindowAttachment<C>,
-    ) -> Result<Option<RendererOutput>, RendererError<C, S>> {
+        attachment: SurfaceAttachment<C, B::Surface>,
+    ) -> Result<Option<RendererOutput>, RendererError<C, B>> {
         match attachment {
             SurfaceAttachment::Attach(attach) => {
-                (self.state.attach(*attach))
-                    .map_err(|failed| RendererError::Attach(failed.error))?;
+                (self.state.attach(*attach)).map_err(RendererError::Attach)?;
                 Ok(None)
             }
             SurfaceAttachment::Control { surface, message } => {
@@ -308,7 +327,7 @@ where
         time: FrameTime,
         scaled_viewport: ScaledViewport,
         built: &BuiltSurface,
-    ) -> Result<RendererOutput, RendererError<C, S>> {
+    ) -> Result<RendererOutput, RendererError<C, B>> {
         let started = Instant::now();
         let cpu_start = self.cpu_timing.stamp();
         let frame = PresentFrame {

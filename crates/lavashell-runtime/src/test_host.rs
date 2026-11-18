@@ -13,6 +13,7 @@ use crate::window::Window;
 use lavashell_actor::{Closed, SystemClock};
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::{Point, Size, Viewport};
+use lavashell_core::output::OutputRequest;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::prelude::{Modifier, NodeId, TextFieldOptions};
 use lavashell_core::reactive::State;
@@ -21,16 +22,17 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{Density, Dp, DpExt};
 use lavashell_core::view::{InputEvent, TextMeasurer, View};
 use lavashell_platform::{
-    Capability, Connection, HostFacts, OutputId, Platform, PlatformEvent, PlatformLinks,
-    PlatformRequest, SurfaceAttachment, SurfaceControl, SurfaceEvent, SurfaceRequest, SurfaceSpec,
-    TimingEvent,
+    Attach, Capability, Connection, HostFacts, OutputId, PainterSetup, Platform, PlatformEvent,
+    PlatformLinks, PlatformRequest, RendererSetup, SurfaceAlpha, SurfaceAttachment, SurfaceControl,
+    SurfaceEvent, SurfaceRequest, SurfaceSpec, TimingEvent,
 };
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming};
 use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
-use lavashell_vulkan_renderer::{HeadlessBackend, PainterSetup, RendererSetup};
+use lavashell_vulkan::HeadlessWindow;
+use lavashell_vulkan_renderer::{HeadlessBackend, VulkanWindow};
 use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
-use std::convert::Infallible;
+use std::convert::{self, Infallible};
 use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 
@@ -47,7 +49,6 @@ pub(crate) fn renderer_setup(painter: Option<PainterSetup>) -> RendererSetup {
     RendererSetup {
         fonts: Fonts::new(),
         painter,
-        scene: None,
         frame_timing: FrameTiming::Off,
         damage: DamageMode::Tracked,
     }
@@ -205,6 +206,7 @@ type RequestLog = mpsc::Sender<Vec<PlatformRequest>>;
 pub(crate) enum Scenario {
     Unreachable,
     Scripted {
+        backend: Option<HeadlessBackend>,
         host: HostFacts,
         offered: BTreeSet<Capability>,
         script: Script,
@@ -227,6 +229,7 @@ impl Platform for StandIn {
     fn connect(scenario: Scenario) -> Result<Connection<Self>, StandInError> {
         match scenario {
             Scenario::Scripted {
+                backend,
                 host,
                 offered,
                 script,
@@ -237,7 +240,7 @@ impl Platform for StandIn {
                     script,
                     log,
                 },
-                backend: HeadlessBackend::without_surfaces(),
+                backend,
                 host,
                 clock: Arc::new(SystemClock::start()),
             }),
@@ -284,6 +287,23 @@ impl Wire {
             .reports
             .scheduler
             .push(event)
+            .map_err(StandInError::from)
+    }
+
+    pub(crate) fn attach(&self, surface: SurfaceId) -> Result<(), StandInError> {
+        let window: VulkanWindow = Arc::new(HeadlessWindow);
+        let attach = SurfaceAttachment::Attach(Box::new(Attach {
+            surface,
+            window,
+            alpha: SurfaceAlpha::Opaque,
+            output: OutputRequest::default(),
+            hdr_metadata: None,
+            control: NoControl,
+        }));
+        self.links
+            .reports
+            .renderer
+            .push(attach)
             .map_err(StandInError::from)
     }
 
@@ -351,19 +371,31 @@ pub(crate) fn run_scripted(
     setup: RuntimeSetup,
     script: impl FnOnce(Wire) -> Result<(), StandInError> + Send + 'static,
 ) -> Run {
+    let backend = HeadlessBackend::without_surfaces();
+    run_scripted_on(Some(backend), host, offered, setup, script)
+}
+
+pub(crate) fn run_scripted_on(
+    backend: Option<HeadlessBackend>,
+    host: HostFacts,
+    offered: impl IntoIterator<Item = Capability>,
+    setup: RuntimeSetup,
+    script: impl FnOnce(Wire) -> Result<(), StandInError> + Send + 'static,
+) -> Run {
     let (log, requests) = mpsc::channel();
     let scenario = Scenario::Scripted {
+        backend,
         host,
         offered: offered.into_iter().collect(),
         script: Box::new(script),
         log,
     };
     Run {
-        outcome: drive::<StandIn>(setup, scenario),
+        outcome: drive::<StandIn>(setup, scenario, convert::identity),
         requests,
     }
 }
 
 pub(crate) fn run_unreachable(setup: RuntimeSetup) -> Outcome {
-    drive::<StandIn>(setup, Scenario::Unreachable)
+    drive::<StandIn>(setup, Scenario::Unreachable, convert::identity)
 }

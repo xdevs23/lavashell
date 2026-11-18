@@ -28,7 +28,7 @@ impl Platform for TestPlatform {
     fn connect(host: ScriptedHost) -> Result<Connection<Self>, Error> {
         let clock = VirtualClock::default();
         Ok(Connection {
-            backend: HeadlessBackend::with_surfaces(),
+            backend: Some(HeadlessBackend::with_surfaces()),
             host: HostFacts {
                 outputs: vec![OUTPUT],
                 reports_presentation: true,

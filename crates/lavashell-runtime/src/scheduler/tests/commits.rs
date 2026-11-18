@@ -9,10 +9,6 @@ fn committed() -> SchedulerInput {
     SchedulerInput::Committed(WINDOW)
 }
 
-fn starts_commit(outputs: &[SchedulerOutput]) -> bool {
-    matches!(outputs, [SchedulerOutput::CommitState(WINDOW)])
-}
-
 #[test]
 fn a_state_change_outside_a_frame_starts_one_commit_at_a_time() {
     let mut script = Script::opened(Redraw::OnChange);

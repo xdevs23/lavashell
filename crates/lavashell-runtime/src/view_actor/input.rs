@@ -3,10 +3,11 @@ use super::ViewActor;
 use crate::clipboard::ShortcutOutcome;
 use crate::input::RoutedInput;
 use crate::observers::{HostKey, KeyboardFocus};
-use crate::rendered_platform::RenderedPlatform;
 use crate::view_actor::ViewError;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{DeviceEvent, KeyAction, KeyboardDevice, PlatformRequest, PressState};
+use lavashell_platform::{
+    DeviceEvent, KeyAction, KeyboardDevice, Platform, PlatformRequest, PressState,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InteractiveWindowControl {
@@ -14,7 +15,7 @@ enum InteractiveWindowControl {
     NotBegun,
 }
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn device_event(&mut self, event: DeviceEvent) -> Result<(), ViewError> {
         match event {
             DeviceEvent::PointerEnter { surface, .. } => self.pointer_event(event, Some(surface)),

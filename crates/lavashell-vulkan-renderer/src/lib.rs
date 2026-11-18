@@ -7,18 +7,16 @@ mod state;
 mod stream;
 pub mod vulkan;
 
-pub use backend::{HeadlessBackend, RendererBackend, VulkanBackend, VulkanWindow};
+pub use backend::{HeadlessBackend, VulkanBackend, VulkanWindow};
 pub use error::{ContextState, Error};
 pub use state::{
-    AttachError, CommitError, DrawError, Drawn, FrameError, PainterSetup, RendererSetup,
-    RendererState, SceneSetup, StartError, StateError,
+    CommitError, DrawError, FrameError, RendererState, SceneSetup, StartError, StateError,
 };
 pub use stream::{NoStreams, RendererStreams};
 pub use vulkan::{
     BorrowedImage, Completion, EmbeddedVulkanRenderer, ExternalImage, ForeignAlpha, ForeignFormat,
     ForeignImport, ForeignImporter, ForeignMemory, ForeignMemoryDescription, HeadlessPresentation,
-    PresentationBackend, ReadySignal, SampledMemory, SurfaceContents, SurfaceTarget,
-    VulkanRenderer,
+    PresentationBackend, ReadySignal, SampledMemory, SurfaceTarget, VulkanRenderer,
 };
 
 #[cfg(test)]

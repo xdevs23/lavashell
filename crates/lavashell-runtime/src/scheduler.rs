@@ -56,6 +56,10 @@ pub enum SchedulerInput {
         outcome: FrameOutcome,
         cost: Duration,
     },
+    Unrendered {
+        surface: SurfaceId,
+        frame: FrameTime,
+    },
     OutputRefresh {
         surface: SurfaceId,
         refresh: Option<Duration>,
@@ -145,6 +149,12 @@ impl FrameScheduler {
                 (self.surfaces.get_mut(&surface))
                     .and_then(|pacing| pacing.rendered(frame, outcome, cost, redraw, now))
                     .map(|frame| (surface, frame))
+            }
+            SchedulerInput::Unrendered { surface, frame } => {
+                if let Some(pacing) = self.surfaces.get_mut(&surface) {
+                    pacing.unrendered(frame);
+                }
+                None
             }
             SchedulerInput::OutputRefresh { surface, refresh } => {
                 if let Some(pacing) = self.surfaces.get_mut(&surface) {
@@ -241,6 +251,7 @@ impl SchedulerInput {
             | Self::StateChanged(surface)
             | Self::Committed(surface)
             | Self::Rendered { surface, .. }
+            | Self::Unrendered { surface, .. }
             | Self::OutputRefresh { surface, .. }
             | Self::Closed(surface) => Some(surface),
             Self::Timing(_) => None,

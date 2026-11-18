@@ -23,15 +23,12 @@ impl Platform for Aosp {
     type Control = NativeWindow;
 
     fn connect(link: HostLink) -> Result<Connection<Self>, AospError> {
-        let backend: AospBackend = VulkanBackend {
-            presentation: AospPresentation,
-            streams: Box::new(|gpu: &VulkanRenderer| {
-                HardwareBufferImporter::new(gpu).map(AospStreams::new)
-            }),
-        };
+        let backend: AospBackend = VulkanBackend::new(AospPresentation, |gpu: &VulkanRenderer| {
+            HardwareBufferImporter::new(gpu).map(AospStreams::new)
+        });
         Ok(Connection {
             platform: Self { link },
-            backend,
+            backend: Some(backend),
             host: HostFacts {
                 outputs: vec![DISPLAY],
                 reports_presentation: false,

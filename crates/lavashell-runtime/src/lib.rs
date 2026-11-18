@@ -6,6 +6,7 @@ mod app;
 mod builder_actor;
 mod choreographer_actor;
 pub mod clipboard;
+mod controls_actor;
 mod cpu_time;
 mod deadline_receiver;
 pub mod drag;
@@ -22,7 +23,6 @@ pub mod pipe_transfers;
 #[cfg(test)]
 mod preference_reader;
 mod registry;
-mod rendered_platform;
 mod renderer_actor;
 mod run;
 mod run_end;
@@ -50,9 +50,9 @@ mod window_control;
 mod window_requests;
 
 pub use app::{App, SetupError};
+pub use controls_actor::ControlsError;
 pub use lavashell_platform::Capability;
 pub use panels::{KeyboardPolicy, PanelOptions};
-pub use rendered_platform::RenderedPlatform;
 pub use renderer_actor::RendererError;
-pub use run::{RunError, run};
+pub use run::{RunError, run, run_with_backend};
 pub use view_actor::{Stopped, ViewError};

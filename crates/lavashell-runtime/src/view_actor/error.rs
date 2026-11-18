@@ -12,6 +12,8 @@ pub enum Stopped {
     Scene,
     #[error("the renderer stopped")]
     Renderer,
+    #[error("the surface controls kept without a renderer stopped")]
+    Controls,
     #[error("the frame scheduler stopped")]
     Scheduler,
     #[error("the platform stopped")]

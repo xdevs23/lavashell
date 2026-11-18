@@ -20,9 +20,8 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{DragEvent, DropAcceptance};
 use lavashell_core::ui::Ui;
 use lavashell_core::view::{ComponentFailure, InputEvent, View};
+use lavashell_platform::RendererSetup;
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter};
-use lavashell_vulkan_renderer::RendererSetup;
-use lavashell_vulkan_renderer::vulkan::SceneSource;
 use std::time::Duration;
 
 mod error;
@@ -135,17 +134,6 @@ impl App {
     }
 
     #[must_use]
-    pub fn scene<S: SceneSource + 'static>(
-        mut self,
-        make: impl FnOnce() -> S + Send + 'static,
-    ) -> Self {
-        self.setup.renderer.scene = Some(Box::new(move || -> Box<dyn SceneSource> {
-            Box::new(make())
-        }));
-        self
-    }
-
-    #[must_use]
     pub fn configure_painter(mut self, setup: impl FnOnce(&mut Painter) + Send + 'static) -> Self {
         let previous = self.setup.renderer.painter.take();
         self.setup.renderer.painter = Some(Box::new(move |painter| {
@@ -163,7 +151,6 @@ impl App {
         let renderer = RendererSetup {
             fonts: Fonts::default(),
             painter: None,
-            scene: None,
             frame_timing: FrameTiming::Off,
             damage: DamageMode::Tracked,
         };

@@ -4,7 +4,7 @@ use crate::Error;
 use ash::vk;
 use lavashell_core::color;
 use lavashell_core::prelude::{HdrMetadata, OutputInfo, OutputProfile, OutputRequest, PixelSize};
-use lavashell_platform::{FrameOutcome, SurfaceAlpha};
+use lavashell_platform::{FrameOutcome, SurfaceAlpha, SurfaceContents};
 use lavashell_renderer::{DrawFailure, scalars};
 use lavashell_vulkan::{
     Chromaticity, Device, ExtensionSet, MasteringDisplay, Semaphore, Submission, Swapchain,
@@ -42,12 +42,6 @@ impl SkippedFrame {
             Self::ChainOutOfDate => FrameOutcome::Stale,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SurfaceContents {
-    Current,
-    Outdated,
 }
 
 struct Slot {

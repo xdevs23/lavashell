@@ -8,22 +8,22 @@ use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
-use lavashell_platform::{Attach, SurfaceAlpha};
+use lavashell_platform::{Attach, PainterSetup, SurfaceAlpha};
 use lavashell_renderer::Painter;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
 use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::{HeadlessBackend, NoStreams, PainterSetup};
+use lavashell_vulkan_renderer::{HeadlessBackend, NoStreams, VulkanWindow};
 use std::sync::mpsc;
 
 const SURFACE_3: SurfaceId = SurfaceId::numbered(3);
 
-type TestInput = RendererInput<NoControl, NoStreams>;
+type TestInput = RendererInput<NoControl, HeadlessBackend>;
 
 fn start(
     painter: Option<PainterSetup>,
 ) -> Result<
     (
-        Renderer<NoControl, NoStreams>,
+        Renderer<NoControl, HeadlessBackend>,
         mpsc::Receiver<RendererOutput>,
     ),
     TestError,
@@ -74,9 +74,10 @@ fn render(surface: u64, sequence: u64) -> TestInput {
 }
 
 fn attach(surface: u64) -> TestInput {
+    let window: VulkanWindow = Arc::new(HeadlessWindow);
     RendererInput::Surface(SurfaceAttachment::Attach(Box::new(Attach {
         surface: SurfaceId::numbered(surface),
-        window: Arc::new(HeadlessWindow),
+        window,
         alpha: SurfaceAlpha::Opaque,
         output: OutputRequest::default(),
         hdr_metadata: None,

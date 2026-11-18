@@ -136,6 +136,17 @@ fn shown(frame: FrameTime, cost: Duration) -> SchedulerInput {
     rendered(frame, FrameOutcome::Shown, cost)
 }
 
+fn unrendered(frame: FrameTime) -> SchedulerInput {
+    SchedulerInput::Unrendered {
+        surface: WINDOW,
+        frame,
+    }
+}
+
+fn starts_commit(outputs: &[SchedulerOutput]) -> bool {
+    matches!(outputs, [SchedulerOutput::CommitState(WINDOW)])
+}
+
 fn display_ready() -> SchedulerInput {
     SchedulerInput::Timing(TimingEvent::DisplayReady(WINDOW))
 }
@@ -446,4 +457,5 @@ fn a_closed_surface_ignores_later_reports() {
 }
 
 mod commits;
+mod unrendered;
 mod wakes;

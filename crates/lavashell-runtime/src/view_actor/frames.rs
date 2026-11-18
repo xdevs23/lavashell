@@ -3,7 +3,6 @@ use super::open_surfaces::OpenSurfaces;
 use super::{ViewActor, send_request};
 use crate::cpu_time::CpuStamp;
 use crate::panels::PanelRequests;
-use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::{Rendered, RendererInput};
 use crate::scene_pipeline::{FrameStatus, SceneSink};
 use crate::scheduler::{FrameKind, FrameSequence, SchedulerInput};
@@ -17,8 +16,9 @@ use lavashell_core::geometry::{ScaledViewport, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
-use lavashell_platform::{FrameOutcome, PanelRequest, PlatformRequest};
-use lavashell_vulkan_renderer::{Drawn, SurfaceContents};
+use lavashell_platform::{
+    Drawn, FrameOutcome, PanelRequest, Platform, PlatformRequest, SurfaceContents,
+};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
@@ -108,7 +108,7 @@ impl ViewSurface {
     }
 }
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn render(&mut self) -> Result<(), ViewError> {
         self.execute_surface_requests()?;
         self.commit_built_states()?;
@@ -154,9 +154,9 @@ impl<P: RenderedPlatform> ViewActor<P> {
     fn advance_scene(&self) -> Result<(), ViewError> {
         if self.pacing.scene_due(self.clock.now())
             && let Some(scaled_viewport) = self.surfaces.first_configured_scaled_viewport()
+            && let Some(renderer) = self.actors.renderer()
         {
-            let advance = RendererInput::AdvanceScene(scaled_viewport);
-            self.actors.renderer.send(advance)?;
+            renderer.send(RendererInput::AdvanceScene(scaled_viewport))?;
         }
         Ok(())
     }
@@ -261,9 +261,11 @@ impl<P: RenderedPlatform> ViewActor<P> {
             clip = Some(geometry.clip);
             Ok::<_, ViewError>(geometry.input_cells)
         })?;
-        if let Some(path) = clip {
+        if let Some(path) = clip
+            && let Some(renderer) = self.actors.renderer()
+        {
             let outline = surface.shape.clips_paint().then_some(path);
-            (self.actors.renderer).send(RendererInput::Outline {
+            renderer.send(RendererInput::Outline {
                 surface: id,
                 outline,
             })?;
@@ -272,6 +274,13 @@ impl<P: RenderedPlatform> ViewActor<P> {
     }
 
     fn render_surface(&mut self, id: SurfaceId, timing: FrameTime) -> Result<(), ViewError> {
+        let Some(renderer) = self.actors.renderer() else {
+            self.schedule(SchedulerInput::Unrendered {
+                surface: id,
+                frame: timing,
+            });
+            return Ok(());
+        };
         let built = self.actors.scene.built(id);
         let panel = self.surfaces.panel_requests(id, &built.state);
         let (surface, scaled_viewport) = self.surfaces.open_surface(id)?;
@@ -285,7 +294,7 @@ impl<P: RenderedPlatform> ViewActor<P> {
             },
         };
         surface.frame = FrameProgress::Drawing { start, panel };
-        self.actors.renderer.send(RendererInput::Render {
+        renderer.send(RendererInput::Render {
             surface: id,
             time: start.timing,
             scaled_viewport: start.scaled_viewport,

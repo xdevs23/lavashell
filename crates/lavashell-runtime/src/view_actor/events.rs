@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
 use super::frames::send_frame;
-use crate::rendered_platform::RenderedPlatform;
 use crate::scheduler::SchedulerInput;
 use crate::surface_records::AccessibilityFailure;
 use crate::view_actor::{Stopped, ViewError};
@@ -11,11 +10,11 @@ use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::View;
 use lavashell_error_chain::message_chain;
 use lavashell_platform::{
-    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, PlatformEvent,
+    AccessibilityEvent, AccessibilityRequest, OutputEvent, OutputId, Platform, PlatformEvent,
     PlatformRequest, SurfaceEvent,
 };
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn platform_event(&mut self, event: PlatformEvent) -> Result<(), ViewError> {
         match event {
             PlatformEvent::Surface(id, event) => self.surface_event(id, event)?,
@@ -94,7 +93,7 @@ impl<P: RenderedPlatform> ViewActor<P> {
     }
 
     fn report_output_refreshes(&self) {
-        if self.outputs.reports_presentation() {
+        if self.outputs.reports_presentation() && self.actors.renderer().is_some() {
             return;
         }
         for surface in self.surfaces.ids() {

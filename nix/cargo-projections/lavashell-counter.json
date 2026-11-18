@@ -2645,7 +2645,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "ff76a782cab3e4c42585d0fcaae7e7db293bd480f2777b5bb39b77efda5a3fd1",
+        "seedHash": "528651166699692cbd6c83ebb26d4a2d162723fb35d9199e287605ba94dc8387",
         "plan": {
           "schema": 1,
           "selection": {
@@ -3615,12 +3615,6 @@
                       "default"
                     ],
                     "path": "../lavashell-renderer"
-                  },
-                  "lavashell-vulkan-renderer": {
-                    "package": "lavashell-vulkan-renderer",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan-renderer"
                   },
                   "log": {
                     "package": "log",
@@ -5433,7 +5427,6 @@
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
-                  "lavashell-vulkan-renderer",
                   "log",
                   "num-traits",
                   "rustix",

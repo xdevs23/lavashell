@@ -94,7 +94,7 @@ impl Platform for Wayland {
         };
         Ok(lavashell_platform::Connection {
             platform: wayland,
-            backend,
+            backend: Some(backend),
             host,
             clock: Arc::new(SystemClock::start()),
         })

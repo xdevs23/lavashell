@@ -9,10 +9,10 @@ use lavashell_core::prelude::{
 use lavashell_core::retained::UnbalancedRestore;
 use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceChange;
-use lavashell_platform::SurfaceAlpha;
+use lavashell_platform::{FrameOutcome, SurfaceAlpha};
 use lavashell_renderer::test_scenes::insert;
 use lavashell_renderer::test_surfaces::{TestSurface, WIDE_SURFACE};
-use lavashell_renderer::{FrameDevice, StreamFrames};
+use lavashell_renderer::{Fonts, FrameDevice, StreamFrames};
 use lavashell_test_fixtures::show_all;
 use lavashell_vulkan::HeadlessWindow;
 use skia_safe::IPoint;
@@ -111,7 +111,6 @@ fn setup() -> RendererSetup {
     RendererSetup {
         fonts: Fonts::new(),
         painter: None,
-        scene: None,
         frame_timing: lavashell_renderer::FrameTiming::Off,
         damage: DamageMode::Tracked,
     }
@@ -137,13 +136,11 @@ fn attach(events: &Rc<RefCell<Vec<Event>>>) -> Attach<RecordingControl, VulkanWi
     }
 }
 
-fn attach_recording<S: StreamBackend<Gpu = VulkanRenderer>>(
+fn attach_recording<S: RendererStreams>(
     state: &mut RendererState<RecordingControl, S>,
     events: &Rc<RefCell<Vec<Event>>>,
 ) -> Result<(), TestError> {
-    state
-        .attach(attach(events))
-        .map_err(|failed| failed.error)?;
+    state.attach(attach(events))?;
     Ok(())
 }
 
@@ -201,13 +198,7 @@ fn a_surface_attaches_once_and_draws_no_more_once_retired() -> Result<(), TestEr
     let mut state = state()?;
     attach_recording(&mut state, &events)?;
     let twice = state.attach(attach(&events));
-    assert!(matches!(
-        twice,
-        Err(AttachError {
-            error: StateError::AttachedTwice(SURFACE),
-            ..
-        })
-    ));
+    assert!(matches!(twice, Err(StateError::AttachedTwice(SURFACE))));
     assert!(state.retire(SURFACE).is_some());
     let drawn = state.draw(SURFACE, frame(1, &SurfaceState::default()), &scene()?);
     assert!(matches!(
@@ -226,7 +217,7 @@ fn streams_surround_the_present_and_fail_with_the_drawn_frame() -> Result<(), Te
         events: Rc::clone(&events),
     };
     let presentation = HeadlessPresentation::with_surfaces();
-    let mut state = RendererState::with_streams(&presentation, setup(), |_| Ok(streams))?;
+    let mut state = RendererState::with_streams(&presentation, setup(), None, |_| Ok(streams))?;
     attach_recording(&mut state, &events)?;
     let surface_state = SurfaceState::default();
     let frame = frame(1, &surface_state);

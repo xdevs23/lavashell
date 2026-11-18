@@ -6,19 +6,21 @@ mod targets;
 #[cfg(test)]
 mod tests;
 
-pub use error::{AttachError, CommitError, DrawError, FrameError, StartError, StateError};
+pub use error::{CommitError, DrawError, FrameError, StartError, StateError};
 
 use crate::vulkan::{PresentationBackend, SceneSource, VulkanRenderer};
-use crate::{NoStreams, SurfaceContents, VulkanWindow};
-use lavashell_core::frame::{GpuFrameTime, RenderStats};
+use crate::{NoStreams, RendererStreams, VulkanWindow};
 use lavashell_core::prelude::{
     OutputInfo, OutputRequest, PixelSize, Rect, ScaledViewport, SceneSnapshot,
 };
 use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_effect_quality::FrameBudget;
-use lavashell_platform::{Attach, FrameOutcome, PresentFrame, SurfaceControl};
+use lavashell_platform::{
+    Attach, Drawn, PresentFrame, RendererSetup, StreamTask, SurfaceContents, SurfaceControl,
+    SurfaceRenderer,
+};
 use lavashell_renderer::text::{Shaper, TextRendering};
-use lavashell_renderer::{DamageMode, Fonts, FrameTiming, Painter, StreamBackend};
+use lavashell_renderer::{DamageMode, FrameTiming, Painter, StreamBackend};
 use present::FrameInputs;
 use scene_source::SceneImages;
 use std::collections::BTreeMap;
@@ -26,33 +28,7 @@ use std::collections::btree_map::Entry;
 use std::time::Duration;
 use targets::{AttachedSurface, PixelInputs};
 
-pub type PainterSetup = Box<dyn FnOnce(&mut Painter) + Send>;
-
 pub type SceneSetup = Box<dyn FnOnce() -> Box<dyn SceneSource> + Send>;
-
-pub struct RendererSetup {
-    pub fonts: Fonts,
-    pub painter: Option<PainterSetup>,
-    pub scene: Option<SceneSetup>,
-    pub frame_timing: FrameTiming,
-    pub damage: DamageMode,
-}
-
-impl RendererSetup {
-    #[must_use]
-    pub fn shows_scene(&self) -> bool {
-        self.scene.is_some()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Drawn {
-    pub outcome: FrameOutcome,
-    pub stats: RenderStats,
-    pub gpu: Option<GpuFrameTime>,
-    pub output: Option<OutputInfo>,
-    pub scene_generation: Option<u64>,
-}
 
 pub struct RendererState<C: SurfaceControl, S = NoStreams> {
     painter: Painter,
@@ -68,7 +44,7 @@ impl<C: SurfaceControl> RendererState<C> {
         backend: &impl PresentationBackend,
         setup: RendererSetup,
     ) -> Result<Self, StateError> {
-        Self::with_streams(backend, setup, |_| Ok(NoStreams::default()))
+        Self::with_streams(backend, setup, None, |_| Ok(NoStreams::default()))
             .map_err(StartError::into_state)
     }
 }
@@ -77,12 +53,12 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
     pub fn with_streams(
         backend: &impl PresentationBackend,
         setup: RendererSetup,
+        scene: Option<SceneSetup>,
         streams: impl FnOnce(&VulkanRenderer) -> Result<S, S::Error>,
     ) -> Result<Self, StartError<S::Error>> {
         let RendererSetup {
             fonts,
             painter: configure,
-            scene,
             frame_timing,
             damage,
         } = setup;
@@ -106,61 +82,11 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         })
     }
 
-    pub fn attach(&mut self, attach: Attach<C, VulkanWindow>) -> Result<(), AttachError<C>> {
-        let Attach {
-            surface,
-            window,
-            alpha,
-            output,
-            hdr_metadata,
-            control,
-        } = attach;
-        let Entry::Vacant(entry) = self.surfaces.entry(surface) else {
-            let error = StateError::AttachedTwice(surface);
-            return Err(AttachError { control, error });
-        };
-        let created = (self.gpu.surface_target(window, alpha))
-            .map_err(StateError::CreateTarget)
-            .and_then(|mut target| {
-                target.request_output(output);
-                if let Some(metadata) = hdr_metadata {
-                    target
-                        .hdr_metadata(metadata)
-                        .map_err(StateError::SetHdrMetadata)?;
-                }
-                Ok(target)
-            });
-        match created {
-            Ok(target) => {
-                let _attached_surface_is_not_needed =
-                    entry.insert(AttachedSurface::new(target, control));
-                Ok(())
-            }
-            Err(error) => Err(AttachError { control, error }),
-        }
-    }
-
-    pub fn retire(&mut self, surface: SurfaceId) -> Option<C> {
-        self.painter.forget_surface(surface);
-        self.surfaces
-            .remove(&surface)
-            .map(|attached| attached.control)
-    }
-
     #[must_use]
     pub fn control(&self, surface: SurfaceId) -> Option<&C> {
         self.surfaces
             .get(&surface)
             .map(|attached| &attached.control)
-    }
-
-    pub fn set_outline(
-        &mut self,
-        surface: SurfaceId,
-        outline: Option<skia_safe::Path>,
-    ) -> Result<(), StateError> {
-        attached_mut(&mut self.surfaces, surface)?.set_outline(outline);
-        Ok(())
     }
 
     pub fn request_output(
@@ -177,16 +103,6 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         (self.surfaces.get(&surface)).and_then(|attached| attached.target.output())
     }
 
-    pub fn contents(
-        &self,
-        surface: SurfaceId,
-        scaled_viewport: ScaledViewport,
-    ) -> Result<SurfaceContents, StateError> {
-        let attached = attached(&self.surfaces, surface)?;
-        let size = physical_size(scaled_viewport)?;
-        (attached.target.contents(size)).map_err(StateError::ReadContents)
-    }
-
     #[must_use]
     pub fn device_name(&self) -> &str {
         &self.gpu.device_name
@@ -201,21 +117,77 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         self.painter.shaper()
     }
 
-    pub fn run_on_streams<T>(&mut self, task: impl FnOnce(&mut S, &Painter) -> T) -> T {
-        task(&mut self.streams, &self.painter)
+    fn scene_frames_in_flight(&self) -> Option<usize> {
+        (self.surfaces.values())
+            .filter_map(|attached| attached.target.frames_in_flight())
+            .min()
     }
+}
 
-    #[must_use]
-    pub fn text_rendering(&self) -> TextRendering {
+impl<C: SurfaceControl, S: RendererStreams> SurfaceRenderer<C, VulkanWindow, S>
+    for RendererState<C, S>
+{
+    type Error = StateError;
+    type DrawError = DrawError<C::Error, S::Error>;
+    type CommitError = CommitError<C::Error>;
+
+    fn text_rendering(&self) -> TextRendering {
         self.painter.text_rendering()
     }
 
-    #[must_use]
-    pub fn scene_deadline(&self) -> Option<Duration> {
+    fn attach(&mut self, attach: Attach<C, VulkanWindow>) -> Result<(), StateError> {
+        let Attach {
+            surface,
+            window,
+            alpha,
+            output,
+            hdr_metadata,
+            control,
+        } = attach;
+        let Entry::Vacant(entry) = self.surfaces.entry(surface) else {
+            return Err(StateError::AttachedTwice(surface));
+        };
+        let mut target =
+            (self.gpu.surface_target(window, alpha)).map_err(StateError::CreateTarget)?;
+        target.request_output(output);
+        if let Some(metadata) = hdr_metadata {
+            target
+                .hdr_metadata(metadata)
+                .map_err(StateError::SetHdrMetadata)?;
+        }
+        let _attached_surface_is_not_needed = entry.insert(AttachedSurface::new(target, control));
+        Ok(())
+    }
+
+    fn retire(&mut self, surface: SurfaceId) -> Option<C> {
+        self.painter.forget_surface(surface);
+        self.surfaces
+            .remove(&surface)
+            .map(|attached| attached.control)
+    }
+
+    fn control_mut(&mut self, surface: SurfaceId) -> Option<&mut C> {
+        (self.surfaces.get_mut(&surface)).map(|attached| &mut attached.control)
+    }
+
+    fn set_outline(
+        &mut self,
+        surface: SurfaceId,
+        outline: Option<skia_safe::Path>,
+    ) -> Result<(), StateError> {
+        attached_mut(&mut self.surfaces, surface)?.set_outline(outline);
+        Ok(())
+    }
+
+    fn run_on_streams(&mut self, task: StreamTask<S>) {
+        task(&mut self.streams, &self.painter);
+    }
+
+    fn scene_deadline(&self) -> Option<Duration> {
         self.scene.as_ref().and_then(SceneImages::wake)
     }
 
-    pub fn advance_scene(
+    fn advance_scene(
         &mut self,
         scaled_viewport: ScaledViewport,
         now: Duration,
@@ -227,7 +199,7 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         }
     }
 
-    pub fn draw(
+    fn draw(
         &mut self,
         surface: SurfaceId,
         frame: PresentFrame<'_>,
@@ -279,23 +251,23 @@ impl<C: SurfaceControl, S: StreamBackend<Gpu = VulkanRenderer>> RendererState<C,
         DrawError::combine(drawn, streams)
     }
 
-    pub fn commit_state(
+    fn contents(
+        &self,
+        surface: SurfaceId,
+        scaled_viewport: ScaledViewport,
+    ) -> Result<SurfaceContents, StateError> {
+        let attached = attached(&self.surfaces, surface)?;
+        let size = physical_size(scaled_viewport)?;
+        (attached.target.contents(size)).map_err(StateError::ReadContents)
+    }
+
+    fn commit_state(
         &mut self,
         surface: SurfaceId,
         state: &SurfaceState,
     ) -> Result<(), CommitError<C::Error>> {
         let attached = attached_mut(&mut self.surfaces, surface)?;
         (attached.control.commit_state(state)).map_err(CommitError::Control)
-    }
-
-    pub fn control_mut(&mut self, surface: SurfaceId) -> Option<&mut C> {
-        (self.surfaces.get_mut(&surface)).map(|attached| &mut attached.control)
-    }
-
-    fn scene_frames_in_flight(&self) -> Option<usize> {
-        (self.surfaces.values())
-            .filter_map(|attached| attached.target.frames_in_flight())
-            .min()
     }
 }
 

@@ -33,7 +33,7 @@ pub use scene_mailbox::{CompletedScene, SceneMailbox};
 pub(crate) use skia_handoff::SkiaFormat;
 pub use timestamps::GpuProfiler;
 pub(crate) use wsi::DrawnFrame;
-pub use wsi::{SurfaceContents, SurfaceTarget};
+pub use wsi::SurfaceTarget;
 
 #[cfg(test)]
 mod tests;

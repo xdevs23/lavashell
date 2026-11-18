@@ -4,7 +4,6 @@ use crate::Error;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::NumberError;
 use std::convert::Infallible;
-use std::fmt;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StateError {
@@ -34,31 +33,6 @@ pub enum StateError {
     ProduceScene(#[source] Error),
     #[error("the scene mailbox did not accept a produced scene")]
     PublishScene(#[source] Error),
-}
-
-pub struct AttachError<C> {
-    pub control: C,
-    pub error: StateError,
-}
-
-impl<C> fmt::Debug for AttachError<C> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        (formatter.debug_struct("AttachError"))
-            .field("error", &self.error)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<C> fmt::Display for AttachError<C> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a surface could not be attached")
-    }
-}
-
-impl<C> std::error::Error for AttachError<C> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

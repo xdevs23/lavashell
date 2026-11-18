@@ -18,6 +18,7 @@ mod session_lock;
 mod settings;
 mod streams;
 mod surface;
+mod surface_renderer;
 #[cfg(test)]
 mod test_merge;
 mod timing;
@@ -25,7 +26,7 @@ mod watch;
 mod window_control;
 
 pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_difference};
-pub use backend::Backend;
+pub use backend::{Backend, PainterSetup, RendererBackend, RendererSetup};
 pub use capability::Capability;
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,
@@ -53,6 +54,7 @@ pub use surface::{
     Attach, PanelRole, Role, SurfaceAlpha, SurfaceAppearance, SurfaceEvent, SurfaceRequest,
     SurfaceSpec, WindowRole,
 };
+pub use surface_renderer::{Drawn, SurfaceContents, SurfaceRenderer};
 pub use timing::TimingEvent;
 pub use watch::{Readiness, WatchEvent, WatchId, WatchRequest};
 pub use window_control::WindowControlRequest;

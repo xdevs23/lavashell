@@ -9,7 +9,9 @@ pub use lavashell_error_chain as error_chain;
 pub use lavashell_keyboard as keyboard;
 pub use lavashell_materials as materials;
 pub use lavashell_renderer as renderer;
-pub use lavashell_runtime::{Capability, RunError as PlatformRunError, SetupError, run};
+pub use lavashell_runtime::{
+    Capability, RunError as PlatformRunError, SetupError, run, run_with_backend,
+};
 pub use lavashell_vulkan_renderer as vulkan_renderer;
 
 #[cfg_attr(target_os = "android", path = "selected/aosp.rs")]

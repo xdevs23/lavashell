@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::ViewActor;
-use crate::rendered_platform::RenderedPlatform;
-use crate::renderer_actor::{RendererInput, RendererOutput};
+use crate::controls_actor::ControlsOutput;
+use crate::renderer_actor::RendererOutput;
 use crate::scene_pipeline::BuilderReport;
 use crate::scheduler::{SchedulerInput, SchedulerOutput};
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::surface::SurfaceId;
-use lavashell_platform::{PlatformRequest, SurfaceRequest};
+use lavashell_platform::{Platform, PlatformRequest, SurfaceRequest};
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(super) fn scene_report(&mut self, report: BuilderReport) {
         match report {
             BuilderReport::Built { surface, sequence } => {
@@ -32,6 +32,14 @@ impl<P: RenderedPlatform> ViewActor<P> {
             RendererOutput::Committed(id) => self.committed(id),
             RendererOutput::Retired(id) => self.retired(id)?,
             RendererOutput::SceneWake(deadline) => self.pacing.set_scene_deadline(deadline),
+        }
+        Ok(())
+    }
+
+    pub(super) fn controls_output(&mut self, output: ControlsOutput) -> Result<(), ViewError> {
+        match output {
+            ControlsOutput::Committed(id) => self.committed(id),
+            ControlsOutput::Retired(id) => self.retired(id)?,
         }
         Ok(())
     }
@@ -61,7 +69,7 @@ impl<P: RenderedPlatform> ViewActor<P> {
             let requests = self.surfaces.panel_requests(id, &built.state);
             if let Some(surface) = self.surfaces.open_view_surface(id) {
                 surface.committing = requests;
-                (self.actors.renderer).send(RendererInput::CommitState { surface: id, built })?;
+                self.actors.commit_state(id, built)?;
             }
         }
         Ok(())

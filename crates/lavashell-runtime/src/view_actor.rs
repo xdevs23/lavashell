@@ -15,10 +15,10 @@ mod transfers;
 
 pub use error::{Stopped, ViewError};
 
+use crate::controls_actor::ControlsOutput;
 use crate::deadline_receiver::{Arrival, DeadlineReceiver};
 use crate::input::InputRouter;
 use crate::observers::Observers;
-use crate::rendered_platform::RenderedPlatform;
 use crate::renderer_actor::{RendererOutput, RendererStopped};
 use crate::run::{RunError, RuntimeSetup, SurfaceSetup};
 use crate::run_end::RunEnd;
@@ -27,10 +27,11 @@ use crate::scheduler::{Redraw, SchedulerInput, SchedulerOutput};
 use crate::session_lock::LockConfiguration;
 use crate::view_actions::ActionQueue;
 use crate::window_requests::to_window_control_request;
-use actors::{ActorSetup, ActorStops, Actors};
+use actors::{ActorSetup, ActorStops, Actors, AttachedSurfaces};
 use lavashell_actor::{Clock, Closed, Merge, MergeEffect, Outlet, Sender};
 use lavashell_platform::{
-    Capability, HostFacts, PlatformEvent, PlatformRequest, Reports, SessionLockRequest,
+    Capability, HostFacts, Platform, PlatformEvent, PlatformRequest, RendererBackend, Reports,
+    SessionLockRequest,
 };
 use lavashell_renderer::text::Shaper;
 use open_surfaces::OpenSurfaces;
@@ -45,6 +46,7 @@ pub(crate) enum ViewInput {
     Platform(PlatformEvent),
     Scheduler(SchedulerOutput),
     Renderer(RendererOutput),
+    Controls(ControlsOutput),
     Builder(BuilderReport),
     Stopped(Stopped),
 }
@@ -68,9 +70,11 @@ impl Merge for ViewInput {
             Self::Renderer(RendererOutput::SceneWake(_)) => {
                 MergeEffect::Overwrites(ViewKey::SceneWake)
             }
-            Self::Scheduler(_) | Self::Renderer(_) | Self::Builder(_) | Self::Stopped(_) => {
-                MergeEffect::Appends
-            }
+            Self::Scheduler(_)
+            | Self::Renderer(_)
+            | Self::Controls(_)
+            | Self::Builder(_)
+            | Self::Stopped(_) => MergeEffect::Appends,
         }
     }
 
@@ -125,7 +129,7 @@ impl<T> ActorOutlet<T> {
     }
 }
 
-pub(crate) struct ViewActor<P: RenderedPlatform> {
+pub(crate) struct ViewActor<P: Platform> {
     surfaces: OpenSurfaces,
     outputs: Outputs,
     actors: Actors<P>,
@@ -141,13 +145,13 @@ pub(crate) struct ViewActor<P: RenderedPlatform> {
     clock: Arc<dyn Clock>,
 }
 
-pub(crate) struct Connected<P: RenderedPlatform> {
-    pub(crate) backend: P::Backend,
+pub(crate) struct Connected<P: Platform> {
+    pub(crate) backend: Option<P::Backend>,
     pub(crate) host: HostFacts,
     pub(crate) clock: Arc<dyn Clock>,
 }
 
-impl<P: RenderedPlatform> ViewActor<P> {
+impl<P: Platform> ViewActor<P> {
     pub(crate) fn start(
         setup: RuntimeSetup,
         offered: &BTreeSet<Capability>,
@@ -174,10 +178,8 @@ impl<P: RenderedPlatform> ViewActor<P> {
             action_queue,
             drags,
         } = setup;
-        let redraw = if observers.tick.is_some()
-            || observers.frame.is_some()
-            || renderer_setup.shows_scene()
-        {
+        let shows_scene = (backend.as_ref()).is_some_and(RendererBackend::shows_scene);
+        let redraw = if observers.tick.is_some() || observers.frame.is_some() || shows_scene {
             Redraw::Continuous
         } else {
             Redraw::OnChange
@@ -189,9 +191,9 @@ impl<P: RenderedPlatform> ViewActor<P> {
             redraw,
             cpu_timing: observers.cpu_timing(),
         };
-        let actors = Actors::start(actor_setup, &clock, inbox)?;
-        let shaper = Shaper::with_rendering(&fonts, actors.renderer.text_rendering())
-            .map_err(RunError::CreateShaper)?;
+        let (actors, text_rendering) = Actors::start(actor_setup, &clock, inbox)?;
+        let shaper =
+            Shaper::with_rendering(&fonts, text_rendering).map_err(RunError::CreateShaper)?;
         let mut actor = Self {
             surfaces: OpenSurfaces::new(preference_overrides, offered),
             outputs: Outputs::new(host, panels_per_output),
@@ -213,9 +215,9 @@ impl<P: RenderedPlatform> ViewActor<P> {
 
     pub(crate) fn reports(
         &self,
-        view: Outlet<PlatformEvent>,
+        inbox: &Sender<ViewInput>,
     ) -> Result<Reports<P::Control, P::Backend>, RendererStopped> {
-        self.actors.reports(view, Arc::clone(&self.clock))
+        self.actors.reports(inbox, Arc::clone(&self.clock))
     }
 
     pub(crate) fn run(&mut self, inputs: &DeadlineReceiver<ViewInput>) -> Result<(), ViewError> {
@@ -244,8 +246,11 @@ impl<P: RenderedPlatform> ViewActor<P> {
         inputs: &DeadlineReceiver<ViewInput>,
         ran: Result<(), ViewError>,
     ) -> (Result<(), ViewError>, ActorStops<P>) {
-        let renderer = self.actors.renderer.stop();
-        let ran = ran.and_then(|()| self.handle_until(inputs, Stopped::Renderer));
+        let (renderer, controls, attached) = match &mut self.actors.attached {
+            AttachedSurfaces::Rendered(renderer) => (renderer.stop(), Ok(()), Stopped::Renderer),
+            AttachedSurfaces::Unrendered(controls) => (Ok(()), controls.stop(), Stopped::Controls),
+        };
+        let ran = ran.and_then(|()| self.handle_until(inputs, attached));
         let scheduler = self.actors.scheduler.stop();
         let ran = ran.and_then(|()| self.handle_until(inputs, Stopped::Scheduler));
         let scene = self.actors.scene.stop();
@@ -253,6 +258,7 @@ impl<P: RenderedPlatform> ViewActor<P> {
         self.transfers.close(self.surfaces.records_mut());
         let stops = ActorStops {
             renderer,
+            controls,
             scheduler,
             scene,
         };
@@ -327,6 +333,7 @@ impl<P: RenderedPlatform> ViewActor<P> {
                 Ok(())
             }
             ViewInput::Renderer(output) => self.renderer_output(output),
+            ViewInput::Controls(output) => self.controls_output(output),
             ViewInput::Builder(report) => {
                 self.scene_report(report);
                 Ok(())
