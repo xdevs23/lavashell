@@ -17,7 +17,8 @@ let
   ) (builtins.readDir (root + "/examples"));
   directories = lib.mapAttrs (name: _: root + "/examples/${name}") runnable;
   packagedDirectories = lib.mapAttrs (_: directory: root + "/${directory}") contract.packagedCrates;
-  packageDirectories = lib.attrValues directories ++ lib.attrValues packagedDirectories;
+  packageDirectoriesByName = lib.attrsets.unionOfDisjoint directories packagedDirectories;
+  packageDirectories = lib.attrValues packageDirectoriesByName;
   packageRoots = map sources.packageName packageDirectories;
   launches = {
     wayland-input = {
@@ -61,13 +62,13 @@ let
   inherit (sources) nativeDirectory;
   registry = artifacts.registry nativeDirectory;
   framework = artifacts.framework nativeDirectory [ registry ] { example = false; };
-  packageSkippingTestsOf =
-    testedElsewhere: name: directory:
+  buildPackage =
+    name: directory:
     let
       program = sources.packageName directory;
       library = !builtins.pathExists (directory + "/src/main.rs");
       crates = sources.localCrates directory;
-      closure = sources.crateNames crates;
+      closure = closures.${name};
       dependencies = lib.remove program closure;
       route = sources.layerRoute {
         package = program;
@@ -77,7 +78,12 @@ let
       engine = if withEngine then artifacts.engine directory else null;
       requirements = requirementsOf dependencies;
       testedByOtherPackages =
-        lib.remove program packageRoots ++ lib.concatMap (other: other.testPackages) testedElsewhere;
+        lib.remove program packageRoots
+        ++ lib.concatMap (package: package.testedPackages) (
+          packagesTestingBefore name (
+            lib.subtractLists (packageRoots ++ artifacts.packagesTestedThrough framework) closure
+          )
+        );
       routed =
         {
           ${types.layerRoutes.registryOnly} = artifacts.registry directory;
@@ -115,6 +121,7 @@ let
         ]
         ++ testedByOtherPackages
       ) closure;
+      testedPackages = testPackages ++ artifacts.packagesTestedThrough local;
     in
     rustPlatform.buildRustPackage (
       rustPackageDefaults
@@ -151,7 +158,12 @@ let
           + artifacts.copy ([ local ] ++ libraries)
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
-          inherit directory route testPackages;
+          inherit
+            directory
+            route
+            testPackages
+            testedPackages
+            ;
           registryArtifacts = registry;
           engineArtifacts = engine;
           frameworkArtifacts = local;
@@ -160,14 +172,25 @@ let
         meta = rustPackageDefaults.meta // lib.optionalAttrs (!library) { mainProgram = program; };
       }
     );
-  testedElsewhere = {
-    native-harness = [ packagedCrates.aosp-round-trip ];
-  };
-  packagedCrates = lib.mapAttrs (
-    name: packageSkippingTestsOf (testedElsewhere.${name} or [ ]) name
-  ) packagedDirectories;
+  closures = lib.mapAttrs (
+    _: directory: sources.crateNames (sources.localCrates directory)
+  ) packageDirectoriesByName;
+  testOrder = lib.mapAttrs (name: closure: [
+    (lib.length closure)
+    name
+  ]) closures;
+  packagesTestingBefore =
+    name: crates:
+    lib.attrValues (
+      lib.filterAttrs (
+        other: _:
+        testOrder.${other} < testOrder.${name} && lib.intersectLists crates closures.${other} != [ ]
+      ) packagesByName
+    );
+  packagesByName = lib.mapAttrs buildPackage packageDirectoriesByName;
+  packagedCrates = lib.getAttrs (lib.attrNames packagedDirectories) packagesByName;
   libraryCrates = lib.attrValues (lib.getAttrs contract.libraryLayers packagedCrates);
-  packages = lib.mapAttrs (packageSkippingTestsOf [ ]) directories // {
+  packages = lib.getAttrs (lib.attrNames directories) packagesByName // {
     inherit (packagedCrates) wayland-input;
   };
   examples = pkgs.symlinkJoin {
