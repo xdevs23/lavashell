@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 clap.workspace = true
+lavashell-enum-values.workspace = true
 lavashell-error-chain.workspace = true
 lavashell-output-capture.workspace = true
 lavashell-process-scope.workspace = true

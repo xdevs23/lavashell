@@ -19,4 +19,5 @@ thiserror.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+lavashell-enum-values.workspace = true
 syn.workspace = true

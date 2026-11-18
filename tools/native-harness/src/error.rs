@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::app_declarations::{Host, LaunchKind};
 use crate::child_lines::ChildLinesError;
 use crate::sway::SwayWindow;
 use lavashell_process_scope::{ProcessError, ProcessExit};
@@ -15,14 +14,6 @@ pub enum HarnessError {
     Process(#[from] ProcessError),
     #[error("{0} is not available")]
     MissingTool(&'static str),
-    #[error("the hosts and launch kinds of the app declarations cannot be read")]
-    UnreadableSpellings(#[source] serde_json::Error),
-    #[error("the app declarations list the hosts {0:?}, which are not every host once")]
-    DivergedHosts(Vec<Host>),
-    #[error(
-        "the app declarations list the launch kinds {0:?}, which are not every launch kind once"
-    )]
-    DivergedLaunchKinds(Vec<LaunchKind>),
     #[error("the declaration of {app} is invalid")]
     InvalidDeclaration {
         app: String,

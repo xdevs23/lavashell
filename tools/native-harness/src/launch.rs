@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::app_declarations::{LaunchKind, WaylandApp};
+use crate::app_declarations::WaylandApp;
+use crate::app_vocabulary::LaunchKind;
 use crate::capture::OutputCapture;
 use crate::child_lines::ChildLines;
 use crate::error::HarnessError;

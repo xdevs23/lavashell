@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod app_declarations;
+mod app_vocabulary;
 mod capture;
 mod check;
 mod child_lines;

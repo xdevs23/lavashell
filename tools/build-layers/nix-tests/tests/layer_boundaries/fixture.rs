@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::manifests::{Dependency, MemberManifest, WorkspaceManifest};
 use lavashell_cargo_model::lock::CargoLock;
+use lavashell_enum_values::enum_with_values;
 use lavashell_nix_tests::evaluation::evaluate;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use lavashell_nix_tests::repository::copy_repository;
@@ -15,29 +16,44 @@ use tempfile::TempDir;
 const EXPRESSION: &str = "layer-derivations.nix";
 const STALE_EXPRESSION: &str = "stale-layer-derivations.nix";
 
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum LayerDerivation {
+        Registry,
+        Framework,
+        Engine,
+        ReferenceFramework,
+        Reference,
+        Native,
+    }
+
+    const ALL;
+}
+
+impl LayerDerivation {
+    fn is_on_engine(self) -> bool {
+        match self {
+            Self::Engine | Self::ReferenceFramework | Self::Reference => true,
+            Self::Registry | Self::Framework | Self::Native => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(untagged)]
 pub enum Derivation {
-    Registry,
-    Framework,
-    Engine,
-    ReferenceFramework,
-    Reference,
-    Native,
-    #[serde(untagged)]
+    Layer(LayerDerivation),
     OfPackagedCrate(String),
 }
 
 impl Derivation {
-    const LAYERS: [Self; 6] = [
-        Self::Registry,
-        Self::Framework,
-        Self::Engine,
-        Self::ReferenceFramework,
-        Self::Reference,
-        Self::Native,
-    ];
-    pub const ON_ENGINE: [Self; 3] = [Self::Engine, Self::ReferenceFramework, Self::Reference];
+    pub fn layers_on_engine() -> Vec<Self> {
+        (LayerDerivation::ALL.into_iter())
+            .filter(|layer| layer.is_on_engine())
+            .map(Self::Layer)
+            .collect()
+    }
 }
 
 #[derive(Deserialize)]
@@ -177,9 +193,8 @@ impl Base {
     }
 
     pub fn engines(&self) -> Vec<Derivation> {
-        std::iter::once(&Derivation::Engine)
-            .chain(self.packages.engines())
-            .cloned()
+        std::iter::once(Derivation::Layer(LayerDerivation::Engine))
+            .chain(self.packages.engines().cloned())
             .collect()
     }
 }
@@ -288,8 +303,8 @@ fn evaluate_base() -> Result<Base, LayerTestError> {
             directory: tree.directory.clone(),
         })?;
     let packages = tree.packages_by_route;
-    let all: Vec<_> = Derivation::LAYERS
-        .into_iter()
+    let all: Vec<_> = (LayerDerivation::ALL.into_iter())
+        .map(Derivation::Layer)
         .chain(packages.registry_only.iter().cloned())
         .chain(packages.engines().cloned())
         .chain(packages.built_on_framework())

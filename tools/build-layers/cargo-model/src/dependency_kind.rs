@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html
+use lavashell_enum_values::enum_with_values;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum DependencyKind {
-    Normal,
-    Build,
-    Dev,
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub enum DependencyKind {
+        Normal,
+        Build,
+        Dev,
+    }
+
+    const ALL;
 }
 
 impl DependencyKind {
-    const ALL: [Self; 3] = [Self::Normal, Self::Build, Self::Dev];
-
     #[must_use]
     pub fn table(self) -> &'static str {
         match self {

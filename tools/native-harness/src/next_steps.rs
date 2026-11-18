@@ -47,10 +47,7 @@ pub fn next_step(error: &HarnessError) -> NextStep {
         HarnessError::UnknownApps(_)
         | HarnessError::CreateOutputDirectory { .. }
         | HarnessError::CreateRunFile { .. } => NextStep::FixArguments,
-        HarnessError::UnreadableSpellings(_)
-        | HarnessError::DivergedHosts(_)
-        | HarnessError::DivergedLaunchKinds(_)
-        | HarnessError::FindRepository(_)
+        HarnessError::FindRepository(_)
         | HarnessError::RepositoryUrl(_)
         | HarnessError::UnreadableSystem(_)
         | HarnessError::UnreadableApps(_)

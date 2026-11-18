@@ -415,6 +415,10 @@
         "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
       },
       {
+        "name": "lavashell-enum-values",
+        "version": "0.1.0"
+      },
+      {
         "name": "lavashell-error-chain",
         "version": "0.1.0"
       },
@@ -423,6 +427,7 @@
         "version": "0.1.0",
         "dependencies": [
           "clap",
+          "lavashell-enum-values",
           "lavashell-error-chain",
           "lavashell-output-capture",
           "lavashell-process-scope",
@@ -1133,7 +1138,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "f7cadd8e227566145f751ce02b7630902ad30f115897862f922a8fa080c7e757",
+        "seedHash": "d54aacd01249863e7f58c4dc6e12e3823819fe93fbbc438546b402de6d2a4610",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1156,6 +1161,7 @@
             "workspace": {
               "resolver": "3",
               "members": [
+                "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
                 "tools/native-harness",
                 "tools/output-capture",
@@ -1165,6 +1171,31 @@
             }
           },
           "crates": [
+            {
+              "member": "crates/lavashell-enum-values",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-enum-values",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
             {
               "member": "crates/lavashell-error-chain",
               "manifest": {
@@ -1222,6 +1253,12 @@
                       "usage"
                     ],
                     "version": "=4.6.7"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-enum-values"
                   },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
@@ -1989,6 +2026,10 @@
                 "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
               },
               {
+                "name": "lavashell-enum-values",
+                "version": "0.0.0"
+              },
+              {
                 "name": "lavashell-error-chain",
                 "version": "0.0.0"
               },
@@ -1997,6 +2038,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "clap",
+                  "lavashell-enum-values",
                   "lavashell-error-chain",
                   "lavashell-output-capture",
                   "lavashell-process-scope",

@@ -12,13 +12,22 @@ let
       inherit root;
     }).buildLayers;
   directory = root + "/${workspace}";
+  manifest = pkgs.lib.importTOML (directory + "/Cargo.toml");
+  pathDependencies = map (dependency: directory + "/${dependency.path}") (
+    builtins.filter (dependency: dependency ? path) (
+      builtins.attrValues manifest.workspace.dependencies
+    )
+  );
+  inheritedRootManifest = (pkgs.formats.toml { }).generate "Cargo.toml" {
+    workspace = { inherit ((pkgs.lib.importTOML (root + "/Cargo.toml")).workspace) package lints; };
+  };
   testPackage = "lavashell-nix-tests";
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
   package =
     attributes:
     rustPlatform.buildRustPackage (
       {
-        version = (pkgs.lib.importTOML (directory + "/Cargo.toml")).workspace.package.version;
+        version = manifest.workspace.package.version;
         cargoDeps = vendor (directory + "/Cargo.lock");
         meta.license = pkgs.lib.licenses.gpl3Only;
       }
@@ -28,7 +37,15 @@ in
 {
   tools = package {
     pname = "lavashell-build-layers";
-    src = directory;
+    src = pkgs.lib.fileset.toSource {
+      inherit root;
+      fileset = pkgs.lib.fileset.unions ([ directory ] ++ pathDependencies);
+    };
+    postPatch = ''
+      cp ${inheritedRootManifest} Cargo.toml
+    '';
+    cargoRoot = workspace;
+    buildAndTestSubdir = workspace;
   };
   nixTests = package (
     clippy [ "--workspace" ]

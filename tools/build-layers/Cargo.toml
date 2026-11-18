@@ -36,6 +36,7 @@ missing_panics_doc = "allow"
 [workspace.dependencies]
 lavashell-cargo-model = { path = "cargo-model" }
 lavashell-command-output = { path = "command-output" }
+lavashell-enum-values = { path = "../../crates/lavashell-enum-values" }
 lavashell-plan-check = { path = "plan-check" }
 clap = { version = "=4.6.7", features = ["derive"] }
 object = { version = "=0.41.0", default-features = false, features = ["elf", "names", "read_core", "std"] }

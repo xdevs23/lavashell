@@ -3,7 +3,8 @@ mod fixture;
 mod manifests;
 
 use fixture::{
-    Derivation, Fixture, LayerTestError, Layers, Variant, base, bump_locked_package, bumped,
+    Derivation, Fixture, LayerDerivation, LayerTestError, Layers, Variant, base,
+    bump_locked_package, bumped,
 };
 use lavashell_cargo_model::lock::{LockReference, LockedPackage};
 use lavashell_nix_tests::toml_files::{read_toml, write_toml};
@@ -62,8 +63,11 @@ fn an_edit_of_the_reference_source_reaches_only_the_reference() -> Result<(), La
     let fixture = Fixture::new()?;
     append_newline(&reference_source(&fixture.root().join(&base()?.reference)))?;
     let current = fixture.all_layers()?;
-    assert_unchanged(&current, &base()?.all_except(&[Derivation::Reference]))?;
-    assert_changed(&current, &[Derivation::Reference])
+    assert_unchanged(
+        &current,
+        &base()?.all_except(&[Derivation::Layer(LayerDerivation::Reference)]),
+    )?;
+    assert_changed(&current, &[Derivation::Layer(LayerDerivation::Reference)])
 }
 
 #[test]
@@ -105,16 +109,16 @@ fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Resul
     let fixture = Fixture::new()?;
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
-    assert_unchanged(&current, &[Derivation::Registry])?;
+    assert_unchanged(&current, &[Derivation::Layer(LayerDerivation::Registry)])?;
     assert_unchanged(&current, &base()?.engines())?;
     assert_unchanged(&current, &base()?.packages.registry_only)?;
     assert_changed(
         &current,
         &[
-            Derivation::Framework,
-            Derivation::ReferenceFramework,
-            Derivation::Reference,
-            Derivation::Native,
+            Derivation::Layer(LayerDerivation::Framework),
+            Derivation::Layer(LayerDerivation::ReferenceFramework),
+            Derivation::Layer(LayerDerivation::Reference),
+            Derivation::Layer(LayerDerivation::Native),
         ],
     )
 }
@@ -141,7 +145,13 @@ fn an_edit_of_the_error_chain_changes_the_packages_on_and_off_the_framework()
             .join("crates/lavashell-error-chain/src/lib.rs"),
     )?;
     let current = fixture.all_layers()?;
-    assert_unchanged(&current, &[Derivation::Registry, Derivation::Engine])?;
+    assert_unchanged(
+        &current,
+        &[
+            Derivation::Layer(LayerDerivation::Registry),
+            Derivation::Layer(LayerDerivation::Engine),
+        ],
+    )?;
     assert_changed(&current, &base()?.packages.registry_only)?;
     assert_changed(&current, &base()?.packages.built_on_framework())
 }
@@ -221,8 +231,9 @@ fn an_added_engine_feature_makes_the_projections_stale_and_leaves_the_other_laye
         features.push("bevy_scene".to_owned());
         Ok(())
     })?;
-    assert_eq!(fixture.stale_layers()?, Derivation::ON_ENGINE);
-    let off_engine = base()?.all_except(&Derivation::ON_ENGINE);
+    let on_engine = Derivation::layers_on_engine();
+    assert_eq!(fixture.stale_layers()?, on_engine);
+    let off_engine = base()?.all_except(&on_engine);
     assert_unchanged(&fixture.layers(Variant::Plain, &off_engine)?, &off_engine)
 }
 
@@ -241,7 +252,10 @@ fn a_version_change_of_the_adapter_reaches_only_the_reference_layers() -> Result
     })?;
     fixture.edit_lock(|lock| bump_locked_package(lock, &adapter, &old, &new))?;
     let current = fixture.all_layers()?;
-    let reference_layers = [Derivation::ReferenceFramework, Derivation::Reference];
+    let reference_layers = [
+        Derivation::Layer(LayerDerivation::ReferenceFramework),
+        Derivation::Layer(LayerDerivation::Reference),
+    ];
     assert_unchanged(&current, &base()?.all_except(&reference_layers))?;
     assert_changed(&current, &reference_layers)
 }
@@ -251,7 +265,8 @@ fn a_version_change_of_the_engine_makes_the_projections_stale_and_leaves_the_oth
 -> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     fixture.bump_workspace_dependency("bevy")?;
-    assert_eq!(fixture.stale_layers()?, Derivation::ON_ENGINE);
-    let off_engine = base()?.all_except(&Derivation::ON_ENGINE);
+    let on_engine = Derivation::layers_on_engine();
+    assert_eq!(fixture.stale_layers()?, on_engine);
+    let off_engine = base()?.all_except(&on_engine);
     assert_unchanged(&fixture.layers(Variant::Plain, &off_engine)?, &off_engine)
 }

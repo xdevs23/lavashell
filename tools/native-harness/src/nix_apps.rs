@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::app_declarations::{WaylandApp, check_declared_spellings, read_wayland_app};
+use crate::app_declarations::{WaylandApp, read_wayland_app};
 use crate::error::HarnessError;
 use crate::program_path::find_on_path;
 use lavashell_process_scope::run_checked_for_stdout;
@@ -34,7 +34,6 @@ impl Flake {
     }
 
     pub fn wayland_apps(&self, only: &[String]) -> Result<Vec<WaylandApp>, HarnessError> {
-        check_declared_spellings()?;
         let system = self.current_system()?;
         let stdout = run_checked_for_stdout(self.nix().args([
             "eval",

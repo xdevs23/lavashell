@@ -2954,6 +2954,7 @@ name = "lavashell-native-harness"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "lavashell-enum-values",
  "lavashell-error-chain",
  "lavashell-output-capture",
  "lavashell-process-scope",

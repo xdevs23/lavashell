@@ -382,6 +382,7 @@ dependencies = [
 name = "lavashell-cargo-model"
 version = "0.1.0"
 dependencies = [
+ "lavashell-enum-values",
  "serde",
  "serde_json",
  "thiserror",
@@ -399,11 +400,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lavashell-enum-values"
+version = "0.1.0"
+
+[[package]]
 name = "lavashell-nix-tests"
 version = "0.1.0"
 dependencies = [
  "lavashell-cargo-model",
  "lavashell-command-output",
+ "lavashell-enum-values",
  "serde",
  "serde_json",
  "syn",
