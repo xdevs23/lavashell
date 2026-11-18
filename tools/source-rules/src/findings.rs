@@ -11,6 +11,7 @@ pub enum Rule {
     IgnoredTest,
     PanickingTest,
     ErasedError,
+    HandWrittenEnumValues { enum_name: String },
     ProbeFamilyLiteral { family: String },
     PixelSizeInTest,
     Comment,
@@ -54,6 +55,10 @@ impl fmt::Display for Rule {
             ),
             Self::ErasedError => formatter.write_str(
                 "report a failure as the error enum of the crate, never as a `String` or a boxed `dyn Error`",
+            ),
+            Self::HandWrittenEnumValues { enum_name } => write!(
+                formatter,
+                "list every value of {enum_name} with `{enum_name}::ALL`, which `enum_with_values!` derives from the declaration. The check rejects a list written by hand",
             ),
             Self::ProbeFamilyLiteral { family } => write!(
                 formatter,

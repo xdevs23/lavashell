@@ -7,6 +7,7 @@ mod comments;
 mod copy_catalogs;
 mod crate_manifests;
 mod documents;
+mod enum_value_lists;
 mod error;
 mod findings;
 mod grammar;

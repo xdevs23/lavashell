@@ -180,7 +180,7 @@ fn attribute_after(tokens: &[TokenTree]) -> Option<syn::Result<Meta>> {
     match next {
         TokenTree::Group(group) if group.delimiter() == Delimiter::Bracket => {
             match syn::parse2(group.stream()) {
-                Err(_) if contains_metavariable(group.stream()) => None,
+                Err(_) if contains_template_variable(group.stream()) => None,
                 parsed => Some(parsed),
             }
         }
@@ -188,12 +188,24 @@ fn attribute_after(tokens: &[TokenTree]) -> Option<syn::Result<Meta>> {
     }
 }
 
-fn contains_metavariable(tokens: TokenStream) -> bool {
-    tokens.into_iter().any(|token| match token {
-        TokenTree::Punct(punct) => punct.as_char() == '$',
-        TokenTree::Group(group) => contains_metavariable(group.stream()),
+pub fn contains_template_variable(tokens: TokenStream) -> bool {
+    let tokens: Vec<_> = tokens.into_iter().collect();
+    tokens.iter().enumerate().any(|(index, token)| match token {
+        TokenTree::Punct(punct) => {
+            punct.as_char() == '$'
+                || punct.as_char() == '#' && is_quote_interpolation(tokens.get(index + 1))
+        }
+        TokenTree::Group(group) => contains_template_variable(group.stream()),
         TokenTree::Ident(_) | TokenTree::Literal(_) => false,
     })
+}
+
+fn is_quote_interpolation(after_pound: Option<&TokenTree>) -> bool {
+    match after_pound {
+        Some(TokenTree::Ident(_)) => true,
+        Some(TokenTree::Group(group)) => group.delimiter() == Delimiter::Parenthesis,
+        _ => false,
+    }
 }
 
 impl<'ast> Visit<'ast> for FileRules {

@@ -3,6 +3,7 @@ use crate::comments::comment_report;
 use crate::copy_catalogs::copy_report;
 use crate::crate_manifests::crate_report;
 use crate::documents::{ALLOWED_DOCUMENT, document_report};
+use crate::enum_value_lists::hand_written_value_lists;
 use crate::error::Error;
 use crate::findings::{Finding, Report};
 use crate::languages::RUST;
@@ -85,6 +86,7 @@ pub fn rust_report(files: &[RepositoryFile], crate_roots: &[PathBuf]) -> Result<
             source: error,
         })?);
     }
+    findings.extend(hand_written_value_lists(&sources)?);
     for root in crate_roots {
         let crate_files = Crate::read(root, &sources)?;
         findings.extend(

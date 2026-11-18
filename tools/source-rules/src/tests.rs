@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf, StripPrefixError};
 
 mod copy_catalogs;
 mod crate_manifests;
+mod enum_value_lists;
 mod renderer_test_fixtures;
 mod repository_files;
 mod vulkan_free_crates;
