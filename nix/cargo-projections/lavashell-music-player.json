@@ -1405,8 +1405,11 @@
         "name": "lavashell-test-fixtures",
         "version": "0.1.0",
         "dependencies": [
+          "futures-lite",
           "lavashell-core",
-          "thiserror 2.0.21"
+          "tempfile",
+          "thiserror 2.0.21",
+          "zbus"
         ]
       },
       {

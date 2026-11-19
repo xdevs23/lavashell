@@ -4,13 +4,6 @@ let
   inherit (pkgs) lib;
   contract = import ./projection-contract.nix;
   assets = import ./assets.nix { inherit pkgs; };
-  privateBus = pkgs.writeShellScript "lavashell-private-test-dbus" ''
-    if [ "''${1-}" = --session ]; then
-      shift
-    fi
-    exec ${pkgs.dbus}/bin/dbus-daemon \
-      --config-file=${pkgs.dbus}/share/dbus-1/session.conf "$@"
-  '';
   fontConfig = pkgs.writeText "lavashell-fonts.conf" ''
     <?xml version="1.0"?>
     <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
@@ -53,7 +46,6 @@ in
     '';
   buildPhase = builtins.readFile ./cargo-build-record.sh;
   preCheck = ''
-    export DBUS_DAEMON="${privateBus}"
     export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json"
     export XDG_CACHE_HOME="$TMPDIR/lavashell-test-cache"
     mkdir -p "$XDG_CACHE_HOME"

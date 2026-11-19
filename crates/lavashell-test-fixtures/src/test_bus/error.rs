@@ -4,6 +4,10 @@ use std::process::ExitStatus;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TestBusError {
+    #[error("the test fixture could not create the runtime directory for the private bus")]
+    CreateRuntimeDirectory(#[source] io::Error),
+    #[error("the test fixture could not write the configuration for the private bus")]
+    WriteBusConfig(#[source] io::Error),
     #[error("the dbus-daemon could not start")]
     StartBusDaemon(#[source] io::Error),
     #[error("the address of the private bus could not be read")]

@@ -3160,8 +3160,11 @@ dependencies = [
 name = "lavashell-test-fixtures"
 version = "0.1.0"
 dependencies = [
+ "futures-lite",
  "lavashell-core",
+ "tempfile",
  "thiserror 2.0.21",
+ "zbus",
 ]
 
 [[package]]

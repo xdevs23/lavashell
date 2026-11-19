@@ -11,4 +11,9 @@ workspace = true
 
 [dependencies]
 lavashell-core = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+futures-lite.workspace = true
+zbus = { workspace = true, features = ["async-io"] }

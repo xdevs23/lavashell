@@ -1280,8 +1280,11 @@
         "name": "lavashell-test-fixtures",
         "version": "0.1.0",
         "dependencies": [
+          "futures-lite",
           "lavashell-core",
-          "thiserror 2.0.21"
+          "tempfile",
+          "thiserror 2.0.21",
+          "zbus"
         ]
       },
       {
@@ -2681,7 +2684,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "5fbbe6d8ea1b8d8278c939b2c46cc1486efb7c231661384311d65ca2d225e292",
+        "seedHash": "ac96a14d67ec896de9b177a04fce0e9bfa20c26202a3b0d3654abb4a10e67a6c",
         "plan": {
           "schema": 1,
           "selection": {
