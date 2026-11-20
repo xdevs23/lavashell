@@ -48,7 +48,7 @@ fn a_failed_component_loses_its_nodes_and_the_rest_is_reused() -> TestResult {
     let broken = State::new(false);
     let mut scene = Scene::default();
     let mut view = View::new(crate::platform::fixture::facts(), weather(broken.clone()));
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
     let before = view.stats();
     broken.set(true);
     let cause = ComponentError::Composition(CompositionError::DuplicateItemKey);
@@ -78,11 +78,11 @@ fn a_failed_component_composes_again_only_once_a_value_it_read_changes() -> Test
     assert_eq!(next_failures(&mut view, &mut scene)?.len(), 1);
     assert!(!view.needs_frame());
     let compositions = view.stats().component_compositions;
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
     assert_eq!(view.stats().component_compositions, compositions);
     broken.set(false);
     assert!(view.needs_frame());
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
     assert_eq!(view.stats().component_compositions, compositions + 1);
     assert!(view.bounds_of(&"hour").is_some());
     Ok(())
@@ -179,7 +179,7 @@ fn a_component_emptied_by_a_cycle_inside_it_composes_again_once_the_cycle_is_gon
     assert!(!view.needs_frame());
     cycled.set(false);
     assert!(view.needs_frame());
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
     assert!(view.bounds_of(&"hour").is_some());
     Ok(())
 }
@@ -215,7 +215,7 @@ fn a_component_that_reads_a_reference_into_a_failed_component_comes_back_with_it
     ));
     assert_eq!(view.bounds_of(&"hour"), None);
     broken.set(false);
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
     assert!(view.bounds_of(&"hour").is_some());
     Ok(())
 }
@@ -364,12 +364,12 @@ fn a_failed_root_composition_empties_the_view_and_the_frame_still_returns() -> T
             ui.fail(NumberError::OutOfRange);
         }
     });
-    assert!(next_failures(&mut view, &mut scene)?.is_empty());
-    assert!(!scene.commands().is_empty());
+    assert_eq!(next_failures(&mut view, &mut scene)?, Vec::new());
+    assert_ne!(scene.commands(), Vec::new());
     broken.set(true);
     let cause = ComponentError::Composition(CompositionError::Number(NumberError::OutOfRange));
     assert_eq!(next_failures(&mut view, &mut scene)?, [(None, cause)]);
-    assert!(scene.commands().is_empty());
+    assert_eq!(scene.commands(), Vec::new());
     assert_eq!(view.bounds_of(&"square"), None);
     Ok(())
 }

@@ -271,7 +271,7 @@ fn the_action_key_shows_its_icon_alone_where_its_word_does_not_fit() -> Result<(
     );
     host.placement.set(docked(Side::Left, 640.dp())?);
     host.settle()?;
-    assert!(word_bounds(&host.scene, "Search").is_empty());
+    assert_eq!(word_bounds(&host.scene, "Search"), Vec::new());
     let key = key_bounds(&host.view, "Search")?;
     let icons = icon_starts(&host.scene);
     assert!(

@@ -253,6 +253,6 @@ fn focus_after_rebinding(scoped: bool) -> Result<(), TestError> {
         "focus must not jump to the search field after End"
     );
     assert_eq!(list.scroll.offset(), 0.dp());
-    assert!(search.get().is_empty());
+    assert_eq!(search.get(), "");
     Ok(())
 }

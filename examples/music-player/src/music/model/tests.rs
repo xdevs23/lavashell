@@ -5,7 +5,7 @@ use rand::SeedableRng;
 #[test]
 fn recent_history_records_real_selections_in_order() {
     let mut model = Model::default();
-    assert!(model.recent.is_empty());
+    assert_eq!(model.recent, Vec::new());
     let (first, second) = (TrackId::at(2), TrackId::at(4));
     model.select(first);
     model.select(second);

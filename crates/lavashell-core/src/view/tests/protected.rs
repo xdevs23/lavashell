@@ -75,7 +75,7 @@ fn protected_unicode_editing_only_shapes_masks_and_blocks_exports() -> TestResul
     );
     let handoff = secret.take();
     handoff.expose(|value| assert_eq!(value, "é中z"));
-    assert!(secret.masked('•').is_empty());
+    assert_eq!(secret.masked('•'), "");
     view.input(InputEvent::Text("新".into()));
     secret.take().expose(|value| assert_eq!(value, "新"));
     Ok(())
@@ -201,7 +201,7 @@ fn explicit_reveal_keeps_unicode_editor_and_accessibility_masked_with_private_ge
         .required("a password input node")?;
     assert!(node.value.is_none());
     let text = node.text.as_ref().required("the text of the node")?;
-    assert!(text.value.is_empty());
+    assert_eq!(text.value, "");
     assert!(!node.actions.contains(&ActionKind::SetValue));
     view.input(InputEvent::Press(Point::new(19.dp(), 20.dp())));
     view.input(InputEvent::Release(Point::new(19.dp(), 20.dp())));

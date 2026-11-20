@@ -26,7 +26,7 @@ fn reduced_transparency_turns_the_glass_opaque() -> Result<(), TestError> {
     host.view.provide(&REDUCED_TRANSPARENCY, true);
     host.frame()?;
     host.settle()?;
-    assert!(backdrops(&host.scene).is_empty());
+    assert_eq!(backdrops(&host.scene), Vec::new());
     let rows = painted(&host.scene, &|command| match command {
         DrawCommand::Fill {
             shape: Shape::Union(union),

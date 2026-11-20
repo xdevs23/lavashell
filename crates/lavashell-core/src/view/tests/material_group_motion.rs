@@ -234,7 +234,7 @@ fn a_group_material_moves_without_composing() -> TestResult {
 fn a_gained_group_fades_in_from_a_transparent_material() -> TestResult {
     let shown = State::new(false);
     let (mut view, mut scene) = group_view(&shown, Some(&Transition::new(linear())), grouped)?;
-    assert!(group_fills(&scene.commands()).is_empty());
+    assert_eq!(group_fills(&scene.commands()), Vec::new());
     shown.set(true);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_f64_eq(group_color(&scene)?.alpha(), 0.0);
@@ -257,7 +257,7 @@ fn a_lost_group_fades_out_over_the_islands_with_the_last_spacing() -> TestResult
     let members = islands(&scene.commands())?.members;
     assert_eq!(members, [island(&view, "first")?, island(&view, "second")?]);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 1000)?;
-    assert!(group_fills(&scene.commands()).is_empty());
+    assert_eq!(group_fills(&scene.commands()), Vec::new());
     assert!(!view.needs_frame());
     Ok(())
 }

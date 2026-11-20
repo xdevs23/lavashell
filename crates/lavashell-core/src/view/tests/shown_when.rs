@@ -379,9 +379,9 @@ fn a_hidden_component_requests_no_frame_and_paints_the_latest_value_once_shown()
         fill_bounds(&mut scene, &mut view, wide)?,
         [Rect::new(0.dp(), 0.dp(), 20.dp(), 10.dp())]
     );
-    assert!(fill_bounds(&mut scene, &mut view, narrow)?.is_empty());
+    assert_eq!(fill_bounds(&mut scene, &mut view, narrow)?, Vec::new());
     width.set(40.dp());
-    assert!(fill_bounds(&mut scene, &mut view, narrow)?.is_empty());
+    assert_eq!(fill_bounds(&mut scene, &mut view, narrow)?, Vec::new());
     assert!(!view.needs_frame());
     assert_eq!(
         fill_bounds(&mut scene, &mut view, wide)?,

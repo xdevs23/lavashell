@@ -33,7 +33,7 @@ fn a_node_with_an_exit_motion_leaves_with_it_and_not_with_its_transition_motion(
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 100)?;
     assert_f64s_eq(&presences(&scene), &[0.5]);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 200)?;
-    assert!(fills(&scene, PIECE)?.is_empty());
+    assert_eq!(fills(&scene, PIECE)?, Vec::new());
     assert_eq!(view.transitions.count(), 0);
     Ok(())
 }

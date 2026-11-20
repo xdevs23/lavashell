@@ -352,7 +352,7 @@ mod variable_font_tests {
     fn a_family_with_a_weight_axis_has_no_static_faces_and_is_looked_up_once()
     -> Result<(), TestError> {
         let mut fonts = crate::test_font::test_font()?.load()?;
-        assert!(fonts.static_face_weights(PROBE_FAMILY).is_empty());
+        assert_eq!(fonts.static_face_weights(PROBE_FAMILY), Vec::new());
         assert!(
             fonts
                 .static_face_weights_by_family

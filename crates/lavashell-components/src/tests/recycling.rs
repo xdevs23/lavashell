@@ -212,7 +212,7 @@ fn recycler_rebinds_a_bounded_pool_and_clears_old_item_memory() -> Result<(), Te
     let overlapping: Vec<_> = (before.iter())
         .filter(|(index, _)| after.iter().any(|(other, _)| other == index))
         .collect();
-    assert!(!overlapping.is_empty());
+    assert_ne!(overlapping, Vec::<&(usize, _)>::new());
     for item in overlapping {
         assert!(
             after.contains(item),

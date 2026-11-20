@@ -35,7 +35,7 @@ fn the_glass_grows_first_then_the_rows_show_fused_then_the_keys_split() -> Resul
     })?;
     host.settle()?;
     assert_eq!(unions(&host.scene, 10).len(), 1, "the keys split apart");
-    assert!(fused_rows(&host.scene).is_empty());
+    assert_eq!(fused_rows(&host.scene), Vec::new());
     Ok(())
 }
 
@@ -61,7 +61,7 @@ fn the_keys_fuse_into_rows_before_the_panel_sinks() -> Result<(), TestError> {
             .is_some_and(|row| row.y > fused[0].y)
     })?;
     host.settle()?;
-    assert!(fused_rows(&host.scene).is_empty());
+    assert_eq!(fused_rows(&host.scene), Vec::new());
     Ok(())
 }
 
@@ -76,7 +76,7 @@ fn under_reduced_motion_the_keyboard_shows_and_hides_whole_at_once() -> Result<(
     host.session.set(None);
     host.frame()?;
     assert!(!host.keyboard.shown());
-    assert!(backdrops(&host.scene).is_empty());
+    assert_eq!(backdrops(&host.scene), Vec::new());
     Ok(())
 }
 

@@ -50,7 +50,7 @@ fn a_shared_key_in_two_views_does_not_report_a_duplicate_key() -> TestResult {
             });
         }
     });
-    assert!(next_failures(&mut view)?.is_empty());
+    assert_eq!(next_failures(&mut view)?, Vec::new());
     assert!(view.bounds_of(&"list").is_some());
     assert!(view.bounds_of(&"page").is_some());
     Ok(())

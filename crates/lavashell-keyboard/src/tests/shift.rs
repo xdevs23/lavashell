@@ -247,7 +247,7 @@ fn a_protected_field_gets_no_automatic_capitals_and_no_preview() -> Result<(), T
     let at = key(&host.view, "q")?;
     host.view.input(InputEvent::Press(at));
     host.frame()?;
-    assert!(unions(&host.scene, 2).is_empty());
+    assert_eq!(unions(&host.scene, 2), Vec::new());
     host.view.input(InputEvent::Release(at));
     assert_eq!(host.sent(), [Host::commit("q")]);
     Ok(())

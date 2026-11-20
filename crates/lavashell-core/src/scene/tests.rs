@@ -381,5 +381,5 @@ fn a_path_without_points_draws_nothing() {
         &screen(TextScaling::default()),
     )
     .path(&[], true, Color::WHITE, None);
-    assert!(commands.is_empty());
+    assert_eq!(commands, Vec::new());
 }

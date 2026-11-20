@@ -112,7 +112,7 @@ fn a_focused_node_whose_state_paints_no_outline_shows_the_focus_ring_of_its_styl
         });
     });
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    assert!(stroke_widths(&scene.commands()).is_empty());
+    assert_eq!(stroke_widths(&scene.commands()), Vec::new());
     view.input(TAB);
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     assert_eq!(stroke_widths(&scene.commands()), [5.dp()]);

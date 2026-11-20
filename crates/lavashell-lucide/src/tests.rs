@@ -161,7 +161,7 @@ fn a_line_that_returns_to_the_start_is_the_closing_line() -> Result<(), TestErro
 
 #[test]
 fn the_build_converts_the_lucide_files() -> Result<(), TestError> {
-    assert!(!crate::SEARCH.icon()?.paths.is_empty());
+    assert_ne!(crate::SEARCH.icon()?.paths, Vec::new());
     assert!(
         crate::HEART
             .icon()?

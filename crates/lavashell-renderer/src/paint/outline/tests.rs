@@ -159,7 +159,7 @@ fn damaged_paint_clears_holes_and_reconstructs_antialiased_edges_without_accumul
 fn an_empty_outline_takes_no_input_and_clips_everything() -> Result<(), TestError> {
     let size = Size::new(96.dp(), 64.dp());
     let (clip, input_cells) = geometry(&SurfaceOutline::Empty, size)?;
-    assert!(input_cells.is_empty());
+    assert_eq!(input_cells, Vec::new());
     assert!(!clip.contains((12.0, 12.0)));
     Ok(())
 }
@@ -195,7 +195,7 @@ fn degenerate_rectangles_are_empty_but_nonfinite_rounded_outlines_fail() -> Resu
     let size = Size::new(10.dp(), 10.dp());
     let degenerate = rounded_outline(Rect::default(), 14.dp());
     let (_clip, input_cells) = geometry(&degenerate, size)?;
-    assert!(input_cells.is_empty());
+    assert_eq!(input_cells, Vec::new());
     let rect = Rect::new(0.dp(), 0.dp(), 10.dp(), 10.dp());
     let nonfinite = rounded_outline(rect, Dp::new(f64::NAN));
     assert!(matches!(

@@ -70,7 +70,7 @@ mod tests {
         let all = ["de-qwertz", "en-qwerty"];
         assert_eq!(ids(offered(&candidates, &[langid!("ja-JP")])), all);
         assert_eq!(ids(offered(&candidates, &[])), all);
-        assert!(offered(&[], &[langid!("ja-JP")]).is_empty());
+        assert_eq!(ids(offered(&[], &[langid!("ja-JP")])), Vec::<&str>::new());
         Ok(())
     }
 }

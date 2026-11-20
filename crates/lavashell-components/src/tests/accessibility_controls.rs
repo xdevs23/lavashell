@@ -69,7 +69,7 @@ fn stock_controls() -> Result<View, TestError> {
 fn stock_buttons_supply_roles_and_visible_names_without_duplicate_text() -> Result<(), TestError> {
     let view = stock_controls()?;
     assert_eq!(named(&view, "Save")?.role, Role::Button);
-    assert!(named(&view, "Save")?.children.is_empty());
+    assert_eq!(named(&view, "Save")?.children, Vec::new());
     assert_eq!(named(&view, "Add")?.role, Role::Button);
     assert!(
         !view
@@ -103,7 +103,7 @@ fn stock_value_controls_supply_roles_and_values() -> Result<(), TestError> {
         named(&view, "Enabled")?.state.semantics.checked,
         Some(Checked::True)
     );
-    assert!(named(&view, "Enabled")?.children.is_empty());
+    assert_eq!(named(&view, "Enabled")?.children, Vec::new());
     assert_eq!(named(&view, "Volume")?.role, Role::Slider);
     assert_eq!(
         named(&view, "Volume")?.value,
