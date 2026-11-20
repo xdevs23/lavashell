@@ -37,7 +37,7 @@ fn a_ready_watch_is_reported_once_until_the_runtime_resumes_it() -> Result<(), T
         .execute(&handle, watch, &view)
         .map_err(Error::from)?;
     assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, [WATCH]);
-    assert!(reported_after_turn(&mut event_loop, &receiver)?.is_empty());
+    assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, Vec::new());
     watches
         .execute(&handle, WatchRequest::Resume(WATCH), &view)
         .map_err(Error::from)?;
@@ -64,6 +64,6 @@ fn an_ended_watch_is_not_reported_after_a_resume() -> Result<(), TestError> {
     watches
         .execute(&handle, WatchRequest::Resume(WATCH), &view)
         .map_err(Error::from)?;
-    assert!(reported_after_turn(&mut event_loop, &receiver)?.is_empty());
+    assert_eq!(reported_after_turn(&mut event_loop, &receiver)?, Vec::new());
     Ok(())
 }

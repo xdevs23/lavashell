@@ -59,7 +59,7 @@ fn the_requests_run_in_order_and_serving_ends_once_every_sender_is_gone() -> Res
     assert_eq!(released, [FIRST, SECOND]);
     assert!(end.is_none());
     let (released, end) = take(&receiver, &wake, None);
-    assert!(released.is_empty());
+    assert_eq!(released, Vec::new());
     assert!(matches!(end, Some(Ok(()))));
     Ok(())
 }
@@ -73,7 +73,7 @@ fn a_failed_request_ends_serving_before_the_requests_after_it() -> Result<(), Te
     sender.push(release(FIRST))?;
     sender.push(release(SECOND))?;
     let (released, end) = take(&receiver, &wake, Some(FIRST));
-    assert!(released.is_empty());
+    assert_eq!(released, Vec::new());
     assert!(matches!(
         end,
         Some(Err(Error::Window(WindowError::NoXdgShell)))

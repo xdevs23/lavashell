@@ -43,8 +43,8 @@ fn a_touch_point_moves_and_goes_up_on_the_surface_where_it_went_down() {
         router.route(DeviceEvent::TouchUp(lifted)),
         [on(PANEL, InputEvent::TouchUp(lifted))]
     );
-    assert!(router.route(DeviceEvent::TouchUp(lifted)).is_empty());
-    assert!(router.route(DeviceEvent::TouchMotion(moved)).is_empty());
+    assert_eq!(router.route(DeviceEvent::TouchUp(lifted)), Vec::new());
+    assert_eq!(router.route(DeviceEvent::TouchMotion(moved)), Vec::new());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn a_cancel_ends_one_touch_point_on_its_surface_and_leaves_the_other_points_down
         router.route(DeviceEvent::TouchCancel(cancelled.id)),
         [on(WINDOW, InputEvent::TouchCancel(cancelled.id))]
     );
-    assert!(router.route(DeviceEvent::TouchUp(cancelled)).is_empty());
+    assert_eq!(router.route(DeviceEvent::TouchUp(cancelled)), Vec::new());
     assert_eq!(
         router.route(DeviceEvent::TouchUp(other)),
         [on(PANEL, InputEvent::TouchUp(other))]
@@ -72,11 +72,10 @@ fn forgetting_a_surface_drops_the_touch_points_that_went_down_on_it() {
     assert_eq!(router.route(down(WINDOW, on_window)).len(), 1);
     assert_eq!(router.route(down(PANEL, on_panel)).len(), 1);
     router.forget_surface(WINDOW);
-    assert!(router.route(DeviceEvent::TouchUp(on_window)).is_empty());
-    assert!(
-        router
-            .route(DeviceEvent::TouchCancel(on_window.id))
-            .is_empty()
+    assert_eq!(router.route(DeviceEvent::TouchUp(on_window)), Vec::new());
+    assert_eq!(
+        router.route(DeviceEvent::TouchCancel(on_window.id)),
+        Vec::new()
     );
     assert_eq!(
         router.route(DeviceEvent::TouchCancel(on_panel.id)),

@@ -85,7 +85,7 @@ fn dispatch_after_close_is_dropped() -> TestResult {
     actions.dispatch_when_readable(readable_source()?, SurfaceId::numbered(3), |_| {})?;
     watches.handle(WatchEvent::Ready(ids[0]));
     assert!(!queue.has_pending_for(SurfaceId::numbered(3)));
-    assert!(watched(&watches.take_requests()).is_empty());
+    assert_eq!(watched(&watches.take_requests()), Vec::new());
     Ok(())
 }
 

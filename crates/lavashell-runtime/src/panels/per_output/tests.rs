@@ -78,7 +78,7 @@ fn the_panels_of_a_removed_output_close() -> TestResult {
             SurfaceRequest::Destroy(SurfaceId::numbered(1))
         ]
     );
-    assert!(panels.output_removed(MONITOR, &mut surfaces).is_empty());
+    assert_eq!(panels.output_removed(MONITOR, &mut surfaces), Vec::new());
     assert!(surfaces.is_open(SurfaceId::numbered(2)));
     assert!(surfaces.is_open(SurfaceId::numbered(3)));
     Ok(())
@@ -94,7 +94,7 @@ fn an_output_records_its_panels_only_after_every_surface_opened() -> TestResult 
         _ => open_in(&mut surfaces)(name, view),
     });
     assert!(matches!(failed, Err(TestError::Missing(DOCK_SURFACE))));
-    assert!(panels.output_removed(MONITOR, &mut surfaces).is_empty());
+    assert_eq!(panels.output_removed(MONITOR, &mut surfaces), Vec::new());
     panels.output_updated(MONITOR, Some(info(1920)), open_in(&mut surfaces))?;
     assert_eq!(seen.borrow().len(), 2);
     assert_eq!(panels.output_removed(MONITOR, &mut surfaces).len(), 2);

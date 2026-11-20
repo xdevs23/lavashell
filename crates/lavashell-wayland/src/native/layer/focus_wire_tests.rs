@@ -11,7 +11,7 @@ use zwlr_layer_surface_v1::KeyboardInteractivity;
 fn layer_client() -> Result<(LayerClient, ZwlrLayerSurfaceV1), TestError> {
     let mut client = LayerClient::new(4)?;
     let layer = client.layer(top_bar(Size::ZERO)?, KeyboardMode::OnDemand)?;
-    assert!(!client.flush()?.is_empty());
+    assert_ne!(client.flush()?, Vec::new());
     Ok((client, layer))
 }
 
@@ -45,7 +45,10 @@ fn an_acquired_grab_adds_the_surface_until_the_runtime_releases_it() -> Result<(
         );
         let released = client.execute(FocusGrabRequest::Release(LAYER))?;
         assert_eq!(released, vec![destroy_grab(grab)]);
-        assert!(client.execute(FocusGrabRequest::Release(LAYER))?.is_empty());
+        assert_eq!(
+            client.execute(FocusGrabRequest::Release(LAYER))?,
+            Vec::new()
+        );
     }
     Ok(())
 }
@@ -56,7 +59,10 @@ fn a_grab_cleared_by_the_compositor_is_destroyed_and_reported() -> Result<(), Te
     let grab = client.execute(FocusGrabRequest::Acquire(LAYER))?[0].arguments[0];
     assert_eq!(client.clear_focus(), FocusGrabEvent::Cleared(LAYER));
     assert_eq!(client.flush()?, vec![destroy_grab(grab)]);
-    assert!(client.execute(FocusGrabRequest::Release(LAYER))?.is_empty());
+    assert_eq!(
+        client.execute(FocusGrabRequest::Release(LAYER))?,
+        Vec::new()
+    );
     Ok(())
 }
 
@@ -109,7 +115,7 @@ fn keyboard_modes_follow_the_protocol_version_and_replay_for_a_new_role() -> Res
         assert_eq!(client.flush()?, vec![keyboard(KeyboardInteractivity::None)]);
         layer.destroy();
         client.replace_surface();
-        assert!(!client.flush()?.is_empty());
+        assert_ne!(client.flush()?, Vec::new());
         let replacement = client.layer(top_bar(Size::ZERO)?, KeyboardMode::OnDemand)?;
         let role = replacement.id().protocol_id();
         let replayed = WireMessage::new(

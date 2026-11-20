@@ -28,7 +28,7 @@ fn sends_the_surface_state_of_a_frame_before_its_frame_request_and_only_once()
 -> Result<(), TestError> {
     let mut client = LayerClient::new(4)?;
     let layer = client.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
-    assert!(!client.flush()?.is_empty());
+    assert_ne!(client.flush()?, Vec::new());
     let control = client.control.as_mut().ok_or(LayerTestError::NoLayer)?;
     let token = ConfigureToken::default();
     control.receive(LayerConfigure {
@@ -89,7 +89,7 @@ fn acknowledges_a_layer_configure_with_the_frame_that_contains_its_token() -> Re
 {
     let mut client = LayerClient::new(4)?;
     let layer = client.layer(top_bar(Size::ZERO)?, KeyboardMode::Off)?;
-    assert!(!client.flush()?.is_empty());
+    assert_ne!(client.flush()?, Vec::new());
     let (message, event) = translate_configure(ProtocolSerial::new(9), 0, 30);
     let configured = SurfaceEvent::Configured {
         width: None,

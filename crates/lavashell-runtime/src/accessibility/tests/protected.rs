@@ -46,7 +46,7 @@ fn native_password_role_has_no_credential_value_runs_or_selection_actions() -> T
         let field = native_node(&native, NativeRole::PasswordInput)?;
         assert_eq!(native.focus, field.0);
         assert_eq!(field.1.value(), Some(""));
-        assert!(field.1.children().is_empty());
+        assert_eq!(field.1.children(), Vec::new());
         assert!(field.1.text_selection().is_none());
         assert!(!field.1.supports_action(Action::SetValue));
         assert!(!field.1.supports_action(Action::ReplaceSelectedText));
