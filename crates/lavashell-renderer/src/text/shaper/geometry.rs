@@ -27,16 +27,10 @@ impl TextMeasurer for Shaper {
     }
 
     fn geometry(&mut self, text: &str, style: &TextStyle<Dp>, width: Dp) -> TextGeometry {
-        let geometry = (self.prepare_paragraph("", style, Dp::INFINITY))
-            .map(|empty| dp_of(empty.height()))
-            .and_then(|empty_line| {
-                let paragraph = self.prepare_paragraph(text, style, width)?;
-                let geometry = shape(paragraph, empty_line, text, width);
-                Ok(TextGeometry {
-                    word_starts: word_starts(paragraph, text),
-                    ..geometry
-                })
-            });
+        let geometry = (self.prepare_paragraph(text, style, width)).map(|paragraph| TextGeometry {
+            word_starts: word_starts(paragraph, text),
+            ..shape(paragraph, text, width)
+        });
         self.measured(geometry).unwrap_or_default()
     }
 
@@ -76,13 +70,9 @@ impl TextMeasurer for Shaper {
         width: Dp,
     ) -> TextGeometry {
         let rendering = self.text_configuration.get().rendering;
-        let empty = self.private_paragraph(rendering, "", style, Dp::INFINITY);
-        let Some(empty_line) = self.measured(empty.map(|empty| dp_of(empty.height()))) else {
-            return TextGeometry::default();
-        };
         text.geometry(|value| {
             let geometry = (self.private_paragraph(rendering, value, style, width))
-                .map(|mut paragraph| shape(&mut paragraph, empty_line, value, width));
+                .map(|mut paragraph| shape(&mut paragraph, value, width));
             self.measured(geometry).unwrap_or_default()
         })
     }
@@ -115,20 +105,27 @@ fn paragraph_size(paragraph: &skia_safe::textlayout::Paragraph, max_width: Dp) -
     )
 }
 
-fn shape(
-    paragraph: &mut skia_safe::textlayout::Paragraph,
-    empty_line: Dp,
-    text: &str,
-    width: Dp,
-) -> TextGeometry {
+fn shape(paragraph: &mut skia_safe::textlayout::Paragraph, text: &str, width: Dp) -> TextGeometry {
     use skia_safe::textlayout::TextDirection;
     let mut carets = Vec::new();
     let mut clusters: Vec<TextCluster> = Vec::new();
     let mut utf16 = 0;
     let utf16_bytes = byte_offsets_by_utf16(text);
     let lines = line_ranges(paragraph, &utf16_bytes);
+    let boxes: Vec<Rect> = (paragraph.get_line_metrics().iter())
+        .scan(Dp::ZERO, |top, line| {
+            let line_box = Rect::new(Dp::ZERO, *top, Dp::ZERO, Dp::new(line.height));
+            *top += line_box.height;
+            Some(line_box)
+        })
+        .collect();
+    let paragraph_box = Rect::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, dp_of(paragraph.height()));
+    let line_box = |line: usize| {
+        let laid_out = boxes.get(line).or(boxes.last());
+        laid_out.copied().unwrap_or(paragraph_box)
+    };
     let mut line = 0;
-    let mut last = Rect::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, empty_line);
+    let mut last = line_box(line);
     for (index, ch) in text.char_indices() {
         if ch == '\n' {
             if !clusters
@@ -150,7 +147,7 @@ fn shape(
                 });
             }
             line += 1;
-            last = Rect::new(Dp::ZERO, last.y + last.height, Dp::ZERO, empty_line);
+            last = line_box(line);
         } else if let Some(info) = paragraph.get_glyph_info_at_utf16_offset(utf16)
             && info.grapheme_cluster_text_range.start == utf16
         {
@@ -160,17 +157,13 @@ fn shape(
                 .get_line_number_at_utf16_offset(utf16)
                 .unwrap_or(line);
             let x = if rtl { r.right } else { r.left };
-            let height = if r.height() > 0.0 {
-                dp_of(r.height())
-            } else {
-                empty_line
-            };
-            let rect = Rect::new(dp_of(x), dp_of(r.top), Dp::ZERO, height);
+            let rect = line_box(glyph_line).translated(Point::new(dp_of(x), Dp::ZERO));
             if let Some(end) = utf16_bytes.get(&info.grapheme_cluster_text_range.end) {
                 clusters.push(TextCluster {
                     byte_range: index..*end,
                     bounds: Rect {
-                        height,
+                        y: rect.y,
+                        height: rect.height,
                         ..rect_of(r)
                     },
                     direction: if rtl {
@@ -264,6 +257,7 @@ mod tests {
     use super::*;
     use crate::failure::Failures;
     use crate::test_error::TestError;
+    use num_traits::AsPrimitive;
 
     fn style() -> TextStyle<Dp> {
         TextStyle {
@@ -286,6 +280,59 @@ mod tests {
                 .carets
                 .is_empty()
         );
+        Ok(())
+    }
+
+    const PARAGRAPHS: [&str; 4] = ["", "a\n", "a\n\nb", "Display brightness level"];
+
+    fn style_with_line_height(height: Sp) -> TextStyle<Dp> {
+        let style = TextStyle::new("sans-serif", 14.sp(), Color::WHITE);
+        style.line_height(height).resolve_unscaled()
+    }
+
+    fn lies_on_line(line: usize, bounds: Rect, line_height: Dp) -> bool {
+        let index: f64 = line.as_();
+        bounds.height == line_height && bounds.y == line_height * index
+    }
+
+    #[test]
+    fn a_paragraph_is_as_tall_as_its_lines_on_the_line_height_of_its_style() -> Result<(), TestError>
+    {
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
+        let style = style_with_line_height(28.sp());
+        assert_eq!(shaper.line_height(&style), 28.dp());
+        for text in PARAGRAPHS {
+            let geometry = shaper.geometry(text, &style, 60.dp());
+            let lines: f64 = geometry.lines.len().max(1).as_();
+            assert_eq!(geometry.size.height, 28.dp() * lines);
+            assert_eq!(
+                shaper.measure(text, &style, 60.dp()).height,
+                28.dp() * lines
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn every_caret_and_cluster_lies_on_the_line_height_of_its_style() -> Result<(), TestError> {
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
+        let style = style_with_line_height(28.sp());
+        for text in PARAGRAPHS {
+            let geometry = shaper.geometry(text, &style, 60.dp());
+            let mut carets = geometry.carets.iter();
+            assert!(carets.all(|caret| lies_on_line(caret.line, caret.rect, 28.dp())));
+            let mut clusters = geometry.clusters.iter();
+            assert!(clusters.all(|cluster| lies_on_line(cluster.line, cluster.bounds, 28.dp())));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_line_height_on_a_zero_font_size_measures_a_finite_height() -> Result<(), TestError> {
+        let mut shaper = Shaper::new(crate::Fonts::new().load()?, Failures::default());
+        let style = TextStyle::new("sans-serif", 0.sp(), Color::WHITE).line_height(28.sp());
+        let size = shaper.measure("Display", &style.resolve_unscaled(), Dp::INFINITY);
+        assert!(size.height.is_finite());
         Ok(())
     }
 

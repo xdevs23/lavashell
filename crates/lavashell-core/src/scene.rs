@@ -95,6 +95,7 @@ pub struct TextStyle<S: FontSize = Sp> {
     pub family: String,
     pub weight: FontWeight,
     pub max_lines: Option<usize>,
+    pub line_height: Option<S>,
     pub letter_spacing: Em,
     pub alignment: TextAlignment,
     pub direction: ParagraphDirection,
@@ -126,6 +127,7 @@ impl TextStyle {
             family: family.into(),
             weight: FontWeight::NORMAL,
             max_lines: None,
+            line_height: None,
             letter_spacing: Em::ZERO,
             alignment: TextAlignment::Start,
             direction: ParagraphDirection::LeftToRight,
@@ -152,6 +154,12 @@ impl TextStyle {
     }
 
     #[must_use]
+    pub fn line_height(mut self, height: Sp) -> Self {
+        self.line_height = Some(height);
+        self
+    }
+
+    #[must_use]
     pub fn letter_spacing(mut self, spacing: Em) -> Self {
         self.letter_spacing = spacing;
         self
@@ -159,12 +167,17 @@ impl TextStyle {
 
     #[must_use]
     pub fn resolve(self, scaling: &TextScaling) -> TextStyle<Dp> {
+        let size = scaling.to_dp(self.size);
         TextStyle {
-            size: scaling.to_dp(self.size),
+            size,
             color: self.color,
             family: self.family,
             weight: self.weight,
             max_lines: self.max_lines,
+            line_height: self
+                .line_height
+                .map(|height| size * (height.get() / self.size.get()))
+                .filter(|height| height.is_finite()),
             letter_spacing: self.letter_spacing,
             alignment: self.alignment,
             direction: self.direction,

@@ -141,6 +141,30 @@ fn resolving_a_style_scales_its_font_size_and_keeps_the_rest() -> TestResult {
 }
 
 #[test]
+fn resolving_a_style_scales_its_line_height_as_much_as_its_font_size() -> TestResult {
+    let table = TextScaling::table([(28.sp(), 35.dp()), (56.sp(), 56.dp())]).required("table")?;
+    let style = TextStyle::new("Inter", 28.sp(), Color::WHITE).line_height(56.sp());
+    assert_eq!(style.resolve(&table).line_height, Some(70.dp()));
+    Ok(())
+}
+
+#[test]
+fn a_style_without_a_line_height_resolves_without_one() -> TestResult {
+    let style = TextStyle::new("Inter", 28.sp(), Color::WHITE);
+    let scaling = TextScaling::linear(1.5).required("scaling")?;
+    assert_eq!(style.resolve(&scaling).line_height, None);
+    Ok(())
+}
+
+#[test]
+fn a_line_height_on_a_zero_font_size_resolves_without_a_line_height() -> TestResult {
+    let style = TextStyle::new("Inter", 0.sp(), Color::WHITE).line_height(28.sp());
+    let scaling = TextScaling::linear(1.5).required("scaling")?;
+    assert_eq!(style.resolve(&scaling).line_height, None);
+    Ok(())
+}
+
+#[test]
 fn canvas_text_follows_the_text_size_setting() -> TestResult {
     let mut commands = Vec::new();
     Drawing::new(

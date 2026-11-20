@@ -3,10 +3,11 @@ use super::coordinate_fonts::CoordinateFonts;
 use crate::failure::DrawFailure;
 use crate::fonts::{LoadedFonts, has_weight_axis, skia_weight, with_weight_arguments};
 use crate::paint::solid;
-use crate::scalar::scalars;
+use crate::scalar::{scalar, scalars};
 use crate::text_cache::{CachedParagraph, ParagraphSource, TextCache};
 use lavashell_core::prelude::*;
 use skia_safe::font_style::{Slant, Weight, Width};
+use skia_safe::textlayout::StrutStyle;
 use skia_safe::{
     FontStyle, Paint,
     textlayout::{
@@ -18,6 +19,7 @@ use std::ops::Range;
 
 pub(super) struct Layout {
     size: f32,
+    line_height_multiple: Option<f32>,
     letter_spacing: f32,
     width: f32,
     foreground: Paint,
@@ -28,12 +30,31 @@ impl Layout {
         let letter_spacing = style.letter_spacing.to_dp(style.size);
         let [size, letter_spacing, width] =
             scalars([style.size.get(), letter_spacing.get(), width.get()])?;
+        let line_height_multiple = (style.line_height)
+            .and_then(|height| Positive::try_new(height / style.size).ok())
+            .map(|multiple| scalar(multiple.get()))
+            .transpose()?;
         Ok(Self {
             size,
+            line_height_multiple,
             letter_spacing,
             width,
             foreground: solid(style.color)?,
         })
+    }
+
+    fn build_line_height_strut(&self, families: &[&str]) -> Option<StrutStyle> {
+        let multiple = self.line_height_multiple?;
+        let mut strut = StrutStyle::new();
+        let _strut_returned_for_chaining = strut
+            .set_strut_enabled(true)
+            .set_force_strut_height(true)
+            .set_height_override(true)
+            .set_half_leading(true)
+            .set_font_families(families)
+            .set_font_size(self.size)
+            .set_height(multiple);
+        Some(strut)
     }
 }
 
@@ -63,6 +84,7 @@ impl<'t> ParagraphInput<'t> {
         style.color.hash_components(&mut key);
         style.weight.hash(&mut key);
         style.max_lines.hash(&mut key);
+        (style.line_height.map(|height| height.get().to_bits())).hash(&mut key);
         style.letter_spacing.get().to_bits().hash(&mut key);
         style.spans.hash(&mut key);
         style.alignment.hash(&mut key);
@@ -202,6 +224,9 @@ pub(super) fn build(
         ps.set_text_style(&ts).set_max_lines(style.max_lines);
     if let Some(ellipsis) = ellipsis(style) {
         let _paragraph_style_returned_for_chaining = ps.set_ellipsis(ellipsis);
+    }
+    if let Some(strut) = layout.build_line_height_strut(&families) {
+        let _paragraph_style_returned_for_chaining = ps.set_strut_style(strut);
     }
     let spans = span_styles(&mut fonts, text, style, &ts);
     let text_styles = std::iter::once(&ts).chain(spans.iter().map(|span| &span.style));
