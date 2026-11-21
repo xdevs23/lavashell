@@ -3,7 +3,7 @@ use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::{Appearance, ContrastPreference};
 use lavashell_desktop_portal::{PortalError, SettingValue, WatchedNamespace, watch_namespace};
 use lavashell_desktop_settings::{
-    DesktopSetting, DesktopSettingSource, SettingsReporter, SettingsWatch,
+    DesktopSetting, DesktopSettingSource, ServiceWatch, SettingsReporter,
 };
 use lavashell_error_chain::message_chain;
 use std::str::FromStr;
@@ -77,7 +77,7 @@ fn read_setting(appearance: Appearance, key: &str, value: &SettingValue) -> Appe
 pub struct AppearanceSource;
 
 impl DesktopSettingSource for AppearanceSource {
-    fn watch(self: Arc<Self>, report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, report: SettingsReporter) -> ServiceWatch {
         Box::pin(async move {
             if let Err(error) = watch_appearance(&report).await {
                 log::info!(

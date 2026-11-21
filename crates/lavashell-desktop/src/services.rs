@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: GPL-3.0-only
+use calloop::futures::ExecutorDestroyed;
+use calloop::ping::{Ping, PingSource, make_ping};
+use calloop::{EventLoop, LoopSignal};
+use lavashell_actor::Outlet;
+use lavashell_error_chain::message_chain;
+use lavashell_platform::PlatformEvent;
+use std::pin::Pin;
+use std::sync::mpsc;
+use std::{io, thread};
+
+pub type ServiceWatch = Pin<Box<dyn Future<Output = ()>>>;
+
+pub trait DesktopService: Send {
+    fn into_watches(self: Box<Self>, view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch>;
+}
+
+const FREE_SYSTEM_RESOURCES: &str =
+    "close programs you do not need to free file descriptors and memory, then start the app again";
+
+const REPORT_THE_DEFECT: &str =
+    "this is a defect in the desktop services; report the failure with this log";
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServicesStartError {
+    #[error("the desktop services cannot create their stop signal; {FREE_SYSTEM_RESOURCES}")]
+    CreateStop(#[source] io::Error),
+    #[error("the desktop services cannot start their thread; {FREE_SYSTEM_RESOURCES}")]
+    SpawnThread(#[source] io::Error),
+    #[error("the desktop services cannot create their event loop; {FREE_SYSTEM_RESOURCES}")]
+    CreateEventLoop(#[source] calloop::Error),
+    #[error(
+        "the desktop services cannot create the executor that runs the watches; \
+         {FREE_SYSTEM_RESOURCES}"
+    )]
+    CreateWatch(#[source] calloop::Error),
+    #[error(
+        "the desktop services cannot add the executor that runs the watches to their event loop; \
+         {FREE_SYSTEM_RESOURCES}"
+    )]
+    InsertWatches(#[source] calloop::Error),
+    #[error(
+        "the desktop services cannot add their stop signal to their event loop; \
+         {FREE_SYSTEM_RESOURCES}"
+    )]
+    InsertStop(#[source] calloop::Error),
+    #[error(
+        "the desktop services cannot start a watch that a service returns, because the executor \
+         that runs the watches is gone; {REPORT_THE_DEFECT}"
+    )]
+    ScheduleWatch(#[source] ExecutorDestroyed),
+    #[error(
+        "the thread of the desktop services panicked before the watches started; {REPORT_THE_DEFECT}"
+    )]
+    Panicked,
+}
+
+struct ServicesStop(Ping);
+
+impl Drop for ServicesStop {
+    fn drop(&mut self) {
+        self.0.ping();
+    }
+}
+
+pub(crate) fn watch_services_while<T>(
+    services: Vec<Box<dyn DesktopService>>,
+    view: Outlet<PlatformEvent>,
+    serve: impl FnOnce() -> T,
+) -> Result<T, ServicesStartError> {
+    let (stop, stopped) = make_ping().map_err(ServicesStartError::CreateStop)?;
+    thread::scope(|scope| {
+        let _stop_on_return = ServicesStop(stop);
+        let (started, start) = mpsc::sync_channel(0);
+        let services_thread = thread::Builder::new()
+            .name("desktop services".to_owned())
+            .spawn_scoped(scope, move || {
+                let watches = start_watches(services, &view, stopped);
+                drop(view);
+                match watches {
+                    Ok(event_loop) => {
+                        let _serve_waits_for_the_start = started.send(Ok(()));
+                        run_watches(event_loop);
+                    }
+                    Err(error) => {
+                        let _serve_waits_for_the_start = started.send(Err(error));
+                    }
+                }
+            })
+            .map_err(ServicesStartError::SpawnThread)?;
+        let Ok(started) = start.recv() else {
+            let _payload_reported_as_panicked = services_thread.join();
+            return Err(ServicesStartError::Panicked);
+        };
+        started?;
+        Ok(serve())
+    })
+}
+
+fn start_watches(
+    services: Vec<Box<dyn DesktopService>>,
+    view: &Outlet<PlatformEvent>,
+    stopped: PingSource,
+) -> Result<EventLoop<'static, LoopSignal>, ServicesStartError> {
+    let event_loop = EventLoop::try_new().map_err(ServicesStartError::CreateEventLoop)?;
+    let handle = event_loop.handle();
+    let (executor, scheduler) =
+        calloop::futures::executor::<()>().map_err(ServicesStartError::CreateWatch)?;
+    let _watches_run_until_the_loop_ends = handle
+        .insert_source(executor, |(), (), _| {})
+        .map_err(|failure| ServicesStartError::InsertWatches(failure.error))?;
+    let _stop_runs_until_the_loop_ends = handle
+        .insert_source(stopped, |(), (), signal: &mut LoopSignal| signal.stop())
+        .map_err(|failure| ServicesStartError::InsertStop(failure.error))?;
+    for watch in services
+        .into_iter()
+        .flat_map(|service| service.into_watches(view))
+    {
+        scheduler
+            .schedule(watch)
+            .map_err(ServicesStartError::ScheduleWatch)?;
+    }
+    Ok(event_loop)
+}
+
+fn run_watches(mut event_loop: EventLoop<'static, LoopSignal>) {
+    let mut signal = event_loop.get_signal();
+    if let Err(error) = event_loop.run(None, &mut signal, |_| {}) {
+        log::error!(
+            "the desktop services stop watching because their event loop failed: {}",
+            message_chain(error)
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests;

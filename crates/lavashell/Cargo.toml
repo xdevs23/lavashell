@@ -11,7 +11,12 @@ workspace = true
 
 [features]
 default = ["desktop"]
-desktop = ["dep:lavashell-desktop"]
+desktop = [
+    "dep:lavashell-desktop",
+    "dep:lavashell-desktop-settings",
+    "dep:lavashell-desktop-settings-freedesktop",
+    "dep:lavashell-store",
+]
 
 [dependencies]
 lavashell-effect-quality.workspace = true
@@ -27,7 +32,13 @@ lavashell-materials.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 lavashell-desktop = { workspace = true, optional = true }
+lavashell-desktop-settings = { workspace = true, optional = true }
+lavashell-desktop-settings-freedesktop = { workspace = true, optional = true }
+lavashell-store = { workspace = true, optional = true }
 lavashell-wayland.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 lavashell-aosp.workspace = true
+
+[build-dependencies]
+lavashell-build-script.workspace = true

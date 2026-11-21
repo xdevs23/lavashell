@@ -2682,9 +2682,12 @@ name = "lavashell"
 version = "0.1.0"
 dependencies = [
  "lavashell-aosp",
+ "lavashell-build-script",
  "lavashell-components",
  "lavashell-core",
  "lavashell-desktop",
+ "lavashell-desktop-settings",
+ "lavashell-desktop-settings-freedesktop",
  "lavashell-effect-quality",
  "lavashell-enum-values",
  "lavashell-error-chain",
@@ -2692,6 +2695,7 @@ dependencies = [
  "lavashell-materials",
  "lavashell-renderer",
  "lavashell-runtime",
+ "lavashell-store",
  "lavashell-vulkan-renderer",
  "lavashell-wayland",
 ]
@@ -2769,7 +2773,11 @@ version = "0.1.0"
 dependencies = [
  "build-rs",
  "lavashell-error-chain",
+ "quote",
+ "serde",
+ "tempfile",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
@@ -2813,10 +2821,9 @@ dependencies = [
  "calloop",
  "lavashell-actor",
  "lavashell-core",
- "lavashell-desktop-settings",
- "lavashell-desktop-settings-freedesktop",
  "lavashell-error-chain",
  "lavashell-platform",
+ "lavashell-store",
  "lavashell-vulkan-renderer",
  "log",
  "thiserror 2.0.21",
@@ -2836,7 +2843,12 @@ dependencies = [
 name = "lavashell-desktop-settings"
 version = "0.1.0"
 dependencies = [
+ "futures-lite",
+ "lavashell-actor",
  "lavashell-core",
+ "lavashell-desktop",
+ "lavashell-platform",
+ "lavashell-store",
 ]
 
 [[package]]
@@ -2845,10 +2857,13 @@ version = "0.1.0"
 dependencies = [
  "calloop",
  "futures-lite",
+ "lavashell-actor",
  "lavashell-core",
+ "lavashell-desktop",
  "lavashell-desktop-portal",
  "lavashell-desktop-settings",
  "lavashell-error-chain",
+ "lavashell-store",
  "lavashell-test-fixtures",
  "log",
  "thiserror 2.0.21",

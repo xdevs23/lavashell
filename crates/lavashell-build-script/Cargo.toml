@@ -12,4 +12,10 @@ workspace = true
 [dependencies]
 build-rs.workspace = true
 lavashell-error-chain.workspace = true
+quote.workspace = true
+serde.workspace = true
 thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

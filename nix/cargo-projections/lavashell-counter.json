@@ -1026,9 +1026,12 @@
         "version": "0.1.0",
         "dependencies": [
           "lavashell-aosp",
+          "lavashell-build-script",
           "lavashell-components",
           "lavashell-core",
           "lavashell-desktop",
+          "lavashell-desktop-settings",
+          "lavashell-desktop-settings-freedesktop",
           "lavashell-effect-quality",
           "lavashell-enum-values",
           "lavashell-error-chain",
@@ -1036,6 +1039,7 @@
           "lavashell-materials",
           "lavashell-renderer",
           "lavashell-runtime",
+          "lavashell-store",
           "lavashell-vulkan-renderer",
           "lavashell-wayland"
         ]
@@ -1078,7 +1082,11 @@
         "dependencies": [
           "build-rs",
           "lavashell-error-chain",
-          "thiserror 2.0.21"
+          "quote",
+          "serde",
+          "tempfile",
+          "thiserror 2.0.21",
+          "toml"
         ]
       },
       {
@@ -1122,10 +1130,9 @@
           "calloop",
           "lavashell-actor",
           "lavashell-core",
-          "lavashell-desktop-settings",
-          "lavashell-desktop-settings-freedesktop",
           "lavashell-error-chain",
           "lavashell-platform",
+          "lavashell-store",
           "lavashell-vulkan-renderer",
           "log",
           "thiserror 2.0.21"
@@ -1145,7 +1152,12 @@
         "name": "lavashell-desktop-settings",
         "version": "0.1.0",
         "dependencies": [
-          "lavashell-core"
+          "futures-lite",
+          "lavashell-actor",
+          "lavashell-core",
+          "lavashell-desktop",
+          "lavashell-platform",
+          "lavashell-store"
         ]
       },
       {
@@ -1154,10 +1166,13 @@
         "dependencies": [
           "calloop",
           "futures-lite",
+          "lavashell-actor",
           "lavashell-core",
+          "lavashell-desktop",
           "lavashell-desktop-portal",
           "lavashell-desktop-settings",
           "lavashell-error-chain",
+          "lavashell-store",
           "lavashell-test-fixtures",
           "log",
           "thiserror 2.0.21",
@@ -1291,6 +1306,10 @@
           "thiserror 2.0.21",
           "unicode-segmentation"
         ]
+      },
+      {
+        "name": "lavashell-store",
+        "version": "0.1.0"
       },
       {
         "name": "lavashell-test-fixtures",
@@ -2699,7 +2718,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "78431eafa4d770460c3db5386136b63b77c2ac0d67a13932c14b281699018eee",
+        "seedHash": "85a9db68b5ed59b699f88bbfb1228d1d32fc73e3a0a901952cb22d683bec509f",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2754,6 +2773,7 @@
                 "crates/lavashell-platform",
                 "crates/lavashell-renderer",
                 "crates/lavashell-runtime",
+                "crates/lavashell-store",
                 "crates/lavashell-vulkan",
                 "crates/lavashell-vulkan-renderer",
                 "crates/lavashell-wayland",
@@ -2775,7 +2795,7 @@
                   "autotests": false,
                   "autoexamples": false,
                   "autobenches": false,
-                  "build": false
+                  "build": "build.rs"
                 },
                 "lib": {
                   "path": "src/lib.rs"
@@ -2804,6 +2824,18 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-desktop"
+                  },
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
+                  },
+                  "lavashell-desktop-settings-freedesktop": {
+                    "package": "lavashell-desktop-settings-freedesktop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings-freedesktop"
                   },
                   "lavashell-effect-quality": {
                     "package": "lavashell-effect-quality",
@@ -2850,6 +2882,12 @@
                     "features": [],
                     "path": "../lavashell-runtime"
                   },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
+                  },
                   "lavashell-vulkan-renderer": {
                     "package": "lavashell-vulkan-renderer",
                     "default-features": false,
@@ -2862,12 +2900,24 @@
                     "features": [],
                     "path": "../lavashell-wayland"
                   }
+                },
+                "build-dependencies": {
+                  "lavashell-build-script": {
+                    "package": "lavashell-build-script",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-build-script"
+                  }
                 }
               },
               "targets": [
                 {
                   "path": "src/lib.rs",
                   "main": false
+                },
+                {
+                  "path": "build.rs",
+                  "main": true
                 }
               ]
             },
@@ -2937,6 +2987,27 @@
                     "features": [],
                     "path": "../lavashell-error-chain"
                   },
+                  "quote": {
+                    "package": "quote",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro"
+                    ],
+                    "version": "=1.0.47"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -2945,6 +3016,18 @@
                       "std"
                     ],
                     "version": "=2.0.21"
+                  },
+                  "toml": {
+                    "package": "toml",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "display",
+                      "parse",
+                      "serde",
+                      "std"
+                    ],
+                    "version": "=1.1.6+spec-1.1.0"
                   }
                 }
               },
@@ -3123,18 +3206,6 @@
                     "features": [],
                     "path": "../lavashell-actor"
                   },
-                  "lavashell-desktop-settings": {
-                    "package": "lavashell-desktop-settings",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-desktop-settings"
-                  },
-                  "lavashell-desktop-settings-freedesktop": {
-                    "package": "lavashell-desktop-settings-freedesktop",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-desktop-settings-freedesktop"
-                  },
                   "lavashell-error-chain": {
                     "package": "lavashell-error-chain",
                     "default-features": false,
@@ -3146,6 +3217,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-platform"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
                   },
                   "log": {
                     "package": "log",
@@ -3256,6 +3333,12 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
                   "lavashell-core": {
                     "package": "lavashell-core",
                     "default-features": false,
@@ -3263,6 +3346,24 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop": {
+                    "package": "lavashell-desktop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
                   }
                 }
               },
@@ -3316,6 +3417,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
                   },
                   "log": {
                     "package": "log",
@@ -3988,6 +4095,31 @@
                     "version": "=1.13.3"
                   }
                 }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-store",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-store",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
               },
               "targets": [
                 {
@@ -5543,9 +5675,12 @@
                 "name": "lavashell",
                 "version": "0.0.0",
                 "dependencies": [
+                  "lavashell-build-script",
                   "lavashell-components",
                   "lavashell-core",
                   "lavashell-desktop",
+                  "lavashell-desktop-settings",
+                  "lavashell-desktop-settings-freedesktop",
                   "lavashell-effect-quality",
                   "lavashell-enum-values",
                   "lavashell-error-chain",
@@ -5553,6 +5688,7 @@
                   "lavashell-materials",
                   "lavashell-renderer",
                   "lavashell-runtime",
+                  "lavashell-store",
                   "lavashell-vulkan-renderer",
                   "lavashell-wayland"
                 ]
@@ -5570,7 +5706,10 @@
                 "dependencies": [
                   "build-rs",
                   "lavashell-error-chain",
-                  "thiserror"
+                  "quote",
+                  "serde",
+                  "thiserror",
+                  "toml"
                 ]
               },
               {
@@ -5609,10 +5748,9 @@
                 "dependencies": [
                   "calloop",
                   "lavashell-actor",
-                  "lavashell-desktop-settings",
-                  "lavashell-desktop-settings-freedesktop",
                   "lavashell-error-chain",
                   "lavashell-platform",
+                  "lavashell-store",
                   "log",
                   "thiserror"
                 ]
@@ -5630,7 +5768,11 @@
                 "name": "lavashell-desktop-settings",
                 "version": "0.0.0",
                 "dependencies": [
-                  "lavashell-core"
+                  "lavashell-actor",
+                  "lavashell-core",
+                  "lavashell-desktop",
+                  "lavashell-platform",
+                  "lavashell-store"
                 ]
               },
               {
@@ -5641,6 +5783,7 @@
                   "lavashell-desktop-portal",
                   "lavashell-desktop-settings",
                   "lavashell-error-chain",
+                  "lavashell-store",
                   "log",
                   "thiserror"
                 ]
@@ -5766,6 +5909,10 @@
                   "thiserror",
                   "unicode-segmentation"
                 ]
+              },
+              {
+                "name": "lavashell-store",
+                "version": "0.0.0"
               },
               {
                 "name": "lavashell-vulkan",

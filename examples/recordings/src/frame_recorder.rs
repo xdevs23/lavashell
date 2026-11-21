@@ -31,7 +31,7 @@ fn serve(
 }
 
 fn on_test_platform(app: App, host: ScriptedHost) -> Result<(), Error> {
-    lavashell::run::<TestPlatform>(app, host).map_err(Error::Record)
+    lavashell_runtime::run::<TestPlatform>(app, host).map_err(Error::Record)
 }
 
 fn reject_component_failures(

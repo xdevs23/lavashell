@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::services::ServiceWatch;
 use lavashell_actor::{Outlet, SystemClock, mailbox};
-use lavashell_desktop_settings::{SettingsReporter, SettingsWatch};
-use lavashell_platform::{HostFacts, Reports, SurfaceControl};
+use lavashell_platform::{HostFacts, PlatformEvent, Reports, SurfaceControl};
 use lavashell_vulkan_renderer::HeadlessBackend;
 use std::convert::Infallible;
 use std::future;
@@ -27,14 +27,14 @@ struct StandInDisplay {
 }
 
 impl Platform for StandInDisplay {
-    type Setup = Result<(), DisplayFailed>;
+    type Setup = ();
     type Error = DisplayFailed;
     type Backend = HeadlessBackend;
     type Control = NoControl;
 
-    fn connect(served: Self::Setup) -> Result<Connection<Self>, DisplayFailed> {
+    fn connect((): ()) -> Result<Connection<Self>, DisplayFailed> {
         Ok(Connection {
-            platform: Self { served },
+            platform: Self { served: Ok(()) },
             backend: None,
             host: HostFacts {
                 outputs: Vec::new(),
@@ -55,26 +55,23 @@ impl Platform for StandInDisplay {
 
 struct WatchesForever;
 
-impl DesktopSettingSource for WatchesForever {
-    fn watch(self: Arc<Self>, _report: SettingsReporter) -> SettingsWatch {
-        Box::pin(future::pending())
+impl DesktopService for WatchesForever {
+    fn into_watches(self: Box<Self>, _view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch> {
+        vec![Box::pin(future::pending())]
     }
 }
 
 struct PanicsWhileStarting;
 
-impl DesktopSettingSource for PanicsWhileStarting {
-    fn watch(self: Arc<Self>, _report: SettingsReporter) -> SettingsWatch {
-        panic::resume_unwind(Box::new("the source panics while its watch starts"))
+impl DesktopService for PanicsWhileStarting {
+    fn into_watches(self: Box<Self>, _view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch> {
+        panic::resume_unwind(Box::new("the service panics while its watches start"))
     }
 }
 
-fn serve(
-    served: Result<(), DisplayFailed>,
-    source: impl DesktopSettingSource + 'static,
-) -> Result<(), DesktopPlatformError<DisplayFailed>> {
+fn links() -> PlatformLinks<NoControl, HeadlessBackend> {
     let (_requests, requests) = mailbox();
-    let links = PlatformLinks {
+    PlatformLinks {
         reports: Reports {
             view: Outlet::new(|_| Ok(())),
             scheduler: Outlet::new(|_| Ok(())),
@@ -83,16 +80,22 @@ fn serve(
             clock: Arc::new(SystemClock::start()),
         },
         requests,
-    };
+    }
+}
+
+fn serve(
+    served: Result<(), DisplayFailed>,
+    service: impl DesktopService + 'static,
+) -> Result<(), DesktopPlatformError<DisplayFailed>> {
     DesktopPlatform {
         display: StandInDisplay { served },
-        sources: vec![Arc::new(source)],
+        services: vec![Box::new(service)],
     }
-    .serve(links)
+    .serve(links())
 }
 
 #[test]
-fn serve_returns_once_the_display_returns_while_a_setting_is_still_watched() {
+fn serve_returns_once_the_display_returns_while_a_service_is_still_watching() {
     assert!(matches!(serve(Ok(()), WatchesForever), Ok(())));
 }
 
@@ -105,11 +108,19 @@ fn serve_returns_the_failure_of_the_display() {
 }
 
 #[test]
-fn serve_fails_when_the_desktop_settings_cannot_start() {
+fn serve_fails_when_the_desktop_services_cannot_start() {
     assert!(matches!(
         serve(Ok(()), PanicsWhileStarting),
-        Err(DesktopPlatformError::StartSettings(
-            SettingsStartError::Panicked
+        Err(DesktopPlatformError::StartServices(
+            ServicesStartError::Panicked
         ))
     ));
+}
+
+#[test]
+fn a_store_without_the_desktop_layer_serves_with_no_services()
+-> Result<(), DesktopPlatformError<DisplayFailed>> {
+    let Connection { platform, .. } = DesktopPlatform::<StandInDisplay>::connect(Store::default())?;
+    assert!(platform.services.is_empty());
+    platform.serve(links())
 }
