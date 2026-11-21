@@ -67,8 +67,8 @@ fn a_field_starts_a_session_when_it_gains_focus_and_counts_the_presses_on_it() -
         mut view,
         session: seen,
     } = fields(&mut scene)?;
-    let search = view.tagged_bounds(&"search")?.center();
-    let plain = view.tagged_bounds(&"plain")?.center();
+    let search = view.tagged_center(&"search")?;
+    let plain = view.tagged_center(&"plain")?;
     assert_eq!(view.text_session(), None);
     press_and_release_at(&mut view, search);
     let session = TextSession {
@@ -119,7 +119,7 @@ fn a_field_starts_a_session_when_it_gains_focus_and_counts_the_presses_on_it() -
 fn a_session_has_the_text_before_the_cursor_or_the_selection() -> TestResult {
     let mut scene = Scene::default();
     let FieldsFixture { mut view, .. } = fields(&mut scene)?;
-    let search = view.tagged_bounds(&"search")?.center();
+    let search = view.tagged_center(&"search")?;
     press_and_release_at(&mut view, search);
     view.input(InputEvent::Text("hello".into()));
     let before = |view: &View| view.text_session().map(|session| session.text);

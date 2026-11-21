@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::View;
-use crate::geometry::Rect;
+use crate::geometry::{Point, Rect};
 use crate::style::InteractionState;
 use crate::test_error::TestError;
 use crate::ui::{NodeTag, ViewTag};
@@ -10,6 +10,10 @@ pub(crate) trait Tagged {
     fn tagged_bounds<T: ViewTag + Clone>(&self, tag: &T) -> Result<Rect, TestError>;
 
     fn tagged_state<T: ViewTag + Clone>(&self, tag: &T) -> Result<InteractionState, TestError>;
+
+    fn tagged_center<T: ViewTag + Clone>(&self, tag: &T) -> Result<Point, TestError> {
+        Ok(self.tagged_bounds(tag)?.center())
+    }
 }
 
 impl Tagged for View {

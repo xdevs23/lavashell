@@ -110,7 +110,7 @@ fn each_axis_of_a_wheel_scrolls_the_nearest_node_that_scrolls_along_it() -> Test
         State::new(0),
         Rc::default(),
     )?;
-    let tab = view.tagged_bounds(&("tab", 0))?.center();
+    let tab = view.tagged_center(&("tab", 0))?;
     view.input(InputEvent::Scroll {
         at: tab,
         delta: Point::new(30.dp(), Dp::ZERO),
@@ -140,7 +140,7 @@ fn shift_turns_a_vertical_wheel_into_a_sideways_one() -> TestResult {
     )?;
     view.input(InputEvent::Modifiers(SHIFT_HELD));
     view.input(InputEvent::Scroll {
-        at: view.tagged_bounds(&("tab", 0))?.center(),
+        at: view.tagged_center(&("tab", 0))?,
         delta: Point::new(Dp::ZERO, 20.dp()),
     });
     assert_eq!((row.offset(), list.offset()), (20.dp(), Dp::ZERO));
@@ -162,7 +162,7 @@ fn with_shift_a_wheel_over_a_list_scrolls_it_by_the_vertical_turn_only() -> Test
         Rc::default(),
     )?;
     view.input(InputEvent::Modifiers(SHIFT_HELD));
-    let slider = view.tagged_bounds(&"slider")?.center();
+    let slider = view.tagged_center(&"slider")?;
     view.input(InputEvent::Scroll {
         at: slider,
         delta: Point::new(Dp::ZERO, 20.dp()),
@@ -255,7 +255,7 @@ fn a_sideways_swipe_on_a_tab_scrolls_the_row_containing_it_and_an_upright_swipe_
         activations.clone(),
         Rc::default(),
     )?;
-    let start = view.tagged_bounds(&("tab", 0))?.center();
+    let start = view.tagged_center(&("tab", 0))?;
     swipe(&mut view, 1, start, start.offset(-30.dp(), 2.dp()));
     assert_eq!((row.offset(), list.offset()), (22.dp(), Dp::ZERO));
     swipe(&mut view, 2, start, start.offset(2.dp(), -30.dp()));
@@ -280,7 +280,7 @@ fn a_slider_below_the_tabs_receives_a_sideways_swipe_and_an_upright_swipe_scroll
         State::new(0),
         drags.clone(),
     )?;
-    let start = view.tagged_bounds(&"slider")?.center();
+    let start = view.tagged_center(&"slider")?;
     swipe(&mut view, 1, start, start.offset(30.dp(), 2.dp()));
     assert_eq!(*drags.borrow(), [DragPhase::Started, DragPhase::Ended]);
     assert_eq!((row.offset(), list.offset()), (Dp::ZERO, Dp::ZERO));

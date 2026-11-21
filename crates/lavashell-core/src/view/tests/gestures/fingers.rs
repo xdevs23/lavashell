@@ -7,7 +7,7 @@ fn two_fingers_moving_together_on_a_list_scroll_it_as_far_as_one_finger() -> Tes
     let scroll = ScrollState::new(Axis::Vertical);
     let mut scene = Scene::default();
     let mut view = list(&mut scene, scroll.clone(), State::new(0), Rc::default())?;
-    let tab = view.tagged_bounds(&("tab", 0))?.center();
+    let tab = view.tagged_center(&("tab", 0))?;
     let (first, second) = (
         tab.offset(-50.dp(), Dp::ZERO),
         tab.offset(50.dp(), Dp::ZERO),
@@ -61,7 +61,7 @@ fn a_tab_removed_before_the_finger_moves_leaves_the_finger_to_the_list() -> Test
         });
     });
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
-    let start = view.tagged_bounds(&("tab", 0))?.center();
+    let start = view.tagged_center(&("tab", 0))?;
     view.input(InputEvent::TouchDown(finger(1, start)));
     shown.set(false);
     advance(&mut scene, &mut view, WINDOW_SIZE, 16)?;

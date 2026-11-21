@@ -76,7 +76,7 @@ fn the_accessibility_focus_action_makes_focus_visible_after_a_press() -> TestRes
         });
     });
     frame(&mut scene, &mut view)?;
-    let at = view.tagged_bounds(&"play")?.center();
+    let at = view.tagged_center(&"play")?;
     press_and_release_at(&mut view, at);
     assert!(!view.tagged_state(&"play")?.focus.visible);
     let next = target(&view, "Next")?;

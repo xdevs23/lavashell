@@ -37,7 +37,7 @@ fn handlers(scene: &mut Scene, calls: &Calls) -> Result<View, TestError> {
 fn a_second_handler_of_one_kind_replaces_the_first_and_context_reaches_its_handler() -> TestResult {
     let (mut scene, calls) = (Scene::default(), Calls::default());
     let mut view = handlers(&mut scene, &calls)?;
-    let twice = view.tagged_bounds(&"twice")?.center();
+    let twice = view.tagged_center(&"twice")?;
     press_and_release_at(&mut view, twice);
     view.input(InputEvent::Context(twice));
     assert_eq!(*calls.borrow(), ["second activate", "context"]);
@@ -48,7 +48,7 @@ fn a_second_handler_of_one_kind_replaces_the_first_and_context_reaches_its_handl
 fn activate_runs_from_a_press_a_key_and_an_accessibility_request() -> TestResult {
     let (mut scene, calls) = (Scene::default(), Calls::default());
     let mut view = handlers(&mut scene, &calls)?;
-    let activated = view.tagged_bounds(&"activated")?.center();
+    let activated = view.tagged_center(&"activated")?;
     press_and_release_at(&mut view, activated);
     view.input(InputEvent::Key {
         key: Key::Space,

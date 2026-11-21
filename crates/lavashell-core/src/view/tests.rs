@@ -119,7 +119,7 @@ fn acting(action: TextAction) -> TextFieldOptions {
 }
 
 fn press_and_release<T: ViewTag + Clone>(view: &mut View, tag: &T) -> Result<(), TestError> {
-    press_and_release_at(view, view.tagged_bounds(tag)?.center());
+    press_and_release_at(view, view.tagged_center(tag)?);
     Ok(())
 }
 

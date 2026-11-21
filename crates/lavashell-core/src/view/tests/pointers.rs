@@ -54,7 +54,7 @@ fn keys(scene: &mut Scene) -> Result<KeysFixture, TestError> {
 }
 
 fn at(view: &View, tag: &'static str) -> Result<Point, TestError> {
-    Ok(view.tagged_bounds(&tag)?.center())
+    view.tagged_center(&tag)
 }
 
 #[test]

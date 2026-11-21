@@ -84,7 +84,7 @@ fn a_context_press_after_keys_hides_focus_again() -> TestResult {
     let mut view = buttons();
     show_frame(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     view.input(TAB);
-    view.input(InputEvent::Context(view.tagged_bounds(&"second")?.center()));
+    view.input(InputEvent::Context(view.tagged_center(&"second")?));
     let state = view.tagged_state(&"second")?;
     assert!(state.focus.focused);
     assert!(!state.focus.visible);

@@ -117,7 +117,7 @@ fn a_held_key_repeats_through_a_timer_until_it_is_released() -> TestResult {
     for _ in 0..5 {
         press_and_release(&mut view, &"a")?;
     }
-    let backspace = view.tagged_bounds(&"backspace")?.center();
+    let backspace = view.tagged_center(&"backspace")?;
     view.input(InputEvent::Press(backspace));
     assert_eq!(text.get(), "aaaa");
     advance(&mut scene, &mut view, WINDOW_SIZE, 399)?;
