@@ -292,10 +292,13 @@ fn a_patch_of_a_file_without_a_known_language_is_an_error() {
 }
 
 #[test]
-fn documents_besides_agents_at_the_root_are_reported_in_any_case() -> Result<(), Failure> {
+fn documents_besides_agents_and_readme_at_the_root_are_reported_in_any_case() -> Result<(), Failure>
+{
     let files = [
         ("AGENTS.md", "Rules.\n"),
+        ("README.md", "# Title\n"),
         ("README.MD", "# Title\n"),
+        ("docs/README.md", "# Title\n"),
         ("docs/AGENTS.md", "Rules.\n"),
         ("docs/guide.markdown", "Guide.\n"),
         ("docs/notes.txt", "Notes.\n"),
@@ -308,6 +311,7 @@ fn documents_besides_agents_at_the_root_are_reported_in_any_case() -> Result<(),
     let expected = [
         "README.MD",
         "docs/AGENTS.md",
+        "docs/README.md",
         "docs/guide.markdown",
         "docs/manual.rst",
         "docs/notes.txt",
@@ -316,7 +320,7 @@ fn documents_besides_agents_at_the_root_are_reported_in_any_case() -> Result<(),
         (
             path.to_owned(),
             Rule::Document {
-                allowed: "AGENTS.md",
+                allowed: &["AGENTS.md", "README.md"],
             },
         )
     });
@@ -375,13 +379,13 @@ fn files_excluded_by_the_exclude_file_of_the_repository_are_not_checked() -> Res
     let files = [
         (".git/info/exclude", "/notes.md\n"),
         ("notes.md", "Notes.\n"),
-        ("README.md", "# Title\n"),
+        ("guide.md", "Guide.\n"),
     ];
     let documents: Vec<_> = repository_findings(&files)?
         .into_iter()
         .map(|(path, _, _)| path)
         .collect();
-    assert_eq!(documents, ["README.md"]);
+    assert_eq!(documents, ["guide.md"]);
     Ok(())
 }
 

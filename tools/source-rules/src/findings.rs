@@ -18,7 +18,7 @@ pub enum Rule {
     PixelSizeInTest,
     DeviceWord { name: String, word: DeviceWord },
     Comment,
-    Document { allowed: &'static str },
+    Document { allowed: &'static [&'static str] },
     UnknownFileKind,
     PythonOutsidePlace { directory: &'static str },
     Crate(CrateRule),
@@ -75,7 +75,8 @@ impl fmt::Display for Rule {
             )),
             Self::Document { allowed } => write!(
                 formatter,
-                "remove the document. {allowed} at the root of the repository is the only document allowed",
+                "remove the document. The only documents allowed are {} at the root of the repository",
+                allowed.join(" and "),
             ),
             Self::UnknownFileKind => formatter.write_str(
                 "add the kind of this file to the file kinds of the source rules, or remove the file",

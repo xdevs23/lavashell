@@ -3,7 +3,7 @@ use crate::comments::comment_report;
 use crate::copy_catalogs::copy_report;
 use crate::crate_manifests::crate_report;
 use crate::device_words::{CORE_DEVICE_WORD_RULES, PLATFORM_DEVICE_WORD_RULES};
-use crate::documents::{ALLOWED_DOCUMENT, document_report};
+use crate::documents::document_report;
 use crate::enum_value_lists::hand_written_value_lists;
 use crate::error::Error;
 use crate::findings::{Finding, Report};
@@ -70,10 +70,7 @@ pub fn repository_reports(
             python_place_report(files, &root.join(PYTHON_DIRECTORY)),
         ),
         (RuleSet::Comment, comment_report(files)?),
-        (
-            RuleSet::Document,
-            document_report(files, &root.join(ALLOWED_DOCUMENT)),
-        ),
+        (RuleSet::Document, document_report(files, root)),
     ])
 }
 
