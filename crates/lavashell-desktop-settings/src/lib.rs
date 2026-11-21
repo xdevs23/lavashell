@@ -3,14 +3,15 @@
 
 use lavashell_core::preferences::Appearance;
 use std::pin::Pin;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DesktopSetting {
     Appearance(Appearance),
 }
 
-pub trait DesktopSettingSource: Send {
-    fn watch(self: Box<Self>, report: SettingsReporter) -> SettingsWatch;
+pub trait DesktopSettingSource: Send + Sync {
+    fn watch(self: Arc<Self>, report: SettingsReporter) -> SettingsWatch;
 }
 
 pub type SettingsReporter = Box<dyn Fn(DesktopSetting)>;

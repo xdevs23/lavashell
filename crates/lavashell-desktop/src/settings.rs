@@ -7,7 +7,7 @@ use lavashell_desktop_settings::{DesktopSetting, DesktopSettingSource};
 use lavashell_desktop_settings_freedesktop::AppearanceSource;
 use lavashell_error_chain::message_chain;
 use lavashell_platform::{PlatformEvent, SettingsEvent};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::{io, thread};
 
 #[derive(Debug, thiserror::Error)]
@@ -30,8 +30,8 @@ pub enum SettingsStartError {
     Panicked,
 }
 
-pub(crate) fn sources() -> Vec<Box<dyn DesktopSettingSource>> {
-    vec![Box::new(AppearanceSource)]
+pub(crate) fn sources() -> Vec<Arc<dyn DesktopSettingSource>> {
+    vec![Arc::new(AppearanceSource)]
 }
 
 fn settings_event(setting: DesktopSetting) -> SettingsEvent {
@@ -49,7 +49,7 @@ impl Drop for SettingsStop {
 }
 
 pub(crate) fn watch_settings_while<T>(
-    sources: Vec<Box<dyn DesktopSettingSource>>,
+    sources: Vec<Arc<dyn DesktopSettingSource>>,
     view: Outlet<PlatformEvent>,
     serve: impl FnOnce() -> T,
 ) -> Result<T, SettingsStartError> {
@@ -83,7 +83,7 @@ pub(crate) fn watch_settings_while<T>(
 }
 
 fn start_watches(
-    sources: Vec<Box<dyn DesktopSettingSource>>,
+    sources: Vec<Arc<dyn DesktopSettingSource>>,
     view: &Outlet<PlatformEvent>,
     stopped: PingSource,
 ) -> Result<EventLoop<'static, LoopSignal>, SettingsStartError> {

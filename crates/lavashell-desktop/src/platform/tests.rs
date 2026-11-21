@@ -56,7 +56,7 @@ impl Platform for StandInDisplay {
 struct WatchesForever;
 
 impl DesktopSettingSource for WatchesForever {
-    fn watch(self: Box<Self>, _report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, _report: SettingsReporter) -> SettingsWatch {
         Box::pin(future::pending())
     }
 }
@@ -64,7 +64,7 @@ impl DesktopSettingSource for WatchesForever {
 struct PanicsWhileStarting;
 
 impl DesktopSettingSource for PanicsWhileStarting {
-    fn watch(self: Box<Self>, _report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, _report: SettingsReporter) -> SettingsWatch {
         panic::resume_unwind(Box::new("the source panics while its watch starts"))
     }
 }
@@ -86,7 +86,7 @@ fn serve(
     };
     DesktopPlatform {
         display: StandInDisplay { served },
-        sources: vec![Box::new(source)],
+        sources: vec![Arc::new(source)],
     }
     .serve(links)
 }

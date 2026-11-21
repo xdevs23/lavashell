@@ -3,10 +3,11 @@ use crate::settings::{SettingsStartError, sources, watch_settings_while};
 use lavashell_desktop_settings::DesktopSettingSource;
 use lavashell_platform::{Capability, Connection, Platform, PlatformLinks};
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 pub struct DesktopPlatform<P> {
     display: P,
-    sources: Vec<Box<dyn DesktopSettingSource>>,
+    sources: Vec<Arc<dyn DesktopSettingSource>>,
 }
 
 #[derive(Debug, thiserror::Error)]

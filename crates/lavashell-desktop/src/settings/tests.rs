@@ -16,7 +16,7 @@ enum TestError {
 struct EndsAtOnce;
 
 impl DesktopSettingSource for EndsAtOnce {
-    fn watch(self: Box<Self>, _report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, _report: SettingsReporter) -> SettingsWatch {
         Box::pin(async {})
     }
 }
@@ -24,7 +24,7 @@ impl DesktopSettingSource for EndsAtOnce {
 struct ReportsDarkMode;
 
 impl DesktopSettingSource for ReportsDarkMode {
-    fn watch(self: Box<Self>, report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, report: SettingsReporter) -> SettingsWatch {
         Box::pin(async move {
             report(DesktopSetting::Appearance(Appearance {
                 color_scheme: Some(ColorScheme::Dark),
@@ -39,8 +39,8 @@ fn a_source_reports_to_the_view_after_another_source_ended() -> Result<(), TestE
     let (sender, view) = mailbox::<PlatformEvent>();
     let outlet = sender.outlet(|event| event);
     drop(sender);
-    let sources: Vec<Box<dyn DesktopSettingSource>> =
-        vec![Box::new(EndsAtOnce), Box::new(ReportsDarkMode)];
+    let sources: Vec<Arc<dyn DesktopSettingSource>> =
+        vec![Arc::new(EndsAtOnce), Arc::new(ReportsDarkMode)];
     let arrived = watch_settings_while(sources, outlet, || view.take())??;
     assert!(matches!(
         arrived[..],

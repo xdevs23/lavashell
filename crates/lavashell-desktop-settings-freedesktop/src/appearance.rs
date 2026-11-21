@@ -7,6 +7,7 @@ use lavashell_desktop_settings::{
 };
 use lavashell_error_chain::message_chain;
 use std::str::FromStr;
+use std::sync::Arc;
 
 const NAMESPACE: &str = "org.freedesktop.appearance";
 
@@ -76,7 +77,7 @@ fn read_setting(appearance: Appearance, key: &str, value: &SettingValue) -> Appe
 pub struct AppearanceSource;
 
 impl DesktopSettingSource for AppearanceSource {
-    fn watch(self: Box<Self>, report: SettingsReporter) -> SettingsWatch {
+    fn watch(self: Arc<Self>, report: SettingsReporter) -> SettingsWatch {
         Box::pin(async move {
             if let Err(error) = watch_appearance(&report).await {
                 log::info!(

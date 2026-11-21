@@ -133,7 +133,7 @@ fn child() -> Result<(), TestError> {
         let _ended_test_stops_reading_updates = sender.send(event);
     });
     scheduler
-        .schedule(Box::new(AppearanceSource).watch(report))
+        .schedule(Arc::new(AppearanceSource).watch(report))
         .map_err(TestError::ScheduleWatch)?;
     let mut updates = Updates::default();
     dispatch_until(&mut loop_, &mut updates, 1)?;
