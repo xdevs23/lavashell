@@ -226,12 +226,7 @@ in
         python.tomli-w
         python.types-psutil
       ]);
-    in
-    packagedCrates
-    // {
-      inherit registry framework examples;
-      nix-tests = layerTools.nixTests;
-      effect-removal = import ./effect-removal.nix {
+      withoutDefaultFeatures = import ./without-default-features.nix {
         inherit
           pkgs
           rustPlatform
@@ -240,6 +235,20 @@ in
           rustPackageDefaults
           skia
           ;
+      };
+    in
+    packagedCrates
+    // {
+      inherit registry framework examples;
+      nix-tests = layerTools.nixTests;
+      effect-removal = withoutDefaultFeatures {
+        pname = "lavashell-effect-removal";
+        crate = "lavashell-renderer";
+        subcommand = "run";
+        arguments = [
+          "--example"
+          "independence-probe"
+        ];
       };
       source-limits =
         pkgs.runCommand "lavashell-source-limits"

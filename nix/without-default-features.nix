@@ -7,13 +7,19 @@
   rustPackageDefaults,
   skia,
 }:
+{
+  pname,
+  crate,
+  subcommand,
+  arguments,
+}:
 let
-  directory = root + "/crates/lavashell-renderer";
+  directory = root + "/crates/${crate}";
 in
 rustPlatform.buildRustPackage (
   rustPackageDefaults
   // {
-    pname = "lavashell-effect-removal";
+    inherit pname;
     src = sources.sourceFor directory;
     cargoDeps = sources.vendor (sources.project directory).lockFile;
     auditable = false;
@@ -21,7 +27,18 @@ rustPlatform.buildRustPackage (
     preBuild = rustPackageDefaults.preBuild + (import ./vendor-directory-times.nix);
     buildPhase = ''
       runHook preBuild
-      cargo run --offline -p lavashell-renderer --no-default-features --example independence-probe
+      cargo ${
+        pkgs.lib.escapeShellArgs (
+          [
+            subcommand
+            "--offline"
+            "-p"
+            crate
+            "--no-default-features"
+          ]
+          ++ arguments
+        )
+      }
       runHook postBuild
     '';
     doCheck = false;
