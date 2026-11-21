@@ -1119,8 +1119,13 @@
         "name": "lavashell-desktop",
         "version": "0.1.0",
         "dependencies": [
+          "calloop",
+          "lavashell-actor",
+          "lavashell-core",
           "lavashell-desktop-settings",
-          "lavashell-desktop-settings-freedesktop"
+          "lavashell-desktop-settings-freedesktop",
+          "lavashell-platform",
+          "thiserror 2.0.21"
         ]
       },
       {
@@ -1137,7 +1142,7 @@
         "name": "lavashell-desktop-settings",
         "version": "0.1.0",
         "dependencies": [
-          "lavashell-platform"
+          "lavashell-core"
         ]
       },
       {
@@ -1150,7 +1155,6 @@
           "lavashell-desktop-portal",
           "lavashell-desktop-settings",
           "lavashell-error-chain",
-          "lavashell-platform",
           "lavashell-test-fixtures",
           "log",
           "thiserror 2.0.21",
@@ -1333,13 +1337,11 @@
           "ash",
           "async-channel",
           "atspi-common",
-          "calloop",
           "futures-lite",
           "icu_locale_core",
           "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
-          "lavashell-desktop-settings",
           "lavashell-platform",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
@@ -2694,7 +2696,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "36ca394185ea2fa7326dcd48f8ad325701237d50e3f741badc3f6faccda176f4",
+        "seedHash": "6a79d4ed1cb533faba3f21bb7a4c11aa19d1e8e1248ffaf79a3719988d53bcd3",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2775,7 +2777,10 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {},
+                "features": {
+                  "default": [],
+                  "desktop": []
+                },
                 "dependencies": {
                   "lavashell-components": {
                     "package": "lavashell-components",
@@ -3100,6 +3105,21 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "calloop": {
+                    "package": "calloop",
+                    "default-features": false,
+                    "features": [
+                      "async-task",
+                      "executor"
+                    ],
+                    "version": "=0.14.4"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
                   "lavashell-desktop-settings": {
                     "package": "lavashell-desktop-settings",
                     "default-features": false,
@@ -3111,6 +3131,21 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-desktop-settings-freedesktop"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
                   }
                 }
               },
@@ -3203,11 +3238,13 @@
                 },
                 "features": {},
                 "dependencies": {
-                  "lavashell-platform": {
-                    "package": "lavashell-platform",
+                  "lavashell-core": {
+                    "package": "lavashell-core",
                     "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-platform"
+                    "features": [
+                      "serde"
+                    ],
+                    "path": "../lavashell-core"
                   }
                 }
               },
@@ -3261,12 +3298,6 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
-                  },
-                  "lavashell-platform": {
-                    "package": "lavashell-platform",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-platform"
                   },
                   "log": {
                     "package": "log",
@@ -4167,15 +4198,6 @@
                     ],
                     "version": "=0.38.0+1.3.281"
                   },
-                  "calloop": {
-                    "package": "calloop",
-                    "default-features": false,
-                    "features": [
-                      "async-task",
-                      "executor"
-                    ],
-                    "version": "=0.14.4"
-                  },
                   "icu_locale_core": {
                     "package": "icu_locale_core",
                     "default-features": false,
@@ -4197,12 +4219,6 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
-                  },
-                  "lavashell-desktop-settings": {
-                    "package": "lavashell-desktop-settings",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-desktop-settings"
                   },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
@@ -4425,7 +4441,10 @@
                   "lavashell": {
                     "package": "lavashell",
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "default",
+                      "desktop"
+                    ],
                     "path": "../../crates/lavashell"
                   },
                   "lavashell-example-support": {
@@ -4491,7 +4510,10 @@
                   "lavashell": {
                     "package": "lavashell",
                     "default-features": false,
-                    "features": [],
+                    "features": [
+                      "default",
+                      "desktop"
+                    ],
                     "path": "../../crates/lavashell"
                   },
                   "lavashell-core": {
@@ -5567,8 +5589,12 @@
                 "name": "lavashell-desktop",
                 "version": "0.0.0",
                 "dependencies": [
+                  "calloop",
+                  "lavashell-actor",
                   "lavashell-desktop-settings",
-                  "lavashell-desktop-settings-freedesktop"
+                  "lavashell-desktop-settings-freedesktop",
+                  "lavashell-platform",
+                  "thiserror"
                 ]
               },
               {
@@ -5584,7 +5610,7 @@
                 "name": "lavashell-desktop-settings",
                 "version": "0.0.0",
                 "dependencies": [
-                  "lavashell-platform"
+                  "lavashell-core"
                 ]
               },
               {
@@ -5595,7 +5621,6 @@
                   "lavashell-desktop-portal",
                   "lavashell-desktop-settings",
                   "lavashell-error-chain",
-                  "lavashell-platform",
                   "log",
                   "thiserror"
                 ]
@@ -5756,12 +5781,10 @@
                   "accesskit",
                   "accesskit_unix",
                   "ash",
-                  "calloop",
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-build-script",
                   "lavashell-core",
-                  "lavashell-desktop-settings",
                   "lavashell-platform",
                   "lavashell-vulkan",
                   "lavashell-vulkan-renderer",
