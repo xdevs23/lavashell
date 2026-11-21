@@ -9,6 +9,7 @@ let
   inherit (pkgs) lib;
   sources = import ./source.nix {
     inherit pkgs root;
+    projections = import ./checkout-projections.nix root;
     commits = import ./vendored-commits.nix;
   };
   linuxTargets = map (system: (lib.systems.elaborate system).rust.rustcTarget) [

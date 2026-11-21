@@ -42,6 +42,7 @@ let
   assets = import ./assets.nix { inherit pkgs; };
   sources = import ./source.nix {
     inherit pkgs root;
+    projections = import ./checkout-projections.nix root;
     commits = import ./vendored-commits.nix;
   };
   notices = import ./notices.nix {

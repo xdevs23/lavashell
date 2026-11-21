@@ -2,7 +2,7 @@
 {
   pkgs,
   root,
-  projections ? root + "/${(import ./projection-contract.nix).projectionDirectory}",
+  projections,
   commits,
 }:
 let
