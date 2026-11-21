@@ -52,3 +52,6 @@ impl<P: Platform> Platform for DesktopPlatform<P> {
             .map_err(DesktopPlatformError::Display)
     }
 }
+
+#[cfg(test)]
+mod tests;

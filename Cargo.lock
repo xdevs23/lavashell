@@ -2817,6 +2817,7 @@ dependencies = [
  "lavashell-desktop-settings-freedesktop",
  "lavashell-error-chain",
  "lavashell-platform",
+ "lavashell-vulkan-renderer",
  "log",
  "thiserror 2.0.21",
 ]

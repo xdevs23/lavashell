@@ -1117,6 +1117,7 @@
           "lavashell-desktop-settings-freedesktop",
           "lavashell-error-chain",
           "lavashell-platform",
+          "lavashell-vulkan-renderer",
           "log",
           "thiserror 2.0.21"
         ]
@@ -2689,7 +2690,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "0c06520a045d2d9dc557bf12e70f314ec6845a8be26f23f204a9ef6bb9e0b7bd",
+        "seedHash": "3e0ff88aa62f56cff83fa1a406f1f4430b159fda4d5b49f8f6ffadd822de74f6",
         "plan": {
           "schema": 1,
           "selection": {
