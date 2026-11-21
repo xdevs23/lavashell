@@ -81,6 +81,7 @@ impl fmt::Display for PackageId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SourceKind {
     Registry,
+    SparseRegistry,
     Git,
     Path,
 }
@@ -88,7 +89,7 @@ pub enum SourceKind {
 impl SourceKind {
     #[must_use]
     pub fn is_external(self) -> bool {
-        matches!(self, Self::Registry | Self::Git)
+        matches!(self, Self::Registry | Self::SparseRegistry | Self::Git)
     }
 }
 
@@ -100,6 +101,7 @@ impl FromStr for SourceKind {
     fn from_str(scheme: &str) -> Result<Self, Self::Err> {
         match scheme {
             "registry" => Ok(Self::Registry),
+            "sparse" => Ok(Self::SparseRegistry),
             "git" => Ok(Self::Git),
             "path" => Ok(Self::Path),
             _ => Err(UnknownSourceKind),
@@ -127,13 +129,20 @@ mod tests {
     }
 
     #[test]
-    fn reads_an_unknown_kind_of_source_as_unknown() {
+    fn reads_a_sparse_registry_as_external() {
         let sparse = package_id("sparse+https://index.crates.io/#serde@1.0.229");
-        assert_eq!(sparse.source(), None);
-        assert!(!sparse.is_external());
+        assert_eq!(sparse.source(), Some(SourceKind::SparseRegistry));
+        assert!(sparse.is_external());
+    }
+
+    #[test]
+    fn reads_an_unknown_kind_of_source_as_unknown() {
+        let unknown = package_id("svn+https://example.org/repository#serde@1.0.229");
+        assert_eq!(unknown.source(), None);
+        assert!(!unknown.is_external());
         assert_eq!(
-            String::from(sparse),
-            "sparse+https://index.crates.io/#serde@1.0.229"
+            String::from(unknown),
+            "svn+https://example.org/repository#serde@1.0.229"
         );
     }
 
