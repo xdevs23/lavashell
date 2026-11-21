@@ -2,6 +2,7 @@
 {
   lib,
   root,
+  projections,
   toml,
   workspaceCrates,
   lock,
@@ -115,7 +116,6 @@ let
       file = projections + "/${packageName directory}.json";
     in
     if builtins.pathExists file then builtins.fromJSON (builtins.readFile file) else null;
-  projections = root + "/${contract.projectionDirectory}";
   nativeMetadata = builtins.fromJSON (builtins.readFile (projections + "/native.json"));
   project =
     directory:

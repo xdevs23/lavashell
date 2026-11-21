@@ -10,6 +10,7 @@ mod files;
 mod projection_start;
 mod refresh;
 mod seed;
+mod stage;
 
 use crate::cargo::Cargo;
 use crate::error::Error;

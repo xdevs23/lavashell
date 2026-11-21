@@ -2,6 +2,7 @@
 {
   pkgs,
   root,
+  projections ? root + "/${(import ./projection-contract.nix).projectionDirectory}",
   commits,
 }:
 let
@@ -15,6 +16,7 @@ let
     inherit
       lib
       root
+      projections
       toml
       workspaceCrates
       lock

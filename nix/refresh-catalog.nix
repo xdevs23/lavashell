@@ -2,7 +2,7 @@
 { arguments }:
 let
   input = builtins.fromJSON arguments;
-  checkout = import ./checkout-sources.nix { inherit (input) nixpkgs root; };
+  checkout = import ./checkout-sources.nix { inherit (input) nixpkgs root projections; };
   inherit (checkout) sources directory;
   types = import ./types.nix;
   routeOf =

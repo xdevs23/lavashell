@@ -51,6 +51,7 @@ pub struct SeedWorkspaceSection {
 #[derive(Serialize)]
 struct SeedArguments<'arguments> {
     root: &'arguments Path,
+    projections: &'arguments Path,
     relative: &'arguments str,
     layer: Layer,
 }
@@ -64,6 +65,7 @@ pub struct Seeds<'refresh> {
 impl Seeds<'_> {
     pub fn write(
         &self,
+        projections: &Path,
         relative: &str,
         layer: Layer,
         destination: &Path,
@@ -72,6 +74,7 @@ impl Seeds<'_> {
             &self.root.join(SEED_PLAN),
             &SeedArguments {
                 root: self.root,
+                projections,
                 relative,
                 layer,
             },
