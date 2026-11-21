@@ -14,7 +14,9 @@ calloop = { workspace = true, features = ["executor"] }
 lavashell-actor.workspace = true
 lavashell-desktop-settings.workspace = true
 lavashell-desktop-settings-freedesktop.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
+log.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

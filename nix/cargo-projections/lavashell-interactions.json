@@ -1216,7 +1216,9 @@
           "lavashell-core",
           "lavashell-desktop-settings",
           "lavashell-desktop-settings-freedesktop",
+          "lavashell-error-chain",
           "lavashell-platform",
+          "log",
           "thiserror 2.0.21"
         ]
       },

@@ -1124,7 +1124,9 @@
           "lavashell-core",
           "lavashell-desktop-settings",
           "lavashell-desktop-settings-freedesktop",
+          "lavashell-error-chain",
           "lavashell-platform",
+          "log",
           "thiserror 2.0.21"
         ]
       },
@@ -2696,7 +2698,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "6a79d4ed1cb533faba3f21bb7a4c11aa19d1e8e1248ffaf79a3719988d53bcd3",
+        "seedHash": "3da457cc04e1f655a375c4ef210742bfec03021274d12a2c0523070041a871b9",
         "plan": {
           "schema": 1,
           "selection": {
@@ -3132,11 +3134,26 @@
                     "features": [],
                     "path": "../lavashell-desktop-settings-freedesktop"
                   },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-platform"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -5593,7 +5610,9 @@
                   "lavashell-actor",
                   "lavashell-desktop-settings",
                   "lavashell-desktop-settings-freedesktop",
+                  "lavashell-error-chain",
                   "lavashell-platform",
+                  "log",
                   "thiserror"
                 ]
               },

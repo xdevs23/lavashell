@@ -1,24 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::settings::{SettingsWatchError, sources, watch_settings};
+use crate::settings::{SettingsStartError, sources, watch_settings_while};
+use lavashell_desktop_settings::DesktopSettingSource;
 use lavashell_platform::{Capability, Connection, Platform, PlatformLinks};
 use std::collections::BTreeSet;
-use std::io;
-use std::thread;
 
 pub struct DesktopPlatform<P> {
     display: P,
+    sources: Vec<Box<dyn DesktopSettingSource>>,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum DesktopPlatformError<E> {
     #[error(transparent)]
     Display(E),
-    #[error("the thread for the desktop settings could not be created")]
-    SpawnSettings(#[source] io::Error),
-    #[error("the desktop settings failed")]
-    WatchSettings(#[source] SettingsWatchError),
-    #[error("the thread for the desktop settings panicked")]
-    SettingsPanicked,
+    #[error("the desktop platform cannot start the desktop settings")]
+    StartSettings(#[source] SettingsStartError),
 }
 
 impl<P: Platform> Platform for DesktopPlatform<P> {
@@ -35,7 +31,10 @@ impl<P: Platform> Platform for DesktopPlatform<P> {
             clock,
         } = P::connect(setup).map_err(DesktopPlatformError::Display)?;
         Ok(Connection {
-            platform: Self { display: platform },
+            platform: Self {
+                display: platform,
+                sources: sources(),
+            },
             backend,
             host,
             clock,
@@ -48,19 +47,8 @@ impl<P: Platform> Platform for DesktopPlatform<P> {
 
     fn serve(self, links: PlatformLinks<P::Control, P::Backend>) -> Result<(), Self::Error> {
         let view = links.reports.view.clone();
-        thread::scope(|scope| {
-            let (stop, stopped) = calloop::channel::channel();
-            let settings = thread::Builder::new()
-                .name("desktop settings".to_owned())
-                .spawn_scoped(scope, move || watch_settings(sources(), &view, stopped))
-                .map_err(DesktopPlatformError::SpawnSettings)?;
-            let served = self.display.serve(links);
-            drop(stop);
-            let watched = match settings.join() {
-                Ok(watched) => watched.map_err(DesktopPlatformError::WatchSettings),
-                Err(_panic) => Err(DesktopPlatformError::SettingsPanicked),
-            };
-            served.map_err(DesktopPlatformError::Display).and(watched)
-        })
+        watch_settings_while(self.sources, view, || self.display.serve(links))
+            .map_err(DesktopPlatformError::StartSettings)?
+            .map_err(DesktopPlatformError::Display)
     }
 }

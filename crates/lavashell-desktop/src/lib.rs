@@ -5,4 +5,4 @@ mod platform;
 mod settings;
 
 pub use platform::{DesktopPlatform, DesktopPlatformError};
-pub use settings::SettingsWatchError;
+pub use settings::SettingsStartError;
