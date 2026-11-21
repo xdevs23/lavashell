@@ -43,6 +43,7 @@ rec {
   testEnvironment = {
     LAVASHELL_TEST_FONT = "${pkgs.noto-fonts}/share/fonts/noto/NotoSans.ttf";
     LAVASHELL_TEST_STATIC_FONTS = lib.concatStringsSep ":" staticNotoSansFaces;
+    VK_DRIVER_FILES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json";
   };
   waylandEnvironment = {
     LAVASHELL_HYPRLAND_PROTOCOLS = "${pkgs.hyprland-protocols}";

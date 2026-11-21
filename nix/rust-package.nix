@@ -46,7 +46,6 @@ in
     '';
   buildPhase = builtins.readFile ./cargo-build-record.sh;
   preCheck = ''
-    export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json"
     export XDG_CACHE_HOME="$TMPDIR/lavashell-test-cache"
     mkdir -p "$XDG_CACHE_HOME"
   '';
