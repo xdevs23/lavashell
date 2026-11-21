@@ -20,9 +20,11 @@ impl DesktopSettingsService {
     }
 }
 
-fn settings_event(setting: DesktopSetting) -> SettingsEvent {
-    match setting {
-        DesktopSetting::Appearance(appearance) => SettingsEvent::Appearance(appearance),
+impl From<DesktopSetting> for SettingsEvent {
+    fn from(setting: DesktopSetting) -> Self {
+        match setting {
+            DesktopSetting::Appearance(appearance) => Self::Appearance(appearance),
+        }
     }
 }
 
@@ -32,7 +34,7 @@ impl DesktopService for DesktopSettingsService {
             .map(|source| {
                 let view = view.clone();
                 source.watch(Box::new(move |setting| {
-                    let _stopped_view_ends_the_run = view.push(settings_event(setting).into());
+                    let _stopped_view_ends_the_run = view.push(SettingsEvent::from(setting).into());
                 }))
             })
             .collect()

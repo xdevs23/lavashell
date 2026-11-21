@@ -85,7 +85,7 @@ fn signal(
     Ok(())
 }
 
-fn appearance_setting(reduced_motion: bool, contrast: ContrastPreference) -> DesktopSetting {
+fn build_appearance_setting(reduced_motion: bool, contrast: ContrastPreference) -> DesktopSetting {
     DesktopSetting::Appearance(Appearance {
         reduced_motion: Some(reduced_motion),
         contrast: Some(contrast),
@@ -139,26 +139,26 @@ fn child() -> Result<(), TestError> {
     dispatch_until(&mut loop_, &mut updates, 1)?;
     assert_eq!(
         updates.events[0],
-        appearance_setting(false, ContrastPreference::More)
+        build_appearance_setting(false, ContrastPreference::More)
     );
     signal(&service, NAMESPACE, "reduced-motion", 1)?;
     dispatch_until(&mut loop_, &mut updates, 2)?;
     assert_eq!(
         updates.events[1],
-        appearance_setting(true, ContrastPreference::More)
+        build_appearance_setting(true, ContrastPreference::More)
     );
     signal(&service, NAMESPACE, "contrast", 42)?;
     dispatch_until(&mut loop_, &mut updates, 3)?;
     assert_eq!(
         updates.events[2],
-        appearance_setting(true, ContrastPreference::NoPreference)
+        build_appearance_setting(true, ContrastPreference::NoPreference)
     );
     signal(&service, "other.namespace", "contrast", 1)?;
     signal(&service, NAMESPACE, "reduced-motion", 0)?;
     dispatch_until(&mut loop_, &mut updates, 4)?;
     assert_eq!(
         updates.events[3],
-        appearance_setting(false, ContrastPreference::NoPreference)
+        build_appearance_setting(false, ContrastPreference::NoPreference)
     );
     loop_.handle().remove(watch);
     loop_.handle().remove(receipt);
