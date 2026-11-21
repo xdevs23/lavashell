@@ -64,5 +64,5 @@ fn run() -> Result<(), Error> {
     let window = Window::new("Lavashell / Counter", "lavashell.counter");
     let mut app = App::new(platform());
     app.window(window, move |ui| counter(ui, &theme, plus))?;
-    lavashell::run::<Platform>(app, lavashell::setup()).map_err(Error::App)
+    lavashell::run::<Platform>(app, ()).map_err(Error::App)
 }

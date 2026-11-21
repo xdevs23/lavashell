@@ -2,9 +2,10 @@
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::{Appearance, ContrastPreference};
 use lavashell_desktop_portal::{PortalError, SettingValue, WatchedNamespace, watch_namespace};
-use lavashell_desktop_settings::{SettingsReporter, SettingsSource, SettingsWatch};
+use lavashell_desktop_settings::{
+    DesktopSetting, DesktopSettingSource, SettingsReporter, SettingsWatch,
+};
 use lavashell_error_chain::message_chain;
-use lavashell_platform::SettingsEvent;
 use std::str::FromStr;
 
 const NAMESPACE: &str = "org.freedesktop.appearance";
@@ -74,7 +75,7 @@ fn read_setting(appearance: Appearance, key: &str, value: &SettingValue) -> Appe
 
 pub struct AppearanceSource;
 
-impl SettingsSource for AppearanceSource {
+impl DesktopSettingSource for AppearanceSource {
     fn watch(self: Box<Self>, report: SettingsReporter) -> SettingsWatch {
         Box::pin(async move {
             if let Err(error) = watch_appearance(&report).await {
@@ -95,13 +96,13 @@ async fn watch_appearance(report: &SettingsReporter) -> Result<(), PortalError> 
     let mut reported = (values.iter()).fold(UNSET_APPEARANCE, |appearance, (key, value)| {
         read_setting(appearance, key, value)
     });
-    report(SettingsEvent::Appearance(reported));
+    report(DesktopSetting::Appearance(reported));
     while let Some(change) = changes.next_change().await {
         let change = change?;
         let latest = read_setting(reported, &change.key, &change.value);
         if latest != reported {
             reported = latest;
-            report(SettingsEvent::Appearance(reported));
+            report(DesktopSetting::Appearance(reported));
         }
     }
     Ok(())

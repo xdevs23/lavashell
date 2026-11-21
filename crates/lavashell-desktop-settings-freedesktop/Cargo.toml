@@ -14,7 +14,6 @@ lavashell-core.workspace = true
 lavashell-desktop-portal.workspace = true
 lavashell-desktop-settings.workspace = true
 lavashell-error-chain.workspace = true
-lavashell-platform.workspace = true
 log.workspace = true
 thiserror.workspace = true
 

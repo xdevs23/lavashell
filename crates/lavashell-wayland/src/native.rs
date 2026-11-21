@@ -28,7 +28,7 @@ pub(crate) use key::{key_event, key_repeat};
 pub(crate) use layer::{LayerTarget, translate_configure};
 pub(crate) use outputs::{advertised_outputs, monitor_info, output_id, refresh_interval};
 pub(crate) use owned_wl_surface::OwnedWlSurface;
-pub(crate) use preferences::install as install_preferences;
+pub(crate) use preferences::report_user_languages;
 pub(crate) use presentation::{
     PresentationFeedbackSource, PresentationFeedbackTarget, presentation_flags,
 };

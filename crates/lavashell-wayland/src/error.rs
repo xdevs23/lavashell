@@ -14,8 +14,6 @@ pub enum Error {
     #[error(transparent)]
     Layer(#[from] crate::LayerError),
     #[error(transparent)]
-    Preferences(#[from] crate::PreferencesError),
-    #[error(transparent)]
     Requests(#[from] crate::RequestsError),
     #[error(transparent)]
     SessionLock(#[from] crate::SessionLockError),

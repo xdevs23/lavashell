@@ -2810,8 +2810,13 @@ dependencies = [
 name = "lavashell-desktop"
 version = "0.1.0"
 dependencies = [
+ "calloop",
+ "lavashell-actor",
+ "lavashell-core",
  "lavashell-desktop-settings",
  "lavashell-desktop-settings-freedesktop",
+ "lavashell-platform",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2828,7 +2833,7 @@ dependencies = [
 name = "lavashell-desktop-settings"
 version = "0.1.0"
 dependencies = [
- "lavashell-platform",
+ "lavashell-core",
 ]
 
 [[package]]
@@ -2841,7 +2846,6 @@ dependencies = [
  "lavashell-desktop-portal",
  "lavashell-desktop-settings",
  "lavashell-error-chain",
- "lavashell-platform",
  "lavashell-test-fixtures",
  "log",
  "thiserror 2.0.21",
@@ -3219,13 +3223,11 @@ dependencies = [
  "ash",
  "async-channel",
  "atspi-common",
- "calloop",
  "futures-lite",
  "icu_locale_core",
  "lavashell-actor",
  "lavashell-build-script",
  "lavashell-core",
- "lavashell-desktop-settings",
  "lavashell-platform",
  "lavashell-test-fixtures",
  "lavashell-vulkan",

@@ -10,5 +10,12 @@ publish = false
 workspace = true
 
 [dependencies]
+calloop = { workspace = true, features = ["executor"] }
+lavashell-actor.workspace = true
 lavashell-desktop-settings.workspace = true
 lavashell-desktop-settings-freedesktop.workspace = true
+lavashell-platform.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+lavashell-core.workspace = true

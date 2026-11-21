@@ -7,7 +7,7 @@ use crate::EventLoopError;
 use crate::clipboard::ClipboardState;
 use crate::native::{
     Grabs, NativeSurfaces, PresentationFeedbackSource, SeatSet, SurfaceProtocols, WatchSources,
-    install_preferences,
+    report_user_languages,
 };
 use crate::sctk;
 use sctk::compositor::CompositorState;
@@ -69,19 +69,17 @@ impl Translator {
             compositor,
             shm,
             presentation,
-            settings,
         } = wayland;
         let qh = queue.handle();
         let seats = SeatState::new(&globals, &qh);
         let connection_source = WaylandSource::new(connection.clone(), queue)
             .insert(loop_handle.clone())
             .map_err(|failure| EventLoopError::WatchConnection(failure.error))?;
-        let mut sources = vec![connection_source];
         let view = ViewLink::new(links.view.clone());
-        sources.push(install_preferences(&loop_handle, &view, settings)?);
+        report_user_languages(&view);
         Ok(Self {
             focus_grabs,
-            sources,
+            sources: vec![connection_source],
             watches: WatchSources::default(),
             surfaces: NativeSurfaces::default(),
             links,

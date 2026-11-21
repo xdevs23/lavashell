@@ -9,6 +9,10 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+default = ["desktop"]
+desktop = ["dep:lavashell-desktop"]
+
 [dependencies]
 lavashell-effect-quality.workspace = true
 lavashell-core.workspace = true
@@ -22,7 +26,7 @@ lavashell-runtime.workspace = true
 lavashell-materials.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-lavashell-desktop.workspace = true
+lavashell-desktop = { workspace = true, optional = true }
 lavashell-wayland.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]

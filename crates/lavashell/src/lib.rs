@@ -15,7 +15,7 @@ pub use lavashell_runtime::{
 pub use lavashell_vulkan_renderer as vulkan_renderer;
 
 #[cfg_attr(target_os = "android", path = "selected/aosp.rs")]
-#[cfg_attr(target_os = "linux", path = "selected/wayland.rs")]
+#[cfg_attr(target_os = "linux", path = "selected/linux.rs")]
 #[cfg_attr(
     not(any(target_os = "android", target_os = "linux")),
     path = "selected/unsupported.rs"

@@ -23,7 +23,6 @@ pub(crate) use state::Translator;
 
 use crate::Error;
 use crate::RequestsError;
-use crate::WaylandSetup;
 use crate::bind::bind_optional;
 use crate::native::{
     Control, Grabs, PresentationFeedbackSource, SurfaceProtocols, advertised_outputs,
@@ -31,7 +30,6 @@ use crate::native::{
 use crate::sctk;
 use crate::wayland_presentation::{WaylandBackend, WaylandPresentation};
 use lavashell_actor::SystemClock;
-use lavashell_desktop_settings::SettingsSource;
 use lavashell_platform::{Capability, HostFacts, Platform, PlatformLinks, Reports};
 use lavashell_vulkan_renderer::VulkanBackend;
 use requests::{Requests, execute_arrived};
@@ -59,16 +57,15 @@ pub struct Wayland {
     compositor: CompositorState,
     shm: Shm,
     presentation: Option<PresentationFeedbackSource>,
-    settings: Vec<Box<dyn SettingsSource>>,
 }
 
 impl Platform for Wayland {
-    type Setup = WaylandSetup;
+    type Setup = ();
     type Error = Error;
     type Backend = WaylandBackend;
     type Control = Control;
 
-    fn connect(setup: WaylandSetup) -> Result<lavashell_platform::Connection<Self>, Error> {
+    fn connect((): ()) -> Result<lavashell_platform::Connection<Self>, Error> {
         let connection = Connection::connect_to_env().map_err(ConnectionError::Connect)?;
         let (globals, queue) =
             registry_queue_init::<Translator>(&connection).map_err(ConnectionError::ReadGlobals)?;
@@ -91,7 +88,6 @@ impl Platform for Wayland {
                 .map_err(ConnectionError::BindCompositor)?,
             shm: Shm::bind(&globals, &qh).map_err(ConnectionError::BindShm)?,
             presentation,
-            settings: setup.settings,
             globals,
             queue,
             connection,

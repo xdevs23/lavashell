@@ -50,7 +50,7 @@ fn appearance_follows_the_portal_settings_on_the_session_bus() -> Result<(), Tes
 
 #[derive(Default)]
 struct Updates {
-    events: Vec<SettingsEvent>,
+    events: Vec<DesktopSetting>,
     ended: Option<TestError>,
 }
 
@@ -85,8 +85,8 @@ fn signal(
     Ok(())
 }
 
-fn appearance_event(reduced_motion: bool, contrast: ContrastPreference) -> SettingsEvent {
-    SettingsEvent::Appearance(Appearance {
+fn appearance_setting(reduced_motion: bool, contrast: ContrastPreference) -> DesktopSetting {
+    DesktopSetting::Appearance(Appearance {
         reduced_motion: Some(reduced_motion),
         contrast: Some(contrast),
         color_scheme: None,
@@ -113,7 +113,7 @@ fn child() -> Result<(), TestError> {
         .serve(),
     )?;
     let mut loop_: EventLoop<Updates> = EventLoop::try_new()?;
-    let (sender, receiver) = channel::channel::<SettingsEvent>();
+    let (sender, receiver) = channel::channel::<DesktopSetting>();
     let receipt = loop_
         .handle()
         .insert_source(receiver, |event, (), updates| {
@@ -139,31 +139,31 @@ fn child() -> Result<(), TestError> {
     dispatch_until(&mut loop_, &mut updates, 1)?;
     assert_eq!(
         updates.events[0],
-        appearance_event(false, ContrastPreference::More)
+        appearance_setting(false, ContrastPreference::More)
     );
     signal(&service, NAMESPACE, "reduced-motion", 1)?;
     dispatch_until(&mut loop_, &mut updates, 2)?;
     assert_eq!(
         updates.events[1],
-        appearance_event(true, ContrastPreference::More)
+        appearance_setting(true, ContrastPreference::More)
     );
     signal(&service, NAMESPACE, "contrast", 42)?;
     dispatch_until(&mut loop_, &mut updates, 3)?;
     assert_eq!(
         updates.events[2],
-        appearance_event(true, ContrastPreference::NoPreference)
+        appearance_setting(true, ContrastPreference::NoPreference)
     );
     signal(&service, "other.namespace", "contrast", 1)?;
     signal(&service, NAMESPACE, "reduced-motion", 0)?;
     dispatch_until(&mut loop_, &mut updates, 4)?;
     assert_eq!(
         updates.events[3],
-        appearance_event(false, ContrastPreference::NoPreference)
+        appearance_setting(false, ContrastPreference::NoPreference)
     );
     loop_.handle().remove(watch);
     loop_.handle().remove(receipt);
     drop(service);
-    let ignore: SettingsReporter = Box::new(drop::<SettingsEvent>);
+    let ignore: SettingsReporter = Box::new(drop::<DesktopSetting>);
     assert!(matches!(
         block_on(watch_appearance(&ignore)),
         Err(PortalError::ReadSettings(_))
