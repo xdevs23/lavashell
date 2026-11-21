@@ -250,6 +250,16 @@ in
           "independence-probe"
         ];
       };
+      desktop-removal = withoutDefaultFeatures {
+        pname = "lavashell-desktop-removal";
+        crate = "lavashell";
+        subcommand = "clippy";
+        arguments = [
+          "--"
+          "--deny"
+          "warnings"
+        ];
+      };
       source-limits =
         pkgs.runCommand "lavashell-source-limits"
           {
