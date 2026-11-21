@@ -92,3 +92,28 @@ fn a_service_registered_through_the_layers_reports_to_the_view_after_another_ser
     ));
     Ok(())
 }
+
+struct PanicsAfterReporting;
+
+impl DesktopService for PanicsAfterReporting {
+    fn into_watches(self: Box<Self>, view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch> {
+        let view = view.clone();
+        vec![Box::pin(async move {
+            let _ended_test_stops_reading =
+                view.push(SettingsEvent::Appearance(Appearance::default()).into());
+            std::panic::resume_unwind(Box::new("the service panics after it reported"))
+        })]
+    }
+}
+
+#[test]
+fn a_service_that_panics_while_the_app_runs_leaves_the_result_of_serve_in_place()
+-> Result<(), TestError> {
+    let (sender, view) = mailbox::<PlatformEvent>();
+    let outlet = sender.outlet(|event| event);
+    drop(sender);
+    let arrived =
+        watch_services_while(vec![Box::new(PanicsAfterReporting)], outlet, || view.take())??;
+    assert_eq!(arrived.len(), 1);
+    Ok(())
+}

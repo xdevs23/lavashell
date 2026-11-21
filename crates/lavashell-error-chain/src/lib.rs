@@ -4,6 +4,8 @@
 use std::error::Error;
 use std::fmt;
 
+pub mod next_step;
+
 pub fn message_chain(error: impl Error) -> String {
     std::iter::successors(error.source(), |&cause| cause.source())
         .fold(error.to_string(), |text, cause| format!("{text}: {cause}"))

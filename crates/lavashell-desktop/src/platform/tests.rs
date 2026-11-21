@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::services::ServiceWatch;
+use crate::services::{PanicValue, ServiceWatch};
 use lavashell_actor::{Outlet, SystemClock, mailbox};
 use lavashell_platform::{HostFacts, PlatformEvent, Reports, SurfaceControl};
 use lavashell_vulkan_renderer::HeadlessBackend;
@@ -112,8 +112,10 @@ fn serve_fails_when_the_desktop_services_cannot_start() {
     assert!(matches!(
         serve(Ok(()), PanicsWhileStarting),
         Err(DesktopPlatformError::StartServices(
-            ServicesStartError::Panicked
-        ))
+            ServicesStartError::Panicked {
+                value: PanicValue::Text(text)
+            }
+        )) if text == "the service panics while its watches start"
     ));
 }
 

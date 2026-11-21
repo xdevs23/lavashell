@@ -9,4 +9,4 @@ mod services;
 pub use layer::build_services;
 pub use layer::{plug_in, register_in_layers};
 pub use platform::{DesktopPlatform, DesktopPlatformError};
-pub use services::{DesktopService, ServiceWatch, ServicesStartError};
+pub use services::{DesktopService, PanicValue, ServiceWatch, ServicesStartError};

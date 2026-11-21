@@ -4,22 +4,21 @@ use calloop::ping::{Ping, PingSource, make_ping};
 use calloop::{EventLoop, LoopSignal};
 use lavashell_actor::Outlet;
 use lavashell_error_chain::message_chain;
+use lavashell_error_chain::next_step::{FREE_SYSTEM_RESOURCES, REPORT_THE_FAILURE};
 use lavashell_platform::PlatformEvent;
 use std::pin::Pin;
 use std::sync::mpsc;
 use std::{io, thread};
+
+mod panic_value;
+
+pub use panic_value::PanicValue;
 
 pub type ServiceWatch = Pin<Box<dyn Future<Output = ()>>>;
 
 pub trait DesktopService: Send {
     fn into_watches(self: Box<Self>, view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch>;
 }
-
-const FREE_SYSTEM_RESOURCES: &str =
-    "close programs you do not need to free file descriptors and memory, then start the app again";
-
-const REPORT_THE_DEFECT: &str =
-    "this is a defect in the desktop services; report the failure with this log";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServicesStartError {
@@ -46,13 +45,19 @@ pub enum ServicesStartError {
     InsertStop(#[source] calloop::Error),
     #[error(
         "the desktop services cannot start a watch that a service returns, because the executor \
-         that runs the watches is gone; {REPORT_THE_DEFECT}"
+         that runs the watches is gone; this is a defect in the desktop services, {REPORT_THE_FAILURE}"
     )]
     ScheduleWatch(#[source] ExecutorDestroyed),
     #[error(
-        "the thread of the desktop services panicked before the watches started; {REPORT_THE_DEFECT}"
+        "the thread of the desktop services panicked with {value} before the watches started; \
+         this is a defect in the desktop services, {REPORT_THE_FAILURE}"
     )]
-    Panicked,
+    Panicked { value: PanicValue },
+    #[error(
+        "the thread of the desktop services ended without reporting whether the watches started; \
+         this is a defect in the desktop services, {REPORT_THE_FAILURE}"
+    )]
+    EndedWithoutReport,
 }
 
 struct ServicesStop(Ping);
@@ -70,7 +75,7 @@ pub(crate) fn watch_services_while<T>(
 ) -> Result<T, ServicesStartError> {
     let (stop, stopped) = make_ping().map_err(ServicesStartError::CreateStop)?;
     thread::scope(|scope| {
-        let _stop_on_return = ServicesStop(stop);
+        let stop_on_return = ServicesStop(stop);
         let (started, start) = mpsc::sync_channel(0);
         let services_thread = thread::Builder::new()
             .name("desktop services".to_owned())
@@ -89,11 +94,25 @@ pub(crate) fn watch_services_while<T>(
             })
             .map_err(ServicesStartError::SpawnThread)?;
         let Ok(started) = start.recv() else {
-            let _payload_reported_as_panicked = services_thread.join();
-            return Err(ServicesStartError::Panicked);
+            return Err(match services_thread.join() {
+                Err(payload) => ServicesStartError::Panicked {
+                    value: PanicValue::of(payload.as_ref()),
+                },
+                Ok(()) => ServicesStartError::EndedWithoutReport,
+            });
         };
         started?;
-        Ok(serve())
+        let served = serve();
+        drop(stop_on_return);
+        if let Err(payload) = services_thread.join() {
+            log::error!(
+                "the thread of the desktop services panicked with {} while the app ran, and the \
+                 app ran on without them; this is a defect in the desktop services, \
+                 {REPORT_THE_FAILURE}",
+                PanicValue::of(payload.as_ref())
+            );
+        }
+        Ok(served)
     })
 }
 
