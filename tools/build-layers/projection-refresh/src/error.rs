@@ -30,6 +30,12 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+    #[error("the refreshed projection cannot replace {path}: {source}")]
+    PublishProjection {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("the temporary directory of the refresh cannot be created: {0}")]
     TemporaryDirectory(#[source] std::io::Error),
     #[error("{path} is not the expected JSON document: {source}")]
@@ -159,6 +165,7 @@ pub enum NextStep {
     FixNix,
     Discard,
     ChooseKnownPackages,
+    RefreshTheRest,
     ReportDefect,
 }
 
@@ -194,6 +201,7 @@ impl Error {
             | Self::AmbiguousFeatureContext { .. }
             | Self::SharedFeaturesUnchanged { .. } => NextStep::CheckManifests,
             Self::UnknownPackages { .. } => NextStep::ChooseKnownPackages,
+            Self::PublishProjection { .. } => NextStep::RefreshTheRest,
             Self::ReadFile { .. }
             | Self::WriteFile { .. }
             | Self::ListDirectory { .. }
@@ -237,6 +245,10 @@ impl fmt::Display for NextStep {
             Self::ChooseKnownPackages => {
                 "Name only examples, packaged crates of the projection contract or the native base."
             }
+            Self::RefreshTheRest => concat!(
+                "Part of the projections in the checkout are refreshed and the rest are not. ",
+                "Fix the error, then run the refresh again to refresh the rest.",
+            ),
             Self::ReportDefect => {
                 "The refresh cannot read or write its files. Report this output to the developers."
             }

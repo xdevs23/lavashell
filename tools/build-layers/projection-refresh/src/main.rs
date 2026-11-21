@@ -17,6 +17,7 @@ use crate::error::Error;
 use crate::files::read_json;
 use crate::refresh::{PackageEntry, Toolkit, package_name, refresh_projections};
 use crate::seed::Seeds;
+use crate::stage::publish_staged_refresh;
 use clap::Parser;
 use lavashell_cargo_model::contract::ProjectionContract;
 use lavashell_command_output::nix::NixEvaluator;
@@ -107,17 +108,21 @@ fn run(packages: &[String]) -> Result<(), Error> {
         target: contract.target.clone(),
         profile: contract.profile.clone(),
     };
-    let toolkit = Toolkit {
-        cargo: &cargo,
-        seeds: Seeds {
-            nix: &nix,
-            root: &root,
+    let refreshed = publish_staged_refresh(&root.join(&contract.projection_directory), |staged| {
+        let toolkit = Toolkit {
+            cargo: &cargo,
+            seeds: Seeds {
+                nix: &nix,
+                root: &root,
+                projections: staged,
+                contract: &contract,
+            },
             contract: &contract,
-        },
-        contract: &contract,
-        root: &root,
-    };
-    for refreshed in refresh_projections(&toolkit, &entries)? {
+            root: &root,
+        };
+        refresh_projections(&toolkit, &entries)
+    })?;
+    for refreshed in refreshed {
         if let Some(unresolved) = refreshed.unresolved_stored_crate {
             println!(
                 "{}: the stored projection lists {} {}, which Cargo.lock no longer resolves, so the refresh started from Cargo.lock",

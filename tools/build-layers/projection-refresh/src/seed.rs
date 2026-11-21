@@ -59,13 +59,13 @@ struct SeedArguments<'arguments> {
 pub struct Seeds<'refresh> {
     pub nix: &'refresh NixEvaluator,
     pub root: &'refresh Path,
+    pub projections: &'refresh Path,
     pub contract: &'refresh ProjectionContract,
 }
 
 impl Seeds<'_> {
     pub fn write(
         &self,
-        projections: &Path,
         relative: &str,
         layer: Layer,
         destination: &Path,
@@ -74,7 +74,7 @@ impl Seeds<'_> {
             &self.root.join(SEED_PLAN),
             &SeedArguments {
                 root: self.root,
-                projections,
+                projections: self.projections,
                 relative,
                 layer,
             },

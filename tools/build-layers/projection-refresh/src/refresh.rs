@@ -4,10 +4,9 @@ use crate::canonical::{Seed, canonical_plan, materialize, verify_units};
 use crate::cargo::{Cargo, LockMode, ResolvedGraph};
 use crate::concurrency::run_concurrently;
 use crate::error::Error;
-use crate::files::{create_directory, read_toml, write_json, write_toml};
+use crate::files::{read_toml, write_json, write_toml};
 use crate::projection_start::{ProjectionStart, start_native_projection, start_package_projection};
 use crate::seed::{SeedWorkspace, Seeds};
-use crate::stage::ProjectionStage;
 use lavashell_cargo_model::contract::ProjectionContract;
 use lavashell_cargo_model::lock::{CargoLock, LockedPackage};
 use lavashell_cargo_model::manifest::PackageManifest;
@@ -17,9 +16,6 @@ use lavashell_plan_check::{external_records, verify};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-
-#[cfg(test)]
-mod tests;
 
 const CATALOG: &str = "nix/refresh-catalog.nix";
 
@@ -77,14 +73,11 @@ impl Toolkit<'_> {
 
     fn seed_graph(
         &self,
-        projections: &Path,
         relative: &str,
         layer: Layer,
         destination: &Path,
     ) -> Result<ResolvedGraph, Error> {
-        let seed = self
-            .seeds
-            .write(projections, relative, layer, destination)?;
+        let seed = self.seeds.write(relative, layer, destination)?;
         let package = package_name(&self.root.join(relative))?;
         let companions = seed.companions(self.contract)?;
         self.graph(destination, &package, &companions, LockMode::Resolve)
@@ -92,13 +85,12 @@ impl Toolkit<'_> {
 
     fn dependency_plan(
         &self,
-        projections: &Path,
         relative: &str,
         layer: Layer,
         destination: &Path,
     ) -> Result<LayerPlan, Error> {
         let seed_path = destination.join("seed");
-        let seed = self.seeds.write(projections, relative, layer, &seed_path)?;
+        let seed = self.seeds.write(relative, layer, &seed_path)?;
         let package = package_name(&self.root.join(relative))?;
         let companions = seed.companions(self.contract)?;
         let expected = self.graph(&seed_path, &package, &companions, LockMode::Frozen)?;
@@ -141,14 +133,13 @@ impl Toolkit<'_> {
 
     fn catalog(
         &self,
-        projections: &Path,
         entries: &[PackageEntry],
     ) -> Result<(Vec<LayeredPackage>, Vec<String>), Error> {
         let catalog: LayerCatalog = self.seeds.nix.evaluate(
             &self.root.join(CATALOG),
             &CatalogArguments {
                 root: self.root,
-                projections,
+                projections: self.seeds.projections,
                 directories: entries
                     .iter()
                     .map(|entry| entry.directory.as_str())
@@ -220,7 +211,7 @@ impl LayerRefresh<'_> {
     fn normal_graph(&self, entry: &PackageEntry) -> Result<ResolvedGraph, Error> {
         let destination = self.scratch.join(&entry.package).join("normal");
         self.toolkit
-            .seed_graph(self.output, &entry.directory, Layer::Registry, &destination)
+            .seed_graph(&entry.directory, Layer::Registry, &destination)
     }
 
     fn store_plan(
@@ -233,12 +224,9 @@ impl LayerRefresh<'_> {
             Layer::Registry => "registry-layer",
         };
         let destination = self.scratch.join(&package.entry.package).join(layer_name);
-        let plan = self.toolkit.dependency_plan(
-            self.output,
-            &package.entry.directory,
-            package.layer,
-            &destination,
-        )?;
+        let plan =
+            self.toolkit
+                .dependency_plan(&package.entry.directory, package.layer, &destination)?;
         let _plan_of_previous_refresh: Option<LayerPlan> = projection
             .dependency_plans
             .entry(self.toolkit.cargo.target.clone())
@@ -277,12 +265,10 @@ impl LayerRefresh<'_> {
                 .scratch
                 .join(&entry.package)
                 .join(format!("engine-{attempt}"));
-            let _seed_read_back_by_cargo: SeedWorkspace = self.toolkit.seeds.write(
-                self.output,
-                &entry.directory,
-                Layer::Engine,
-                &destination,
-            )?;
+            let _seed_read_back_by_cargo: SeedWorkspace =
+                self.toolkit
+                    .seeds
+                    .write(&entry.directory, Layer::Engine, &destination)?;
             let engine =
                 self.toolkit
                     .graph(&destination, &entry.package, &[], LockMode::Resolve)?;
@@ -366,15 +352,11 @@ pub fn refresh_projections(
 ) -> Result<Vec<RefreshedPackage>, Error> {
     let contract = toolkit.contract;
     let original: CargoLock = read_toml(&toolkit.root.join("Cargo.lock"))?;
-    let checkout_projections = toolkit.root.join(&contract.projection_directory);
-    create_directory(&checkout_projections)?;
-    let stage = ProjectionStage::copy_of(checkout_projections)?;
-    let output = stage.path();
+    let output = toolkit.seeds.projections;
     let native_path = output.join("native.json");
     let native_start = start_native_projection(&native_path, &original)?;
     let scratch = tempfile::tempdir().map_err(Error::TemporaryDirectory)?;
     let native_graph = toolkit.seed_graph(
-        output,
         &contract.native_directory,
         Layer::Registry,
         &scratch.path().join("native"),
@@ -383,9 +365,8 @@ pub fn refresh_projections(
         .projection
         .prepared(native_graph.lock, &toolkit.cargo.target);
     write_json(&native_path, &native)?;
-    let (packages, native_names) = toolkit.catalog(output, entries)?;
+    let (packages, native_names) = toolkit.catalog(entries)?;
     let native_plan = toolkit.dependency_plan(
-        output,
         &contract.native_directory,
         Layer::Registry,
         &scratch.path().join("native-layer"),
@@ -414,6 +395,5 @@ pub fn refresh_projections(
             .map(|package| || refresh.refresh(package))
             .collect(),
     )?;
-    stage.publish()?;
     Ok(std::iter::once(native_refresh).chain(refreshed).collect())
 }

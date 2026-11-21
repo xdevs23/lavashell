@@ -12,11 +12,22 @@ pub fn read_text(path: &Path) -> Result<String, Error> {
     })
 }
 
+pub fn read_bytes(path: &Path) -> Result<Vec<u8>, Error> {
+    fs::read(path).map_err(|source| Error::ReadFile {
+        path: path.to_owned(),
+        source,
+    })
+}
+
 pub fn write_text(path: &Path, text: &str) -> Result<(), Error> {
+    write_bytes(path, text.as_bytes())
+}
+
+pub fn write_bytes(path: &Path, contents: &[u8]) -> Result<(), Error> {
     if let Some(parent) = path.parent() {
         create_directory(parent)?;
     }
-    fs::write(path, text).map_err(|source| Error::WriteFile {
+    fs::write(path, contents).map_err(|source| Error::WriteFile {
         path: path.to_owned(),
         source,
     })
