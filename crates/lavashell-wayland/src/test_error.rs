@@ -6,8 +6,8 @@ use crate::LayerLayoutError;
 use lavashell_core::units::NumberError;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
 use std::env::VarError;
+use std::io;
 use std::num::TryFromIntError;
-use std::{io, sync::mpsc};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TestError {
@@ -26,7 +26,7 @@ pub(crate) enum TestError {
     #[error("the address of the session bus is not set")]
     BusAddress(#[from] VarError),
     #[error("the fixture received no message")]
-    Receive(#[from] mpsc::RecvError),
+    Receive(#[from] async_channel::RecvError),
     #[error("a number could not be converted")]
     Number(#[from] NumberError),
     #[error("a number does not fit its type")]

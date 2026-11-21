@@ -121,6 +121,7 @@ lavashell-source-rules = { path = "tools/source-rules" }
 accesskit = "=0.25.1"
 accesskit_consumer = "=0.39.1"
 accesskit_unix = "=0.24.0"
+async-channel = "=2.5.0"
 atspi-common = { version = "=0.13.0", default-features = false, features = ["zbus"] }
 bevy = { version = "=0.17.3", default-features = false }
 build-rs = "=0.3.5"

@@ -1331,6 +1331,7 @@
           "accesskit",
           "accesskit_unix",
           "ash",
+          "async-channel",
           "atspi-common",
           "calloop",
           "futures-lite",
@@ -2693,7 +2694,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "42d11db9aa0d3c221182e467c539a0074201338f56686742c936e202b436055f",
+        "seedHash": "36ca394185ea2fa7326dcd48f8ad325701237d50e3f741badc3f6faccda176f4",
         "plan": {
           "schema": 1,
           "selection": {

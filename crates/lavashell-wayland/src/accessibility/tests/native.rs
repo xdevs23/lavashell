@@ -9,7 +9,6 @@ use futures_lite::future::block_on;
 use lavashell_actor::{Closed, Receiver};
 use lavashell_test_fixtures::test_bus;
 use serde::{Deserialize, Serialize};
-use std::sync::mpsc;
 use zbus::zvariant::{OwnedObjectPath, Type};
 use zbus::{Connection, MessageStream, Proxy, connection::Builder};
 
@@ -24,7 +23,22 @@ struct AtspiAddress {
 
 struct Reported {
     view: Receiver<PlatformEvent>,
+    arrived: async_channel::Receiver<()>,
     events: Vec<AccessibilityEvent>,
+}
+
+impl Reported {
+    fn new(view: Receiver<PlatformEvent>) -> Self {
+        let (arrival, arrived) = async_channel::bounded(1);
+        view.on_arrival(move || {
+            let _full_slot_or_finished_test_needs_no_signal = arrival.try_send(());
+        });
+        Self {
+            view,
+            arrived,
+            events: Vec::new(),
+        }
+    }
 }
 
 struct Status {
@@ -52,7 +66,7 @@ impl Status {
 const ROOT: &str = "/org/a11y/atspi/accessible/root";
 
 struct Registry {
-    embedded: mpsc::Sender<AtspiAddress>,
+    embedded: async_channel::Sender<AtspiAddress>,
     name: String,
     root: OwnedObjectPath,
 }
@@ -68,7 +82,7 @@ enum RegistryError {
 #[zbus::interface(name = "org.a11y.atspi.Socket")]
 impl Registry {
     fn embed(&self, plug: AtspiAddress) -> Result<(AtspiAddress,), RegistryError> {
-        if self.embedded.send(plug).is_err() {
+        if self.embedded.try_send(plug).is_err() {
             return Err(RegistryError::EmbedsReceiverGone);
         }
         Ok((AtspiAddress {
@@ -99,7 +113,7 @@ async fn proxy<'a>(
     .await?)
 }
 
-fn wait_event(
+async fn wait_event(
     reported: &mut Reported,
     predicate: impl Fn(&AccessibilityEvent) -> bool,
 ) -> Result<AccessibilityEvent, TestError> {
@@ -109,8 +123,11 @@ fn wait_event(
         }
         let arrived = reported
             .view
-            .take()
+            .take_arrived()
             .map_err(|Closed| AccessibilityTestError::EventsClosed)?;
+        if arrived.is_empty() {
+            reported.arrived.recv().await?;
+        }
         reported.events.extend(accessibility_events(arrived));
     }
 }
@@ -152,8 +169,15 @@ async fn children(
 
 async fn serve_fixture(
     address: &str,
-) -> Result<(Connection, Connection, mpsc::Receiver<AtspiAddress>), TestError> {
-    let (embedded, embeds) = mpsc::channel();
+) -> Result<
+    (
+        Connection,
+        Connection,
+        async_channel::Receiver<AtspiAddress>,
+    ),
+    TestError,
+> {
+    let (embedded, embeds) = async_channel::unbounded();
     let status = Builder::address(address)?
         .name("org.a11y.Bus")?
         .serve_at("/org/a11y/bus", Status { enabled: true })?
@@ -193,13 +217,11 @@ async fn child() -> Result<(), TestError> {
         ViewLink::new(sender.outlet(|event| event)),
     );
     drop(sender);
-    let mut reported = Reported {
-        view,
-        events: Vec::new(),
-    };
+    let mut reported = Reported::new(view);
     let activation = wait_event(&mut reported, |event| {
         matches!(event, AccessibilityEvent::Activate(_))
-    })?;
+    })
+    .await?;
     assert!(matches!(
         activation,
         AccessibilityEvent::Activate(SURFACE_0)
@@ -207,7 +229,7 @@ async fn child() -> Result<(), TestError> {
     let initial = tree(&[Run::line("a💡é", &[0])])?;
     bridge.publish(initial.clone());
     bridge.window_focus(true);
-    let app = embeds.recv()?;
+    let app = embeds.recv().await?;
     let mut windows = wait_for(
         &mut signals,
         || children(&client, &app),
@@ -231,7 +253,8 @@ async fn child() -> Result<(), TestError> {
     assert!(selection);
     let AccessibilityEvent::Action(SURFACE_0, action) = wait_event(&mut reported, |event| {
         matches!(event, AccessibilityEvent::Action(SURFACE_0, _))
-    })?
+    })
+    .await?
     else {
         return Err(AccessibilityTestError::UnexpectedEvent.into());
     };
@@ -254,7 +277,7 @@ async fn child() -> Result<(), TestError> {
     );
     text_navigation(&text_proxy, &mut signals, &mut bridge).await?;
     lifecycle(&client, &mut reported, &mut bridge, initial).await?;
-    let app = embeds.recv()?;
+    let app = embeds.recv().await?;
     let _shown_window_is_not_checked = wait_for(
         &mut signals,
         || children(&client, &app),
@@ -288,7 +311,8 @@ async fn check_button(
     assert!(accepted);
     let AccessibilityEvent::Action(SURFACE_0, action) = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Action(SURFACE_0, _))
-    })?
+    })
+    .await?
     else {
         return Err(AccessibilityTestError::UnexpectedEvent.into());
     };
@@ -362,7 +386,8 @@ async fn lifecycle(
     status.set_property("IsEnabled", false).await?;
     let deactivation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Deactivate(_))
-    })?;
+    })
+    .await?;
     assert!(matches!(
         deactivation,
         AccessibilityEvent::Deactivate(SURFACE_0)
@@ -370,7 +395,8 @@ async fn lifecycle(
     status.set_property("IsEnabled", true).await?;
     let activation = wait_event(reported, |event| {
         matches!(event, AccessibilityEvent::Activate(_))
-    })?;
+    })
+    .await?;
     assert!(matches!(
         activation,
         AccessibilityEvent::Activate(SURFACE_0)

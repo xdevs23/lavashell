@@ -36,6 +36,7 @@ quote.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+async-channel.workspace = true
 atspi-common.workspace = true
 futures-lite.workspace = true
 lavashell-core = { workspace = true, features = ["test-support"] }
