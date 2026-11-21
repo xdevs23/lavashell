@@ -13,6 +13,7 @@ members = [
     "crates/lavashell-renderer",
     "crates/lavashell-vulkan-renderer",
     "crates/lavashell-platform",
+    "crates/lavashell-store",
     "crates/lavashell-desktop",
     "crates/lavashell-desktop-portal",
     "crates/lavashell-desktop-settings",
@@ -88,6 +89,7 @@ lavashell-vulkan = { path = "crates/lavashell-vulkan" }
 lavashell-renderer = { path = "crates/lavashell-renderer" }
 lavashell-vulkan-renderer = { path = "crates/lavashell-vulkan-renderer" }
 lavashell-platform = { path = "crates/lavashell-platform" }
+lavashell-store = { path = "crates/lavashell-store" }
 lavashell-desktop = { path = "crates/lavashell-desktop" }
 lavashell-desktop-portal = { path = "crates/lavashell-desktop-portal" }
 lavashell-desktop-settings = { path = "crates/lavashell-desktop-settings" }
