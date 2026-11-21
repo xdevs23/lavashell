@@ -9,7 +9,9 @@ use std::process::ExitCode;
 use std::{fs, io};
 
 use convert::{ConvertError, convert};
-use lavashell_build_script::{BuildScriptError, PackageVariable, output_directory, run, write};
+use lavashell_build_script::{
+    BuildScriptError, PackageVariable, output_directory, rerun_if_changed, run, write,
+};
 use proc_macro2::{Ident, Literal, TokenStream, TokenTree};
 use quote::quote;
 use thiserror::Error;
@@ -50,7 +52,7 @@ fn main() -> ExitCode {
 fn generate() -> Result<(), BuildError> {
     LUCIDE.rerun_if_variable_changed();
     let icons = LUCIDE.path()?.join("icons");
-    println!("cargo::rerun-if-changed={}", icons.display());
+    rerun_if_changed(&icons)?;
     let out = output_directory()?;
     let statics = svg_files(&icons)?
         .iter()

@@ -5,7 +5,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{fs, io};
 
-use lavashell_build_script::{BuildScriptError, PackageVariable, output_directory, run, write};
+use lavashell_build_script::{
+    BuildScriptError, PackageVariable, output_directory, rerun_if_changed, run, write,
+};
 use quote::quote;
 use thiserror::Error;
 
@@ -41,7 +43,7 @@ fn generate() -> Result<(), BuildError> {
         .join("share/hyprland-protocols/protocols/hyprland-focus-grab-v1.xml");
     let protocol =
         fs::canonicalize(&file).map_err(|source| BuildError::FindProtocol { file, source })?;
-    println!("cargo::rerun-if-changed={}", protocol.display());
+    rerun_if_changed(&protocol)?;
     let path = protocol
         .to_str()
         .ok_or_else(|| BuildError::PathNotUtf8(protocol.clone()))?;
