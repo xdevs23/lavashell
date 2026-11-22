@@ -16,7 +16,7 @@ let
       "--package"
       name
     ]) names;
-  copy = import ./cache-copy.nix { inherit lib; };
+  artifactLayers = import ./artifact-layers.nix { inherit lib; };
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
   selectedPackages =
@@ -26,7 +26,7 @@ let
       companion: builtins.elem companion (sources.packageNames directory)
     ) contract.companions;
   packagesTestedThrough =
-    layer: layer.testPackages ++ lib.concatMap packagesTestedThrough layer.previous;
+    layers: lib.concatMap (layer: layer.testPackages) (artifactLayers.stack layers);
   tests = packages: {
     cargoTestFlags = flags packages ++ [ "--frozen" ];
     doCheck = packages != [ ];
@@ -74,7 +74,7 @@ let
       names = sources.crateNames projection.crates;
       selected = projection.selectedPackages or (selectedPackages directory);
       testPackages = lib.subtractLists (
-        dummyPackages ++ testedByOtherPackages ++ lib.concatMap packagesTestedThrough previous
+        dummyPackages ++ testedByOtherPackages ++ packagesTestedThrough previous
       ) names;
       realCrates = lib.subtractLists dummyPackages names;
       stubsLintedToCheckTheirDependencies = lib.optionals (realCrates == [ ]) dummyPackages;
@@ -96,15 +96,14 @@ let
         preBuild =
           configuration.preBuild
           + lib.optionalString testPhase.doCheck (import ./vendor-directory-times.nix)
-          + copy previous
+          + artifactLayers.restoreLowerLayers previous
           + lib.optionalString validateEngine (planCheck directory selected);
         installPhase = ''
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) ''
             cargo clean ${buildScope} ${lib.escapeShellArgs (flags dummyPackages)}
           ''}
-          mkdir -p "$out"
-          cp -a --reflink=auto target "$out/target"
+          ${artifactLayers.storeLayerChanges}
           install -Dm444 cargo-artifacts.jsonl "$out/share/lavashell/cargo-artifacts.jsonl"
           runHook postInstall
         '';
@@ -161,7 +160,6 @@ in
       configuration = rustPackageDefaults;
     };
   inherit
-    copy
     enableFeatures
     flags
     lint

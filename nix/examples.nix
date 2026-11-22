@@ -50,6 +50,7 @@ let
     inherit (sources) vendor;
   };
   buildLayers = layerTools.tools;
+  artifactLayers = import ./artifact-layers.nix { inherit lib; };
   artifacts = import ./artifacts.nix {
     inherit
       pkgs
@@ -82,7 +83,7 @@ let
         lib.remove program packageRoots
         ++ lib.concatMap (package: package.testedPackages) (
           packagesTestingBefore name (
-            lib.subtractLists (packageRoots ++ artifacts.packagesTestedThrough framework) closure
+            lib.subtractLists (packageRoots ++ artifacts.packagesTestedThrough [ framework ]) closure
           )
         );
       routed =
@@ -116,13 +117,13 @@ let
       );
       selected = artifacts.selectedPackages directory;
       testPackages = lib.subtractLists (
-        lib.concatMap artifacts.packagesTestedThrough [
+        artifacts.packagesTestedThrough [
           framework
           local
         ]
         ++ testedByOtherPackages
       ) closure;
-      testedPackages = testPackages ++ artifacts.packagesTestedThrough local;
+      testedPackages = testPackages ++ artifacts.packagesTestedThrough [ local ];
     in
     rustPlatform.buildRustPackage (
       rustPackageDefaults
@@ -156,7 +157,7 @@ let
         preBuild =
           rustPackageDefaults.preBuild
           + (import ./vendor-directory-times.nix)
-          + artifacts.copy ([ local ] ++ libraries)
+          + artifactLayers.restore ([ local ] ++ libraries)
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
           inherit

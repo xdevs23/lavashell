@@ -17,7 +17,8 @@ let
     inherit (built) drvPath doCheck cargoTestFlags;
     cargoClippyFlags = built.cargoClippyFlags or [ ];
   };
-  layersThrough = layer: [ layer ] ++ lib.concatMap layersThrough layer.previous;
+  artifactLayers = import (/. + input.nix + "/artifact-layers.nix") { inherit lib; };
+  layersThrough = layer: artifactLayers.stack [ layer ];
   withLayers =
     built:
     [ built ] ++ lib.optionals (built ? frameworkArtifacts) (layersThrough built.frameworkArtifacts);
