@@ -4,10 +4,10 @@ use super::{
     two_pixels_per_dp, updated, window,
 };
 use crate::host::AospError;
-use crate::input::TouchAction;
+use crate::input::{MotionEvent, TouchAction};
 use crate::layout_size::LayoutSize;
 use crate::platform::{DisplaySurface, SIDE, TestError};
-use crate::tests::motion::{finger, touch};
+use crate::tests::motion::finger;
 use lavashell_core::prelude::{Density, DpExt, PixelScale, PixelSize, Size, Viewport};
 use lavashell_platform::{DeviceEvent, SurfaceEvent};
 
@@ -78,7 +78,10 @@ fn a_layout_size_set_before_the_show_lays_the_surface_out() -> Result<(), TestEr
 #[test]
 fn a_touch_on_a_layout_size_reaches_the_dp_point_shown_under_it() -> Result<(), TestError> {
     let mut host = shown_in_car_layout(&DisplaySurface::new(1280, 480))?;
-    host.motion(touch(0, TouchAction::Down(finger(0, 793.0, 216.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Down(finger(0, 793.0, 216.0)),
+    ))?;
     assert_eq!(host.sent()?, [touch_down(touched(495.625, 216.0))]);
     Ok(())
 }
@@ -100,7 +103,10 @@ fn a_window_resize_derives_a_new_scale_for_the_layout_size() -> Result<(), TestE
 fn a_density_change_lays_the_layout_size_out_at_the_new_density() -> Result<(), TestError> {
     let mut host = shown_in_car_layout(&DisplaySurface::new(1280, 480))?;
     host.display_changed(display(two_pixels_per_dp()?))?;
-    host.motion(touch(0, TouchAction::Down(finger(0, 793.0, 216.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Down(finger(0, 793.0, 216.0)),
+    ))?;
     let window_size = PixelSize::new(1280, 480);
     let mut reported = Vec::from(updated(SIDE / 2));
     reported.push(Sent::Surface(
@@ -119,10 +125,16 @@ fn a_density_change_lays_the_layout_size_out_at_the_new_density() -> Result<(), 
 fn touches_on_a_window_without_pixels_use_the_last_layout() -> Result<(), TestError> {
     let surface = DisplaySurface::new(1280, 480);
     let mut host = shown_in_car_layout(&surface)?;
-    host.motion(touch(0, TouchAction::Down(finger(0, 793.0, 216.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Down(finger(0, 793.0, 216.0)),
+    ))?;
     surface.resize(0, 0);
     host.changed()?;
-    host.motion(touch(0, TouchAction::Up(finger(0, 793.0, 216.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Up(finger(0, 793.0, 216.0)),
+    ))?;
     let up = Sent::Device(DeviceEvent::TouchUp(touched(495.625, 216.0)));
     assert_eq!(host.sent()?, [touch_down(touched(495.625, 216.0)), up]);
     surface.resize(1600, 480);
@@ -140,7 +152,10 @@ fn a_host_surface_without_pixels_is_laid_out_once_it_has_some() -> Result<(), Te
     host.changed()?;
     host.execute(create(SURFACE))?;
     assert_eq!(host.sent()?, showing(SURFACE, Density::ONE, []));
-    host.motion(touch(0, TouchAction::Down(finger(0, 0.0, 0.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Down(finger(0, 0.0, 0.0)),
+    ))?;
     assert_eq!(host.sent()?, []);
     surface.resize(SIDE, SIDE / 2);
     host.changed()?;

@@ -4,10 +4,10 @@ use super::{
     touched, two_pixels_per_dp, updated, window,
 };
 use crate::Error;
-use crate::input::TouchAction;
+use crate::input::{MotionEvent, TouchAction};
 use crate::output::{DisplayReading, HostDisplay};
 use crate::platform::{DisplaySurface, SIDE, TestError};
-use crate::tests::motion::{finger, touch};
+use crate::tests::motion::finger;
 use lavashell_core::prelude::{Density, PixelScale, PxExt};
 use lavashell_core::units::RefreshRate;
 use lavashell_platform::{SurfaceEvent, SurfaceRequest};
@@ -66,7 +66,10 @@ fn a_surface_is_shown_at_the_density_of_the_display() -> Result<(), TestError> {
 fn a_density_change_converts_the_size_and_touches_of_the_surface() -> Result<(), TestError> {
     let mut host = shown()?;
     host.display_changed(display(two_pixels_per_dp()?))?;
-    host.motion(touch(0, TouchAction::Down(finger(0, 8.0, 4.0))))?;
+    host.motion(MotionEvent::touch(
+        0,
+        TouchAction::Down(finger(0, 8.0, 4.0)),
+    ))?;
     let mut reported = Vec::from(updated(SIDE / 2));
     reported.push(Sent::Surface(
         SURFACE,

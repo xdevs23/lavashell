@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::input::{Motion, MotionEvent, MouseAction, MousePosition, TouchAction, TouchPointer};
+use crate::input::{Motion, MotionEvent, MouseAction, MousePosition, TouchPointer};
 use lavashell_core::ui::PointerKind;
 use lavashell_core::units::Px;
 use lavashell_platform::{Button, PressState};
@@ -19,10 +19,6 @@ fn pointer(id: i32, kind: PointerKind, x: f64, y: f64) -> TouchPointer {
         x: Px::new(x),
         y: Px::new(y),
     }
-}
-
-pub(super) fn touch(seat: i64, action: TouchAction) -> MotionEvent {
-    MotionEvent(Motion::Touch { seat, action })
 }
 
 pub(super) fn mouse(action: MouseAction) -> MotionEvent {

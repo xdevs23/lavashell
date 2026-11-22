@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::motion::{finger, holding, hovering, mouse, pen, press, release, touch};
+use super::motion::{finger, holding, hovering, mouse, pen, press, release};
 use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, ShownSurface, TouchAction};
 use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport};
 use lavashell_core::surface::SurfaceId;
@@ -85,9 +85,9 @@ fn button(button: Button, state: PressState, at: Point, serial: u64) -> DeviceEv
 #[test]
 fn a_tap_goes_down_moves_and_goes_up_at_its_dp_position() -> Result<(), NumberError> {
     let recorded = vec![
-        touch(SCREEN, TouchAction::Down(finger(0, 20.0, 40.0))),
-        touch(SCREEN, TouchAction::Move(vec![finger(0, 24.0, 42.0)])),
-        touch(SCREEN, TouchAction::Up(finger(0, 24.0, 42.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 20.0, 40.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Move(vec![finger(0, 24.0, 42.0)])),
+        MotionEvent::touch(SCREEN, TouchAction::Up(finger(0, 24.0, 42.0))),
     ];
     let expected = [
         DeviceEvent::TouchDown {
@@ -108,11 +108,11 @@ fn a_tap_goes_down_moves_and_goes_up_at_its_dp_position() -> Result<(), NumberEr
 fn a_two_finger_gesture_lifts_the_first_finger_while_the_second_moves_on() {
     let both = vec![finger(0, 12.0, 10.0), finger(1, 48.0, 10.0)];
     let recorded = vec![
-        touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
-        touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
-        touch(SCREEN, TouchAction::Move(both)),
-        touch(SCREEN, TouchAction::Up(finger(0, 12.0, 10.0))),
-        touch(SCREEN, TouchAction::Up(finger(1, 48.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Move(both)),
+        MotionEvent::touch(SCREEN, TouchAction::Up(finger(0, 12.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Up(finger(1, 48.0, 10.0))),
     ];
     let expected = [
         DeviceEvent::TouchDown {
@@ -134,11 +134,11 @@ fn a_two_finger_gesture_lifts_the_first_finger_while_the_second_moves_on() {
 #[test]
 fn a_cancel_ends_every_finger_that_is_down_and_a_pointer_cancel_ends_one() {
     let recorded = vec![
-        touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
-        touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
-        touch(SCREEN, TouchAction::Down(finger(2, 90.0, 10.0))),
-        touch(SCREEN, TouchAction::Cancel(vec![2])),
-        touch(SCREEN, TouchAction::Cancel(vec![0, 1])),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(2, 90.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Cancel(vec![2])),
+        MotionEvent::touch(SCREEN, TouchAction::Cancel(vec![0, 1])),
     ];
     let expected = [
         DeviceEvent::TouchDown {
@@ -164,9 +164,9 @@ fn a_cancel_ends_every_finger_that_is_down_and_a_pointer_cancel_ends_one() {
 fn each_pointer_of_a_gesture_has_the_kind_of_its_tool() {
     let both = vec![finger(0, 12.0, 10.0), pen(1, 48.0, 10.0)];
     let recorded = vec![
-        touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
-        touch(SCREEN, TouchAction::Down(pen(1, 50.0, 10.0))),
-        touch(SCREEN, TouchAction::Move(both)),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(pen(1, 50.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Move(both)),
     ];
     let expected = [
         DeviceEvent::TouchDown {
@@ -186,9 +186,9 @@ fn each_pointer_of_a_gesture_has_the_kind_of_its_tool() {
 #[test]
 fn two_devices_keep_apart_their_pointers_of_the_same_id() {
     let recorded = vec![
-        touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
-        touch(VIRTUAL_TABLET, TouchAction::Down(pen(0, 50.0, 50.0))),
-        touch(SCREEN, TouchAction::Up(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(VIRTUAL_TABLET, TouchAction::Down(pen(0, 50.0, 50.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Up(finger(0, 10.0, 10.0))),
     ];
     let expected = [
         DeviceEvent::TouchDown {

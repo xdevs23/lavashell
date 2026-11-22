@@ -37,15 +37,15 @@ pub fn motion_event_of(
     let motion = match kind_of_tool(changed.tool_type()) {
         PointerKind::Mouse => {
             let action = mouse_action(env, event, native, changed)?;
-            action.map(Motion::Mouse)
+            action.map(|action| MotionEvent(Motion::Mouse(action)))
         }
         PointerKind::Finger | PointerKind::Pen => {
             let seat = i64::from(native.device_id());
             let action = touch_action(env, native, &pointers, changed)?;
-            action.map(|action| Motion::Touch { seat, action })
+            action.map(|action| MotionEvent::touch(seat, action))
         }
     };
-    Ok(motion.map(MotionEvent))
+    Ok(motion)
 }
 
 struct NativeMotionEvent(ndk::event::MotionEvent);
