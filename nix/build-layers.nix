@@ -15,6 +15,13 @@ let
       builtins.attrValues manifest.workspace.dependencies
     )
   );
+  defaultMembersSource = import ./default-members-source.nix {
+    inherit (pkgs) lib;
+    workspaceCrates = import ./workspace-crates.nix {
+      inherit (pkgs) lib;
+      inherit root;
+    };
+  } { inherit root workspace pathDependencies; };
   inheritedRootManifest = (pkgs.formats.toml { }).generate "Cargo.toml" {
     workspace =
       pkgs.lib.getAttrs cargoWorkspaces.inherited-tables
@@ -36,12 +43,10 @@ in
 {
   tools = package {
     pname = "lavashell-build-layers";
-    src = pkgs.lib.fileset.toSource {
-      inherit root;
-      fileset = pkgs.lib.fileset.unions ([ directory ] ++ pathDependencies);
-    };
+    inherit (defaultMembersSource) src;
     postPatch = ''
       cp ${inheritedRootManifest} Cargo.toml
+      ${defaultMembersSource.writeUnbuiltStubs}
     '';
     cargoRoot = workspace;
     buildAndTestSubdir = workspace;

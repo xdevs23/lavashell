@@ -53,7 +53,7 @@ let
   stubs = lib.concatMapStrings (
     crate:
     lib.optionalString (builtins.elem (relative crate.key) dummyMembers) (
-      writeStubSources ''"$out"/${lib.escapeShellArg (relative crate.key)}'' (targets crate)
+      writeStubSources (relative crate.key) (targets crate)
     )
   ) projectedWorkspace.crates;
   manifest = builtins.toFile "Cargo.toml" (toml.manifest projectedWorkspace.manifest);
@@ -65,5 +65,6 @@ pkgs.runCommand "source" { inherit src; } ''
   cp ${manifest} "$out/Cargo.toml"
   cp ${projectedWorkspace.lockFile} "$out/Cargo.lock"
   ${manifests}
+  cd "$out"
   ${stubs}
 ''

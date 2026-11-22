@@ -37,16 +37,15 @@ let
       computed.${member};
   packageName = directory: (readManifest directory).package.name;
   readManifest = directory: builtins.fromTOML (builtins.readFile (directory + "/Cargo.toml"));
+  crateAt = directory: {
+    key = toString directory;
+    manifest = readManifest directory;
+  };
   crateNames = map (crate: crate.manifest.package.name);
   localCrates =
     directory:
     lib.genericClosure {
-      startSet = [
-        {
-          key = toString directory;
-          manifest = readManifest directory;
-        }
-      ];
+      startSet = [ (crateAt directory) ];
       operator =
         crate:
         lib.mapAttrsToList
@@ -60,10 +59,7 @@ let
                 else
                   builtins.toPath (crate.key + "/${dependency.path}");
             in
-            {
-              key = toString path;
-              manifest = readManifest path;
-            }
+            crateAt path
           )
           (
             lib.filterAttrs (_: dependency: builtins.isAttrs dependency && dependency ? path) (
@@ -92,6 +88,7 @@ in
     relative
     memoizePerMember
     packageName
+    crateAt
     crateNames
     localCrates
     nativeDirectory

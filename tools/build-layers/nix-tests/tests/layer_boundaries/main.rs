@@ -13,7 +13,7 @@ use lavashell_nix_tests::toml_files::{read_toml, write_toml};
 use manifests::{Inheritable, WorkspaceManifest};
 use std::fs;
 use std::path::{Path, PathBuf};
-use toml::toml;
+use toml::{Table, toml};
 
 const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
 
@@ -205,6 +205,34 @@ fn an_unrelated_example_and_its_registry_update_reach_no_layer() -> Result<(), L
         bump_locked_package(lock, "foreign-registry-fixture", "1.0.0", "1.0.1")
     })?;
     assert_eq!(&fixture.all_layers()?, &base()?.layers);
+    Ok(())
+}
+
+#[test]
+fn an_edit_of_the_nix_tests_reaches_no_layer() -> Result<(), LayerTestError> {
+    let fixture = Fixture::new()?;
+    let nix_tests = fixture.root().join("tools/build-layers/nix-tests");
+    append_newline(&nix_tests.join("src/lib.rs"))?;
+    append_newline(&nix_tests.join("expressions/layer-derivations.nix"))?;
+    assert_eq!(&fixture.all_layers()?, &base()?.layers);
+    Ok(())
+}
+
+#[test]
+fn an_edit_of_the_nix_tests_reaches_the_layers_once_a_tool_depends_on_them()
+-> Result<(), LayerTestError> {
+    let fixture = Fixture::new()?;
+    let tools = fixture.root().join("tools/build-layers");
+    let tool_manifest = tools.join("plan-check/Cargo.toml");
+    let mut manifest: Table = read_toml(&tool_manifest)?;
+    let _absent_before: Option<toml::Value> = manifest.insert(
+        "dev-dependencies".to_owned(),
+        toml! { lavashell-nix-tests = { workspace = true } }.into(),
+    );
+    write_toml(&tool_manifest, &manifest)?;
+    let depending = fixture.all_layers()?;
+    append_newline(&tools.join("nix-tests/src/lib.rs"))?;
+    assert_ne!(&fixture.all_layers()?, &depending);
     Ok(())
 }
 

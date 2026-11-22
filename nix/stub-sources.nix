@@ -7,7 +7,7 @@ directory: targets:
 lib.concatMapStrings (
   target:
   let
-    file = "${directory}/${lib.escapeShellArg target.path}";
+    file = lib.escapeShellArg "${directory}/${target.path}";
   in
   ''
     mkdir -p "$(dirname ${file})"
