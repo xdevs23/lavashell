@@ -12,6 +12,13 @@ pub(crate) const MOUSE: PointerDevice = PointerDevice(0);
 #[derive(Clone, Debug, PartialEq)]
 pub struct MotionEvent(pub(crate) Motion);
 
+impl MotionEvent {
+    #[must_use]
+    pub fn touch(seat: i64, action: TouchAction) -> Self {
+        Self(Motion::Touch { seat, action })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Motion {
     Touch { seat: i64, action: TouchAction },
@@ -19,7 +26,7 @@ pub(crate) enum Motion {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum TouchAction {
+pub enum TouchAction {
     Down(TouchPointer),
     Up(TouchPointer),
     Move(Vec<TouchPointer>),
@@ -27,11 +34,11 @@ pub(crate) enum TouchAction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct TouchPointer {
-    pub(crate) id: i32,
-    pub(crate) kind: PointerKind,
-    pub(crate) x: Px,
-    pub(crate) y: Px,
+pub struct TouchPointer {
+    pub id: i32,
+    pub kind: PointerKind,
+    pub x: Px,
+    pub y: Px,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

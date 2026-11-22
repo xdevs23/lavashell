@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::motion::{finger, hovering, mouse, touch};
+use super::motion::{finger, hovering, mouse};
 use crate::host::{AospError, AospHost, AospReports, HostMessage, HostState};
 use crate::input::{MOUSE, MotionEvent, MouseAction, TouchAction};
 use crate::layout_size::LayoutSize;
@@ -423,7 +423,7 @@ fn a_surface_created_again_while_the_host_surface_lives_is_shown_again() -> Resu
 
 #[test]
 fn a_motion_produces_device_events_only_on_a_shown_surface() -> Result<(), TestError> {
-    let corner = || touch(0, TouchAction::Down(finger(0, 0.0, 0.0)));
+    let corner = || MotionEvent::touch(0, TouchAction::Down(finger(0, 0.0, 0.0)));
     let mut idle = displayed(display(Density::ONE))?;
     idle.created(window(&DisplaySurface::new(SIDE, SIDE)))?;
     idle.motion(corner())?;
