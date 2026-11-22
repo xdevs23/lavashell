@@ -11,6 +11,7 @@ let
   inherit (pkgs) lib;
   inherit (workspaceCrates) relative;
   contract = import ./projection-contract.nix;
+  writeStubSources = import ./stub-sources.nix { inherit lib; };
 in
 projectedWorkspace: dummyMembers:
 let
@@ -52,13 +53,7 @@ let
   stubs = lib.concatMapStrings (
     crate:
     lib.optionalString (builtins.elem (relative crate.key) dummyMembers) (
-      lib.concatMapStrings (target: ''
-        mkdir -p "$out/$(dirname ${lib.escapeShellArg "${relative crate.key}/${target.path}"})"
-        printf '%s\n' ${
-          lib.escapeShellArg (if target.main then contract.stub.mainSource else contract.stub.librarySource)
-        } \
-          > "$out/${relative crate.key}/${target.path}"
-      '') (targets crate)
+      writeStubSources ''"$out"/${lib.escapeShellArg (relative crate.key)}'' (targets crate)
     )
   ) projectedWorkspace.crates;
   manifest = builtins.toFile "Cargo.toml" (toml.manifest projectedWorkspace.manifest);
