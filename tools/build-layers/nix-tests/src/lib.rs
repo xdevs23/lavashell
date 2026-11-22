@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod evaluation;
+pub mod file_tree;
 pub mod fixture_error;
 pub mod repository;
 pub mod toml_files;

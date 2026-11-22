@@ -4,7 +4,7 @@
   rustPlatform,
   sources,
   rustPackageDefaults,
-  requirementsOf,
+  buildInputsOf,
   buildLayers,
 }:
 let
@@ -18,6 +18,7 @@ let
     ]) names;
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
+  removeStubbedMembers = import ./stubbed-member-removal.nix { inherit pkgs; };
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
   selectedPackages =
     directory:
@@ -58,7 +59,7 @@ let
       file = builtins.toFile "engine-projection.json" (builtins.toJSON metadata);
     in
     ''
-      RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options ${buildScope} \
+      RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options ${buildScope.target} \
         ${lib.escapeShellArgs (flags selected)} > consumer-cargo-plan.json
       ${lib.getExe' buildLayers "lavashell-plan-check"} --contract ${./projection-contract.json} \
         --engine ${file} --consumer consumer-cargo-plan.json
@@ -71,6 +72,7 @@ let
       projection,
       previous ? [ ],
       dummyPackages,
+      testedByLayerAbove ? [ ],
       testedByOtherPackages ? [ ],
       configuration,
       validateEngine ? false,
@@ -83,7 +85,7 @@ let
         dummyPackages ++ testedByOtherPackages ++ packagesTestedThrough previous
       ) names;
       stubLayer = lib.subtractLists dummyPackages names == [ ];
-      checkedPackages = if stubLayer then projection.testedByLayerAbove else testPackages;
+      checkedPackages = if stubLayer then testedByLayerAbove else testPackages;
       testPhase = (if stubLayer then compiledTests else tests) checkedPackages;
     in
     rustPlatform.buildRustPackage (
@@ -95,24 +97,20 @@ let
         inherit pname;
         src = source;
         cargoDeps = projection.cargoDeps;
-        buildInputs =
-          configuration.buildInputs
-          ++ lib.concatMap (requirement: requirement.buildInputs) (requirementsOf names);
+        buildInputs = configuration.buildInputs ++ buildInputsOf names;
         cargoBuildFlags = flags selected ++ [ "--frozen" ] ++ rustPackageDefaults.cargoBuildFlags;
         preBuild =
           configuration.preBuild
-          + lib.optionalString testPhase.doCheck (import ./vendor-directory-times.nix)
+          + import ./vendor-directory-times.nix
           + artifactLayers.restoreLowerLayers previous
           + lib.optionalString validateEngine (planCheck directory selected);
         postBuild = lib.optionalString stubLayer ''
-          ${pkgs.rust.envVars.setEnv} cargo check -j "$NIX_BUILD_CORES" ${buildScope} \
+          ${pkgs.rust.envVars.setEnv} cargo check -j "$NIX_BUILD_CORES" ${buildScope.target} \
             ${lib.escapeShellArgs (flags selected)}
         '';
         installPhase = ''
           runHook preInstall
-          ${lib.optionalString (dummyPackages != [ ]) ''
-            cargo clean ${buildScope} ${lib.escapeShellArgs (flags dummyPackages)}
-          ''}
+          ${lib.optionalString (dummyPackages != [ ]) (removeStubbedMembers (flags dummyPackages))}
           ${artifactLayers.storeLayerChanges}
           install -Dm444 cargo-artifacts.jsonl "$out/share/lavashell/cargo-artifacts.jsonl"
           runHook postInstall
@@ -122,27 +120,57 @@ let
         passthru = { inherit previous testPackages; };
       }
     );
+  stubArtifacts =
+    {
+      pname,
+      directory,
+      layer,
+      testedByLayerAbove,
+      configuration,
+      previous ? [ ],
+    }:
+    artifacts {
+      inherit
+        pname
+        directory
+        previous
+        testedByLayerAbove
+        configuration
+        ;
+      inherit (layer) projection source;
+      dummyPackages = sources.crateNames layer.projection.crates;
+    };
 in
 {
   registry =
     directory:
-    artifacts {
+    let
+      layer = sources.stubLayers.registry directory;
+    in
+    stubArtifacts {
       pname = "lavashell-registry-artifacts";
-      inherit directory;
-      projection = sources.registryProject directory;
-      source = sources.registrySource directory;
-      dummyPackages = sources.crateNames (sources.registryProject directory).crates;
+      inherit directory layer;
+      inherit (layer.projection) testedByLayerAbove;
       configuration = rustPackageDefaults;
     };
   engine =
     directory:
-    artifacts {
+    let
+      layer = sources.stubLayers.engine directory;
+    in
+    stubArtifacts {
       pname = "lavashell-engine-artifacts";
-      inherit directory;
-      projection = sources.engineProject directory;
-      source = sources.engineSource directory;
-      dummyPackages = sources.crateNames (sources.engineProject directory).crates;
+      inherit directory layer;
+      inherit (layer.projection) testedByLayerAbove;
       configuration = engineDefaults;
+    };
+  unified =
+    directory: previous: testedByLayerAbove:
+    stubArtifacts {
+      pname = "lavashell-unified-artifacts";
+      layer = sources.stubLayers.unified directory;
+      inherit directory previous testedByLayerAbove;
+      configuration = rustPackageDefaults;
     };
   framework =
     directory: previous:

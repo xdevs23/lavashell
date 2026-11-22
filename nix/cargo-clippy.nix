@@ -10,7 +10,7 @@ selection: {
   preInstallPhases = lib.optional (selection != [ ]) "clippyPhase";
   clippyPhase = ''
     pushd "''${buildAndTestSubdir:-.}"
-    ${pkgs.rust.envVars.setEnv} cargo clippy -j "$NIX_BUILD_CORES" ${buildScope} \
+    ${pkgs.rust.envVars.setEnv} cargo clippy -j "$NIX_BUILD_CORES" ${buildScope.target} \
       $cargoClippyFlags --all-targets -- ${denyLintsLeftAtWarn}
     popd
   '';

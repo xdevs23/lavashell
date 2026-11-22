@@ -37,6 +37,7 @@ let
   );
   cratesWithEngine = map (name: {
     engine = "${name}-engine";
+    unified = "${name}-unified";
     framework = "${name}-framework";
     package = name;
   }) namesByRoute.${types.layerRoutes.frameworkWithEngine};
@@ -46,6 +47,7 @@ original.lib.getAttrs input.keys (
     registry = tree.checks.registry.drvPath;
     framework = tree.checks.framework.drvPath;
     engine = reference.engineArtifacts.drvPath;
+    unified = reference.unifiedArtifacts.drvPath;
     referenceFramework = reference.frameworkArtifacts.drvPath;
     reference = reference.drvPath;
     native = tree.packages.interactions.drvPath;
@@ -58,6 +60,7 @@ original.lib.getAttrs input.keys (
   // original.lib.mergeAttrsList (
     map (layers: {
       ${layers.engine} = packagedCrates.${layers.package}.engineArtifacts.drvPath;
+      ${layers.unified} = packagedCrates.${layers.package}.unifiedArtifacts.drvPath;
       ${layers.framework} = packagedCrates.${layers.package}.frameworkArtifacts.drvPath;
     }) cratesWithEngine
   )

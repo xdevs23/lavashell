@@ -65,6 +65,18 @@ let
   registryProject = memoizePerMember (
     directory: withCargoDeps (dependencyProject directory types.layers.registry)
   );
+  stubLayer =
+    projectOf:
+    memoizePerMember (
+      directory:
+      let
+        projected = projectOf directory;
+      in
+      {
+        projection = projected;
+        source = source projected projected.members;
+      }
+    );
 in
 {
   inherit (projection)
@@ -83,8 +95,6 @@ in
   version = workspaceCrates.workspace.workspace.package.version;
   inherit
     project
-    engineProject
-    registryProject
     metadataFor
     ;
   cargoWorkspaces = lib.mapAttrs (_: directory: {
@@ -96,12 +106,11 @@ in
     src = sourceFor directory;
     inherit (project directory) cargoDeps;
   };
-  registrySource = memoizePerMember (
-    directory: source (registryProject directory) (registryProject directory).members
-  );
-  engineSource = memoizePerMember (
-    directory: source (engineProject directory) (engineProject directory).members
-  );
+  stubLayers = {
+    registry = stubLayer registryProject;
+    engine = stubLayer engineProject;
+    unified = stubLayer project;
+  };
   frameworkSource = memoizePerMember (
     directory: source (project directory) [ (workspaceCrates.relative directory) ]
   );

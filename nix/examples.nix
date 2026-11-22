@@ -40,7 +40,10 @@ let
     inherit pkgs assets;
     inherit (sources) version;
   };
-  requirementsOf = import ./crate-requirements.nix { inherit pkgs skia assets; };
+  inherit (import ./crate-requirements.nix { inherit pkgs skia assets; })
+    requirementsOf
+    buildInputsOf
+    ;
   layerTools = import ./build-layers.nix {
     inherit pkgs root rustPlatform;
     cargoWorkspace = sources.cargoWorkspaces.buildLayers;
@@ -53,7 +56,7 @@ let
       rustPlatform
       sources
       rustPackageDefaults
-      requirementsOf
+      buildInputsOf
       buildLayers
       ;
   };
@@ -74,7 +77,18 @@ let
       };
       withEngine = route == types.layerRoutes.frameworkWithEngine;
       engine = if withEngine then artifacts.engine directory else null;
+      unified =
+        if withEngine then
+          artifacts.unified directory [
+            registry
+            engine
+          ] testedInOwnLayers
+        else
+          null;
       requirements = requirementsOf dependencies;
+      testedInOwnLayers = lib.subtractLists (
+        artifacts.packagesTestedThrough [ framework ] ++ testedByOtherPackages
+      ) closure;
       testedByOtherPackages =
         lib.remove program packageRoots
         ++ lib.concatMap (package: package.testedPackages) (
@@ -86,7 +100,7 @@ let
         {
           ${types.layerRoutes.registryOnly} = artifacts.registry directory;
           ${types.layerRoutes.framework} = framework;
-          ${types.layerRoutes.frameworkWithEngine} = artifacts.framework directory [ framework engine ] {
+          ${types.layerRoutes.frameworkWithEngine} = artifacts.framework directory [ framework unified ] {
             validateEngine = true;
             inherit testedByOtherPackages;
           };
@@ -129,9 +143,7 @@ let
       // {
         pname = "lavashell-${name}";
         inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
-        buildInputs =
-          rustPackageDefaults.buildInputs
-          ++ lib.concatMap (requirement: requirement.buildInputs) requirements;
+        buildInputs = rustPackageDefaults.buildInputs ++ buildInputsOf dependencies;
         nativeCheckInputs =
           rustPackageDefaults.nativeCheckInputs
           ++ lib.concatMap (requirement: requirement.nativeCheckInputs) (requirementsOf testPackages);
@@ -163,6 +175,7 @@ let
             ;
           registryArtifacts = registry;
           engineArtifacts = engine;
+          unifiedArtifacts = unified;
           frameworkArtifacts = local;
           libraryArtifacts = libraries;
         };

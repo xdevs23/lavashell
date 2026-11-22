@@ -23,6 +23,7 @@ enum_with_values! {
         Registry,
         Framework,
         Engine,
+        Unified,
         ReferenceFramework,
         Reference,
         Native,
@@ -34,7 +35,7 @@ enum_with_values! {
 impl LayerDerivation {
     fn is_on_engine(self) -> bool {
         match self {
-            Self::Engine | Self::ReferenceFramework | Self::Reference => true,
+            Self::Engine | Self::Unified | Self::ReferenceFramework | Self::Reference => true,
             Self::Registry | Self::Framework | Self::Native => false,
         }
     }
@@ -59,6 +60,7 @@ impl Derivation {
 #[derive(Deserialize)]
 pub struct CrateWithEngine {
     pub engine: Derivation,
+    pub unified: Derivation,
     pub framework: Derivation,
     pub package: Derivation,
 }
@@ -72,10 +74,10 @@ pub struct PackagesByRoute {
 }
 
 impl PackagesByRoute {
-    fn engines(&self) -> impl Iterator<Item = &Derivation> {
+    fn dependency_layers(&self) -> impl Iterator<Item = &Derivation> {
         self.framework_with_engine
             .iter()
-            .map(|with_engine| &with_engine.engine)
+            .flat_map(|with_engine| [&with_engine.engine, &with_engine.unified])
     }
 
     pub fn built_on_framework(&self) -> Vec<Derivation> {
@@ -196,10 +198,26 @@ impl Base {
             .collect()
     }
 
-    pub fn engines(&self) -> Vec<Derivation> {
-        std::iter::once(Derivation::Layer(LayerDerivation::Engine))
-            .chain(self.packages.engines().cloned())
+    fn layer_of_every_crate_with_engine(
+        &self,
+        layer: LayerDerivation,
+        of: fn(&CrateWithEngine) -> &Derivation,
+    ) -> Vec<Derivation> {
+        std::iter::once(Derivation::Layer(layer))
+            .chain(self.packages.framework_with_engine.iter().map(of).cloned())
             .collect()
+    }
+
+    pub fn engines(&self) -> Vec<Derivation> {
+        self.layer_of_every_crate_with_engine(LayerDerivation::Engine, |with_engine| {
+            &with_engine.engine
+        })
+    }
+
+    pub fn unified_layers(&self) -> Vec<Derivation> {
+        self.layer_of_every_crate_with_engine(LayerDerivation::Unified, |with_engine| {
+            &with_engine.unified
+        })
     }
 }
 
@@ -306,7 +324,7 @@ fn evaluate_base() -> Result<Base, LayerTestError> {
     let all: Vec<_> = (LayerDerivation::ALL.into_iter())
         .map(Derivation::Layer)
         .chain(packages.registry_only.iter().cloned())
-        .chain(packages.engines().cloned())
+        .chain(packages.dependency_layers().cloned())
         .chain(packages.built_on_framework())
         .collect();
     Ok(Base {

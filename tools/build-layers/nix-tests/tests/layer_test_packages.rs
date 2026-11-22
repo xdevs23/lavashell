@@ -72,6 +72,14 @@ struct Example {
     derivations: Vec<CheckPhase>,
     library_layers: Vec<String>,
     has_engine: bool,
+    unified: Option<UnifiedLayer>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UnifiedLayer {
+    layer: CheckPhase,
+    layers_above: Vec<CheckPhase>,
 }
 
 #[derive(Deserialize)]
@@ -103,7 +111,7 @@ fn check_phases() -> Result<CheckPhases, FixtureError> {
 }
 
 #[test]
-fn the_registry_and_engine_layers_run_no_tests() -> Result<(), FixtureError> {
+fn the_dependency_layers_run_no_tests() -> Result<(), FixtureError> {
     for layer in check_phases()?.dependency_layers {
         assert!(
             layer.tested_packages().is_empty(),
@@ -114,18 +122,37 @@ fn the_registry_and_engine_layers_run_no_tests() -> Result<(), FixtureError> {
     Ok(())
 }
 
+fn assert_compiles_and_lints_the_tests_above(stub: &CheckPhase, above: &[CheckPhase]) {
+    let compiled: BTreeSet<&str> = stub.compiled_test_packages().into_iter().collect();
+    let tested: BTreeSet<&str> = above.iter().flat_map(CheckPhase::tested_packages).collect();
+    assert_eq!(compiled, tested, "{}", stub.drv_path);
+    assert!(
+        tested.iter().all(|package| stub.lints(package)),
+        "{}",
+        stub.drv_path
+    );
+}
+
 #[test]
 fn the_registry_layer_compiles_and_lints_the_tests_of_the_support_layer() -> Result<(), FixtureError>
 {
     let phases = check_phases()?;
-    let compiled: BTreeSet<&str> = phases
-        .registry
-        .compiled_test_packages()
-        .into_iter()
+    assert_compiles_and_lints_the_tests_above(&phases.registry, &[phases.support]);
+    Ok(())
+}
+
+#[test]
+fn every_unified_layer_compiles_and_lints_the_tests_of_the_layers_above_it()
+-> Result<(), FixtureError> {
+    let unified_layers: Vec<UnifiedLayer> = check_phases()?
+        .examples
+        .into_values()
+        .filter_map(|example| example.unified)
         .collect();
-    let tested: BTreeSet<&str> = phases.support.tested_packages().into_iter().collect();
-    assert_eq!(compiled, tested);
-    assert!(tested.iter().all(|package| phases.registry.lints(package)));
+    assert!(!unified_layers.is_empty());
+    for unified in &unified_layers {
+        assert_compiles_and_lints_the_tests_above(&unified.layer, &unified.layers_above);
+    }
     Ok(())
 }
 

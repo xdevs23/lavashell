@@ -22,6 +22,12 @@ let
   };
   artifactLayers = import (/. + input.nix + "/artifact-layers.nix") { inherit lib; };
   layersThrough = layer: artifactLayers.stack [ layer ];
+  layersRestoring =
+    layer: package:
+    [ package ]
+    ++ lib.filter (above: above != layer && builtins.elem layer (layersThrough above)) (
+      layersThrough package.frameworkArtifacts
+    );
   withLayers =
     built:
     [ built ] ++ lib.optionals (built ? frameworkArtifacts) (layersThrough built.frameworkArtifacts);
@@ -37,9 +43,13 @@ in
   checks = map checkOf (lib.filter (built: built ? cargoTestFlags) checkedDerivations);
   dependencyLayers = map checkOf (
     [ tree.checks.registry ]
-    ++ lib.filter (engine: engine != null) (
-      lib.mapAttrsToList (_: package: package.engineArtifacts) examples
-    )
+    ++ lib.concatMap (
+      package:
+      lib.remove null [
+        package.engineArtifacts
+        package.unifiedArtifacts
+      ]
+    ) (lib.attrValues examples)
   );
   registry = checkOf tree.checks.registry;
   support = checkOf tree.checks.framework;
@@ -60,5 +70,13 @@ in
     derivations = map checkOf ([ package ] ++ layersThrough package.frameworkArtifacts);
     libraryLayers = map (layer: layer.drvPath) package.libraryArtifacts;
     hasEngine = package.engineArtifacts != null;
+    unified =
+      if package.unifiedArtifacts == null then
+        null
+      else
+        {
+          layer = checkOf package.unifiedArtifacts;
+          layersAbove = map checkOf (layersRestoring package.unifiedArtifacts package);
+        };
   }) examples;
 }

@@ -1,3 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 { pkgs }:
-''--offline --frozen --profile "$cargoBuildType" --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget}''
+let
+  host = ''--offline --frozen --profile "$cargoBuildType"'';
+in
+{
+  inherit host;
+  target = "${host} --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget}";
+}

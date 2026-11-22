@@ -106,13 +106,14 @@ fn an_edit_of_the_test_platform_source_changes_only_the_packages_built_on_it()
 }
 
 #[test]
-fn an_edit_of_the_framework_source_leaves_the_registry_and_the_engine() -> Result<(), LayerTestError>
-{
+fn an_edit_of_the_framework_source_leaves_the_registry_the_engine_and_the_unified_layers()
+-> Result<(), LayerTestError> {
     let fixture = Fixture::new()?;
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
     assert_unchanged(&current, &[Derivation::Layer(LayerDerivation::Registry)])?;
     assert_unchanged(&current, &base()?.engines())?;
+    assert_unchanged(&current, &base()?.unified_layers())?;
     assert_unchanged(&current, &base()?.packages.registry_only)?;
     assert_changed(
         &current,
@@ -283,6 +284,7 @@ fn a_version_change_of_the_adapter_reaches_only_the_reference_layers() -> Result
     fixture.edit_lock(|lock| bump_locked_package(lock, &adapter, &old, &new))?;
     let current = fixture.all_layers()?;
     let reference_layers = [
+        Derivation::Layer(LayerDerivation::Unified),
         Derivation::Layer(LayerDerivation::ReferenceFramework),
         Derivation::Layer(LayerDerivation::Reference),
     ];

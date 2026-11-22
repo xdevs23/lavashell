@@ -29,5 +29,11 @@ let
         ${pkgs.hyprland-protocols}/share/hyprland-protocols/protocols/hyprland-focus-grab-v1.xml
     '';
   };
+  requirementsOf =
+    crateNames: lib.attrValues (lib.filterAttrs (name: _: builtins.elem name crateNames) requirements);
 in
-crateNames: lib.attrValues (lib.filterAttrs (name: _: builtins.elem name crateNames) requirements)
+{
+  inherit requirementsOf;
+  buildInputsOf =
+    crateNames: lib.concatMap (requirement: requirement.buildInputs) (requirementsOf crateNames);
+}

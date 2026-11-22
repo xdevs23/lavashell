@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 use lavashell_nix_tests::evaluation::evaluate;
+use lavashell_nix_tests::file_tree::walk;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -55,18 +56,6 @@ struct LayerScripts {
 
 fn own_output(own: &str) -> String {
     format!("x86_64-unknown-linux-gnu/packaged/build/{own}/nested/output")
-}
-
-fn walk(directory: &Path) -> Result<Vec<PathBuf>, FixtureError> {
-    let mut paths = Vec::new();
-    for entry in fs::read_dir(directory)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            paths.extend(walk(&path)?);
-        }
-        paths.push(path);
-    }
-    Ok(paths)
 }
 
 fn files(target: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, FixtureError> {
