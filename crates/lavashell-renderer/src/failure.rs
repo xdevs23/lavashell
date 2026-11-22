@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::Error;
-use crate::fault::{DefectNotice, Fault, REPORT_THE_FAILURE};
+use crate::fault::{DefectNotice, Fault};
 use crate::paint::StreamRejection;
 use lavashell_error_chain::message_chain;
+use lavashell_error_chain::next_step::REPORT_THE_FAILURE;
 use std::{cell::RefCell, collections::BTreeMap, fmt, rc::Rc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

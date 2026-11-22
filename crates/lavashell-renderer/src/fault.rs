@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_error_chain::next_step::REPORT_THE_FAILURE;
 use std::fmt;
-
-pub(crate) const REPORT_THE_FAILURE: &str = "report the failure with this log";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Fault {
