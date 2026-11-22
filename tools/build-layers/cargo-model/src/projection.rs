@@ -32,7 +32,6 @@ pub struct Selection {
     pub target: String,
     pub profile: String,
     pub packages: Vec<String>,
-    pub features: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,12 +73,10 @@ pub struct CanonicalPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LockedPlan {
     #[serde(flatten)]
     pub plan: CanonicalPlan,
     pub lock: CargoLock,
-    pub external_units: BTreeSet<UnitRecord>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

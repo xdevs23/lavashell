@@ -143,7 +143,6 @@ impl Toolkit<'_> {
             packages: std::iter::once(package.clone())
                 .chain(companions.iter().cloned())
                 .collect(),
-            features: Vec::new(),
         };
         let manifest = seed.workspace_manifest()?;
         let plan = canonical_plan(
@@ -167,7 +166,6 @@ impl Toolkit<'_> {
             plan: LockedPlan {
                 plan,
                 lock: resolved.lock,
-                external_units: external_records(&frozen.build.graph)?,
             },
         })
     }

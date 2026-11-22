@@ -187,7 +187,6 @@ impl Fixture {
                 target: TARGET.to_owned(),
                 profile: "packaged".to_owned(),
                 packages: vec!["app".to_owned()],
-                features: Vec::new(),
             },
             manifest: toml::from_str(
                 "[workspace]\nresolver = \"3\"\nmembers = [\"app\"]\n\n\
