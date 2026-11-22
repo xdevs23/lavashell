@@ -28,3 +28,16 @@ fn an_event_source_failure_shows_every_cause_below_it() {
         "an event source failed: the watched pipe broke: the writer hung up"
     );
 }
+
+#[test]
+fn a_failed_insertion_shows_the_error_of_the_event_loop_once() {
+    let failure = calloop::InsertError {
+        inserted: (),
+        error: calloop::Error::IoError(io::Error::other("the descriptor table is full")),
+    };
+
+    assert_eq!(
+        message_chain(EventLoopFailure::from(failure)),
+        "an input or output operation failed: the descriptor table is full"
+    );
+}

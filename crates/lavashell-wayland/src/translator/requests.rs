@@ -129,7 +129,7 @@ impl Requests {
             .insert_source(writable, |_readiness, _socket, _data| {
                 Ok(PostAction::Continue)
             })
-            .map_err(|failure| RequestsError::WatchWritable(failure.error.into()))?;
+            .map_err(|failure| RequestsError::WatchWritable(failure.into()))?;
         self.writable = Some(token);
         Ok(())
     }

@@ -13,6 +13,12 @@ impl From<calloop::Error> for EventLoopFailure {
     }
 }
 
+impl<T> From<calloop::InsertError<T>> for EventLoopFailure {
+    fn from(failure: calloop::InsertError<T>) -> Self {
+        Self(failure.error)
+    }
+}
+
 impl fmt::Display for EventLoopFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self.0 {

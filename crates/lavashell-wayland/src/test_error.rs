@@ -54,7 +54,7 @@ pub(crate) enum TestError {
 
 impl<T> From<InsertError<T>> for TestError {
     fn from(failure: InsertError<T>) -> Self {
-        Self::EventLoop(failure.error.into())
+        Self::EventLoop(failure.into())
     }
 }
 

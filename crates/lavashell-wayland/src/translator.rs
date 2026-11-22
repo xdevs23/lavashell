@@ -129,7 +129,7 @@ impl Platform for Wayland {
                     translator.ending.record(end);
                 }
             })
-            .map_err(|failure| RequestsError::WatchRequests(failure.error.into()))?;
+            .map_err(|failure| RequestsError::WatchRequests(failure.into()))?;
         let requests = Requests::new(intake, source);
         let mut translator = Translator::new(self, reports, requests, handle)?;
         loop {

@@ -60,7 +60,7 @@ impl WatchSources {
                 view.report(WatchEvent::Ready(id));
                 Ok(PostAction::Disable)
             })
-            .map_err(|failure| WatchError::WatchFd(failure.error.into()))?;
+            .map_err(|failure| WatchError::WatchFd(failure.into()))?;
         if let Some(replaced) = self.0.insert(id, token) {
             handle.remove(replaced);
         }

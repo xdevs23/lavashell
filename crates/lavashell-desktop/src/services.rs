@@ -129,10 +129,10 @@ fn start_watches(
         .map_err(|error| ServicesStartError::CreateWatch(error.into()))?;
     let _watches_run_until_the_loop_ends = handle
         .insert_source(executor, |(), (), _| {})
-        .map_err(|failure| ServicesStartError::InsertWatches(failure.error.into()))?;
+        .map_err(|failure| ServicesStartError::InsertWatches(failure.into()))?;
     let _stop_runs_until_the_loop_ends = handle
         .insert_source(stopped, |(), (), signal: &mut LoopSignal| signal.stop())
-        .map_err(|failure| ServicesStartError::InsertStop(failure.error.into()))?;
+        .map_err(|failure| ServicesStartError::InsertStop(failure.into()))?;
     for watch in services
         .into_iter()
         .flat_map(|service| service.into_watches(view))
