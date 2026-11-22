@@ -25,6 +25,15 @@ impl DependencyKind {
             Self::Dev => "dev-dependencies",
         }
     }
+
+    #[must_use]
+    pub fn linked_declaration_kinds(self) -> &'static [Self] {
+        match self {
+            Self::Normal => &[Self::Normal],
+            Self::Build => &[Self::Build],
+            Self::Dev => &[Self::Normal, Self::Dev],
+        }
+    }
 }
 
 impl fmt::Display for DependencyKind {

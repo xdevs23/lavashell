@@ -15,7 +15,9 @@ use lavashell_cargo_model::package_id::PackageId;
 use lavashell_cargo_model::projection::{
     CanonicalCrate, CanonicalPlan, Selection, StubTarget, WorkspaceManifest, WorkspaceSection,
 };
-use lavashell_cargo_model::unit_graph::{Edge, TargetKind, Unit, UnitGraph, UnitMode};
+use lavashell_cargo_model::unit_graph::{
+    Edge, TargetKind, Unit, UnitGraph, UnitIndexError, UnitMode, UnitRecord,
+};
 use lavashell_plan_check::external_records;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -35,6 +37,21 @@ const SUPPORTED_LOCAL_KINDS: [TargetKind; 5] = [
 pub struct Seed<'seed> {
     pub manifest: &'seed SeedManifest,
     pub original_contracts: &'seed [OriginalContract],
+}
+
+pub struct UnitGraphs<'graph> {
+    pub build: &'graph UnitGraph,
+    pub tests: Option<&'graph UnitGraph>,
+}
+
+impl UnitGraphs<'_> {
+    fn external_records(&self) -> Result<BTreeSet<UnitRecord>, UnitIndexError> {
+        let mut records = external_records(self.build)?;
+        if let Some(tests) = self.tests {
+            records.extend(external_records(tests)?);
+        }
+        Ok(records)
+    }
 }
 
 fn selected_units(graph: &UnitGraph) -> Result<Vec<&Unit>, Error> {
@@ -116,7 +133,10 @@ fn declared_alias(
     let candidates: BTreeSet<(String, Option<String>)> = parent
         .dependencies
         .iter()
-        .filter(|dependency| dependency.name == child.name && dependency.kind() == kind)
+        .filter(|dependency| {
+            dependency.name == child.name
+                && kind.linked_declaration_kinds().contains(&dependency.kind())
+        })
         .filter(|dependency| {
             let expected = dependency.rename.as_ref().unwrap_or(&unit.target.name);
             expected.replace('-', "_") == edge.extern_crate_name
@@ -149,29 +169,59 @@ struct StubRequirements {
     proc_macros: BTreeSet<PackageId>,
 }
 
+fn links_dev_dependencies(unit: &Unit) -> bool {
+    match unit.mode {
+        UnitMode::Test | UnitMode::DocTest => true,
+        UnitMode::Build => unit.target.kind == [TargetKind::Example],
+        _ => false,
+    }
+}
+
+fn units_declaring_beyond_build<'graph>(
+    test_units: &[&'graph Unit],
+    build_units: &[&Unit],
+) -> Vec<&'graph Unit> {
+    let built: BTreeSet<&PackageId> = build_units.iter().map(|unit| &unit.pkg_id).collect();
+    test_units
+        .iter()
+        .copied()
+        .filter(|unit| links_dev_dependencies(unit) || !built.contains(&unit.pkg_id))
+        .collect()
+}
+
 impl StubRequirements {
-    fn dependency_kind_of(&mut self, unit: &Unit) -> Result<DependencyKind, Error> {
-        match unit.target.kind.as_slice() {
-            [TargetKind::CustomBuild] => {
+    fn record_features(&mut self, unit: &Unit) {
+        self.features
+            .entry(unit.pkg_id.clone())
+            .or_default()
+            .extend(unit.features.iter().cloned());
+    }
+
+    fn dependency_kind_of(&mut self, unit: &Unit) -> Result<Option<DependencyKind>, Error> {
+        match (unit.mode, unit.target.kind.as_slice()) {
+            _ if links_dev_dependencies(unit) => Ok(Some(DependencyKind::Dev)),
+            (UnitMode::RunCustomBuild, _) => Ok(None),
+            (UnitMode::Build, [TargetKind::CustomBuild]) => {
                 let _first_build_script_of_package: bool =
                     self.build_scripts.insert(unit.pkg_id.clone());
-                Ok(DependencyKind::Build)
+                Ok(Some(DependencyKind::Build))
             }
-            [TargetKind::ProcMacro] => {
+            (UnitMode::Build, [TargetKind::ProcMacro]) => {
                 let _first_proc_macro_of_package: bool =
                     self.proc_macros.insert(unit.pkg_id.clone());
-                Ok(DependencyKind::Normal)
+                Ok(Some(DependencyKind::Normal))
             }
-            kinds
+            (UnitMode::Build, kinds)
                 if kinds
                     .iter()
                     .all(|kind| SUPPORTED_LOCAL_KINDS.contains(kind)) =>
             {
-                Ok(DependencyKind::Normal)
+                Ok(Some(DependencyKind::Normal))
             }
-            kinds => Err(Error::UnsupportedTargetKind {
+            (UnitMode::Build, kinds) => Err(Error::UnsupportedTargetKind {
                 kinds: kinds.to_vec(),
             }),
+            (mode, _) => Err(Error::UnsupportedMode { mode }),
         }
     }
 
@@ -256,8 +306,11 @@ impl Closure<'_> {
         ))
     }
 
-    fn requirements(&self, units: &[&Unit]) -> Result<StubRequirements, Error> {
-        let mut requirements = StubRequirements::default();
+    fn record_declarations(
+        &self,
+        units: &[&Unit],
+        requirements: &mut StubRequirements,
+    ) -> Result<(), Error> {
         for unit in units {
             let parent = self.packages.get(&unit.pkg_id)?;
             let dependencies = || {
@@ -280,17 +333,9 @@ impl Closure<'_> {
                     package: parent.name.clone(),
                 });
             }
-            requirements
-                .features
-                .entry(parent.id.clone())
-                .or_default()
-                .extend(unit.features.iter().cloned());
-            match unit.mode {
-                UnitMode::RunCustomBuild => continue,
-                UnitMode::Build => {}
-                mode => return Err(Error::UnsupportedMode { mode }),
-            }
-            let kind = requirements.dependency_kind_of(unit)?;
+            let Some(kind) = requirements.dependency_kind_of(unit)? else {
+                continue;
+            };
             for dependency in dependencies() {
                 let (edge, child_unit, child) = dependency?;
                 if child.id != parent.id {
@@ -300,7 +345,7 @@ impl Closure<'_> {
                 }
             }
         }
-        Ok(requirements)
+        Ok(())
     }
 }
 
@@ -396,7 +441,7 @@ fn canonical_crate(
 
 pub fn canonical_plan(
     seed: &Seed,
-    graph: &UnitGraph,
+    graphs: &UnitGraphs,
     metadata: &CargoMetadata,
     selection: Selection,
     contract: &ProjectionContract,
@@ -408,15 +453,22 @@ pub fn canonical_plan(
             .map(|package| (&package.id, package))
             .collect(),
     };
-    let units = selected_units(graph)?;
+    let build_units = selected_units(graphs.build)?;
+    let test_units = graphs
+        .tests
+        .map(selected_units)
+        .transpose()?
+        .unwrap_or_default();
     let mut members = BTreeMap::new();
-    for unit in &units {
+    let mut requirements = StubRequirements::default();
+    for unit in build_units.iter().chain(&test_units) {
         let package = packages.get(&unit.pkg_id)?;
         if package.source.is_none() {
             let _member_of_same_package: Option<String> = members.insert(
                 package.id.clone(),
                 member_path(package, &metadata.workspace_root)?,
             );
+            requirements.record_features(unit);
         }
     }
     let active: BTreeSet<&String> = members.values().collect();
@@ -430,12 +482,18 @@ pub fn canonical_plan(
     if patched {
         return Err(Error::PathPatch);
     }
-    let closure = Closure {
+    let closure = |graph| Closure {
         graph,
         packages: &packages,
         members: &members,
     };
-    let requirements = closure.requirements(&units)?;
+    closure(graphs.build).record_declarations(&build_units, &mut requirements)?;
+    if let Some(tests) = graphs.tests {
+        closure(tests).record_declarations(
+            &units_declaring_beyond_build(&test_units, &build_units),
+            &mut requirements,
+        )?;
+    }
     let scripted: BTreeSet<&String> = requirements
         .build_scripts
         .iter()
@@ -500,9 +558,9 @@ pub fn materialize(
     })
 }
 
-pub fn verify_units(expected: &UnitGraph, actual: &UnitGraph) -> Result<(), Error> {
-    let wanted = external_records(expected)?;
-    let found = external_records(actual)?;
+pub fn verify_units(expected: &UnitGraphs, actual: &UnitGraphs) -> Result<(), Error> {
+    let wanted = expected.external_records()?;
+    let found = actual.external_records()?;
     if wanted == found {
         Ok(())
     } else {

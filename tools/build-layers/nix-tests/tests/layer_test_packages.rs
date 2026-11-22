@@ -11,6 +11,7 @@ use std::path::PathBuf;
 const EXPRESSION: &str = "layer-test-packages.nix";
 const PACKAGE_FLAG: &str = "--package";
 const WORKSPACE_FLAG: &str = "--workspace";
+const COMPILE_ONLY_FLAG: &str = "--no-run";
 
 #[derive(Serialize)]
 struct TreeArguments {
@@ -37,11 +38,22 @@ fn packages_selected_by(flags: &[String]) -> Vec<&str> {
 }
 
 impl CheckPhase {
-    fn tested_packages(&self) -> Vec<&str> {
+    fn compiled_test_packages(&self) -> Vec<&str> {
         if !self.do_check {
             return Vec::new();
         }
         packages_selected_by(&self.cargo_test_flags)
+    }
+
+    fn tested_packages(&self) -> Vec<&str> {
+        if self
+            .cargo_test_flags
+            .iter()
+            .any(|flag| flag == COMPILE_ONLY_FLAG)
+        {
+            return Vec::new();
+        }
+        self.compiled_test_packages()
     }
 
     fn lints(&self, package: &str) -> bool {
@@ -77,6 +89,7 @@ struct CheckPhases {
     members: Vec<String>,
     checks: Vec<CheckPhase>,
     dependency_layers: Vec<CheckPhase>,
+    registry: CheckPhase,
     support: CheckPhase,
     library_layers: Vec<LibraryLayer>,
     examples: BTreeMap<String, Example>,
@@ -92,8 +105,27 @@ fn check_phases() -> Result<CheckPhases, FixtureError> {
 #[test]
 fn the_registry_and_engine_layers_run_no_tests() -> Result<(), FixtureError> {
     for layer in check_phases()?.dependency_layers {
-        assert!(!layer.do_check, "{:?}", layer.cargo_test_flags);
+        assert!(
+            layer.tested_packages().is_empty(),
+            "{:?}",
+            layer.cargo_test_flags
+        );
     }
+    Ok(())
+}
+
+#[test]
+fn the_registry_layer_compiles_and_lints_the_tests_of_the_support_layer() -> Result<(), FixtureError>
+{
+    let phases = check_phases()?;
+    let compiled: BTreeSet<&str> = phases
+        .registry
+        .compiled_test_packages()
+        .into_iter()
+        .collect();
+    let tested: BTreeSet<&str> = phases.support.tested_packages().into_iter().collect();
+    assert_eq!(compiled, tested);
+    assert!(tested.iter().all(|package| phases.registry.lints(package)));
     Ok(())
 }
 

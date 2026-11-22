@@ -18,6 +18,7 @@ let
     packageName
     crateNames
     localCrates
+    nativeDirectory
     nativeNames
     buildScript
     externalDependencies
@@ -244,11 +245,19 @@ let
       targets = targets crate;
     }) projectedWorkspace.crates;
   };
+  testedByLayerAbove =
+    directory: layer:
+    lib.optionals (
+      layer == types.layers.registry && toString directory == toString nativeDirectory
+    ) nativeNames;
   seedPlan =
     directory: layer:
     let
       seed =
         plan (if layer == types.layers.engine then engineSeedProject directory else project directory)
+        // {
+          testedByLayerAbove = testedByLayerAbove directory layer;
+        }
         // lib.optionalAttrs (layer == types.layers.engine) {
           originalContracts = map (crate: {
             member = relative crate.key;

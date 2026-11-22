@@ -2709,7 +2709,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "65b8bd74c9892fa835929aaabc6ee8ad4c0044e1face25a5c547b4c60f7518f3",
+        "seedHash": "35c4135dc2c3e56ccd31f699d96583ae0e03d61c0e928a12b306b4e28af96df3",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2748,6 +2748,7 @@
               "members": [
                 "crates/lavashell",
                 "crates/lavashell-actor",
+                "crates/lavashell-aosp",
                 "crates/lavashell-build-script",
                 "crates/lavashell-components",
                 "crates/lavashell-core",
@@ -2765,6 +2766,7 @@
                 "crates/lavashell-renderer",
                 "crates/lavashell-runtime",
                 "crates/lavashell-store",
+                "crates/lavashell-test-fixtures",
                 "crates/lavashell-vulkan",
                 "crates/lavashell-vulkan-renderer",
                 "crates/lavashell-wayland",
@@ -2898,6 +2900,107 @@
                     "features": [],
                     "path": "../lavashell-build-script"
                   }
+                },
+                "dev-dependencies": {
+                  "lavashell-components": {
+                    "package": "lavashell-components",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-components"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop": {
+                    "package": "lavashell-desktop",
+                    "default-features": false,
+                    "features": [
+                      "test-support"
+                    ],
+                    "path": "../lavashell-desktop"
+                  },
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
+                  },
+                  "lavashell-desktop-settings-freedesktop": {
+                    "package": "lavashell-desktop-settings-freedesktop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings-freedesktop"
+                  },
+                  "lavashell-effect-quality": {
+                    "package": "lavashell-effect-quality",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-keyboard": {
+                    "package": "lavashell-keyboard",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-keyboard"
+                  },
+                  "lavashell-materials": {
+                    "package": "lavashell-materials",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-materials"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-runtime": {
+                    "package": "lavashell-runtime",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-runtime"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
+                  "lavashell-wayland": {
+                    "package": "lavashell-wayland",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-wayland"
+                  }
                 }
               },
               "targets": [
@@ -2929,6 +3032,161 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-aosp",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-aosp",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dev-dependencies": {
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "num-traits": {
+                    "package": "num-traits",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=0.2.19"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "version": "=1.1.6"
+                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -3019,6 +3277,71 @@
                     ],
                     "version": "=1.1.6+spec-1.1.0"
                   }
+                },
+                "dev-dependencies": {
+                  "build-rs": {
+                    "package": "build-rs",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.3.5"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "quote": {
+                    "package": "quote",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro"
+                    ],
+                    "version": "=1.0.47"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "toml": {
+                    "package": "toml",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "display",
+                      "parse",
+                      "serde",
+                      "std"
+                    ],
+                    "version": "=1.1.6+spec-1.1.0"
+                  }
                 }
               },
               "targets": [
@@ -3063,6 +3386,32 @@
                     ],
                     "version": "=2.0.21"
                   }
+                },
+                "dev-dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
                 }
               },
               "targets": [
@@ -3089,7 +3438,8 @@
                   "path": "src/lib.rs"
                 },
                 "features": {
-                  "serde": []
+                  "serde": [],
+                  "test-support": []
                 },
                 "dependencies": {
                   "icu_locale_core": {
@@ -3154,6 +3504,100 @@
                     ],
                     "version": "=1.9.1"
                   }
+                },
+                "dev-dependencies": {
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "num-traits": {
+                    "package": "num-traits",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=0.2.19"
+                  },
+                  "palette": {
+                    "package": "palette",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.7.7"
+                  },
+                  "postcard": {
+                    "package": "postcard",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "use-std"
+                    ],
+                    "version": "=1.1.3"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "package": "serde_json",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=1.0.151"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "toml": {
+                    "package": "toml",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "display",
+                      "parse",
+                      "serde",
+                      "std"
+                    ],
+                    "version": "=1.1.6+spec-1.1.0"
+                  },
+                  "zeroize": {
+                    "package": "zeroize",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default"
+                    ],
+                    "version": "=1.9.1"
+                  }
                 }
               },
               "targets": [
@@ -3179,7 +3623,9 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {},
+                "features": {
+                  "test-support": []
+                },
                 "dependencies": {
                   "calloop": {
                     "package": "calloop",
@@ -3232,6 +3678,74 @@
                     ],
                     "version": "=2.0.21"
                   }
+                },
+                "dev-dependencies": {
+                  "calloop": {
+                    "package": "calloop",
+                    "default-features": false,
+                    "features": [
+                      "async-task",
+                      "executor"
+                    ],
+                    "version": "=0.14.4"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
                 }
               },
               "targets": [
@@ -3257,7 +3771,9 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {},
+                "features": {
+                  "test-support": []
+                },
                 "dependencies": {
                   "futures-lite": {
                     "package": "futures-lite",
@@ -3272,6 +3788,51 @@
                       "std"
                     ],
                     "version": "=2.6.1"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "zbus": {
+                    "package": "zbus",
+                    "default-features": false,
+                    "features": [
+                      "async-executor",
+                      "async-fs",
+                      "async-io",
+                      "async-lock",
+                      "async-process",
+                      "async-task",
+                      "blocking"
+                    ],
+                    "version": "=5.19.0"
+                  }
+                },
+                "dev-dependencies": {
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -3341,6 +3902,57 @@
                     "package": "lavashell-desktop",
                     "default-features": false,
                     "features": [],
+                    "path": "../lavashell-desktop"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
+                  }
+                },
+                "dev-dependencies": {
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop": {
+                    "package": "lavashell-desktop",
+                    "default-features": false,
+                    "features": [
+                      "test-support"
+                    ],
                     "path": "../lavashell-desktop"
                   },
                   "lavashell-platform": {
@@ -3432,6 +4044,118 @@
                     ],
                     "version": "=2.0.21"
                   }
+                },
+                "dev-dependencies": {
+                  "calloop": {
+                    "package": "calloop",
+                    "default-features": false,
+                    "features": [
+                      "async-task",
+                      "executor"
+                    ],
+                    "version": "=0.14.4"
+                  },
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-desktop": {
+                    "package": "lavashell-desktop",
+                    "default-features": false,
+                    "features": [
+                      "test-support"
+                    ],
+                    "path": "../lavashell-desktop"
+                  },
+                  "lavashell-desktop-portal": {
+                    "package": "lavashell-desktop-portal",
+                    "default-features": false,
+                    "features": [
+                      "test-support"
+                    ],
+                    "path": "../lavashell-desktop-portal"
+                  },
+                  "lavashell-desktop-settings": {
+                    "package": "lavashell-desktop-settings",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-desktop-settings"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-store": {
+                    "package": "lavashell-store",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-store"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "zbus": {
+                    "package": "zbus",
+                    "default-features": false,
+                    "features": [
+                      "async-executor",
+                      "async-fs",
+                      "async-io",
+                      "async-lock",
+                      "async-process",
+                      "async-task",
+                      "blocking"
+                    ],
+                    "version": "=5.19.0"
+                  }
                 }
               },
               "targets": [
@@ -3464,6 +4188,17 @@
                     "default-features": false,
                     "features": [
                       "serde"
+                    ],
+                    "path": "../lavashell-core"
+                  }
+                },
+                "dev-dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
                     ],
                     "path": "../lavashell-core"
                   }
@@ -3565,6 +4300,46 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-enum-values"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -3702,6 +4477,53 @@
                     "features": [],
                     "version": "=0.48.1"
                   }
+                },
+                "dev-dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "postcard": {
+                    "package": "postcard",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "use-std"
+                    ],
+                    "version": "=1.1.3"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "usvg": {
+                    "package": "usvg",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.48.1"
+                  }
                 }
               },
               "targets": [
@@ -3738,6 +4560,23 @@
                     "default-features": false,
                     "features": [
                       "serde"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                },
+                "dev-dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
                     ],
                     "path": "../lavashell-core"
                   },
@@ -3826,6 +4665,62 @@
                     ],
                     "version": "=2.0.21"
                   }
+                },
+                "dev-dependencies": {
+                  "accesskit": {
+                    "package": "accesskit",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.25.1"
+                  },
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
                 }
               },
               "targets": [
@@ -3853,7 +4748,8 @@
                 },
                 "features": {
                   "backdrop": [],
-                  "default": []
+                  "default": [],
+                  "test-support": []
                 },
                 "dependencies": {
                   "i_overlay": {
@@ -3895,6 +4791,105 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-error-chain"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "lru": {
+                    "package": "lru",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "hashbrown"
+                    ],
+                    "version": "=0.19.0"
+                  },
+                  "num-traits": {
+                    "package": "num-traits",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=0.2.19"
+                  },
+                  "skia-safe": {
+                    "package": "skia-safe",
+                    "default-features": false,
+                    "features": [
+                      "embed-icudtl",
+                      "ganesh",
+                      "jpeg",
+                      "no-compile",
+                      "pdf",
+                      "textlayout",
+                      "vulkan"
+                    ],
+                    "version": "=0.153.3"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "i_overlay": {
+                    "package": "i_overlay",
+                    "default-features": false,
+                    "features": [
+                      "default"
+                    ],
+                    "version": "=9.1.0"
+                  },
+                  "inventory": {
+                    "package": "inventory",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.3.25"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-effect-quality": {
+                    "package": "lavashell-effect-quality",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
                   },
                   "log": {
                     "package": "log",
@@ -4084,6 +5079,145 @@
                     "features": [],
                     "version": "=1.13.3"
                   }
+                },
+                "dev-dependencies": {
+                  "accesskit": {
+                    "package": "accesskit",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.25.1"
+                  },
+                  "accesskit_consumer": {
+                    "package": "accesskit_consumer",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.39.1"
+                  },
+                  "env_logger": {
+                    "package": "env_logger",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.11.11"
+                  },
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "inventory": {
+                    "package": "inventory",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.3.25"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "num-traits": {
+                    "package": "num-traits",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=0.2.19"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "version": "=1.1.6"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "unicode-segmentation": {
+                    "package": "unicode-segmentation",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=1.13.3"
+                  }
                 }
               },
               "targets": [
@@ -4119,6 +5253,117 @@
               ]
             },
             {
+              "member": "crates/lavashell-test-fixtures",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-test-fixtures",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "zbus": {
+                    "package": "zbus",
+                    "default-features": false,
+                    "features": [
+                      "async-executor",
+                      "async-fs",
+                      "async-io",
+                      "async-lock",
+                      "async-process",
+                      "async-task",
+                      "blocking"
+                    ],
+                    "version": "=5.19.0"
+                  }
+                }
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
               "member": "crates/lavashell-vulkan",
               "manifest": {
                 "package": {
@@ -4136,6 +5381,42 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
                   "ash": {
                     "package": "ash",
                     "default-features": false,
@@ -4247,6 +5528,105 @@
                       "default"
                     ],
                     "path": "../lavashell-renderer"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "skia-safe": {
+                    "package": "skia-safe",
+                    "default-features": false,
+                    "features": [
+                      "embed-icudtl",
+                      "ganesh",
+                      "jpeg",
+                      "no-compile",
+                      "pdf",
+                      "textlayout",
+                      "vulkan"
+                    ],
+                    "version": "=0.153.3"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-effect-quality": {
+                    "package": "lavashell-effect-quality",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-effect-quality"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-renderer": {
+                    "package": "lavashell-renderer",
+                    "default-features": false,
+                    "features": [
+                      "backdrop",
+                      "default",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-renderer"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
                   },
                   "lavashell-vulkan": {
                     "package": "lavashell-vulkan",
@@ -4481,6 +5861,216 @@
                     ],
                     "version": "=2.0.21"
                   }
+                },
+                "dev-dependencies": {
+                  "accesskit": {
+                    "package": "accesskit",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.25.1"
+                  },
+                  "accesskit_unix": {
+                    "package": "accesskit_unix",
+                    "default-features": false,
+                    "features": [
+                      "async-io",
+                      "default"
+                    ],
+                    "version": "=0.24.0"
+                  },
+                  "ash": {
+                    "package": "ash",
+                    "default-features": false,
+                    "features": [
+                      "debug",
+                      "linked",
+                      "std"
+                    ],
+                    "version": "=0.38.0+1.3.281"
+                  },
+                  "async-channel": {
+                    "package": "async-channel",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.5.0"
+                  },
+                  "atspi-common": {
+                    "package": "atspi-common",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "wrappers",
+                      "zbus"
+                    ],
+                    "version": "=0.13.0"
+                  },
+                  "futures-lite": {
+                    "package": "futures-lite",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "fastrand",
+                      "futures-io",
+                      "parking",
+                      "race",
+                      "std"
+                    ],
+                    "version": "=2.6.1"
+                  },
+                  "icu_locale_core": {
+                    "package": "icu_locale_core",
+                    "default-features": false,
+                    "features": [
+                      "alloc"
+                    ],
+                    "version": "=2.3.0"
+                  },
+                  "lavashell-actor": {
+                    "package": "lavashell-actor",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-actor"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../lavashell-core"
+                  },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
+                  "lavashell-test-fixtures": {
+                    "package": "lavashell-test-fixtures",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-test-fixtures"
+                  },
+                  "lavashell-vulkan": {
+                    "package": "lavashell-vulkan",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan"
+                  },
+                  "lavashell-vulkan-renderer": {
+                    "package": "lavashell-vulkan-renderer",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-vulkan-renderer"
+                  },
+                  "log": {
+                    "package": "log",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "std"
+                    ],
+                    "version": "=0.4.34"
+                  },
+                  "num-traits": {
+                    "package": "num-traits",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=0.2.19"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "version": "=1.1.6"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "smithay-client-toolkit": {
+                    "package": "smithay-client-toolkit",
+                    "default-features": false,
+                    "features": [
+                      "bytemuck",
+                      "calloop",
+                      "calloop-wayland-source",
+                      "default",
+                      "pkg-config",
+                      "xkbcommon"
+                    ],
+                    "version": "=0.21.1"
+                  },
+                  "sys-locale": {
+                    "package": "sys-locale",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.3.2"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "wayland-backend": {
+                    "package": "wayland-backend",
+                    "default-features": false,
+                    "features": [
+                      "client_system"
+                    ],
+                    "version": "=0.3.17"
+                  },
+                  "wayland-scanner": {
+                    "package": "wayland-scanner",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.31.11"
+                  },
+                  "zbus": {
+                    "package": "zbus",
+                    "default-features": false,
+                    "features": [
+                      "async-executor",
+                      "async-fs",
+                      "async-io",
+                      "async-lock",
+                      "async-process",
+                      "async-task",
+                      "blocking"
+                    ],
+                    "version": "=5.19.0"
+                  }
                 }
               },
               "targets": [
@@ -4512,6 +6102,47 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "csv": {
+                    "package": "csv",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=1.4.0"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-error-chain"
+                  },
+                  "proc-macro2": {
+                    "package": "proc-macro2",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro"
+                    ],
+                    "version": "=1.0.107"
+                  },
+                  "quote": {
+                    "package": "quote",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "proc-macro"
+                    ],
+                    "version": "=1.0.47"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
                   "csv": {
                     "package": "csv",
                     "default-features": false,
@@ -4650,6 +6281,74 @@
                     "default-features": false,
                     "features": [],
                     "path": "../copy-keys"
+                  }
+                },
+                "dev-dependencies": {
+                  "clap": {
+                    "package": "clap",
+                    "default-features": false,
+                    "features": [
+                      "color",
+                      "default",
+                      "derive",
+                      "error-context",
+                      "help",
+                      "std",
+                      "suggestions",
+                      "usage"
+                    ],
+                    "version": "=4.6.7"
+                  },
+                  "csv": {
+                    "package": "csv",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=1.4.0"
+                  },
+                  "lavashell": {
+                    "package": "lavashell",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "desktop"
+                    ],
+                    "path": "../../crates/lavashell"
+                  },
+                  "lavashell-core": {
+                    "package": "lavashell-core",
+                    "default-features": false,
+                    "features": [
+                      "serde",
+                      "test-support"
+                    ],
+                    "path": "../../crates/lavashell-core"
+                  },
+                  "lavashell-lucide": {
+                    "package": "lavashell-lucide",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-lucide"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
                   }
                 }
               },
@@ -5643,6 +7342,26 @@
                 ]
               },
               {
+                "name": "lavashell-aosp",
+                "version": "0.0.0",
+                "dependencies": [
+                  "ash",
+                  "icu_locale_core",
+                  "lavashell-actor",
+                  "lavashell-core",
+                  "lavashell-enum-values",
+                  "lavashell-error-chain",
+                  "lavashell-platform",
+                  "lavashell-renderer",
+                  "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
+                  "log",
+                  "num-traits",
+                  "rustix",
+                  "thiserror"
+                ]
+              },
+              {
                 "name": "lavashell-build-script",
                 "version": "0.0.0",
                 "dependencies": [
@@ -5650,6 +7369,7 @@
                   "lavashell-error-chain",
                   "quote",
                   "serde",
+                  "tempfile",
                   "thiserror",
                   "toml"
                 ]
@@ -5659,6 +7379,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "lavashell-core",
+                  "lavashell-test-fixtures",
                   "thiserror"
                 ]
               },
@@ -5670,8 +7391,11 @@
                   "lavashell-enum-values",
                   "num-traits",
                   "palette",
+                  "postcard",
                   "serde",
+                  "serde_json",
                   "thiserror",
+                  "toml",
                   "zeroize"
                 ]
               },
@@ -5681,9 +7405,11 @@
                 "dependencies": [
                   "calloop",
                   "lavashell-actor",
+                  "lavashell-core",
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-store",
+                  "lavashell-vulkan-renderer",
                   "log",
                   "thiserror"
                 ]
@@ -5693,6 +7419,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "futures-lite",
+                  "lavashell-test-fixtures",
                   "thiserror",
                   "zbus"
                 ]
@@ -5701,6 +7428,7 @@
                 "name": "lavashell-desktop-settings",
                 "version": "0.0.0",
                 "dependencies": [
+                  "futures-lite",
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-desktop",
@@ -5712,13 +7440,19 @@
                 "name": "lavashell-desktop-settings-freedesktop",
                 "version": "0.0.0",
                 "dependencies": [
+                  "calloop",
+                  "futures-lite",
+                  "lavashell-actor",
                   "lavashell-core",
+                  "lavashell-desktop",
                   "lavashell-desktop-portal",
                   "lavashell-desktop-settings",
                   "lavashell-error-chain",
                   "lavashell-store",
+                  "lavashell-test-fixtures",
                   "log",
-                  "thiserror"
+                  "thiserror",
+                  "zbus"
                 ]
               },
               {
@@ -5768,6 +7502,7 @@
                   "icu_locale_core",
                   "lavashell-core",
                   "lavashell-enum-values",
+                  "lavashell-test-fixtures",
                   "thiserror"
                 ]
               },
@@ -5816,6 +7551,7 @@
                   "lavashell-effect-quality",
                   "lavashell-enum-values",
                   "lavashell-error-chain",
+                  "lavashell-test-fixtures",
                   "log",
                   "lru",
                   "num-traits",
@@ -5828,6 +7564,7 @@
                 "version": "0.0.0",
                 "dependencies": [
                   "accesskit",
+                  "accesskit_consumer",
                   "env_logger",
                   "icu_locale_core",
                   "inventory",
@@ -5836,6 +7573,9 @@
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
+                  "lavashell-test-fixtures",
+                  "lavashell-vulkan",
+                  "lavashell-vulkan-renderer",
                   "log",
                   "num-traits",
                   "rustix",
@@ -5846,6 +7586,17 @@
               {
                 "name": "lavashell-store",
                 "version": "0.0.0"
+              },
+              {
+                "name": "lavashell-test-fixtures",
+                "version": "0.0.0",
+                "dependencies": [
+                  "futures-lite",
+                  "lavashell-core",
+                  "tempfile",
+                  "thiserror",
+                  "zbus"
+                ]
               },
               {
                 "name": "lavashell-vulkan",
@@ -5868,6 +7619,7 @@
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
+                  "lavashell-test-fixtures",
                   "lavashell-vulkan",
                   "log",
                   "skia-safe",
@@ -5881,22 +7633,28 @@
                   "accesskit",
                   "accesskit_unix",
                   "ash",
+                  "async-channel",
+                  "atspi-common",
+                  "futures-lite",
                   "icu_locale_core",
                   "lavashell-actor",
                   "lavashell-build-script",
                   "lavashell-core",
                   "lavashell-platform",
+                  "lavashell-test-fixtures",
                   "lavashell-vulkan",
                   "lavashell-vulkan-renderer",
                   "log",
                   "num-traits",
                   "quote",
                   "rustix",
+                  "serde",
                   "smithay-client-toolkit",
                   "sys-locale",
                   "thiserror",
                   "wayland-backend",
-                  "wayland-scanner"
+                  "wayland-scanner",
+                  "zbus"
                 ]
               },
               {

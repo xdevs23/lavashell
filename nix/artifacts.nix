@@ -31,6 +31,12 @@ let
     cargoTestFlags = flags packages ++ [ "--frozen" ];
     doCheck = packages != [ ];
   };
+  compiledTests =
+    packages:
+    let
+      phase = tests packages;
+    in
+    phase // { cargoTestFlags = phase.cargoTestFlags ++ [ "--no-run" ]; };
   lint = packages: clippy (flags packages);
   enableFeatures = features: lib.optionalAttrs (features != [ ]) { buildFeatures = features; };
   engineDefaults = rustPackageDefaults // {
@@ -76,14 +82,14 @@ let
       testPackages = lib.subtractLists (
         dummyPackages ++ testedByOtherPackages ++ packagesTestedThrough previous
       ) names;
-      realCrates = lib.subtractLists dummyPackages names;
-      stubsLintedToCheckTheirDependencies = lib.optionals (realCrates == [ ]) dummyPackages;
-      testPhase = tests testPackages;
+      stubLayer = lib.subtractLists dummyPackages names == [ ];
+      checkedPackages = if stubLayer then projection.testedByLayerAbove else testPackages;
+      testPhase = (if stubLayer then compiledTests else tests) checkedPackages;
     in
     rustPlatform.buildRustPackage (
       configuration
       // testPhase
-      // lint (testPackages ++ stubsLintedToCheckTheirDependencies)
+      // lint checkedPackages
       // enableFeatures features
       // {
         inherit pname;
@@ -98,6 +104,10 @@ let
           + lib.optionalString testPhase.doCheck (import ./vendor-directory-times.nix)
           + artifactLayers.restoreLowerLayers previous
           + lib.optionalString validateEngine (planCheck directory selected);
+        postBuild = lib.optionalString stubLayer ''
+          ${pkgs.rust.envVars.setEnv} cargo check -j "$NIX_BUILD_CORES" ${buildScope} \
+            ${lib.escapeShellArgs (flags selected)}
+        '';
         installPhase = ''
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) ''

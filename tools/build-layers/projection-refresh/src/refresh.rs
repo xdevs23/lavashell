@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::activations::missing_activations;
-use crate::canonical::{Seed, canonical_plan, materialize, verify_units};
-use crate::cargo::{Cargo, LockMode, ResolvedGraph};
+use crate::canonical::{Seed, UnitGraphs, canonical_plan, materialize, verify_units};
+use crate::cargo::{Cargo, Compilation, LockMode, ResolvedGraph};
 use crate::concurrency::run_concurrently;
 use crate::error::Error;
 use crate::files::{read_toml, write_json, write_toml};
@@ -50,6 +50,20 @@ struct LayerCatalog {
     native_names: Vec<String>,
 }
 
+struct LockedGraphs {
+    build: ResolvedGraph,
+    tests: Option<UnitGraph>,
+}
+
+impl LockedGraphs {
+    fn unit_graphs(&self) -> UnitGraphs<'_> {
+        UnitGraphs {
+            build: &self.build.graph,
+            tests: self.tests.as_ref(),
+        }
+    }
+}
+
 pub struct Toolkit<'refresh> {
     pub cargo: &'refresh Cargo,
     pub seeds: Seeds<'refresh>,
@@ -68,7 +82,34 @@ impl Toolkit<'_> {
         let packages: Vec<String> = std::iter::once(package.to_owned())
             .chain(companions.iter().cloned())
             .collect();
-        self.cargo.unit_graph(directory, &packages, mode)
+        self.cargo.unit_graph(
+            directory,
+            Compilation::Build {
+                packages: &packages,
+            },
+            mode,
+        )
+    }
+
+    fn locked_graphs(
+        &self,
+        directory: &Path,
+        package: &str,
+        companions: &[String],
+        tested: &[String],
+    ) -> Result<LockedGraphs, Error> {
+        let build = self.graph(directory, package, companions, LockMode::Frozen)?;
+        let tests = (!tested.is_empty())
+            .then(|| {
+                self.cargo.unit_graph(
+                    directory,
+                    Compilation::Tests { packages: tested },
+                    LockMode::Frozen,
+                )
+            })
+            .transpose()?
+            .map(|tests| tests.graph);
+        Ok(LockedGraphs { build, tests })
     }
 
     fn seed_graph(
@@ -93,7 +134,8 @@ impl Toolkit<'_> {
         let seed = self.seeds.write(relative, layer, &seed_path)?;
         let package = package_name(&self.root.join(relative))?;
         let companions = seed.companions(self.contract)?;
-        let expected = self.graph(&seed_path, &package, &companions, LockMode::Frozen)?;
+        let tested = &seed.tested_by_layer_above;
+        let expected = self.locked_graphs(&seed_path, &package, &companions, tested)?;
         let metadata = self.cargo.metadata(&seed_path)?;
         let selection = Selection {
             target: self.cargo.target.clone(),
@@ -109,24 +151,23 @@ impl Toolkit<'_> {
                 manifest: &manifest,
                 original_contracts: &seed.original_contracts,
             },
-            &expected.graph,
+            &expected.unit_graphs(),
             &metadata,
             selection,
             self.contract,
         )?;
         let canonical_path = destination.join("canonical");
-        materialize(&plan, &canonical_path, &expected.lock, self.contract)?;
+        materialize(&plan, &canonical_path, &expected.build.lock, self.contract)?;
         let resolved = self.graph(&canonical_path, &package, &companions, LockMode::Resolve)?;
-        verify_units(&expected.graph, &resolved.graph)?;
         write_toml(&canonical_path.join("Cargo.lock"), &resolved.lock)?;
-        let frozen = self.graph(&canonical_path, &package, &companions, LockMode::Frozen)?;
-        verify_units(&expected.graph, &frozen.graph)?;
+        let frozen = self.locked_graphs(&canonical_path, &package, &companions, tested)?;
+        verify_units(&expected.unit_graphs(), &frozen.unit_graphs())?;
         Ok(LayerPlan {
             seed_hash: seed.seed_hash,
             plan: LockedPlan {
                 plan,
                 lock: resolved.lock,
-                external_units: external_records(&frozen.graph)?,
+                external_units: external_records(&frozen.build.graph)?,
             },
         })
     }

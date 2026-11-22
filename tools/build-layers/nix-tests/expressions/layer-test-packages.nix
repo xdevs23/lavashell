@@ -38,6 +38,7 @@ in
       lib.mapAttrsToList (_: package: package.engineArtifacts) examples
     )
   );
+  registry = checkOf tree.checks.registry;
   support = checkOf tree.checks.framework;
   libraryLayers = map (
     name:

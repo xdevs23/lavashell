@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{CRATES_IO, Seed, canonical_plan, materialize, verify_units};
+use super::{CRATES_IO, Seed, UnitGraphs, canonical_plan, materialize, verify_units};
 use crate::error::Error;
 use crate::files::read_toml;
 use crate::seed::{OriginalContract, SeedManifest};
@@ -164,6 +164,7 @@ struct Fixture {
     packages: Vec<Package>,
     units: Vec<Value>,
     roots: Vec<usize>,
+    test_graph: Option<Value>,
     selection: Selection,
     manifest: toml::Table,
     contracts: Vec<OriginalContract>,
@@ -181,6 +182,7 @@ impl Fixture {
             ],
             packages: vec![app, dep],
             roots: vec![0],
+            test_graph: None,
             selection: Selection {
                 target: TARGET.to_owned(),
                 profile: "packaged".to_owned(),
@@ -207,12 +209,21 @@ impl Fixture {
             "packages": self.packages.iter().map(Package::json).collect::<Vec<_>>()
         }))?;
         let manifest: SeedManifest = self.manifest.clone().try_into()?;
+        let build = self.graph()?;
+        let tests: Option<UnitGraph> = self
+            .test_graph
+            .clone()
+            .map(serde_json::from_value)
+            .transpose()?;
         Ok(canonical_plan(
             &Seed {
                 manifest: &manifest,
                 original_contracts: &self.contracts,
             },
-            &self.graph()?,
+            &UnitGraphs {
+                build: &build,
+                tests: tests.as_ref(),
+            },
             &metadata,
             self.selection.clone(),
             &contract(),
@@ -477,6 +488,123 @@ fn host_build_dependencies_and_proc_macros_keep_their_roles() -> Result<(), Test
 }
 
 #[test]
+fn test_units_declare_dev_dependencies_and_members_only_tests_reach() -> Result<(), TestError> {
+    let mut fixture = Fixture::new()?;
+    let helper = package("helper", false);
+    let mut fixtures = package("fixtures", true);
+    fixtures.dependencies.push(registry_declaration("dep"));
+    fixture.packages[0].dependencies.extend([
+        declaration("helper", None, Some("dev"), Some(CRATES_IO)),
+        declaration("fixtures", None, Some("dev"), None),
+    ]);
+    let (app, dep) = (fixture.app().clone(), fixture.dep().clone());
+    fixture.test_graph = Some(json!({
+        "units": [
+            library(&app, &[(1, "dep")], &[]),
+            library(&dep, &[], &["std", "default", "alloc"]),
+            library(&helper, &[], &[]),
+            library(&fixtures, &[(1, "dep")], &[]),
+            unit(
+                &app,
+                &[(1, "dep"), (2, "helper"), (3, "fixtures")],
+                &[],
+                Role::Target,
+                "lib",
+                "test",
+            ),
+        ],
+        "roots": [4]
+    }));
+    fixture.packages.extend([helper, fixtures]);
+    let plan = fixture.plan()?;
+    let features = |name: &str, kind: DependencyKind| {
+        request(&plan, name, kind, "dep").map(|request| request.features.join(","))
+    };
+    assert_eq!(
+        features("app", DependencyKind::Normal).as_deref(),
+        Some("default,std")
+    );
+    assert_eq!(
+        features("app", DependencyKind::Dev).as_deref(),
+        Some("alloc,default,std")
+    );
+    assert_eq!(
+        features("fixtures", DependencyKind::Normal).as_deref(),
+        Some("alloc,default,std")
+    );
+    assert!(request(&plan, "app", DependencyKind::Dev, "helper").is_some());
+    assert!(request(&plan, "app", DependencyKind::Normal, "helper").is_none());
+    assert_eq!(
+        request(&plan, "app", DependencyKind::Dev, "fixtures").map(|request| &request.source),
+        Some(&RequestSource::Path {
+            path: "../fixtures".to_owned()
+        })
+    );
+    Ok(())
+}
+
+#[test]
+fn example_and_doctest_units_declare_dev_dependencies() -> Result<(), TestError> {
+    let mut fixture = Fixture::new()?;
+    let (helper, extra) = (package("helper", false), package("extra", false));
+    fixture.packages[0].dependencies.extend([
+        declaration("helper", None, Some("dev"), Some(CRATES_IO)),
+        declaration("extra", None, Some("dev"), Some(CRATES_IO)),
+    ]);
+    let (app, dep) = (fixture.app().clone(), fixture.dep().clone());
+    fixture.test_graph = Some(json!({
+        "units": [
+            library(&app, &[(1, "dep")], &[]),
+            library(&dep, &[], &["std", "default"]),
+            library(&helper, &[], &[]),
+            unit(&app, &[(0, "app"), (2, "helper")], &[], Role::Target, "example", "build"),
+            unit(&app, &[(0, "app"), (5, "extra")], &[], Role::Target, "lib", "doctest"),
+            library(&extra, &[], &[]),
+        ],
+        "roots": [3, 4]
+    }));
+    fixture.packages.extend([helper, extra]);
+    let plan = fixture.plan()?;
+    for name in ["helper", "extra"] {
+        assert!(request(&plan, "app", DependencyKind::Dev, name).is_some());
+        assert!(request(&plan, "app", DependencyKind::Normal, name).is_none());
+    }
+    Ok(())
+}
+
+#[test]
+fn a_test_unit_links_a_renamed_dev_declaration_of_a_normal_dependency() -> Result<(), TestError> {
+    let mut fixture = Fixture::new()?;
+    fixture.packages[0].dependencies.push(declaration(
+        "dep",
+        Some("dep2"),
+        Some("dev"),
+        Some(CRATES_IO),
+    ));
+    let (app, dep) = (fixture.app().clone(), fixture.dep().clone());
+    fixture.test_graph = Some(json!({
+        "units": [
+            library(&app, &[(1, "dep")], &[]),
+            library(&dep, &[], &["std", "default"]),
+            unit(&app, &[(1, "dep"), (1, "dep2")], &[], Role::Target, "lib", "test"),
+        ],
+        "roots": [2]
+    }));
+    let plan = fixture.plan()?;
+    let package = |kind, alias| request(&plan, "app", kind, alias).map(|request| &request.package);
+    assert_eq!(
+        package(DependencyKind::Dev, "dep2").map(String::as_str),
+        Some("dep")
+    );
+    assert_eq!(
+        package(DependencyKind::Dev, "dep").map(String::as_str),
+        Some("dep")
+    );
+    assert!(package(DependencyKind::Normal, "dep2").is_none());
+    Ok(())
+}
+
+#[test]
 fn conflicting_requests_in_one_manifest_slot_fail() -> Result<(), TestError> {
     let mut fixture = Fixture::new()?;
     let (app, dep) = (fixture.app().clone(), fixture.dep().clone());
@@ -633,13 +761,30 @@ fn context_verification_compares_whole_records() -> Result<(), TestError> {
     let mut changed = Fixture::new()?;
     let dep = changed.dep().clone();
     changed.units[1] = library(&dep, &[], &["other"]);
+    let build_only = |graph| UnitGraphs {
+        build: graph,
+        tests: None,
+    };
+    let (original, changed, unchanged) =
+        (fixture.graph()?, changed.graph()?, Fixture::new()?.graph()?);
     assert!(matches!(
-        verify_units(&fixture.graph()?, &changed.graph()?),
+        verify_units(&build_only(&original), &build_only(&changed)),
         Err(Error::ExternalContextsChanged {
             missing: 1,
             extra: 1
         })
     ));
-    verify_units(&fixture.graph()?, &Fixture::new()?.graph()?)?;
+    verify_units(&build_only(&original), &build_only(&unchanged))?;
+    let with_tests = |tests| UnitGraphs {
+        build: &original,
+        tests: Some(tests),
+    };
+    assert!(matches!(
+        verify_units(&with_tests(&changed), &with_tests(&original)),
+        Err(Error::ExternalContextsChanged {
+            missing: 1,
+            extra: 0
+        })
+    ));
     Ok(())
 }

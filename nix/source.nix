@@ -41,14 +41,18 @@ let
     let
       metadata =
         if toString directory == toString nativeDirectory then nativeMetadata else metadataFor directory;
+      seed = projection.seedPlan directory layer;
     in
     if metadata == null then
       throw "Run nix run .#refresh-cargo-projections for ${workspaceCrates.packageName directory}"
     else
       dependencyWorkspace {
         inherit layer metadata;
-        seedHash = (projection.seedPlan directory layer).seedHash;
+        inherit (seed) seedHash;
         target = pkgs.stdenv.hostPlatform.rust.rustcTarget;
+      }
+      // {
+        inherit (seed) testedByLayerAbove;
       };
   engineProject = directory: dependencyProject directory types.layers.engine;
   registryProject = directory: dependencyProject directory types.layers.registry;

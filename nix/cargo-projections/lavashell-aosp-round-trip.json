@@ -522,7 +522,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "72c7e4157d6a26b68c9b0010a7126fd33e36f1b847dca79bc9a1325c9ca6d514",
+        "seedHash": "0a1d2ab102b194b135092cfed343f81bee428d2b542242c35809deac5479ef31",
         "plan": {
           "schema": 1,
           "selection": {

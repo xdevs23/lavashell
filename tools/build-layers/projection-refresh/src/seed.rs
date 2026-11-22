@@ -17,6 +17,7 @@ pub struct SeedWorkspace {
     pub lock: String,
     pub crates: Vec<SeedCrate>,
     pub seed_hash: String,
+    pub tested_by_layer_above: Vec<String>,
     #[serde(default)]
     pub original_contracts: Vec<OriginalContract>,
 }

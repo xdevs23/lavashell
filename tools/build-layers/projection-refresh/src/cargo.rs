@@ -23,6 +23,28 @@ impl LockMode {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Compilation<'packages> {
+    Build { packages: &'packages [String] },
+    Tests { packages: &'packages [String] },
+}
+
+impl<'packages> Compilation<'packages> {
+    fn arguments(self) -> Vec<&'packages str> {
+        let (subcommand, packages) = match self {
+            Self::Build { packages } => ("build", packages),
+            Self::Tests { packages } => ("test", packages),
+        };
+        std::iter::once(subcommand)
+            .chain(
+                packages
+                    .iter()
+                    .flat_map(|package| ["--package", package.as_str()]),
+            )
+            .collect()
+    }
+}
+
 const PROGRAM: &str = "cargo";
 
 pub struct Cargo {
@@ -39,7 +61,7 @@ impl Cargo {
     pub fn unit_graph(
         &self,
         directory: &Path,
-        packages: &[String],
+        compilation: Compilation,
         mode: LockMode,
     ) -> Result<ResolvedGraph, Error> {
         let graph = read_json_output(
@@ -47,16 +69,10 @@ impl Cargo {
                 .current_dir(directory)
                 .env("RUSTC_BOOTSTRAP", "1")
                 .env("CARGO_TARGET_DIR", directory.join("target"))
-                .args([
-                    "build",
-                    "--unit-graph",
-                    "-Z",
-                    "unstable-options",
-                    "--offline",
-                ])
+                .args(compilation.arguments())
+                .args(["--unit-graph", "-Z", "unstable-options", "--offline"])
                 .args(["--profile", &self.profile, "--target", &self.target])
-                .args(mode.arguments())
-                .args(packages.iter().flat_map(|package| ["--package", package])),
+                .args(mode.arguments()),
         )
         .map_err(Error::Cargo)?;
         let lock = read_toml(&directory.join("Cargo.lock"))?;
