@@ -46,4 +46,4 @@ enum CounterError {
 
 ## License
 
-Lavashell is free and open source under the GNU General Public License, version 3 only ([`COPYING`](COPYING)).
+Lavashell is licensed under the GNU General Public License, version 3 only ([`COPYING`](COPYING)).
