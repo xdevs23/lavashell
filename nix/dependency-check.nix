@@ -4,14 +4,10 @@
   rustPlatform,
   advisoryDatabase,
   root,
+  cargoWorkspaces,
 }:
 let
   inherit (pkgs) lib;
-  sources = import ./source.nix {
-    inherit pkgs root;
-    projections = import ./checkout-projections.nix root;
-    commits = import ./vendored-commits.nix;
-  };
   linuxTargets = map (system: (lib.systems.elaborate system).rust.rustcTarget) [
     "x86_64-linux"
     "aarch64-linux"
@@ -60,14 +56,11 @@ let
       licenses.unused-allowed-license = "allow";
     };
   };
-  workspaceDirectories = (lib.importTOML ./cargo-workspaces.toml).directories;
   workspaces =
-    assert lib.assertMsg (lib.attrNames auditPolicies == lib.attrNames workspaceDirectories)
-      "nix/dependency-check.nix sets audit policies for ${toString (lib.attrNames auditPolicies)}, while nix/cargo-workspaces.toml lists ${toString (lib.attrNames workspaceDirectories)}";
+    assert lib.assertMsg (lib.attrNames auditPolicies == lib.attrNames cargoWorkspaces)
+      "nix/dependency-check.nix sets audit policies for ${toString (lib.attrNames auditPolicies)}, while nix/cargo-workspaces.toml lists ${toString (lib.attrNames cargoWorkspaces)}";
     lib.sort sourceRootFirst (
-      lib.mapAttrsToList (
-        name: directory: auditPolicies.${name} // { inherit directory; }
-      ) workspaceDirectories
+      lib.mapAttrsToList (name: cargoWorkspace: auditPolicies.${name} // cargoWorkspace) cargoWorkspaces
     );
   sourceRootFirst = workspace: other: workspace.directory == "." && other.directory != ".";
   rules =
@@ -100,7 +93,7 @@ in
     src = root;
     cargoDeps = pkgs.symlinkJoin {
       name = "cargo-vendor-dir";
-      paths = map (workspace: sources.vendor (root + "/${workspace.directory}/Cargo.lock")) workspaces;
+      paths = map (workspace: workspace.cargoDeps) workspaces;
     };
     nativeBuildInputs = [
       rustPlatform.cargoSetupHook

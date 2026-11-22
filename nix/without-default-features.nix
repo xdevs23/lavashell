@@ -20,8 +20,7 @@ rustPlatform.buildRustPackage (
   rustPackageDefaults
   // {
     inherit pname;
-    src = sources.sourceFor directory;
-    cargoDeps = sources.vendor (sources.project directory).lockFile;
+    inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
     auditable = false;
     buildInputs = rustPackageDefaults.buildInputs ++ [ skia ];
     preBuild = rustPackageDefaults.preBuild + (import ./vendor-directory-times.nix);

@@ -3,11 +3,11 @@
   pkgs,
   rustPlatform,
   root,
-  vendor,
+  cargoWorkspace,
 }:
 let
   cargoWorkspaces = pkgs.lib.importTOML ./cargo-workspaces.toml;
-  workspace = cargoWorkspaces.directories.buildLayers;
+  workspace = cargoWorkspace.directory;
   directory = root + "/${workspace}";
   manifest = pkgs.lib.importTOML (directory + "/Cargo.toml");
   pathDependencies = map (dependency: directory + "/${dependency.path}") (
@@ -27,7 +27,7 @@ let
     rustPlatform.buildRustPackage (
       {
         version = manifest.workspace.package.version;
-        cargoDeps = vendor (directory + "/Cargo.lock");
+        inherit (cargoWorkspace) cargoDeps;
         meta.license = pkgs.lib.licenses.gpl3Only;
       }
       // attributes

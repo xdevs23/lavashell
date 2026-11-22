@@ -18,12 +18,15 @@ let
       }
     else
       original;
+  root = /. + input.root;
   tree =
-    (import (/. + input.nix + "/examples-tree.nix") {
-      inherit pkgs;
-      inherit (original) rustPlatform;
-      root = /. + input.root;
-    }).examples;
+    (import (/. + input.nix + "/examples-tree.nix") (
+      import (/. + input.nix + "/sources-and-assets.nix") { inherit pkgs root; }
+      // {
+        inherit pkgs root;
+        inherit (original) rustPlatform;
+      }
+    )).examples;
   inherit (tree) reference;
   types = import (/. + input.nix + "/types.nix");
   packagedCrates = original.lib.filterAttrs (

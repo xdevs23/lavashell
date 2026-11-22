@@ -51,8 +51,10 @@ let
       ndkVersions = [ ndkVersion ];
       includeEmulator = false;
     }).androidsdk;
-  sdkRoot = "${sdk}/libexec/android-sdk";
-  ndkRoot = "${sdkRoot}/ndk/${ndkVersion}";
+  sdkPath = "/libexec/android-sdk";
+  ndkPath = "${sdkPath}/ndk/${ndkVersion}";
+  sdkRoot = "${sdk}${sdkPath}";
+  ndkRoot = "${sdk}${ndkPath}";
   emulatorSdk =
     (pkgs.androidenv.composeAndroidPackages {
       platformVersions = [ emulatorApi ];
@@ -76,6 +78,7 @@ in
     rustPlatform
     sdk
     sdkRoot
+    ndkPath
     ndkRoot
     emulatorSdk
     ;

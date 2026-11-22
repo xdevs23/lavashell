@@ -5,6 +5,8 @@
   root,
   buildLayers,
   aospRoundTrip,
+  sources,
+  assets,
 }:
 let
   inherit (toolchain)
@@ -39,12 +41,6 @@ let
   deviceTarget = targetWithRole types.targetRoles.device;
   emulatorTarget = targetWithRole types.targetRoles.emulator;
   underscored = lib.replaceStrings [ "-" ] [ "_" ];
-  assets = import ./assets.nix { inherit pkgs; };
-  sources = import ./source.nix {
-    inherit pkgs root;
-    projections = import ./checkout-projections.nix root;
-    commits = import ./vendored-commits.nix;
-  };
   notices = import ./notices.nix {
     inherit
       pkgs
@@ -125,8 +121,7 @@ let
     rustPlatform.buildRustPackage {
       inherit pname buildPhase installPhase;
       inherit (sources) version;
-      src = sources.sourceFor roundTripWorkspace;
-      cargoDeps = sources.vendor (sources.project roundTripWorkspace).lockFile;
+      inherit (sources.sourceAndCargoDeps roundTripWorkspace) src cargoDeps;
       nativeBuildInputs = packageTools;
       buildInputs = [ skia.${target} ];
       env = targetEnvironment target // toolchainEnvironment;

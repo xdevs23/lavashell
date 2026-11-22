@@ -23,6 +23,18 @@ let
     else
       named;
   relative = path: lib.removePrefix "${toString root}/" (toString path);
+  memoizePerMember =
+    compute:
+    let
+      computed = lib.genAttrs workspace.workspace.members (member: compute (root + "/${member}"));
+    in
+    directory:
+    let
+      member = relative directory;
+    in
+    lib.throwIfNot (computed ? ${member})
+      "${member} must be a workspace member of the root Cargo.toml, so add it to workspace.members there"
+      computed.${member};
   packageName = directory: (readManifest directory).package.name;
   readManifest = directory: builtins.fromTOML (builtins.readFile (directory + "/Cargo.toml"));
   crateNames = map (crate: crate.manifest.package.name);
@@ -78,6 +90,7 @@ in
     workspace
     expandDependency
     relative
+    memoizePerMember
     packageName
     crateNames
     localCrates

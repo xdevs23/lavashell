@@ -36,6 +36,11 @@ let
   };
   inherit (workspaceCrates) nativeDirectory;
   types = import ./types.nix;
+  vendor = import ./cargo-vendor.nix { inherit pkgs commits; };
+  withCargoDeps = projected: projected // { cargoDeps = vendor projected.lockFile; };
+  inherit (workspaceCrates) memoizePerMember;
+  project = memoizePerMember (directory: withCargoDeps (projection.project directory));
+  sourceFor = memoizePerMember (directory: source (project directory) [ ]);
   dependencyProject =
     directory: layer:
     let
@@ -54,12 +59,15 @@ let
       // {
         inherit (seed) testedByLayerAbove;
       };
-  engineProject = directory: dependencyProject directory types.layers.engine;
-  registryProject = directory: dependencyProject directory types.layers.registry;
+  engineProject = memoizePerMember (
+    directory: withCargoDeps (dependencyProject directory types.layers.engine)
+  );
+  registryProject = memoizePerMember (
+    directory: withCargoDeps (dependencyProject directory types.layers.registry)
+  );
 in
 {
   inherit (projection)
-    project
     layerRoute
     seedPlan
     ;
@@ -73,12 +81,28 @@ in
     dependencyFeaturesEnabledByDependents
     ;
   version = workspaceCrates.workspace.workspace.package.version;
-  inherit dependencyProject engineProject registryProject;
-  vendor = import ./cargo-vendor.nix { inherit pkgs commits; };
-  inherit metadataFor;
-  sourceFor = directory: source (projection.project directory) [ ];
-  registrySource = directory: source (registryProject directory) (registryProject directory).members;
-  engineSource = directory: source (engineProject directory) (engineProject directory).members;
-  frameworkSource =
-    directory: source (projection.project directory) [ (workspaceCrates.relative directory) ];
+  inherit
+    project
+    engineProject
+    registryProject
+    metadataFor
+    ;
+  cargoWorkspaces = lib.mapAttrs (_: directory: {
+    inherit directory;
+    cargoDeps = vendor (root + "/${directory}/Cargo.lock");
+  }) (lib.importTOML ./cargo-workspaces.toml).directories;
+  inherit sourceFor;
+  sourceAndCargoDeps = directory: {
+    src = sourceFor directory;
+    inherit (project directory) cargoDeps;
+  };
+  registrySource = memoizePerMember (
+    directory: source (registryProject directory) (registryProject directory).members
+  );
+  engineSource = memoizePerMember (
+    directory: source (engineProject directory) (engineProject directory).members
+  );
+  frameworkSource = memoizePerMember (
+    directory: source (project directory) [ (workspaceCrates.relative directory) ]
+  );
 }

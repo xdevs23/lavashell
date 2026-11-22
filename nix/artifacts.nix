@@ -94,7 +94,7 @@ let
       // {
         inherit pname;
         src = source;
-        cargoDeps = sources.vendor projection.lockFile;
+        cargoDeps = projection.cargoDeps;
         buildInputs =
           configuration.buildInputs
           ++ lib.concatMap (requirement: requirement.buildInputs) (requirementsOf names);

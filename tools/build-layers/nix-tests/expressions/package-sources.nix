@@ -6,10 +6,13 @@ let
   inherit (pkgs) lib;
   root = /. + input.root;
   tree =
-    (import (/. + input.nix + "/examples-tree.nix") {
-      inherit pkgs root;
-      inherit (pkgs) rustPlatform;
-    }).examples;
+    (import (/. + input.nix + "/examples-tree.nix") (
+      import (/. + input.nix + "/sources-and-assets.nix") { inherit pkgs root; }
+      // {
+        inherit pkgs root;
+        inherit (pkgs) rustPlatform;
+      }
+    )).examples;
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
 in
 lib.mapAttrs (_: package: {

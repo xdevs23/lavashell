@@ -36,7 +36,20 @@
           root
           ;
       };
-      inherit (import ./nix/examples-tree.nix { inherit pkgs root rustPlatform; }) skia examples;
+      inherit (import ./nix/sources-and-assets.nix { inherit pkgs root; }) sources assets;
+      inherit
+        (import ./nix/examples-tree.nix {
+          inherit
+            pkgs
+            root
+            rustPlatform
+            sources
+            assets
+            ;
+        })
+        skia
+        examples
+        ;
       projectionRefresh = import ./nix/projection-refresh.nix {
         inherit pkgs rustPlatform;
         inherit (examples) buildLayers;
@@ -48,12 +61,11 @@
           workspaces = [ ./. ];
         }).aosp
           {
-            ndk = toolchain.ndkRoot;
+            inherit (toolchain) sdk ndkPath;
             llvm = toolchain.llvmRoot;
             api = toolchain.nativeApi;
           };
       aospSkiaBuilds = lib.mapAttrs' (_: build: lib.nameValuePair build.name build) aospSkia;
-      assets = import ./nix/assets.nix { inherit pkgs; };
       nativeTestTools = with pkgs; [
         sway
         dbus
@@ -93,13 +105,23 @@
           }
         );
       aosp = import ./nix/aosp.nix {
-        inherit toolchain root;
+        inherit
+          toolchain
+          root
+          sources
+          assets
+          ;
         inherit (examples) buildLayers;
         aospRoundTrip = examples.packagedCrates.aosp-round-trip;
         skia = aospSkia;
       };
       dependencies = import ./nix/dependency-check.nix {
-        inherit pkgs root rustPlatform;
+        inherit
+          pkgs
+          root
+          rustPlatform
+          ;
+        inherit (sources) cargoWorkspaces;
         advisoryDatabase = advisory-db;
       };
     in

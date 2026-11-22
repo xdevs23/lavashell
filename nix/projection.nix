@@ -15,6 +15,7 @@ let
     workspace
     expandDependency
     relative
+    memoizePerMember
     packageName
     crateNames
     localCrates
@@ -111,21 +112,23 @@ let
         lockFile
         ;
     };
-  metadataFor =
+  metadataFor = memoizePerMember (
     directory:
     let
       file = projections + "/${packageName directory}.json";
     in
-    if builtins.pathExists file then builtins.fromJSON (builtins.readFile file) else null;
+    if builtins.pathExists file then builtins.fromJSON (builtins.readFile file) else null
+  );
   nativeMetadata = builtins.fromJSON (builtins.readFile (projections + "/native.json"));
-  project =
+  project = memoizePerMember (
     directory:
     let
       crates = localCrates directory;
       metadata = metadataFor directory;
       baseline = if metadata == null then nativeMetadata.lock else metadata.normalLock;
     in
-    projectCrates crates (lock.projected baseline (crateNames crates));
+    projectCrates crates (lock.projected baseline (crateNames crates))
+  );
   withoutNative =
     manifest:
     let

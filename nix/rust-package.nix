@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
-{ pkgs, version }:
+{
+  pkgs,
+  assets,
+  version,
+}:
 let
   inherit (pkgs) lib;
   contract = import ./projection-contract.nix;
-  assets = import ./assets.nix { inherit pkgs; };
   fontConfig = pkgs.writeText "lavashell-fonts.conf" ''
     <?xml version="1.0"?>
     <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">

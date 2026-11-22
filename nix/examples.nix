@@ -4,6 +4,8 @@
   root,
   skia,
   rustPlatform,
+  sources,
+  assets,
 }:
 let
   inherit (pkgs) lib;
@@ -26,12 +28,6 @@ let
       arguments = [ "--keyboard" ];
     };
   };
-  assets = import ./assets.nix { inherit pkgs; };
-  sources = import ./source.nix {
-    inherit pkgs root;
-    projections = import ./checkout-projections.nix root;
-    commits = import ./vendored-commits.nix;
-  };
   notices = import ./notices.nix {
     inherit
       pkgs
@@ -41,13 +37,13 @@ let
       ;
   };
   rustPackageDefaults = import ./rust-package.nix {
-    inherit pkgs;
+    inherit pkgs assets;
     inherit (sources) version;
   };
   requirementsOf = import ./crate-requirements.nix { inherit pkgs skia assets; };
   layerTools = import ./build-layers.nix {
     inherit pkgs root rustPlatform;
-    inherit (sources) vendor;
+    cargoWorkspace = sources.cargoWorkspaces.buildLayers;
   };
   buildLayers = layerTools.tools;
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
@@ -132,8 +128,7 @@ let
       // artifacts.enableFeatures local.cargoBuildFeatures
       // {
         pname = "lavashell-${name}";
-        src = sources.sourceFor directory;
-        cargoDeps = sources.vendor (sources.project directory).lockFile;
+        inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
         buildInputs =
           rustPackageDefaults.buildInputs
           ++ lib.concatMap (requirement: requirement.buildInputs) requirements;

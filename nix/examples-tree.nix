@@ -3,6 +3,8 @@
   pkgs,
   root,
   rustPlatform,
+  sources,
+  assets,
 }:
 let
   skia =
@@ -20,6 +22,8 @@ in
       root
       skia
       rustPlatform
+      sources
+      assets
       ;
   };
 }

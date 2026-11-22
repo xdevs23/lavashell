@@ -29,8 +29,7 @@ in
 }:
 pkgs.stdenv.mkDerivation {
   name = "lavashell-notices-${baseNameOf member}";
-  src = sources.sourceFor directory;
-  cargoDeps = sources.vendor (sources.project directory).lockFile;
+  inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
   nativeBuildInputs = [
     rustPlatform.cargoSetupHook
     rustPlatform.rust.cargo

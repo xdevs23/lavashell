@@ -231,13 +231,16 @@ in
     };
   aosp =
     {
-      ndk,
+      sdk,
+      ndkPath,
       llvm,
       api,
     }:
-    assert lib.assertMsg (
-      lib.isDerivation ndk || builtins.isPath ndk || (builtins.isString ndk && builtins.hasContext ndk)
-    ) "The NDK of the AOSP builds of Skia must be in the Nix store.";
+    assert lib.assertMsg (lib.isDerivation sdk)
+      "Pass the SDK derivation of pkgs.androidenv.composeAndroidPackages { includeNDK = true; } as sdk to the AOSP builds of Skia, and the path of the NDK inside it, starting with a slash, as ndkPath.";
+    let
+      ndk = "${sdk}${ndkPath}";
+    in
     lib.mapAttrs (
       target: targetArguments:
       build {
@@ -251,7 +254,7 @@ in
           skia_use_system_freetype2 = false;
         };
         environment = {
-          ANDROID_NDK = toString ndk;
+          ANDROID_NDK = ndk;
           SKIA_ANDROID_API_LEVEL = toString api;
           CLANG_PATH = "${llvm}/bin/clang";
           LIBCLANG_PATH = "${llvm}/lib";
