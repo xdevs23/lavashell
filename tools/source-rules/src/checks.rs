@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::calloop_errors::find_stored_calloop_errors;
 use crate::comments::comment_report;
 use crate::copy_catalogs::copy_report;
 use crate::crate_manifests::crate_report;
@@ -10,6 +11,7 @@ use crate::findings::{Finding, Report};
 use crate::languages::RUST;
 use crate::metadata::ExternPreludes;
 use crate::modules::{Crate, Source, Sources};
+use crate::names::{RepositoryNames, sources_by_module};
 use crate::python_place::{PYTHON_DIRECTORY, python_place_report};
 use crate::renderer_test_fixtures::RENDERER_TEST_RULES;
 use crate::repository_files::{FileKind, RepositoryFile, unknown_kind_report};
@@ -101,11 +103,10 @@ pub fn rust_report(
     let crates = (crate_roots.iter())
         .map(|root| Crate::read(root, &sources))
         .collect::<Result<Vec<_>, Error>>()?;
-    findings.extend(hand_written_value_lists(
-        extern_preludes,
-        &sources,
-        &crates,
-    )?);
+    let modules = sources_by_module(&sources, &crates);
+    let names = RepositoryNames::read(extern_preludes, &modules)?;
+    findings.extend(hand_written_value_lists(&names, &modules));
+    findings.extend(find_stored_calloop_errors(&names, &modules));
     for crate_files in &crates {
         let root = &crate_files.root.path;
         findings.extend(

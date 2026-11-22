@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::calloop_errors::StoredCalloopError;
 use crate::crate_manifests::CrateRule;
 use crate::device_words::DeviceWord;
 use std::fmt;
@@ -13,6 +14,7 @@ pub enum Rule {
     IgnoredTest,
     PanickingTest,
     ErasedError,
+    StoredCalloopError(StoredCalloopError),
     HandWrittenEnumValues { enum_name: String },
     ProbeFamilyLiteral { family: String },
     PixelSizeInTest,
@@ -53,6 +55,7 @@ impl fmt::Display for Rule {
             Self::ErasedError => formatter.write_str(
                 "report a failure as the error enum of the crate, never as a `String` or a boxed `dyn Error`",
             ),
+            Self::StoredCalloopError(rule) => fmt::Display::fmt(rule, formatter),
             Self::HandWrittenEnumValues { enum_name } => write!(
                 formatter,
                 "list every value of {enum_name} with `{enum_name}::ALL`, which `enum_with_values!` derives from the declaration. The check rejects a list written by hand",
@@ -101,6 +104,12 @@ impl fmt::Display for Rule {
                 "remove the semicolon, em dash or en dash from the copy of the key {key}",
             ),
         }
+    }
+}
+
+impl From<StoredCalloopError> for Rule {
+    fn from(rule: StoredCalloopError) -> Self {
+        Self::StoredCalloopError(rule)
     }
 }
 

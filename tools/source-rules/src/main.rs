@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod attributes;
+mod calloop_errors;
 mod checks;
 mod comments;
 mod copy_catalogs;
@@ -16,6 +17,7 @@ mod identifiers;
 mod languages;
 mod metadata;
 mod modules;
+mod names;
 mod next_steps;
 mod patch;
 mod python_place;

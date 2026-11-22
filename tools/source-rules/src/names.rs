@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/reference/names/name-resolution.html
-use super::{Variants, declared_enum};
+mod declarations;
+
 use crate::metadata::ExternPreludes;
+use declarations::declared_enum;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use syn::ext::IdentExt;
-use syn::{Ident, Item, Type, UseTree};
+use syn::{Block, Ident, Item, Stmt, Type, UseTree};
 
-pub fn name_of(ident: &Ident) -> String {
+pub use declarations::sources_by_module;
+
+pub type Variants = BTreeSet<String>;
+
+fn name_of(ident: &Ident) -> String {
     ident.unraw().to_string()
 }
 
@@ -24,18 +30,22 @@ pub struct ModuleKey {
 }
 
 impl ModuleKey {
-    pub fn new(crate_root: &Path, path: &[String]) -> Self {
+    fn new(crate_root: &Path, path: &[String]) -> Self {
         Self {
             crate_root: crate_root.to_path_buf(),
             path: path.to_vec(),
         }
     }
 
-    pub fn child(&self, name: &str) -> Self {
+    fn child(&self, name: &str) -> Self {
         Self {
             crate_root: self.crate_root.clone(),
             path: [&self.path[..], &[name.to_owned()]].concat(),
         }
+    }
+
+    pub fn is_in_crate(&self, crate_root: &str) -> bool {
+        self.crate_root.ends_with(crate_root)
     }
 
     fn parent(&self) -> Option<Self> {
@@ -55,7 +65,7 @@ pub struct EnumKey {
 }
 
 impl EnumKey {
-    pub fn new(module: &ModuleKey, name: String) -> Self {
+    fn new(module: &ModuleKey, name: String) -> Self {
         Self {
             module: module.clone(),
             name,
@@ -74,6 +84,7 @@ pub enum Named {
     Module(ModuleKey),
     Enum(EnumKey),
     Variant(Variant),
+    External(Vec<String>),
     Unchecked,
 }
 
@@ -85,13 +96,13 @@ enum Binding {
 }
 
 #[derive(Default)]
-pub struct ScopeNames {
+struct ScopeNames {
     bindings: BTreeMap<String, Binding>,
     globs: Vec<Vec<String>>,
 }
 
 impl ScopeNames {
-    pub fn declared_in<'item>(items: impl IntoIterator<Item = &'item Item>) -> Self {
+    fn declared_in<'item>(items: impl IntoIterator<Item = &'item Item>) -> Self {
         let mut names = Self::default();
         for item in items {
             match item {
@@ -181,7 +192,7 @@ pub struct RepositoryNames<'libraries> {
 }
 
 impl<'libraries> RepositoryNames<'libraries> {
-    pub fn new(extern_preludes: &'libraries ExternPreludes) -> Self {
+    fn new(extern_preludes: &'libraries ExternPreludes) -> Self {
         Self {
             modules: BTreeMap::new(),
             enums: BTreeMap::new(),
@@ -189,7 +200,7 @@ impl<'libraries> RepositoryNames<'libraries> {
         }
     }
 
-    pub fn record_module<'item>(
+    fn record_module<'item>(
         &mut self,
         module: &ModuleKey,
         items: impl IntoIterator<Item = &'item Item>,
@@ -197,11 +208,11 @@ impl<'libraries> RepositoryNames<'libraries> {
         (self.modules.entry(module.clone()).or_default()).extend(ScopeNames::declared_in(items));
     }
 
-    pub fn record_enum(&mut self, enum_key: EnumKey, variants: Variants) {
+    fn record_enum(&mut self, enum_key: EnumKey, variants: Variants) {
         self.enums.entry(enum_key).or_default().push(variants);
     }
 
-    pub fn declares(&self, enum_key: &EnumKey, variants: &Variants) -> bool {
+    fn declares(&self, enum_key: &EnumKey, variants: &Variants) -> bool {
         self.enums
             .get(enum_key)
             .is_some_and(|declared| declared.contains(variants))
@@ -234,7 +245,11 @@ impl Scopes<'_> {
             .scopes_of(&self.module.child(&name_of(name)))
     }
 
-    pub fn enter_block<'item>(&mut self, items: impl IntoIterator<Item = &'item Item>) {
+    pub fn enter_block(&mut self, block: &Block) {
+        let items = block.stmts.iter().filter_map(|statement| match statement {
+            Stmt::Item(item) => Some(item),
+            _ => None,
+        });
         self.blocks.push(ScopeNames::declared_in(items));
     }
 
@@ -285,7 +300,7 @@ impl Lookup<'_> {
             "Self" => self_type.cloned(),
             "crate" => Some(Named::Module(place.module.crate_root())),
             "self" | "super" => self.member(Named::Module(place.module.clone()), first),
-            name => self.lookup(place, name),
+            name => Some(self.lookup(place, name)),
         };
         (rest.iter()).fold(start.unwrap_or(Named::Unchecked), |named, segment| {
             self.member(named, segment).unwrap_or(Named::Unchecked)
@@ -307,25 +322,28 @@ impl Lookup<'_> {
                     })
                 })
             }
+            Named::External(path) => Some(Named::External([path, vec![name.to_owned()]].concat())),
             Named::Variant(_) | Named::Unchecked => Some(Named::Unchecked),
         }
     }
 
-    fn lookup(&mut self, place: Place<'_>, name: &str) -> Option<Named> {
+    fn lookup(&mut self, place: Place<'_>, name: &str) -> Named {
         for (depth, block) in place.blocks.iter().enumerate().rev() {
             let enclosing = Place {
                 module: place.module,
                 blocks: &place.blocks[..=depth],
             };
             if let Some(named) = self.scope_member(ScopeId::Block(depth), enclosing, block, name) {
-                return Some(named);
+                return named;
             }
         }
-        self.module_member(place.module, name).or_else(|| {
-            (self.repository.extern_preludes)
-                .library_root(&place.module.crate_root, name)
-                .map(|root| Named::Module(ModuleKey::new(root, &[])))
-        })
+        (self.module_member(place.module, name))
+            .or_else(|| {
+                (self.repository.extern_preludes)
+                    .library_root(&place.module.crate_root, name)
+                    .map(|root| Named::Module(ModuleKey::new(root, &[])))
+            })
+            .unwrap_or_else(|| Named::External(vec![name.to_owned()]))
     }
 
     fn module_member(&mut self, module: &ModuleKey, name: &str) -> Option<Named> {
@@ -378,13 +396,15 @@ impl Lookup<'_> {
                 self.member(imported_from, name)
             })
             .collect();
-        let mut repository_items = supplied.iter().filter(|named| **named != Named::Unchecked);
-        match (repository_items.next(), repository_items.next()) {
-            (Some(only), None) => Some(only.clone()),
-            (Some(_), Some(_)) => Some(Named::Unchecked),
-            (None, _) => supplied
+        let (external, repository): (Vec<&Named>, Vec<&Named>) = (supplied.iter())
+            .filter(|named| **named != Named::Unchecked)
+            .partition(|named| matches!(named, Named::External(_)));
+        match (repository.as_slice(), external.as_slice()) {
+            ([only], _) | ([], [only]) => Some((*only).clone()),
+            ([], []) => supplied
                 .contains(&Named::Unchecked)
                 .then_some(Named::Unchecked),
+            _ => Some(Named::Unchecked),
         }
     }
 }

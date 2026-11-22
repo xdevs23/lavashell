@@ -8,6 +8,7 @@ use crate::repository_files::read_repository_files;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf, StripPrefixError};
 
+mod calloop_errors;
 mod copy_catalogs;
 mod crate_manifests;
 mod device_words;
