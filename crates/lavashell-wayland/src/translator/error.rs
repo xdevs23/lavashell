@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::sctk;
-use sctk::reexports::calloop;
+use lavashell_event_loop::EventLoopFailure;
 use sctk::reexports::client::ConnectError;
 use sctk::reexports::client::backend::WaylandError;
 use sctk::reexports::client::globals::{BindError, GlobalError};
@@ -22,9 +22,9 @@ pub enum ConnectionError {
 #[derive(Debug, thiserror::Error)]
 pub enum EventLoopError {
     #[error("the event loop could not be created")]
-    CreateEventLoop(#[source] calloop::Error),
+    CreateEventLoop(#[source] EventLoopFailure),
     #[error("the Wayland connection could not join the event loop")]
-    WatchConnection(#[source] calloop::Error),
+    WatchConnection(#[source] EventLoopFailure),
     #[error("the event loop failed to dispatch")]
-    DispatchEvents(#[source] calloop::Error),
+    DispatchEvents(#[source] EventLoopFailure),
 }

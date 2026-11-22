@@ -119,7 +119,8 @@ impl Requests {
             return Ok(());
         }
         self.intake.close();
-        (handle.disable(&self.source)).map_err(RequestsError::PauseRequests)?;
+        (handle.disable(&self.source))
+            .map_err(|error| RequestsError::PauseRequests(error.into()))?;
         let duplicate = socket
             .try_clone_to_owned()
             .map_err(RequestsError::DuplicateSocket)?;
@@ -128,7 +129,7 @@ impl Requests {
             .insert_source(writable, |_readiness, _socket, _data| {
                 Ok(PostAction::Continue)
             })
-            .map_err(|failure| RequestsError::WatchWritable(failure.error))?;
+            .map_err(|failure| RequestsError::WatchWritable(failure.error.into()))?;
         self.writable = Some(token);
         Ok(())
     }
@@ -138,7 +139,8 @@ impl Requests {
             return Ok(());
         };
         handle.remove(writable);
-        (handle.enable(&self.source)).map_err(RequestsError::ResumeRequests)?;
+        (handle.enable(&self.source))
+            .map_err(|error| RequestsError::ResumeRequests(error.into()))?;
         self.intake.open();
         Ok(())
     }

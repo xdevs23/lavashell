@@ -1131,6 +1131,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-error-chain",
+          "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-store",
           "lavashell-vulkan-renderer",
@@ -1172,6 +1173,7 @@
           "lavashell-desktop-portal",
           "lavashell-desktop-settings",
           "lavashell-error-chain",
+          "lavashell-event-loop",
           "lavashell-store",
           "lavashell-test-fixtures",
           "log",
@@ -1193,6 +1195,15 @@
       {
         "name": "lavashell-error-chain",
         "version": "0.1.0"
+      },
+      {
+        "name": "lavashell-event-loop",
+        "version": "0.1.0",
+        "dependencies": [
+          "calloop",
+          "lavashell-error-chain",
+          "thiserror 2.0.21"
+        ]
       },
       {
         "name": "lavashell-example-copy-keys",
@@ -1364,6 +1375,7 @@
           "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
+          "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-test-fixtures",
           "lavashell-vulkan",
@@ -2718,7 +2730,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "7d5b2fc901b42aaedef1a3ca04cbbe4d4985be15570de070bd999bee67d2a758",
+        "seedHash": "c60c4d02ef7a8989b2d3bad87ec47449dbf3fa99d057e97dd03174a0d31de007",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2767,6 +2779,7 @@
                 "crates/lavashell-effect-quality",
                 "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
+                "crates/lavashell-event-loop",
                 "crates/lavashell-keyboard",
                 "crates/lavashell-lucide",
                 "crates/lavashell-materials",
@@ -3212,6 +3225,12 @@
                     "features": [],
                     "path": "../lavashell-error-chain"
                   },
+                  "lavashell-event-loop": {
+                    "package": "lavashell-event-loop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-event-loop"
+                  },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
                     "default-features": false,
@@ -3528,6 +3547,42 @@
                   "path": "src/lib.rs"
                 },
                 "features": {}
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
+            {
+              "member": "crates/lavashell-event-loop",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-event-loop",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {},
+                "dependencies": {
+                  "calloop": {
+                    "package": "calloop",
+                    "default-features": false,
+                    "features": [
+                      "async-task",
+                      "executor"
+                    ],
+                    "version": "=0.14.4"
+                  }
+                }
               },
               "targets": [
                 {
@@ -4369,6 +4424,12 @@
                       "serde"
                     ],
                     "path": "../lavashell-core"
+                  },
+                  "lavashell-event-loop": {
+                    "package": "lavashell-event-loop",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-event-loop"
                   },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
@@ -5749,6 +5810,7 @@
                   "calloop",
                   "lavashell-actor",
                   "lavashell-error-chain",
+                  "lavashell-event-loop",
                   "lavashell-platform",
                   "lavashell-store",
                   "log",
@@ -5802,6 +5864,13 @@
               {
                 "name": "lavashell-error-chain",
                 "version": "0.0.0"
+              },
+              {
+                "name": "lavashell-event-loop",
+                "version": "0.0.0",
+                "dependencies": [
+                  "calloop"
+                ]
               },
               {
                 "name": "lavashell-example-copy-keys",
@@ -5952,6 +6021,7 @@
                   "lavashell-actor",
                   "lavashell-build-script",
                   "lavashell-core",
+                  "lavashell-event-loop",
                   "lavashell-platform",
                   "lavashell-vulkan",
                   "lavashell-vulkan-renderer",

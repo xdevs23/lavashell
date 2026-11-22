@@ -74,7 +74,7 @@ impl Translator {
         let seats = SeatState::new(&globals, &qh);
         let connection_source = WaylandSource::new(connection.clone(), queue)
             .insert(loop_handle.clone())
-            .map_err(|failure| EventLoopError::WatchConnection(failure.error))?;
+            .map_err(|failure| EventLoopError::WatchConnection(failure.error.into()))?;
         let view = ViewLink::new(links.view.clone());
         report_user_languages(&view);
         Ok(Self {

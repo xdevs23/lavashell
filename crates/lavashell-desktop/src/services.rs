@@ -5,6 +5,7 @@ use calloop::{EventLoop, LoopSignal};
 use lavashell_actor::Outlet;
 use lavashell_error_chain::message_chain;
 use lavashell_error_chain::next_step::{FREE_SYSTEM_RESOURCES, REPORT_THE_FAILURE};
+use lavashell_event_loop::EventLoopFailure;
 use lavashell_platform::PlatformEvent;
 use std::pin::Pin;
 use std::sync::mpsc;
@@ -27,22 +28,22 @@ pub enum ServicesStartError {
     #[error("the desktop services cannot start their thread; {FREE_SYSTEM_RESOURCES}")]
     SpawnThread(#[source] io::Error),
     #[error("the desktop services cannot create their event loop; {FREE_SYSTEM_RESOURCES}")]
-    CreateEventLoop(#[source] calloop::Error),
+    CreateEventLoop(#[source] EventLoopFailure),
     #[error(
         "the desktop services cannot create the executor that runs the watches; \
          {FREE_SYSTEM_RESOURCES}"
     )]
-    CreateWatch(#[source] calloop::Error),
+    CreateWatch(#[source] EventLoopFailure),
     #[error(
         "the desktop services cannot add the executor that runs the watches to their event loop; \
          {FREE_SYSTEM_RESOURCES}"
     )]
-    InsertWatches(#[source] calloop::Error),
+    InsertWatches(#[source] EventLoopFailure),
     #[error(
         "the desktop services cannot add their stop signal to their event loop; \
          {FREE_SYSTEM_RESOURCES}"
     )]
-    InsertStop(#[source] calloop::Error),
+    InsertStop(#[source] EventLoopFailure),
     #[error(
         "the desktop services cannot start a watch that a service returns, because the executor \
          that runs the watches is gone; this is a defect in the desktop services, {REPORT_THE_FAILURE}"
@@ -121,16 +122,17 @@ fn start_watches(
     view: &Outlet<PlatformEvent>,
     stopped: PingSource,
 ) -> Result<EventLoop<'static, LoopSignal>, ServicesStartError> {
-    let event_loop = EventLoop::try_new().map_err(ServicesStartError::CreateEventLoop)?;
+    let event_loop =
+        EventLoop::try_new().map_err(|error| ServicesStartError::CreateEventLoop(error.into()))?;
     let handle = event_loop.handle();
-    let (executor, scheduler) =
-        calloop::futures::executor::<()>().map_err(ServicesStartError::CreateWatch)?;
+    let (executor, scheduler) = calloop::futures::executor::<()>()
+        .map_err(|error| ServicesStartError::CreateWatch(error.into()))?;
     let _watches_run_until_the_loop_ends = handle
         .insert_source(executor, |(), (), _| {})
-        .map_err(|failure| ServicesStartError::InsertWatches(failure.error))?;
+        .map_err(|failure| ServicesStartError::InsertWatches(failure.error.into()))?;
     let _stop_runs_until_the_loop_ends = handle
         .insert_source(stopped, |(), (), signal: &mut LoopSignal| signal.stop())
-        .map_err(|failure| ServicesStartError::InsertStop(failure.error))?;
+        .map_err(|failure| ServicesStartError::InsertStop(failure.error.into()))?;
     for watch in services
         .into_iter()
         .flat_map(|service| service.into_watches(view))

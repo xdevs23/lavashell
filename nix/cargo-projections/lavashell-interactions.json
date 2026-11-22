@@ -1223,6 +1223,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-error-chain",
+          "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-store",
           "lavashell-vulkan-renderer",
@@ -1264,6 +1265,7 @@
           "lavashell-desktop-portal",
           "lavashell-desktop-settings",
           "lavashell-error-chain",
+          "lavashell-event-loop",
           "lavashell-store",
           "lavashell-test-fixtures",
           "log",
@@ -1285,6 +1287,15 @@
       {
         "name": "lavashell-error-chain",
         "version": "0.1.0"
+      },
+      {
+        "name": "lavashell-event-loop",
+        "version": "0.1.0",
+        "dependencies": [
+          "calloop",
+          "lavashell-error-chain",
+          "thiserror 2.0.21"
+        ]
       },
       {
         "name": "lavashell-example-copy-keys",
@@ -1471,6 +1482,7 @@
           "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
+          "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-test-fixtures",
           "lavashell-vulkan",

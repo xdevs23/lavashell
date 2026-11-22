@@ -24,5 +24,6 @@ futures-lite.workspace = true
 lavashell-actor.workspace = true
 lavashell-desktop = { workspace = true, features = ["test-support"] }
 lavashell-desktop-portal = { workspace = true, features = ["test-support"] }
+lavashell-event-loop.workspace = true
 lavashell-test-fixtures.workspace = true
 zbus = { workspace = true, features = ["async-io"] }

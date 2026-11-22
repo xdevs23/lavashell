@@ -116,7 +116,7 @@ impl Platform for Wayland {
     fn serve(self, links: WaylandLinks) -> Result<(), Error> {
         let PlatformLinks { reports, requests } = links;
         let mut event_loop: EventLoop<'static, Translator> =
-            EventLoop::try_new().map_err(EventLoopError::CreateEventLoop)?;
+            EventLoop::try_new().map_err(|error| EventLoopError::CreateEventLoop(error.into()))?;
         let handle = event_loop.handle();
         let (wake, arrivals) = make_ping().map_err(RequestsError::CreateRequestWake)?;
         let arrival = wake.clone();
@@ -129,12 +129,12 @@ impl Platform for Wayland {
                     translator.ending.record(end);
                 }
             })
-            .map_err(|failure| RequestsError::WatchRequests(failure.error))?;
+            .map_err(|failure| RequestsError::WatchRequests(failure.error.into()))?;
         let requests = Requests::new(intake, source);
         let mut translator = Translator::new(self, reports, requests, handle)?;
         loop {
             let served = (event_loop.dispatch(None, &mut translator))
-                .map_err(EventLoopError::DispatchEvents)
+                .map_err(|error| EventLoopError::DispatchEvents(error.into()))
                 .map_err(Error::from)
                 .and_then(|()| translator.flush());
             if let Err(failure) = served {

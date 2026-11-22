@@ -27,7 +27,9 @@ impl WatchSources {
             }
             WatchRequest::Resume(id) => {
                 if let Some(token) = self.0.get(&id) {
-                    handle.enable(token).map_err(WatchError::ResumeWatch)?;
+                    handle
+                        .enable(token)
+                        .map_err(|error| WatchError::ResumeWatch(error.into()))?;
                 }
                 Ok(())
             }
@@ -58,7 +60,7 @@ impl WatchSources {
                 view.report(WatchEvent::Ready(id));
                 Ok(PostAction::Disable)
             })
-            .map_err(|failure| WatchError::WatchFd(failure.error))?;
+            .map_err(|failure| WatchError::WatchFd(failure.error.into()))?;
         if let Some(replaced) = self.0.insert(id, token) {
             handle.remove(replaced);
         }

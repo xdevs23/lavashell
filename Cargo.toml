@@ -3,6 +3,7 @@
 members = [
     "crates/lavashell-core",
     "crates/lavashell-error-chain",
+    "crates/lavashell-event-loop",
     "crates/lavashell-enum-values",
     "crates/lavashell-actor",
     "crates/lavashell-effect-quality",
@@ -83,6 +84,7 @@ lavashell-actor = { path = "crates/lavashell-actor" }
 lavashell-effect-quality = { path = "crates/lavashell-effect-quality" }
 lavashell-core = { path = "crates/lavashell-core" }
 lavashell-error-chain = { path = "crates/lavashell-error-chain" }
+lavashell-event-loop = { path = "crates/lavashell-event-loop" }
 lavashell-enum-values = { path = "crates/lavashell-enum-values" }
 lavashell-components = { path = "crates/lavashell-components" }
 lavashell-vulkan = { path = "crates/lavashell-vulkan" }

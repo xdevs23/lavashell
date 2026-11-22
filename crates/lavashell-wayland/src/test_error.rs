@@ -4,6 +4,7 @@ use crate::ControlError;
 use crate::Error;
 use crate::LayerLayoutError;
 use lavashell_core::units::NumberError;
+use lavashell_event_loop::EventLoopFailure;
 use smithay_client_toolkit::reexports::calloop::{self, InsertError};
 use std::env::VarError;
 use std::io;
@@ -14,7 +15,7 @@ pub(crate) enum TestError {
     #[error("the host failed")]
     Host(#[from] Error),
     #[error("the event loop failed")]
-    EventLoop(#[from] calloop::Error),
+    EventLoop(#[source] EventLoopFailure),
     #[error("the other end of a link is gone")]
     LinkClosed(#[from] lavashell_actor::Closed),
     #[error("the bus failed")]
@@ -53,6 +54,12 @@ pub(crate) enum TestError {
 
 impl<T> From<InsertError<T>> for TestError {
     fn from(failure: InsertError<T>) -> Self {
-        Self::EventLoop(failure.error)
+        Self::EventLoop(failure.error.into())
+    }
+}
+
+impl From<calloop::Error> for TestError {
+    fn from(error: calloop::Error) -> Self {
+        Self::EventLoop(error.into())
     }
 }

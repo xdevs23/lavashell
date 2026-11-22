@@ -16,6 +16,7 @@ test-support = []
 calloop = { workspace = true, features = ["executor"] }
 lavashell-actor.workspace = true
 lavashell-error-chain.workspace = true
+lavashell-event-loop.workspace = true
 lavashell-platform.workspace = true
 lavashell-store.workspace = true
 log.workspace = true
