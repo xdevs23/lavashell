@@ -11,7 +11,13 @@ pub(super) fn place_in_flow(
     gap: Dp,
     arrangement: Arrangement,
 ) -> Vec<Point> {
-    let vertical = arrangement == Arrangement::Along(Axis::Vertical);
+    let vertical = matches!(
+        arrangement,
+        Arrangement::Along {
+            axis: Axis::Vertical,
+            ..
+        }
+    );
     let overlay = arrangement == Arrangement::Overlay;
     let length = |size: Size| if vertical { size.height } else { size.width };
     let mut cursor = Dp::ZERO;
@@ -48,4 +54,11 @@ pub(super) fn place_in_flow(
         cursor += gap;
     }
     placements
+}
+
+pub(super) fn flow_length(sizes: &[Size], in_flow: &[bool], axis: Axis, gap: Dp) -> Dp {
+    (sizes.iter().zip(in_flow))
+        .filter_map(|(size, flow)| flow.then_some(axis.length(*size)))
+        .reduce(|stacked, length| stacked + gap + length)
+        .unwrap_or(Dp::ZERO)
 }

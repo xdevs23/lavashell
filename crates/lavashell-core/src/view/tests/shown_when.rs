@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::geometry::{Axis, Color};
-use crate::scene::DrawCommand;
 use crate::ui::{Deferred, NodeRef};
 
 fn forms(ui: &mut Ui, wide: &NodeRef, fits: &Deferred<bool>) {
@@ -11,17 +10,6 @@ fn forms(ui: &mut Ui, wide: &NodeRef, fits: &Deferred<bool>) {
         let narrow_form = Modifier::new().shown_when(fits.map(|fits| !fits));
         ui.spacer(40.dp(), 20.dp(), narrow_form);
     });
-}
-
-fn fill_bounds(scene: &mut Scene, view: &mut View, size: Size) -> Result<Vec<Rect>, TestError> {
-    advance(scene, view, size, 0)?;
-    let bounds = (scene.commands().into_iter())
-        .filter_map(|command| match command {
-            DrawCommand::Fill { shape, .. } => Some(shape.bounds()),
-            _ => None,
-        })
-        .collect();
-    Ok(bounds)
 }
 
 #[test]

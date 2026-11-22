@@ -111,8 +111,9 @@ pub mod prelude {
     };
     pub use crate::ui::{
         Activation, Align, Arrangement, ContentSizes, ContextRequest, Deferred, DragInput,
-        DragPhase, IconOptions, IconStyle, InputModifiers, Modifier, NodeId, NodeRef, PointerId,
-        PointerInput, PointerKind, PointerPhase, TextFieldOptions, TouchId, TransformInput, Ui,
+        DragPhase, IconOptions, IconStyle, InputModifiers, Modifier, NodeId, NodeRef, Overflow,
+        PointerId, PointerInput, PointerKind, PointerPhase, TextFieldOptions, TouchId,
+        TransformInput, Ui,
     };
     pub use crate::units::{
         Density, Dp, DpExt, Em, EmExt, FiniteDp, Fraction, NonNegative, NonNegativeDp, NumberError,

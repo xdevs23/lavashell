@@ -62,6 +62,11 @@ pub enum LayoutError {
          conditions of the children with a weight"
     )]
     WeightedReadOrder(LayoutRead),
+    #[error(
+        "{0}: a size or a condition inside one child of a container that hides the children that \
+         do not fit cannot read the size of another child or of a node inside it"
+    )]
+    HideableChildRead(LayoutRead),
     #[error("layout cycle: {0}")]
     SizeCycle(LayoutReads),
     #[error(
@@ -117,7 +122,9 @@ impl LayoutError {
         match self {
             Self::UnsetNodeRef(value) => vec![value.node.id],
             Self::DuplicateNodeRef { first, second } => vec![first.id, second.id],
-            Self::RelativeSizeRead(read) | Self::WeightedReadOrder(read) => read.nodes().to_vec(),
+            Self::RelativeSizeRead(read)
+            | Self::WeightedReadOrder(read)
+            | Self::HideableChildRead(read) => read.nodes().to_vec(),
             Self::SizeCycle(reads) | Self::BoundsCycle(reads) => {
                 reads.0.iter().flat_map(LayoutRead::nodes).collect()
             }

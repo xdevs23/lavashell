@@ -79,6 +79,17 @@ fn advance(scene: &mut Scene, view: &mut View, size: Size, time_ms: u64) -> Resu
     advance_with_timing(scene, view, viewport, &mut Metrics, timing)
 }
 
+fn fill_bounds(scene: &mut Scene, view: &mut View, size: Size) -> Result<Vec<Rect>, TestError> {
+    advance(scene, view, size, 0)?;
+    let bounds = (scene.commands().into_iter())
+        .filter_map(|command| match command {
+            DrawCommand::Fill { shape, .. } => Some(shape.bounds()),
+            _ => None,
+        })
+        .collect();
+    Ok(bounds)
+}
+
 fn show_frame(
     scene: &mut Scene,
     view: &mut View,
@@ -220,6 +231,8 @@ mod material_group_motion;
 mod material_motion;
 #[path = "tests/moving_hits.rs"]
 mod moving_hits;
+#[path = "tests/overflow.rs"]
+mod overflow;
 #[path = "tests/presence.rs"]
 mod presence;
 #[path = "tests/probe.rs"]

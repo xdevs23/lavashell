@@ -15,7 +15,7 @@ pub(in crate::view) fn weight(
     child: usize,
     bounded: bool,
 ) -> Option<Weight> {
-    let NodeKind::Container(Arrangement::Along(axis)) = nodes[container].kind else {
+    let NodeKind::Container(Arrangement::Along { axis, .. }) = nodes[container].kind else {
         return None;
     };
     let (true, Flow::In(weight)) = (bounded, nodes[child].flow) else {
@@ -31,7 +31,7 @@ pub(in crate::view) fn fills_through_children(
     container: usize,
     child: usize,
 ) -> bool {
-    let NodeKind::Container(Arrangement::Along(axis)) = nodes[container].kind else {
+    let NodeKind::Container(Arrangement::Along { axis, .. }) = nodes[container].kind else {
         return false;
     };
     let node = &nodes[child];
@@ -54,7 +54,7 @@ pub(in crate::view) fn fill_decided_by(
                 below.push(child);
                 child = parent;
             }
-            NodeKind::Container(Arrangement::Along(axis)) => {
+            NodeKind::Container(Arrangement::Along { axis, .. }) => {
                 let fills_on_the_way = |inside: &usize| {
                     matches!(nodes[*inside].flow, Flow::In(_))
                         && fills(nodes, *inside, axis, &mut |_| true)
@@ -161,7 +161,7 @@ impl Smallest {
 impl<T: TextMeasurer> Measuring<'_, T> {
     pub(super) fn takes_share(&mut self, container: usize, child: usize) -> bool {
         let nodes = self.nodes;
-        let NodeKind::Container(Arrangement::Along(axis)) = nodes[container].kind else {
+        let NodeKind::Container(Arrangement::Along { axis, .. }) = nodes[container].kind else {
             return true;
         };
         let mut shown = |node| self.resolve_conditions(node);

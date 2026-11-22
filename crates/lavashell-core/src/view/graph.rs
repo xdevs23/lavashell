@@ -3,7 +3,9 @@ use super::frame_error::{LayoutError, LayoutRead, LayoutReads, NodeName, NodeVal
 use super::layout::{fill_decided_by, fills_through_children, weight};
 use super::parents::{Parent, Parents};
 use crate::geometry::Axis;
-use crate::ui::{ModifierElement, Node, NodeRef, NodeRefKey, Part, Read, Used};
+use crate::ui::{
+    Arrangement, ModifierElement, Node, NodeKind, NodeRef, NodeRefKey, Overflow, Part, Read, Used,
+};
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
@@ -180,6 +182,9 @@ impl Graph {
             (Some(&from), Some(&to)) if from.position != to.position => (from, to),
             _ => return Err(LayoutError::RelativeSizeRead(layout_read(nodes, &edge))),
         };
+        if hides_children(&nodes[from.node]) {
+            return Err(LayoutError::HideableChildRead(layout_read(nodes, &edge)));
+        }
         let child_at = |parent: Parent| nodes[parent.node].children[parent.position];
         let weighted = |child: Parent| weight(nodes, child.node, child_at(child), true).is_some();
         let condition = edge.used == Used::Condition;
@@ -256,6 +261,13 @@ impl Probes<'_> {
 fn made_by_probe(parents: &Parents, node: usize, read: Edge) -> bool {
     let inside = parents.ancestry(read.reader).any(|above| above == node);
     inside && (read.reader != node || read.used == Used::Length(Axis::Vertical))
+}
+
+fn hides_children(node: &Node) -> bool {
+    let NodeKind::Container(Arrangement::Along { overflow, .. }) = node.kind else {
+        return false;
+    };
+    overflow != Overflow::Visible
 }
 
 fn invalid_modifier(node: &Node) -> Option<LayoutError> {

@@ -3,7 +3,7 @@ use super::*;
 use crate::geometry::{Axis, Color, Viewport};
 use crate::scene::DrawCommand;
 use crate::scroll::ScrollState;
-use crate::ui::NodeRef;
+use crate::ui::{NodeRef, Overflow};
 
 #[test]
 fn an_offset_places_a_menu_under_the_bounds_of_a_button() -> TestResult {
@@ -233,6 +233,35 @@ fn a_condition_cannot_read_the_size_of_its_own_node() -> TestResult {
         error,
         ComponentError::Layout(LayoutError::RelativeSizeRead(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn a_condition_cannot_read_a_sibling_that_overflow_can_hide() -> TestResult {
+    let error = first_frame_error(|ui| {
+        let card = NodeRef::new();
+        let hiding = Arrangement::Along {
+            axis: Axis::Vertical,
+            overflow: Overflow::HideStart,
+        };
+        ui.layout(hiding, Modifier::new().height(50.dp()), |ui| {
+            ui.spacer(
+                50.dp(),
+                40.dp(),
+                Modifier::new().node_ref(&card).tag("card"),
+            );
+            let tall = card.height().map(|height| height > 30.dp());
+            ui.spacer(
+                50.dp(),
+                10.dp(),
+                Modifier::new().shown_when(tall).tag("note"),
+            );
+        });
+    })?;
+    let ComponentError::Layout(LayoutError::HideableChildRead(read)) = error else {
+        return Err(error.into());
+    };
+    assert_eq!(tags(&[read]), [(Some("note"), Some("card"))]);
     Ok(())
 }
 

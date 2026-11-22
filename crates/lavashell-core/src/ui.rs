@@ -24,7 +24,7 @@ pub(crate) use node::Memory;
 pub use node::{
     AccessibilityHandler, Action, ActivateAction, Activation, Align, Arrangement, ContentSizes,
     ContentSizesAction, ContextAction, ContextRequest, FieldContent, Flow, IconOptions, IconSize,
-    Identity, InputModifiers, KeyAction, Lines, MeasureAction, Node, NodeId, NodeKind,
+    Identity, InputModifiers, KeyAction, Lines, MeasureAction, Node, NodeId, NodeKind, Overflow,
     ScrollAction, SemanticsProvider, SharedKey, TextChange, TextFieldOptions, Tooltip, ViewId,
     Weight,
 };

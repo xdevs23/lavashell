@@ -96,13 +96,16 @@ pub(crate) type Memory = Rc<RefCell<crate::states::States<(NodeId, u64)>>>;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Arrangement {
-    Along(Axis),
+    Along { axis: Axis, overflow: Overflow },
     Overlay,
 }
 
 impl From<Axis> for Arrangement {
     fn from(axis: Axis) -> Self {
-        Self::Along(axis)
+        Self::Along {
+            axis,
+            overflow: Overflow::Visible,
+        }
     }
 }
 
@@ -154,6 +157,23 @@ pub enum Align {
     Start,
     Center,
     End,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Overflow {
+    #[default]
+    Visible,
+    HideStart,
+    HideEnd,
+}
+
+impl Overflow {
+    pub(crate) fn kept_first(self, positions: Vec<usize>) -> Vec<usize> {
+        match self {
+            Self::Visible | Self::HideEnd => positions,
+            Self::HideStart => positions.into_iter().rev().collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
