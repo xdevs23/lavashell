@@ -46,7 +46,7 @@ enum TestError {
 type TestResult = Result<(), TestError>;
 
 fn app(compose: impl FnMut(&mut Ui) + 'static) -> Result<App, SetupError> {
-    let mut app = App::new(lavashell_test_fixtures::facts());
+    let mut app = App::new().facts(lavashell_test_fixtures::facts());
     app.window(
         Window::new("test", APP_ID).size(100.dp(), 100.dp()),
         compose,
@@ -220,7 +220,7 @@ fn a_recording_repeats_at_each_interval_until_the_motion_rests() -> TestResult {
 
 #[test]
 fn an_app_that_needs_a_missing_capability_fails_before_the_run_starts() {
-    let mut app = App::new(lavashell_test_fixtures::facts());
+    let mut app = App::new().facts(lavashell_test_fixtures::facts());
     app.layer(LayerSurface::new("bar"), |_| {});
     let (ran, frames) = HostScript::new(Density::ONE).serve(|host| run::<TestPlatform>(app, host));
     assert!(matches!(

@@ -93,6 +93,10 @@ impl LockConfiguration {
             },
         }
     }
+
+    pub(crate) fn provide_platform(&mut self, platform: PlatformFacts) {
+        self.views.platform = platform;
+    }
 }
 
 #[derive(Clone, Copy)]

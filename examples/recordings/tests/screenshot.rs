@@ -2,7 +2,6 @@
 #![forbid(unsafe_code)]
 use lavashell::prelude::*;
 use lavashell_example_recordings::{Error, write_screenshot};
-use lavashell_example_support::platform;
 use std::path::{Path, PathBuf};
 use std::{fs::File, io::BufReader};
 
@@ -19,7 +18,7 @@ enum TestError {
 }
 
 fn app() -> Result<App, Error> {
-    let mut app = App::new(platform());
+    let mut app = App::new();
     app.window(
         Window::new("screenshot", APP_ID).size(10.dp(), 20.dp()),
         |_| {},

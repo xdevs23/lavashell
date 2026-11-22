@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use lavashell_example_support::platform;
 use std::cell::Cell;
 
 fn timing(sequence: u64, milliseconds: u64) -> FrameTime {
@@ -33,7 +32,7 @@ fn labels(labeled: Vec<(&'static str, RecordedFrame)>) -> Vec<(&'static str, u64
 }
 
 fn view() -> View {
-    View::new(platform(), |_| {})
+    View::new(PlatformFacts::default(), |_| {})
 }
 
 fn milliseconds(count: u64) -> Duration {
@@ -44,7 +43,7 @@ fn observe_frame<C: 'static, L: 'static>(
     steps: Steps<C, L, Error>,
 ) -> Rc<RefCell<Playing<C, L, Error>>> {
     let playing = Rc::new(RefCell::new(steps.into_playing()));
-    let actions = App::new(platform()).view_actions();
+    let actions = App::new().view_actions();
     let viewport = Viewport::new(Size::new(10.dp(), 20.dp()), Density::ONE);
     observe(&playing, &actions, marked(1, 1, 0), viewport, &view());
     playing
@@ -266,7 +265,7 @@ fn a_press_of_keys_waits_for_the_frame_that_shows_them() {
 fn play_labeled_times(
     steps: Steps<(), &'static str, Error>,
 ) -> Result<Vec<(&'static str, Duration)>, Error> {
-    let mut app = App::new(platform());
+    let mut app = App::new();
     app.window(
         Window::new("test", "test.steps").size(10.dp(), 10.dp()),
         |_| {},

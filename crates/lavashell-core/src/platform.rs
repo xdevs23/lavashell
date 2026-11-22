@@ -22,6 +22,33 @@ pub struct PlatformFacts {
     pub locales: Vec<LanguageIdentifier>,
 }
 
+const DEFAULT_LONG_PRESS: Duration = Duration::from_millis(300);
+const DEFAULT_DOUBLE_PRESS: Duration = Duration::from_millis(300);
+const DEFAULT_KEY_REPEAT_DELAY: Duration = Duration::from_millis(400);
+const DEFAULT_KEY_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
+const DEFAULT_TEXT_SIZE: Sp = Sp::new(14.0);
+
+impl Default for PlatformFacts {
+    fn default() -> Self {
+        Self {
+            slop: None,
+            caret_width: None,
+            long_press: DEFAULT_LONG_PRESS,
+            double_press: DEFAULT_DOUBLE_PRESS,
+            key_repeat: KeyRepeat::new(DEFAULT_KEY_REPEAT_DELAY, DEFAULT_KEY_REPEAT_INTERVAL),
+            text_size: DEFAULT_TEXT_SIZE,
+            foreground: Color::WHITE,
+            color_scheme: ColorScheme::Dark,
+            password_mask: '•',
+            keyboard: KeyboardPreferences {
+                automatic_capitals: true,
+                key_preview: true,
+            },
+            locales: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct KeyRepeat {
     delay: Duration,

@@ -3,7 +3,6 @@
 use lavashell::prelude::*;
 use lavashell_example_support::{
     Error, TEAL_PALETTE, TealPalette, Theme, ThemeChoice, ThemeSwitchColors, exit_code, icon,
-    platform,
 };
 use std::process::ExitCode;
 
@@ -62,7 +61,7 @@ fn run() -> Result<(), Error> {
     let plus = icon(&lavashell_lucide::PLUS)?;
     let theme = Theme::new(ThemeChoice::System)?;
     let window = Window::new("Lavashell / Counter", "lavashell.counter");
-    let mut app = App::new(platform());
+    let mut app = App::new();
     app.window(window, move |ui| counter(ui, &theme, plus))?;
     lavashell::run(app).map_err(Error::App)
 }

@@ -7,7 +7,6 @@ mod error;
 mod frame_log;
 mod next_steps;
 mod palette;
-mod platform;
 mod report;
 mod samples;
 #[cfg(any(test, feature = "testing"))]
@@ -22,7 +21,6 @@ pub use frame_log::{FrameLog, run, run_observed};
 pub use lavashell_lucide as lucide;
 pub use next_steps::{ExampleError, NextStep};
 pub use palette::{TEAL_PALETTE, TealPalette};
-pub use platform::platform;
 pub use report::{exit_code, report, report_failure};
 pub use samples::{HARBOR_LIGHTS, SampleTrack, UNDERTOW};
 pub use theme::{Theme, ThemeChoice, ThemeSwitchColors};
@@ -57,7 +55,7 @@ pub fn size_window(window: Window, size: Option<Size>) -> Window {
 }
 
 pub fn default_app() -> Result<App, Error> {
-    Ok(App::new(platform()).fonts(fonts()?))
+    Ok(App::new().fonts(fonts()?))
 }
 
 pub const FONT_DIRECTORY: &str = "LAVASHELL_EXAMPLE_NODE_MODULES";

@@ -63,7 +63,7 @@ fn a_panel_on_a_platform_without_panels_ends_the_run_before_the_platform_serves(
 
 #[test]
 fn an_app_without_a_surface_fails_before_the_platform_connects() {
-    let app = App::new(lavashell_test_fixtures::facts());
+    let app = App::new().facts(lavashell_test_fixtures::facts());
     assert!(matches!(
         run::<StandIn>(app, Scenario::Unreachable),
         Err(RunError::NoSurfaces)
@@ -221,7 +221,7 @@ impl SceneSource for EmptyScene {
 
 #[test]
 fn a_scene_that_the_app_sets_on_the_backend_starts_with_the_renderer() -> TestResult {
-    let mut app = App::new(lavashell_test_fixtures::facts());
+    let mut app = App::new().facts(lavashell_test_fixtures::facts());
     app.window(Window::new("window", "test.app"), |_| {})?;
     let (made, scenes) = mpsc::channel();
     let make_scene = move || -> Box<dyn SceneSource> {

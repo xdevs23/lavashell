@@ -159,3 +159,13 @@ fn every_lock_surface_shows_a_view_of_the_same_compose_function() -> TestResult 
     assert_eq!(composed.get(), 2);
     Ok(())
 }
+
+#[test]
+fn facts_provided_after_the_lock_is_configured_reach_every_lock_view() {
+    let mut configuration = configuration(&SessionLock::new());
+    configuration.provide_platform(PlatformFacts::default());
+    assert_eq!(
+        configuration.views.view().platform(),
+        PlatformFacts::default()
+    );
+}

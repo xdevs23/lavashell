@@ -37,7 +37,8 @@ pub fn run_pane(
     let showing = shown.clone();
     let closed = Rc::new(Cell::new(false));
     let closing = closed.clone();
-    let mut app = App::new(facts())
+    let mut app = App::new()
+        .facts(facts())
         .on_frame(move |_| match requested.take_arrived() {
             Ok(panes) => panes.into_iter().for_each(|pane| showing.set(pane)),
             Err(Closed) => closing.set(true),

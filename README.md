@@ -29,8 +29,8 @@ fn counter(ui: &mut Ui) {
     });
 }
 
-fn open_counter(facts: PlatformFacts) -> Result<(), CounterError> {
-    let mut app = App::new(facts);
+fn main() -> Result<(), CounterError> {
+    let mut app = App::new();
     app.window(Window::new("Counter", "org.example.counter"), counter)?;
     Ok(lavashell::run(app)?)
 }

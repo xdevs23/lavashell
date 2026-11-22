@@ -5,7 +5,7 @@ use lavashell_core::geometry::Size;
 use lavashell_core::units::{Dp, DpExt, NumberError};
 
 fn app() -> App {
-    App::new(lavashell_test_fixtures::facts())
+    App::new().facts(lavashell_test_fixtures::facts())
 }
 
 fn window(title: &str) -> Window {
@@ -98,5 +98,35 @@ fn a_session_lock_alone_gives_the_setup_a_surface() -> TestResult {
     assert!(!app.setup.has_surfaces());
     app.session_lock(SessionLock::new(), |_| {})?;
     assert!(app.into_setup().has_surfaces());
+    Ok(())
+}
+
+fn surface_facts(app: &App) -> Vec<PlatformFacts> {
+    (app.setup.surfaces.iter())
+        .map(|surface| surface.view().platform())
+        .collect()
+}
+
+#[test]
+fn an_app_starts_from_the_default_platform_facts() -> TestResult {
+    let mut app = App::new();
+    app.window(window("window"), |_| {})?;
+    assert_eq!(surface_facts(&app), [PlatformFacts::default()]);
+    Ok(())
+}
+
+#[test]
+fn facts_given_to_the_app_reach_the_surfaces_added_before_and_after() -> TestResult {
+    let mut app = App::new();
+    app.window(window("before"), |_| {})?;
+    let mut app = app.facts(lavashell_test_fixtures::facts());
+    app.layer(LayerSurface::new("after"), |_| {});
+    assert_eq!(
+        surface_facts(&app),
+        [
+            lavashell_test_fixtures::facts(),
+            lavashell_test_fixtures::facts()
+        ]
+    );
     Ok(())
 }

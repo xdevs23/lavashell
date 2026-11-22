@@ -33,6 +33,12 @@ pub struct App {
     platform: PlatformFacts,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     #[must_use]
     pub fn input_filter(
@@ -146,7 +152,7 @@ impl App {
     }
 
     #[must_use]
-    pub fn new(platform: PlatformFacts) -> Self {
+    pub fn new() -> Self {
         let watches = Watches::default();
         let renderer = RendererSetup {
             fonts: Fonts::default(),
@@ -168,7 +174,17 @@ impl App {
             drags: Drags::new(&watches),
             watches,
         };
-        Self { setup, platform }
+        Self {
+            setup,
+            platform: PlatformFacts::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn facts(mut self, platform: PlatformFacts) -> Self {
+        self.setup.provide_platform(&platform);
+        self.platform = platform;
+        self
     }
 
     #[must_use]

@@ -18,6 +18,7 @@ use crate::watches::Watches;
 use crate::window::Window;
 use crate::{logging, registry, scene_pipeline};
 use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
+use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
 use lavashell_platform::{Capability, Platform, PlatformLinks, RendererSetup};
@@ -29,6 +30,14 @@ use std::{convert, io, thread};
 pub(crate) enum SurfaceSetup {
     Window(Window, View),
     Panel(LayerSurface, View),
+}
+
+impl SurfaceSetup {
+    pub(crate) fn view(&self) -> &View {
+        match self {
+            Self::Window(_, view) | Self::Panel(_, view) => view,
+        }
+    }
 }
 
 pub(crate) struct RuntimeSetup {
@@ -52,6 +61,15 @@ impl RuntimeSetup {
             SurfaceSetup::Panel(layer, _) => Some(layer),
             SurfaceSetup::Window(..) => None,
         })
+    }
+
+    pub fn provide_platform(&mut self, platform: &PlatformFacts) {
+        for surface in &self.surfaces {
+            surface.view().provide_platform(platform.clone());
+        }
+        if let Some(lock) = &mut self.session_lock {
+            lock.provide_platform(platform.clone());
+        }
     }
 
     pub fn has_surfaces(&self) -> bool {
