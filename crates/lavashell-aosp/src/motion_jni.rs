@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::Error;
 use crate::error::ensure_no_exception;
-use crate::input::{Motion, MotionEvent, MouseAction, MousePosition, TouchAction, TouchPointer};
+use crate::input::{
+    Motion, MotionEvent, MouseAction, MousePosition, TouchAction, TouchPointer, TouchPositions,
+};
 use jni::objects::JObject;
 use jni::{Env, JValueOwned, jni_sig, jni_str};
 use lavashell_core::ui::PointerKind;
 use lavashell_core::units::Px;
-use lavashell_platform::{Button, PressState};
+use lavashell_platform::{Button, InputTime, PressState};
 use ndk::event::{MotionAction as ActionCode, Pointer, SourceClass, ToolType};
 use std::ptr::NonNull;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum MalformedMotion {
@@ -16,6 +19,8 @@ pub enum MalformedMotion {
     PointerIndex { index: usize, count: usize },
     #[error("the action button {0:#x} of a button action is not one of the mouse buttons")]
     ActionButton(i32),
+    #[error("the event time {0} ns is before the start of the clock of the event")]
+    EventTime(i64),
 }
 
 pub fn motion_event_of(
@@ -98,7 +103,7 @@ fn touch_action(
             PointerEnding::Lifted => TouchAction::Up(touch_pointer(changed)),
         },
         ActionCode::Up => TouchAction::Up(touch_pointer(changed)),
-        ActionCode::Move => TouchAction::Move(pointers.iter().map(touch_pointer).collect()),
+        ActionCode::Move => TouchAction::Move(batched_touch_positions(native, pointers)?),
         ActionCode::Cancel => {
             TouchAction::Cancel(pointers.iter().map(Pointer::pointer_id).collect())
         }
@@ -128,12 +133,45 @@ fn pointer_ending(
 }
 
 fn touch_pointer(pointer: &Pointer<'_>) -> TouchPointer {
+    touch_pointer_at(pointer, pointer.x(), pointer.y())
+}
+
+fn touch_pointer_at(pointer: &Pointer<'_>, x: f32, y: f32) -> TouchPointer {
     TouchPointer {
         id: pointer.pointer_id(),
         kind: kind_of_tool(pointer.tool_type()),
-        x: to_px(pointer.x()),
-        y: to_px(pointer.y()),
+        x: to_px(x),
+        y: to_px(y),
     }
+}
+
+fn batched_touch_positions(
+    native: &ndk::event::MotionEvent,
+    pointers: &[Pointer<'_>],
+) -> Result<Vec<TouchPositions>, MalformedMotion> {
+    let historical = native.history().map(|moment| {
+        let historical_pointers = (moment.pointers())
+            .map(|position| {
+                let pointer = native.pointer_at_index(position.pointer_index());
+                touch_pointer_at(&pointer, position.x(), position.y())
+            })
+            .collect();
+        input_time(moment.event_time()).map(|time| TouchPositions {
+            time,
+            pointers: historical_pointers,
+        })
+    });
+    let current = input_time(native.event_time()).map(|time| TouchPositions {
+        time,
+        pointers: pointers.iter().map(touch_pointer).collect(),
+    });
+    historical.chain([current]).collect()
+}
+
+fn input_time(nanos: i64) -> Result<InputTime, MalformedMotion> {
+    (u64::try_from(nanos))
+        .map(|nanos| InputTime(Duration::from_nanos(nanos)))
+        .map_err(|_negative_time| MalformedMotion::EventTime(nanos))
 }
 
 fn mouse_action(

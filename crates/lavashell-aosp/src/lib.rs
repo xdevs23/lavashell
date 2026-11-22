@@ -39,7 +39,7 @@ pub use hardware_buffer::{HardwareBufferMemory, PropertiesError};
 pub use host::{AospError, AospHost, HostLink, RunEnded};
 #[cfg(target_os = "android")]
 pub use host_jni::{configuration_of, display_of};
-pub use input::{MotionEvent, TouchAction, TouchPointer};
+pub use input::{MotionEvent, TouchAction, TouchPointer, TouchPositions};
 pub use layout_size::LayoutSize;
 #[cfg(target_os = "android")]
 pub use motion_jni::{MalformedMotion, motion_event_of};

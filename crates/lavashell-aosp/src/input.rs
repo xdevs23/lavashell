@@ -5,7 +5,9 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::Px;
 use lavashell_core::view::TouchSample;
-use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState};
+use lavashell_platform::{
+    Button, DeviceEvent, InputSerial, InputTime, PointerDevice, PressState, TouchMove,
+};
 
 pub(crate) const MOUSE: PointerDevice = PointerDevice(0);
 
@@ -29,8 +31,14 @@ pub(crate) enum Motion {
 pub enum TouchAction {
     Down(TouchPointer),
     Up(TouchPointer),
-    Move(Vec<TouchPointer>),
+    Move(Vec<TouchPositions>),
     Cancel(Vec<i32>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TouchPositions {
+    pub time: InputTime,
+    pub pointers: Vec<TouchPointer>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -173,8 +181,18 @@ fn touch_events(seat: i64, action: TouchAction, shown: ShownSurface) -> Vec<Devi
             sample: sample(pointer),
         }],
         TouchAction::Up(pointer) => vec![DeviceEvent::TouchUp(sample(pointer))],
-        TouchAction::Move(pointers) => (pointers.into_iter())
-            .map(|pointer| DeviceEvent::TouchMotion(sample(pointer)))
+        TouchAction::Move(batched) => (batched.into_iter())
+            .flat_map(|TouchPositions { time, pointers }| {
+                pointers
+                    .into_iter()
+                    .map(move |pointer| DeviceEvent::TouchMotion {
+                        earlier: Vec::new(),
+                        latest: TouchMove {
+                            sample: sample(pointer),
+                            time,
+                        },
+                    })
+            })
             .collect(),
         TouchAction::Cancel(points) => (points.into_iter())
             .map(|point| DeviceEvent::TouchCancel(id(point)))

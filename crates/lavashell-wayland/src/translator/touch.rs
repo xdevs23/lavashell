@@ -2,10 +2,11 @@
 use super::Translator;
 use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
-use lavashell_platform::DeviceEvent;
+use lavashell_platform::{DeviceEvent, InputTime};
 use sctk::reexports::client::protocol::{wl_surface, wl_touch};
 use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::seat::touch::TouchHandler;
+use std::time::Duration;
 
 impl TouchHandler for Translator {
     fn down(
@@ -49,12 +50,13 @@ impl TouchHandler for Translator {
         _: &Connection,
         _: &QueueHandle<Self>,
         touch: &wl_touch::WlTouch,
-        _: u32,
+        millis: u32,
         id: i32,
         position: (f64, f64),
     ) {
         let at = crate::logical::convert_to_point(position.0, position.1);
-        if let Some(motion) = self.devices.touch_motion(touch, id, at) {
+        let time = InputTime(Duration::from_millis(u64::from(millis)));
+        if let Some(motion) = self.devices.touch_motion(touch, id, at, time) {
             self.links.report(motion);
         }
     }

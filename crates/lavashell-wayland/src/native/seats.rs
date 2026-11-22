@@ -4,7 +4,7 @@ use crate::sctk;
 use lavashell_core::geometry::Point;
 use lavashell_core::ui::TouchId;
 use lavashell_core::view::TouchSample;
-use lavashell_platform::{DeviceEvent, KeyboardDevice, PointerDevice};
+use lavashell_platform::{DeviceEvent, InputTime, KeyboardDevice, PointerDevice, TouchMove};
 use sctk::reexports::client::Proxy;
 use sctk::reexports::client::protocol::{wl_keyboard, wl_seat, wl_touch};
 use sctk::seat::pointer::ThemedPointer;
@@ -170,11 +170,15 @@ impl SeatSet {
         touch: &wl_touch::WlTouch,
         point: i32,
         at: Point,
+        time: InputTime,
     ) -> Option<DeviceEvent> {
         let devices = self.touch_devices(touch)?;
         *devices.touch_positions.get_mut(&point)? = at;
         let sample = TouchSample::finger(touch_id(&devices.seat, point), at);
-        Some(DeviceEvent::TouchMotion(sample))
+        Some(DeviceEvent::TouchMotion {
+            earlier: Vec::new(),
+            latest: TouchMove { sample, time },
+        })
     }
 
     pub(crate) fn cancel_touches(&mut self, touch: &wl_touch::WlTouch) -> Vec<DeviceEvent> {

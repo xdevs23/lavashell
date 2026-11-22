@@ -5,6 +5,7 @@ use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{InputModifiers, TouchId};
 use lavashell_core::view::{Cursor, TouchSample};
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerDevice(pub u64);
@@ -14,6 +15,15 @@ pub struct KeyboardDevice(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InputSerial(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InputTime(pub Duration);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TouchMove {
+    pub sample: TouchSample,
+    pub time: InputTime,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PointerPress {
@@ -97,7 +107,10 @@ pub enum DeviceEvent {
         surface: SurfaceId,
         sample: TouchSample,
     },
-    TouchMotion(TouchSample),
+    TouchMotion {
+        earlier: Vec<TouchMove>,
+        latest: TouchMove,
+    },
     TouchUp(TouchSample),
     TouchCancel(TouchId),
 }
@@ -122,8 +135,8 @@ impl Merge for DeviceEvent {
                 key: DeviceEventKey::Scroll(*pointer),
                 fenced: DeviceEventKey::PointerPosition(*pointer),
             },
-            Self::TouchMotion(sample) => {
-                MergeEffect::Overwrites(DeviceEventKey::TouchPosition(sample.id))
+            Self::TouchMotion { latest, .. } => {
+                MergeEffect::Overwrites(DeviceEventKey::TouchPosition(latest.sample.id))
             }
             _ => MergeEffect::Appends,
         }
@@ -141,6 +154,17 @@ impl Merge for DeviceEvent {
             ) => {
                 *at = later_at;
                 *delta = delta.offset(later_delta.x, later_delta.y);
+            }
+            (
+                Self::TouchMotion { earlier, latest },
+                Self::TouchMotion {
+                    earlier: later_earlier,
+                    latest: later_latest,
+                },
+            ) => {
+                earlier.push(*latest);
+                earlier.extend(later_earlier);
+                *latest = later_latest;
             }
             (earlier, later) => *earlier = later,
         }

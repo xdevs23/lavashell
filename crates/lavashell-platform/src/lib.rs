@@ -40,8 +40,8 @@ pub use drag::{
 pub use event::PlatformEvent;
 pub use focus_grab::{FocusGrabEvent, FocusGrabRequest};
 pub use input::{
-    Button, DeviceEvent, InputRequest, InputSerial, KeyAction, KeyboardDevice, PointerDevice,
-    PointerPress, PressState,
+    Button, DeviceEvent, InputRequest, InputSerial, InputTime, KeyAction, KeyboardDevice,
+    PointerDevice, PointerPress, PressState, TouchMove,
 };
 pub use output::{OutputEvent, OutputId};
 pub use panel::{KeyboardMode, PanelRequest};

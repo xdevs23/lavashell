@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::motion::{finger, holding, hovering, mouse, pen, press, release};
-use crate::input::{MOUSE, MotionEvent, MotionTranslator, MouseAction, ShownSurface, TouchAction};
+use crate::input::{
+    MOUSE, MotionEvent, MotionTranslator, MouseAction, ShownSurface, TouchAction, TouchPointer,
+    TouchPositions,
+};
 use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::{Density, DpExt, NumberError};
 use lavashell_core::view::TouchSample;
-use lavashell_platform::{Button, DeviceEvent, InputSerial, PressState};
+use lavashell_platform::{Button, DeviceEvent, InputSerial, InputTime, PressState, TouchMove};
+use std::time::Duration;
 
 const SURFACE: SurfaceId = SurfaceId::numbered(1);
 const SCREEN: i64 = 3;
@@ -49,6 +53,27 @@ fn finger_at(point: i32, x: f64, y: f64) -> TouchSample {
     sample(SCREEN, point, PointerKind::Finger, at(x, y))
 }
 
+fn at_millis(millis: u64) -> InputTime {
+    InputTime(Duration::from_millis(millis))
+}
+
+fn positions(millis: u64, pointers: Vec<TouchPointer>) -> TouchPositions {
+    TouchPositions {
+        time: at_millis(millis),
+        pointers,
+    }
+}
+
+fn moved(sample: TouchSample, millis: u64) -> DeviceEvent {
+    DeviceEvent::TouchMotion {
+        earlier: Vec::new(),
+        latest: TouchMove {
+            sample,
+            time: at_millis(millis),
+        },
+    }
+}
+
 fn at(x: f64, y: f64) -> Point {
     Point::new(x.dp(), y.dp())
 }
@@ -84,9 +109,10 @@ fn button(button: Button, state: PressState, at: Point, serial: u64) -> DeviceEv
 
 #[test]
 fn a_tap_goes_down_moves_and_goes_up_at_its_dp_position() -> Result<(), NumberError> {
+    let batched = vec![positions(16, vec![finger(0, 24.0, 42.0)])];
     let recorded = vec![
         MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 20.0, 40.0))),
-        MotionEvent::touch(SCREEN, TouchAction::Move(vec![finger(0, 24.0, 42.0)])),
+        MotionEvent::touch(SCREEN, TouchAction::Move(batched)),
         MotionEvent::touch(SCREEN, TouchAction::Up(finger(0, 24.0, 42.0))),
     ];
     let expected = [
@@ -94,7 +120,7 @@ fn a_tap_goes_down_moves_and_goes_up_at_its_dp_position() -> Result<(), NumberEr
             surface: SURFACE,
             sample: finger_at(0, 10.0, 20.0),
         },
-        DeviceEvent::TouchMotion(finger_at(0, 12.0, 21.0)),
+        moved(finger_at(0, 12.0, 21.0), 16),
         DeviceEvent::TouchUp(finger_at(0, 12.0, 21.0)),
     ];
     assert_eq!(
@@ -106,11 +132,14 @@ fn a_tap_goes_down_moves_and_goes_up_at_its_dp_position() -> Result<(), NumberEr
 
 #[test]
 fn a_two_finger_gesture_lifts_the_first_finger_while_the_second_moves_on() {
-    let both = vec![finger(0, 12.0, 10.0), finger(1, 48.0, 10.0)];
+    let batched = vec![positions(
+        16,
+        vec![finger(0, 12.0, 10.0), finger(1, 48.0, 10.0)],
+    )];
     let recorded = vec![
         MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
         MotionEvent::touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
-        MotionEvent::touch(SCREEN, TouchAction::Move(both)),
+        MotionEvent::touch(SCREEN, TouchAction::Move(batched)),
         MotionEvent::touch(SCREEN, TouchAction::Up(finger(0, 12.0, 10.0))),
         MotionEvent::touch(SCREEN, TouchAction::Up(finger(1, 48.0, 10.0))),
     ];
@@ -123,10 +152,41 @@ fn a_two_finger_gesture_lifts_the_first_finger_while_the_second_moves_on() {
             surface: SURFACE,
             sample: finger_at(1, 50.0, 10.0),
         },
-        DeviceEvent::TouchMotion(finger_at(0, 12.0, 10.0)),
-        DeviceEvent::TouchMotion(finger_at(1, 48.0, 10.0)),
+        moved(finger_at(0, 12.0, 10.0), 16),
+        moved(finger_at(1, 48.0, 10.0), 16),
         DeviceEvent::TouchUp(finger_at(0, 12.0, 10.0)),
         DeviceEvent::TouchUp(finger_at(1, 48.0, 10.0)),
+    ];
+    assert_eq!(translate(recorded, Density::ONE), expected);
+}
+
+#[test]
+fn a_batched_move_moves_every_finger_through_each_position_at_its_time_oldest_first() {
+    let batched = vec![
+        positions(8, vec![finger(0, 11.0, 10.0), finger(1, 49.0, 10.0)]),
+        positions(12, vec![finger(0, 12.0, 11.0), finger(1, 48.0, 11.0)]),
+        positions(16, vec![finger(0, 13.0, 12.0), finger(1, 47.0, 12.0)]),
+    ];
+    let recorded = vec![
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Down(finger(1, 50.0, 10.0))),
+        MotionEvent::touch(SCREEN, TouchAction::Move(batched)),
+    ];
+    let expected = [
+        DeviceEvent::TouchDown {
+            surface: SURFACE,
+            sample: finger_at(0, 10.0, 10.0),
+        },
+        DeviceEvent::TouchDown {
+            surface: SURFACE,
+            sample: finger_at(1, 50.0, 10.0),
+        },
+        moved(finger_at(0, 11.0, 10.0), 8),
+        moved(finger_at(1, 49.0, 10.0), 8),
+        moved(finger_at(0, 12.0, 11.0), 12),
+        moved(finger_at(1, 48.0, 11.0), 12),
+        moved(finger_at(0, 13.0, 12.0), 16),
+        moved(finger_at(1, 47.0, 12.0), 16),
     ];
     assert_eq!(translate(recorded, Density::ONE), expected);
 }
@@ -162,11 +222,14 @@ fn a_cancel_ends_every_finger_that_is_down_and_a_pointer_cancel_ends_one() {
 
 #[test]
 fn each_pointer_of_a_gesture_has_the_kind_of_its_tool() {
-    let both = vec![finger(0, 12.0, 10.0), pen(1, 48.0, 10.0)];
+    let batched = vec![positions(
+        16,
+        vec![finger(0, 12.0, 10.0), pen(1, 48.0, 10.0)],
+    )];
     let recorded = vec![
         MotionEvent::touch(SCREEN, TouchAction::Down(finger(0, 10.0, 10.0))),
         MotionEvent::touch(SCREEN, TouchAction::Down(pen(1, 50.0, 10.0))),
-        MotionEvent::touch(SCREEN, TouchAction::Move(both)),
+        MotionEvent::touch(SCREEN, TouchAction::Move(batched)),
     ];
     let expected = [
         DeviceEvent::TouchDown {
@@ -177,8 +240,8 @@ fn each_pointer_of_a_gesture_has_the_kind_of_its_tool() {
             surface: SURFACE,
             sample: sample(SCREEN, 1, PointerKind::Pen, at(50.0, 10.0)),
         },
-        DeviceEvent::TouchMotion(finger_at(0, 12.0, 10.0)),
-        DeviceEvent::TouchMotion(sample(SCREEN, 1, PointerKind::Pen, at(48.0, 10.0))),
+        moved(finger_at(0, 12.0, 10.0), 16),
+        moved(sample(SCREEN, 1, PointerKind::Pen, at(48.0, 10.0)), 16),
     ];
     assert_eq!(translate(recorded, Density::ONE), expected);
 }

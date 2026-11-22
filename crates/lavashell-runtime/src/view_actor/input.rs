@@ -56,7 +56,7 @@ impl<P: Platform> ViewActor<P> {
             }
             DeviceEvent::Modifiers { .. }
             | DeviceEvent::TouchDown { .. }
-            | DeviceEvent::TouchMotion(_)
+            | DeviceEvent::TouchMotion { .. }
             | DeviceEvent::TouchUp(_)
             | DeviceEvent::TouchCancel(_) => self.route(event),
         }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_merge::merged;
-use crate::{Button, InputSerial, PointerDevice, PressState};
+use crate::{Button, InputSerial, InputTime, PointerDevice, PressState, TouchMove};
 use lavashell_actor::{Closed, mailbox};
 use lavashell_core::geometry::Point;
 use lavashell_core::platform::KeyRepeat;
@@ -67,18 +67,27 @@ fn touch_sample(point: i32, x: f64) -> TouchSample {
     TouchSample::finger(TouchId { seat: 1, point }, Point::new(x.dp(), 0.dp()))
 }
 
-fn touch_motion(point: i32, x: f64) -> PlatformEvent {
-    PlatformEvent::Device(DeviceEvent::TouchMotion(touch_sample(point, x)))
+fn touch_motion(point: i32, x: f64, millis: u64) -> PlatformEvent {
+    let latest = TouchMove {
+        sample: touch_sample(point, x),
+        time: InputTime(Duration::from_millis(millis)),
+    };
+    PlatformEvent::Device(DeviceEvent::TouchMotion {
+        earlier: Vec::new(),
+        latest,
+    })
 }
 
 fn touch_up(point: i32) -> PlatformEvent {
     PlatformEvent::Device(DeviceEvent::TouchUp(touch_sample(point, 0.0)))
 }
 
-fn touch_x(event: &PlatformEvent) -> Option<(i32, Dp)> {
+fn touch_moves(event: &PlatformEvent) -> Option<(i32, Vec<(Dp, InputTime)>)> {
     match event {
-        PlatformEvent::Device(DeviceEvent::TouchMotion(sample)) => {
-            Some((sample.id.point, sample.at.x))
+        PlatformEvent::Device(DeviceEvent::TouchMotion { earlier, latest }) => {
+            let moves = earlier.iter().chain([latest]);
+            let xs = moves.map(|moved| (moved.sample.at.x, moved.time));
+            Some((latest.sample.id.point, xs.collect()))
         }
         _ => None,
     }
@@ -232,20 +241,22 @@ fn a_scroll_between_motions_keeps_both_motions_apart() -> Result<(), Closed> {
 }
 
 #[test]
-fn touch_motions_merge_per_point_until_another_touch_event() -> Result<(), Closed> {
+fn touch_motions_merge_per_point_with_every_position_until_another_touch_event()
+-> Result<(), Closed> {
     let events = [
-        touch_motion(1, 1.0),
-        touch_motion(2, 5.0),
-        touch_motion(1, 2.0),
+        touch_motion(1, 1.0, 10),
+        touch_motion(2, 5.0, 10),
+        touch_motion(1, 2.0, 18),
         touch_up(1),
-        touch_motion(1, 3.0),
+        touch_motion(1, 3.0, 26),
     ];
-    let taken: Vec<_> = merged(events)?.iter().map(touch_x).collect();
+    let at = |millis| InputTime(Duration::from_millis(millis));
+    let taken: Vec<_> = merged(events)?.iter().map(touch_moves).collect();
     let expected = [
-        Some((1, 2.dp())),
-        Some((2, 5.dp())),
+        Some((1, vec![(1.dp(), at(10)), (2.dp(), at(18))])),
+        Some((2, vec![(5.dp(), at(10))])),
         None,
-        Some((1, 3.dp())),
+        Some((1, vec![(3.dp(), at(26))])),
     ];
     assert_eq!(taken, expected);
     Ok(())
