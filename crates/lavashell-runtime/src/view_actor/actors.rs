@@ -11,7 +11,6 @@ use crate::surface_slots::BuiltSurface;
 use lavashell_actor::{Clock, Closed, JoinError, Outlet, Sender};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::{Platform, RendererSetup, Reports};
-use lavashell_renderer::Painter;
 use lavashell_renderer::text::TextRendering;
 use std::sync::Arc;
 
@@ -128,9 +127,5 @@ impl<P: Platform> Actors<P> {
 pub(super) fn text_rendering_set_up_for_painter(
     setup: RendererSetup,
 ) -> Result<TextRendering, lavashell_renderer::Error> {
-    let mut painter = Painter::without_device(&setup.fonts)?;
-    if let Some(configure) = setup.painter {
-        configure(&mut painter);
-    }
-    Ok(painter.text_rendering())
+    Ok(setup.painter_without_device()?.text_rendering())
 }

@@ -27,3 +27,13 @@ pub struct RendererSetup {
     pub frame_timing: FrameTiming,
     pub damage: DamageMode,
 }
+
+impl RendererSetup {
+    pub fn painter_without_device(self) -> Result<Painter, lavashell_renderer::Error> {
+        let mut painter = Painter::without_device(&self.fonts)?;
+        if let Some(configure) = self.painter {
+            configure(&mut painter);
+        }
+        Ok(painter)
+    }
+}
