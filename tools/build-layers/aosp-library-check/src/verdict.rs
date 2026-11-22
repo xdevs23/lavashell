@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::api_level::ApiLevel;
+use crate::api_level::{ApiLevel, ApiLevelMatch};
 use crate::architecture::Architecture;
 use crate::elf_library::{ElfLibrary, LoadSegment};
 use crate::system_stubs::Introductions;
@@ -13,6 +13,7 @@ pub struct Expectation {
     pub architecture: Architecture,
     pub page_size: NonZeroU64,
     pub api_level: ApiLevel,
+    pub api_level_match: ApiLevelMatch,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77,7 +78,7 @@ impl Verdict {
         let linking = Linking::of(library, introduced);
         let problems = header_problems(library, expectation)
             .chain(segment_problems(library, expectation.page_size))
-            .chain(linking.problems(expectation.api_level))
+            .chain(linking.problems(expectation.api_level, expectation.api_level_match))
             .collect();
         Self {
             architecture: library.machine,
@@ -138,7 +139,11 @@ impl Linking {
         }
     }
 
-    fn problems(&self, api_level: ApiLevel) -> impl Iterator<Item = Problem> {
+    fn problems(
+        &self,
+        declared: ApiLevel,
+        api_level_match: ApiLevelMatch,
+    ) -> impl Iterator<Item = Problem> {
         [
             (!self.missing.is_empty()).then(|| Problem::LibrariesWithoutStubs {
                 names: self.missing.clone(),
@@ -146,10 +151,12 @@ impl Linking {
             (!self.unresolved.is_empty()).then(|| Problem::UnresolvedSymbols {
                 names: self.unresolved.clone(),
             }),
-            (self.required != Some(api_level)).then_some(Problem::ApiLevelMismatch {
-                declared: api_level,
-                required: self.required,
-            }),
+            (!api_level_match.accepts(declared, self.required)).then_some(
+                Problem::ApiLevelMismatch {
+                    declared,
+                    required: self.required,
+                },
+            ),
         ]
         .into_iter()
         .flatten()

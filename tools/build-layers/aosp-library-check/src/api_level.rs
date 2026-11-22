@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use clap::ValueEnum;
 use serde::Serialize;
 use std::fmt;
 use std::str::FromStr;
@@ -6,6 +7,22 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
 pub struct ApiLevel(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ApiLevelMatch {
+    Exact,
+    AtLeast,
+}
+
+impl ApiLevelMatch {
+    #[must_use]
+    pub fn accepts(self, declared: ApiLevel, required: Option<ApiLevel>) -> bool {
+        required.is_some_and(|required| match self {
+            Self::Exact => declared == required,
+            Self::AtLeast => declared >= required,
+        })
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("{text:?} is not an API level, which is written as decimal digits only")]

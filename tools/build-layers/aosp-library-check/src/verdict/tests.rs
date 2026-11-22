@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Expectation, Problem, Verdict};
-use crate::api_level::ApiLevel;
+use crate::api_level::{ApiLevel, ApiLevelMatch};
 use crate::architecture::Architecture;
 use crate::elf_library::{ElfLibrary, LoadSegment};
 use crate::synthetic_elf::PAGE_SIZE;
 use crate::system_stubs::Introductions;
+use clap::ValueEnum;
 use object::elf;
 
 fn expectation() -> Expectation {
@@ -12,6 +13,7 @@ fn expectation() -> Expectation {
         architecture: Architecture::X86_64,
         page_size: PAGE_SIZE,
         api_level: ApiLevel(26),
+        api_level_match: ApiLevelMatch::Exact,
     }
 }
 
@@ -53,6 +55,22 @@ fn introductions() -> Introductions {
 
 fn problems(library: &ElfLibrary, introduced: &Introductions) -> Vec<Problem> {
     Verdict::of(library, &expectation(), introduced).problems
+}
+
+fn problems_in_every_api_level_match(
+    library: &ElfLibrary,
+    introduced: &Introductions,
+) -> Vec<Vec<Problem>> {
+    ApiLevelMatch::value_variants()
+        .iter()
+        .map(|&api_level_match| {
+            let expectation = Expectation {
+                api_level_match,
+                ..expectation()
+            };
+            Verdict::of(library, &expectation, introduced).problems
+        })
+        .collect()
 }
 
 #[test]
@@ -182,28 +200,64 @@ fn refuses_libraries_and_symbols_that_no_system_stub_provides() {
 }
 
 #[test]
-fn refuses_an_api_level_other_than_the_newest_import_needs() {
+fn accepts_an_api_level_equal_to_the_newest_import_in_every_match() {
+    for problems in problems_in_every_api_level_match(&valid_library(), &introductions()) {
+        assert_eq!(problems, []);
+    }
+}
+
+#[test]
+fn refuses_an_import_newer_than_the_api_level_or_without_a_known_level_in_every_match() {
     let mut introduced = introductions();
     let _previous_level = introduced
         .symbols
         .insert("write_log_message".to_owned(), ApiLevel(30));
-    assert_eq!(
-        problems(&valid_library(), &introduced),
-        [Problem::ApiLevelMismatch {
-            declared: ApiLevel(26),
-            required: Some(ApiLevel(30)),
-        }]
-    );
+    for newer_import_problems in problems_in_every_api_level_match(&valid_library(), &introduced) {
+        assert_eq!(
+            newer_import_problems,
+            [Problem::ApiLevelMismatch {
+                declared: ApiLevel(26),
+                required: Some(ApiLevel(30)),
+            }]
+        );
+    }
     let without_imports = ElfLibrary {
         needed: Vec::new(),
         imports: [].into(),
         ..valid_library()
     };
+    for unknown_level_problems in
+        problems_in_every_api_level_match(&without_imports, &introductions())
+    {
+        assert_eq!(
+            unknown_level_problems,
+            [Problem::ApiLevelMismatch {
+                declared: ApiLevel(26),
+                required: None,
+            }]
+        );
+    }
+}
+
+#[test]
+fn accepts_an_api_level_above_the_newest_import_only_when_allowed() {
+    let above_newest_import = Expectation {
+        api_level: ApiLevel(31),
+        ..expectation()
+    };
     assert_eq!(
-        problems(&without_imports, &introductions()),
+        Verdict::of(&valid_library(), &above_newest_import, &introductions()).problems,
         [Problem::ApiLevelMismatch {
-            declared: ApiLevel(26),
-            required: None,
+            declared: ApiLevel(31),
+            required: Some(ApiLevel(26)),
         }]
+    );
+    let allowed = Expectation {
+        api_level_match: ApiLevelMatch::AtLeast,
+        ..above_newest_import
+    };
+    assert_eq!(
+        Verdict::of(&valid_library(), &allowed, &introductions()).problems,
+        []
     );
 }

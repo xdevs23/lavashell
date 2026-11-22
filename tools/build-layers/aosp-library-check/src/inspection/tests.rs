@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::inspect;
-use crate::api_level::ApiLevel;
+use crate::api_level::{ApiLevel, ApiLevelMatch};
 use crate::architecture::Architecture;
 use crate::report::{InspectionError, Status};
 use crate::synthetic_elf::{PAGE_SIZE, SyntheticElfError, SyntheticLibrary, SyntheticSymbol};
@@ -24,6 +24,7 @@ fn expectation(api_level: u32) -> Expectation {
         architecture: Architecture::X86_64,
         page_size: PAGE_SIZE,
         api_level: ApiLevel(api_level),
+        api_level_match: ApiLevelMatch::Exact,
     }
 }
 
