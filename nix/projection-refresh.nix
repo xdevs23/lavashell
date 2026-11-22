@@ -4,15 +4,25 @@
   rustPlatform,
   buildLayers,
 }:
-pkgs.writeShellApplication {
+let
   name = "lavashell-refresh-cargo-projections";
-  runtimeInputs = [
-    rustPlatform.rust.cargo
-    rustPlatform.rust.rustc
-  ];
-  runtimeEnv.LAVASHELL_NIXPKGS = pkgs.path;
-  text = ''
-    exec ${pkgs.lib.getExe' buildLayers "lavashell-projection-refresh"} "$@"
-  '';
-  meta.description = "Refresh the Cargo projections of the checkout in the working directory";
-}
+in
+pkgs.runCommand name
+  {
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    meta = {
+      description = "Refresh the Cargo projections for the checkout in the working directory";
+      mainProgram = name;
+    };
+  }
+  ''
+    makeWrapper ${pkgs.lib.getExe' buildLayers "lavashell-projection-refresh"} \
+      "$out/bin/${name}" \
+      --prefix PATH : ${
+        pkgs.lib.makeBinPath [
+          rustPlatform.rust.cargo
+          rustPlatform.rust.rustc
+        ]
+      } \
+      --set LAVASHELL_NIXPKGS ${pkgs.path}
+  ''

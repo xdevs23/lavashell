@@ -169,6 +169,7 @@
         // aospSkiaBuilds
         // {
           dependencies = dependencies.check;
+          refresh-cargo-projections = projectionRefresh;
           rustfmt = import ./nix/rustfmt-check.nix { inherit pkgs root rust; };
         };
       devShells.${system} = {
