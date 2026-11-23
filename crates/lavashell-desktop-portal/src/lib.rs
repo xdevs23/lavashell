@@ -3,6 +3,7 @@
 
 mod error;
 mod settings;
+mod settings_watch_failure;
 #[cfg(test)]
 mod test_error;
 #[cfg(any(test, feature = "test-support"))]

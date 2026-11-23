@@ -96,14 +96,14 @@ fn build_appearance_setting(reduced_motion: bool, contrast: ContrastPreference) 
 fn child() -> Result<(), TestError> {
     let service = block_on(
         TestSettingsPortal {
-            namespaces: HashMap::from([(
+            read_all_reply: Ok(HashMap::from([(
                 NAMESPACE.into(),
                 HashMap::from([
                     ("contrast".into(), OwnedValue::from(1u32)),
                     ("reduced-motion".into(), OwnedValue::from(0u32)),
                     ("color-scheme".into(), OwnedValue::from(true)),
                 ]),
-            )]),
+            )])),
             changed_before_reply: vec![TestSettingChange {
                 namespace: NAMESPACE,
                 key: "contrast",
@@ -164,9 +164,6 @@ fn child() -> Result<(), TestError> {
     loop_.handle().remove(receipt);
     drop(service);
     let ignore: SettingsReporter = Box::new(drop::<DesktopSetting>);
-    assert!(matches!(
-        block_on(watch_appearance(&ignore)),
-        Err(PortalError::ReadSettings(_))
-    ));
+    assert!(block_on(watch_appearance(&ignore)).is_ok());
     Ok(())
 }

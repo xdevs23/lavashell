@@ -90,10 +90,13 @@ impl DesktopSettingSource for AppearanceSource {
 }
 
 async fn watch_appearance(report: &SettingsReporter) -> Result<(), PortalError> {
-    let WatchedNamespace {
+    let Some(WatchedNamespace {
         values,
         mut changes,
-    } = watch_namespace(NAMESPACE).await?;
+    }) = watch_namespace(NAMESPACE).await?
+    else {
+        return Ok(());
+    };
     let mut reported = (values.iter()).fold(UNSET_APPEARANCE, |appearance, (key, value)| {
         read_setting(appearance, key, value)
     });

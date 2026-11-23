@@ -11,7 +11,7 @@ pub struct TestSettingChange {
 }
 
 pub struct TestSettingsPortal {
-    pub namespaces: HashMap<String, HashMap<String, OwnedValue>>,
+    pub read_all_reply: zbus::fdo::Result<HashMap<String, HashMap<String, OwnedValue>>>,
     pub changed_before_reply: Vec<TestSettingChange>,
 }
 
@@ -25,10 +25,12 @@ impl TestSettingsPortal {
         for change in std::mem::take(&mut self.changed_before_reply) {
             emit_setting_changed(connection, &change).await?;
         }
-        Ok(std::mem::take(&mut self.namespaces)
-            .into_iter()
-            .filter(|(namespace, _)| namespaces.contains(namespace))
-            .collect())
+        Ok(
+            std::mem::replace(&mut self.read_all_reply, Ok(HashMap::new()))?
+                .into_iter()
+                .filter(|(namespace, _)| namespaces.contains(namespace))
+                .collect(),
+        )
     }
 }
 

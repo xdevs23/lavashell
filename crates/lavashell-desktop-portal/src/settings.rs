@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::PortalError;
+use crate::settings_watch_failure::SettingsWatchFailure;
 use futures_lite::StreamExt;
 use std::collections::HashMap;
 use zbus::message::Sequence;
@@ -59,10 +60,24 @@ impl SettingChanges {
     }
 }
 
-pub async fn watch_namespace(namespace: &'static str) -> Result<WatchedNamespace, PortalError> {
+pub async fn watch_namespace(
+    namespace: &'static str,
+) -> Result<Option<WatchedNamespace>, PortalError> {
+    match watch_namespace_of_present_portal(namespace).await {
+        Ok(watched) => Ok(Some(watched)),
+        Err(
+            SettingsWatchFailure::SessionBusMissing | SettingsWatchFailure::SettingsPortalMissing,
+        ) => Ok(None),
+        Err(SettingsWatchFailure::Portal(failure)) => Err(failure),
+    }
+}
+
+async fn watch_namespace_of_present_portal(
+    namespace: &'static str,
+) -> Result<WatchedNamespace, SettingsWatchFailure> {
     let connection = Connection::session()
         .await
-        .map_err(PortalError::ConnectToSessionBus)?;
+        .map_err(SettingsWatchFailure::from_session_bus_connection)?;
     let proxy = Proxy::new(&connection, DESTINATION, PATH, INTERFACE)
         .await
         .map_err(PortalError::AddressSettingsPortal)?;
@@ -73,7 +88,7 @@ pub async fn watch_namespace(namespace: &'static str) -> Result<WatchedNamespace
     let reply = proxy
         .call_method("ReadAll", &(vec![namespace],))
         .await
-        .map_err(PortalError::ReadSettings)?;
+        .map_err(SettingsWatchFailure::from_settings_read)?;
     let mut namespaces = reply
         .body()
         .deserialize::<HashMap<String, HashMap<String, OwnedValue>>>()

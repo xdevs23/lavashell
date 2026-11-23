@@ -10,6 +10,8 @@ pub(crate) enum TestError {
     Portal(#[from] PortalError),
     #[error(transparent)]
     TestBus(#[from] TestBusError),
+    #[error("the session bus used by the test does not offer the settings portal")]
+    PortalMissing,
     #[error("the changes ended before the test read one")]
     ChangesEnded,
 }
