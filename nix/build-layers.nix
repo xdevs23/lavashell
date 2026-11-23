@@ -29,6 +29,7 @@ let
   };
   testPackage = "lavashell-nix-tests";
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
+  artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
   package =
     attributes:
     rustPlatform.buildRustPackage (
@@ -66,6 +67,7 @@ in
         "--package"
         testPackage
       ];
+      nativeBuildInputs = artifactRecord.nativeBuildInputs;
       nativeCheckInputs = [ pkgs.nix ];
       env.LAVASHELL_NIXPKGS = "${pkgs.path}";
       preCheck = ''

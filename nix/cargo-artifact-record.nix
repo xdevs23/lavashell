@@ -7,10 +7,11 @@ let
 in
 {
   inherit fileName buildPath installedPath;
+  nativeBuildInputs = [ pkgs.jq ];
   messageFormat = "--message-format=json-render-diagnostics";
   run = command: ''
     source ${./cargo-artifact-record.sh}
-    recordCargoArtifacts ${pkgs.lib.getExe pkgs.jq} ${buildPath} ${command}
+    recordCargoArtifacts ${buildPath} ${command}
   '';
   install = ''
     install -Dm444 ${buildPath} "$out/${installedPath}"

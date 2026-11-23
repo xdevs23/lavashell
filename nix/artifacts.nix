@@ -46,7 +46,7 @@ let
   lint = packages: clippy (flags packages);
   enableFeatures = features: lib.optionalAttrs (features != [ ]) { buildFeatures = features; };
   engineDefaults = rustPackageDefaults // {
-    nativeBuildInputs = [ pkgs.pkg-config ];
+    nativeBuildInputs = [ pkgs.pkg-config ] ++ artifactRecord.nativeBuildInputs;
     buildInputs = [ pkgs.wayland ];
     preBuild = import ./build-environment.nix {
       inherit pkgs;

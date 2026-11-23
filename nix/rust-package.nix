@@ -23,11 +23,14 @@ in
   inherit version;
   buildType = contract.profile;
   cargoBuildFlags = [ artifactRecord.messageFormat ];
-  nativeBuildInputs = with pkgs; [
-    pkg-config
-    clang
-    makeWrapper
-  ];
+  nativeBuildInputs =
+    with pkgs;
+    [
+      pkg-config
+      clang
+      makeWrapper
+    ]
+    ++ artifactRecord.nativeBuildInputs;
   nativeCheckInputs = [ pkgs.dbus ];
   buildInputs = runtime.libraries;
   env =

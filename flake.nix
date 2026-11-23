@@ -91,6 +91,7 @@
               vulkan-loader
               nixfmt
               nix-prefetch-git
+              jq
               ruff
               (python3.withPackages (python: [
                 python.psutil
