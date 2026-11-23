@@ -8,7 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 const LOCKFILE: &str = "Cargo.lock";
-const VULKAN_FREE_CRATES: [&str; 3] = ["lavashell-core", "lavashell-platform", "lavashell-runtime"];
+const VULKAN_FREE_CRATES: [&str; 4] = [
+    "lavashell-core",
+    "lavashell-platform",
+    "lavashell-runtime",
+    "lavashell-test-platform",
+];
 const VULKAN_CRATES: [&str; 3] = ["ash", "lavashell-vulkan", "lavashell-vulkan-renderer"];
 
 #[derive(Deserialize)]
