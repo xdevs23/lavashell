@@ -124,9 +124,9 @@ let
       // artifacts.tests testPackages
       // artifacts.lint testPackages
       // artifacts.enableFeatures featuresEnabledByDependents
+      // import ./vendored-source.nix (sources.sourceAndCargoDeps directory)
       // {
         pname = "lavashell-${name}";
-        inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
         buildInputs = rustPackageDefaults.buildInputs ++ buildInputsOf dependencies;
         nativeCheckInputs =
           rustPackageDefaults.nativeCheckInputs
@@ -148,7 +148,6 @@ let
           + lib.concatMapStrings (check: check.script) stubLayerReuseChecks;
         preBuild =
           rustPackageDefaults.preBuild
-          + (import ./vendor-directory-times.nix)
           + artifactLayers.restore restoredLayers
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {

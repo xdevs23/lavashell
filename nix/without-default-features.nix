@@ -18,12 +18,11 @@ let
 in
 rustPlatform.buildRustPackage (
   rustPackageDefaults
+  // import ./vendored-source.nix (sources.sourceAndCargoDeps directory)
   // {
     inherit pname;
-    inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
     auditable = false;
     buildInputs = rustPackageDefaults.buildInputs ++ [ skia ];
-    preBuild = rustPackageDefaults.preBuild + (import ./vendor-directory-times.nix);
     buildPhase = ''
       runHook preBuild
       cargo ${

@@ -99,15 +99,16 @@ let
       // testPhase
       // lint checkedPackages
       // enableFeatures features
+      // import ./vendored-source.nix {
+        src = source;
+        inherit (projection) cargoDeps;
+      }
       // {
         inherit pname;
-        src = source;
-        cargoDeps = projection.cargoDeps;
         buildInputs = configuration.buildInputs ++ buildInputsOf names;
         cargoBuildFlags = flags selected ++ [ "--frozen" ] ++ rustPackageDefaults.cargoBuildFlags;
         preBuild =
           configuration.preBuild
-          + import ./vendor-directory-times.nix
           + artifactLayers.restoreLowerLayers previous
           + lib.optionalString validateEngine (planCheck directory selected);
         buildPhase =

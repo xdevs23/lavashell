@@ -6,9 +6,6 @@ let
   ) libraries;
 in
 ''
-  find . -path ./target -prune -o -type f -exec touch -h -r "$cargoDeps" {} +
-  find "$NIX_BUILD_TOP/$(stripHash "$cargoDeps")" -type f -exec touch -h -r "$cargoDeps" {} +
-
   cat > "$NIX_BUILD_TOP/lavashell-pkg-config" <<'PKG_CONFIG_WRAPPER'
   #!${pkgs.runtimeShell}
   export PKG_CONFIG_PATH=${pkgs.lib.escapeShellArg paths}
