@@ -6,14 +6,12 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectionContract {
-    pub schema: u32,
     pub profile: String,
     pub target: String,
     pub projection_directory: String,
     pub engine_root: String,
     pub native_directory: String,
     pub layers: Vec<Layer>,
-    pub companions: Vec<String>,
     pub packaged_crates: BTreeMap<String, String>,
     pub source_files: SourceFiles,
     pub stub: StubLayout,

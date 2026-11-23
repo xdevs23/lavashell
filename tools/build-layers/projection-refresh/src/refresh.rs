@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::activations::missing_activations;
-use crate::canonical::{Seed, UnitGraphs, canonical_plan, materialize, verify_units};
-use crate::cargo::{Cargo, Compilation, LockMode, ResolvedGraph};
+use crate::cargo::{Cargo, ResolvedGraph};
 use crate::concurrency::run_concurrently;
 use crate::error::Error;
-use crate::files::{read_toml, write_json, write_toml};
+use crate::files::{read_toml, write_json};
 use crate::projection_start::{ProjectionStart, start_native_projection, start_package_projection};
-use crate::seed::{SeedWorkspace, Seeds};
+use crate::seed::Seeds;
 use lavashell_cargo_model::contract::ProjectionContract;
 use lavashell_cargo_model::lock::{CargoLock, LockedPackage};
 use lavashell_cargo_model::manifest::PackageManifest;
-use lavashell_cargo_model::projection::{Layer, LayerPlan, LockedPlan, ProjectionFile, Selection};
+use lavashell_cargo_model::projection::{Layer, ProjectionFile, SeedHash};
 use lavashell_cargo_model::unit_graph::UnitGraph;
 use lavashell_plan_check::{external_records, verify};
 use serde::{Deserialize, Serialize};
@@ -50,20 +49,6 @@ struct LayerCatalog {
     native_names: Vec<String>,
 }
 
-struct LockedGraphs {
-    build: ResolvedGraph,
-    tests: Option<UnitGraph>,
-}
-
-impl LockedGraphs {
-    fn unit_graphs(&self) -> UnitGraphs<'_> {
-        UnitGraphs {
-            build: &self.build.graph,
-            tests: self.tests.as_ref(),
-        }
-    }
-}
-
 pub struct Toolkit<'refresh> {
     pub cargo: &'refresh Cargo,
     pub seeds: Seeds<'refresh>,
@@ -72,46 +57,6 @@ pub struct Toolkit<'refresh> {
 }
 
 impl Toolkit<'_> {
-    fn graph(
-        &self,
-        directory: &Path,
-        package: &str,
-        companions: &[String],
-        mode: LockMode,
-    ) -> Result<ResolvedGraph, Error> {
-        let packages: Vec<String> = std::iter::once(package.to_owned())
-            .chain(companions.iter().cloned())
-            .collect();
-        self.cargo.unit_graph(
-            directory,
-            Compilation::Build {
-                packages: &packages,
-            },
-            mode,
-        )
-    }
-
-    fn locked_graphs(
-        &self,
-        directory: &Path,
-        package: &str,
-        companions: &[String],
-        tested: &[String],
-    ) -> Result<LockedGraphs, Error> {
-        let build = self.graph(directory, package, companions, LockMode::Frozen)?;
-        let tests = (!tested.is_empty())
-            .then(|| {
-                self.cargo.unit_graph(
-                    directory,
-                    Compilation::Tests { packages: tested },
-                    LockMode::Frozen,
-                )
-            })
-            .transpose()?
-            .map(|tests| tests.graph);
-        Ok(LockedGraphs { build, tests })
-    }
-
     fn seed_graph(
         &self,
         relative: &str,
@@ -119,55 +64,11 @@ impl Toolkit<'_> {
         destination: &Path,
     ) -> Result<ResolvedGraph, Error> {
         let seed = self.seeds.write(relative, layer, destination)?;
-        let package = package_name(&self.root.join(relative))?;
-        let companions = seed.companions(self.contract)?;
-        self.graph(destination, &package, &companions, LockMode::Resolve)
+        self.cargo.unit_graph(destination, &seed.selected_packages)
     }
 
-    fn dependency_plan(
-        &self,
-        relative: &str,
-        layer: Layer,
-        destination: &Path,
-    ) -> Result<LayerPlan, Error> {
-        let seed_path = destination.join("seed");
-        let seed = self.seeds.write(relative, layer, &seed_path)?;
-        let package = package_name(&self.root.join(relative))?;
-        let companions = seed.companions(self.contract)?;
-        let tested = &seed.tested_by_layer_above;
-        let expected = self.locked_graphs(&seed_path, &package, &companions, tested)?;
-        let metadata = self.cargo.metadata(&seed_path)?;
-        let selection = Selection {
-            target: self.cargo.target.clone(),
-            profile: self.contract.profile.clone(),
-            packages: std::iter::once(package.clone())
-                .chain(companions.iter().cloned())
-                .collect(),
-        };
-        let manifest = seed.workspace_manifest()?;
-        let plan = canonical_plan(
-            &Seed {
-                manifest: &manifest,
-                original_contracts: &seed.original_contracts,
-            },
-            &expected.unit_graphs(),
-            &metadata,
-            selection,
-            self.contract,
-        )?;
-        let canonical_path = destination.join("canonical");
-        materialize(&plan, &canonical_path, &expected.build.lock, self.contract)?;
-        let resolved = self.graph(&canonical_path, &package, &companions, LockMode::Resolve)?;
-        write_toml(&canonical_path.join("Cargo.lock"), &resolved.lock)?;
-        let frozen = self.locked_graphs(&canonical_path, &package, &companions, tested)?;
-        verify_units(&expected.unit_graphs(), &frozen.unit_graphs())?;
-        Ok(LayerPlan {
-            seed_hash: seed.seed_hash,
-            plan: LockedPlan {
-                plan,
-                lock: resolved.lock,
-            },
-        })
+    fn seed_hash(&self, relative: &str, layer: Layer) -> Result<SeedHash, Error> {
+        Ok(self.seeds.evaluate(relative, layer)?.seed_hash)
     }
 
     fn catalog(
@@ -257,24 +158,17 @@ impl LayerRefresh<'_> {
             .seed_graph(&entry.directory, Layer::Registry, &destination)
     }
 
-    fn store_plan(
+    fn store_seed_hash(
         &self,
         package: &LayeredPackage,
         projection: &mut ProjectionFile,
     ) -> Result<(), Error> {
-        let layer_name = match package.layer {
-            Layer::Engine => "engine-layer",
-            Layer::Registry => "registry-layer",
-        };
-        let destination = self.scratch.join(&package.entry.package).join(layer_name);
-        let plan =
-            self.toolkit
-                .dependency_plan(&package.entry.directory, package.layer, &destination)?;
-        let _plan_of_previous_refresh: Option<LayerPlan> = projection
-            .dependency_plans
-            .entry(self.toolkit.cargo.target.clone())
-            .or_default()
-            .insert(package.layer, plan);
+        let seed_hash = self
+            .toolkit
+            .seed_hash(&package.entry.directory, package.layer)?;
+        projection
+            .seed_hashes
+            .record(&self.toolkit.cargo.target, package.layer, seed_hash);
         self.write(&package.entry, projection)
     }
 
@@ -285,7 +179,7 @@ impl LayerRefresh<'_> {
     ) -> Result<Option<usize>, Error> {
         projection.normal_lock = self.normal_graph(&package.entry)?.lock;
         self.write(&package.entry, &projection)?;
-        self.store_plan(package, &mut projection)?;
+        self.store_seed_hash(package, &mut projection)?;
         Ok(None)
     }
 
@@ -308,13 +202,14 @@ impl LayerRefresh<'_> {
                 .scratch
                 .join(&entry.package)
                 .join(format!("engine-{attempt}"));
-            let _seed_read_back_by_cargo: SeedWorkspace =
-                self.toolkit
-                    .seeds
-                    .write(&entry.directory, Layer::Engine, &destination)?;
-            let engine =
-                self.toolkit
-                    .graph(&destination, &entry.package, &[], LockMode::Resolve)?;
+            let seed = self
+                .toolkit
+                .seeds
+                .write(&entry.directory, Layer::Engine, &destination)?;
+            let engine = self
+                .toolkit
+                .cargo
+                .unit_graph(&destination, &seed.selected_packages)?;
             projection.engine_lock = Some(engine.lock);
             let missing = missing_activations(&engine.graph, &normal.graph)?;
             if missing.is_empty() {
@@ -347,14 +242,14 @@ impl LayerRefresh<'_> {
         engine: &UnitGraph,
         normal: &UnitGraph,
     ) -> Result<Option<usize>, Error> {
-        let records = external_records(engine)?;
-        let _units_counted_by_records: lavashell_plan_check::CompatiblePlan =
-            verify(&records, normal, &self.toolkit.contract.engine_root)?;
-        let count = records.len();
-        projection.external_units = Some(records);
+        let compatible = verify(
+            &external_records(engine)?,
+            normal,
+            &self.toolkit.contract.engine_root,
+        )?;
         self.write(&package.entry, &projection)?;
-        self.store_plan(package, &mut projection)?;
-        Ok(Some(count))
+        self.store_seed_hash(package, &mut projection)?;
+        Ok(Some(compatible.engine_units))
     }
 
     fn refresh(&self, package: &LayeredPackage) -> Result<RefreshedPackage, Error> {
@@ -409,16 +304,10 @@ pub fn refresh_projections(
         .prepared(native_graph.lock, &toolkit.cargo.target);
     write_json(&native_path, &native)?;
     let (packages, native_names) = toolkit.catalog(entries)?;
-    let native_plan = toolkit.dependency_plan(
-        &contract.native_directory,
-        Layer::Registry,
-        &scratch.path().join("native-layer"),
-    )?;
-    let _plan_of_previous_refresh: Option<LayerPlan> = native
-        .dependency_plans
-        .entry(toolkit.cargo.target.clone())
-        .or_default()
-        .insert(Layer::Registry, native_plan);
+    let native_seed_hash = toolkit.seed_hash(&contract.native_directory, Layer::Registry)?;
+    native
+        .seed_hashes
+        .record(&toolkit.cargo.target, Layer::Registry, native_seed_hash);
     write_json(&native_path, &native)?;
     let refresh = LayerRefresh {
         toolkit,

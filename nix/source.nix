@@ -11,7 +11,6 @@ let
   lock = import ./cargo-lock.nix { inherit lib root; };
   toml = import ./cargo-toml.nix { inherit lib; };
   targets = import ./cargo-targets.nix { inherit lib; };
-  dependencyWorkspace = import ./dependency-workspace.nix { inherit root toml; };
   packageDirectories = import ./package-directories.nix { inherit lib root; };
   packageTests = import ./package-tests.nix { inherit lib workspaceCrates packageDirectories; };
   projection = import ./projection.nix {
@@ -49,18 +48,14 @@ let
     let
       metadata =
         if toString directory == toString nativeDirectory then nativeMetadata else metadataFor directory;
-      seed = projection.seedPlan directory layer;
     in
     if metadata == null then
       throw "Run nix run .#refresh-cargo-projections for ${workspaceCrates.packageName directory}"
     else
-      dependencyWorkspace {
+      import ./seed-hash-check.nix {
         inherit layer metadata;
-        inherit (seed) seedHash;
         target = pkgs.stdenv.hostPlatform.rust.rustcTarget;
-      }
-      // {
-        inherit (seed) testedByLayerAbove;
+        seedProject = projection.seedProject directory layer;
       };
   engineProject = memoizePerMember (
     directory: withCargoDeps (dependencyProject directory types.layers.engine)
@@ -98,7 +93,6 @@ in
   version = workspaceCrates.workspace.workspace.package.version;
   inherit
     project
-    metadataFor
     packageDirectories
     packageTests
     ;

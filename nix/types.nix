@@ -20,6 +20,10 @@ in
     "framework"
     "frameworkWithEngine"
   ];
+  checkedBuilds = {
+    stubLayer = "stub-layer";
+    consumer = "consumer";
+  };
   targetRoles = {
     device = "device";
     emulator = "emulator";

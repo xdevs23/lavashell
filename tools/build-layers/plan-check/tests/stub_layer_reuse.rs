@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use clap::ValueEnum;
 use lavashell_command_output::json::{CommandError, successful_output};
+use lavashell_plan_check::stub_layer_reuse::CheckedBuild;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -95,6 +97,8 @@ enum FixtureError {
     File(#[from] std::io::Error),
     #[error(transparent)]
     Command(#[from] CommandError),
+    #[error("the checked build {0:?} has no command line value")]
+    HiddenCheckedBuild(CheckedBuild),
 }
 
 struct Workspace(TempDir);
@@ -152,16 +156,31 @@ impl StubLayer {
         package: &str,
         build_setting: &str,
     ) -> Result<Command, FixtureError> {
+        self.check_build_of_kind_above(CheckedBuild::Consumer, package, build_setting)
+    }
+
+    fn check_build_of_kind_above(
+        &self,
+        checked_build: CheckedBuild,
+        package: &str,
+        build_setting: &str,
+    ) -> Result<Command, FixtureError> {
         let build_record = self
             .workspace
             .record_build(package, build_setting, "build.jsonl")?;
         let mut command = Command::new(env!("CARGO_BIN_EXE_lavashell-plan-check"));
         let _command: &mut Command = command
-            .arg("stub-layer-reuse")
             .arg("--build")
             .arg(build_record)
             .arg("--stub-layer")
-            .arg(&self.record);
+            .arg(&self.record)
+            .arg("--checked-build")
+            .arg(
+                checked_build
+                    .to_possible_value()
+                    .ok_or(FixtureError::HiddenCheckedBuild(checked_build))?
+                    .get_name(),
+            );
         Ok(command)
     }
 }
@@ -220,6 +239,36 @@ fn a_build_resolving_the_dependencies_of_a_planned_unit_differently_fails()
     let stub_layer = StubLayer::build()?;
     let check = stub_layer
         .check_build_above("widening", STUB_LAYER_SETTING)?
+        .output()?;
+    assert_refused(
+        &check,
+        &format!(
+            "This build compiled the target planned of {PLANNED_PACKAGE_ID} with the features [] \
+             under another hash than the stub layer recorded in {}, because its dependencies \
+             resolved differently.",
+            stub_layer.record.display()
+        ),
+    );
+    Ok(())
+}
+
+#[test]
+fn a_stub_layer_compiling_a_variant_the_stub_layer_below_never_built_passes()
+-> Result<(), FixtureError> {
+    let _check: Output = successful_output(&mut StubLayer::build()?.check_build_of_kind_above(
+        CheckedBuild::StubLayer,
+        "recompiling",
+        STUB_LAYER_SETTING,
+    )?)?;
+    Ok(())
+}
+
+#[test]
+fn a_stub_layer_resolving_the_dependencies_of_a_unit_below_differently_fails()
+-> Result<(), FixtureError> {
+    let stub_layer = StubLayer::build()?;
+    let check = stub_layer
+        .check_build_of_kind_above(CheckedBuild::StubLayer, "widening", STUB_LAYER_SETTING)?
         .output()?;
     assert_refused(
         &check,

@@ -71,11 +71,3 @@ pub fn parse_toml<Document: DeserializeOwned>(path: &Path, text: &str) -> Result
         source,
     })
 }
-
-pub fn write_toml<Document: Serialize>(path: &Path, document: &Document) -> Result<(), Error> {
-    let text = toml::to_string(document).map_err(|source| Error::WriteToml {
-        path: path.to_owned(),
-        source,
-    })?;
-    write_text(path, &text)
-}

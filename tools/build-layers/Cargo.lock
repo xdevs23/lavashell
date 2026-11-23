@@ -456,7 +456,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "toml",
  "url",
 ]
 

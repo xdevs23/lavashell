@@ -16,7 +16,7 @@ let
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
 in
 lib.mapAttrs (_: package: {
-  source = "${(lib.head package.srcs).src}";
+  source = "${package.source.src}";
   members = map (crate: workspaceCrates.relative crate.key) (
     workspaceCrates.localCrates package.directory
   );

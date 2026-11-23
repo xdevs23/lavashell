@@ -2,7 +2,6 @@
 #![forbid(unsafe_code)]
 
 mod activations;
-mod canonical;
 mod cargo;
 mod concurrency;
 mod error;

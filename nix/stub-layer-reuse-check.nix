@@ -5,7 +5,7 @@ let
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
   artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
 in
-lowerLayers:
+{ checkedBuild, lowerLayers }:
 let
   reusedStubLayers = lib.filter (layer: layer.stubLayer) (artifactLayers.stack lowerLayers);
   stubLayerFlags = lib.concatMap (layer: [
@@ -16,7 +16,7 @@ in
 {
   inherit reusedStubLayers;
   script = ''
-    ${lib.getExe' buildLayers "lavashell-plan-check"} stub-layer-reuse --build ${artifactRecord.buildPath} \
-      ${lib.escapeShellArgs stubLayerFlags}
+    ${lib.getExe' buildLayers "lavashell-plan-check"} --build ${artifactRecord.buildPath} \
+      --checked-build ${checkedBuild} ${lib.escapeShellArgs stubLayerFlags}
   '';
 }

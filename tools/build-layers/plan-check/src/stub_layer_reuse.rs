@@ -61,6 +61,12 @@ pub struct StubLayerRecordError {
     pub path: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum CheckedBuild {
+    StubLayer,
+    Consumer,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecompileCause {
     UnplannedVariant,
@@ -77,16 +83,18 @@ pub struct RecompiledUnit<'records> {
 pub fn recompiled_units<'records>(
     build: &'records [CompilerArtifact],
     stub_layers: &'records [StubLayerRecord],
+    checked_build: CheckedBuild,
 ) -> impl Iterator<Item = RecompiledUnit<'records>> {
     build
         .iter()
         .filter(|artifact| !artifact.fresh)
-        .filter_map(|artifact| recompile_of(artifact, stub_layers))
+        .filter_map(move |artifact| recompile_of(artifact, stub_layers, checked_build))
 }
 
 fn recompile_of<'records>(
     artifact: &'records CompilerArtifact,
     stub_layers: &'records [StubLayerRecord],
+    checked_build: CheckedBuild,
 ) -> Option<RecompiledUnit<'records>> {
     let find_stub_layer = |cause, built: fn(&StubLayerRecord, &CompilerArtifact) -> bool| {
         stub_layers
@@ -104,11 +112,12 @@ fn recompile_of<'records>(
             StubLayerRecord::built_unit,
         )
     })
-    .or_else(|| {
-        find_stub_layer(
+    .or_else(|| match checked_build {
+        CheckedBuild::StubLayer => None,
+        CheckedBuild::Consumer => find_stub_layer(
             RecompileCause::UnplannedVariant,
             StubLayerRecord::built_package,
-        )
+        ),
     })?;
     Some(RecompiledUnit {
         unit: &artifact.unit,

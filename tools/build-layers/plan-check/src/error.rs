@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use lavashell_plan_check::PlanError;
 use lavashell_plan_check::stub_layer_reuse::{RecompileCause, StubLayerRecordError};
 use std::fmt;
 use std::path::PathBuf;
@@ -25,13 +24,10 @@ pub enum Error {
         source: std::io::Error,
     },
     #[error(transparent)]
-    Plan(#[from] PlanError),
-    #[error(transparent)]
     StubLayerRecord(#[from] StubLayerRecordError),
 }
 
 pub enum NextStep {
-    RefreshProjections,
     PlanUnitInStubLayer,
     BuildOnStubLayerResolvingLikePackage,
     BuildLikeStubLayer,
@@ -41,13 +37,9 @@ pub enum NextStep {
 impl Error {
     pub fn next_step(&self) -> NextStep {
         match self {
-            Self::Plan(
-                PlanError::EngineUnitsChanged { .. } | PlanError::EngineUnitsUncached { .. },
-            ) => NextStep::RefreshProjections,
             Self::Open { .. }
             | Self::Read { .. }
             | Self::ReadLine { .. }
-            | Self::Plan(PlanError::UnitGraph(_))
             | Self::StubLayerRecord(_) => NextStep::ReportDefect,
         }
     }
@@ -68,13 +60,9 @@ impl From<RecompileCause> for NextStep {
 impl fmt::Display for NextStep {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RefreshProjections => formatter.write_str(
-                "Run `nix run .#refresh-cargo-projections` and commit the refreshed projections.",
-            ),
-            Self::PlanUnitInStubLayer => write!(
-                formatter,
-                "Extend the projection refresh in tools/build-layers so that the stub layer plans this unit. {}",
-                Self::RefreshProjections
+            Self::PlanUnitInStubLayer => formatter.write_str(
+                "Extend the projection refresh in tools/build-layers so that the stub layer plans this unit. \
+                 Run `nix run .#refresh-cargo-projections` and commit the refreshed projections.",
             ),
             Self::BuildOnStubLayerResolvingLikePackage => formatter.write_str(
                 "This package does not share the dependency resolution of the stub layer. \

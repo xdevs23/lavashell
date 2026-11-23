@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::lock::{CargoLock, LockedPackage};
-use crate::manifest::{FeatureActivations, StubManifest};
-use crate::unit_graph::UnitRecord;
+use crate::manifest::FeatureActivations;
 use lavashell_enum_values::enum_with_values;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 enum_with_values! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -28,84 +27,51 @@ impl Layer {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Selection {
-    pub target: String,
-    pub profile: String,
-    pub packages: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StubTarget {
     pub path: String,
     pub main: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CanonicalCrate {
-    pub member: String,
-    pub manifest: StubManifest,
-    pub targets: Vec<StubTarget>,
-}
+#[serde(transparent)]
+pub struct SeedHash(String);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct WorkspaceManifest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub profile: Option<toml::Table>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub patch: Option<toml::Table>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub replace: Option<toml::Table>,
-    pub workspace: WorkspaceSection,
-}
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SeedHashes(BTreeMap<String, BTreeMap<Layer, SeedHash>>);
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WorkspaceSection {
-    pub resolver: String,
-    pub members: Vec<String>,
-}
+impl SeedHashes {
+    pub fn record(&mut self, target: &str, layer: Layer, hash: SeedHash) {
+        let _hash_of_previous_refresh: Option<SeedHash> = self
+            .0
+            .entry(target.to_owned())
+            .or_default()
+            .insert(layer, hash);
+    }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CanonicalPlan {
-    pub schema: u32,
-    pub selection: Selection,
-    pub manifest: WorkspaceManifest,
-    pub crates: Vec<CanonicalCrate>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LockedPlan {
-    #[serde(flatten)]
-    pub plan: CanonicalPlan,
-    pub lock: CargoLock,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LayerPlan {
-    pub seed_hash: String,
-    pub plan: LockedPlan,
-}
-
-pub type DependencyPlans = BTreeMap<String, BTreeMap<Layer, LayerPlan>>;
-
-fn plans_kept_for_other_targets(
-    plans: &DependencyPlans,
-    obsolete: Layer,
-    target: &str,
-) -> DependencyPlans {
-    plans
-        .iter()
-        .filter(|(platform, _)| platform.as_str() != target)
-        .map(|(platform, layers)| {
-            let kept: BTreeMap<Layer, LayerPlan> = layers
+    #[must_use]
+    pub fn kept_for_other_targets(&self, obsolete: Layer, target: &str) -> Self {
+        Self(
+            self.0
                 .iter()
-                .filter(|(layer, _)| **layer != obsolete)
-                .map(|(layer, plan)| (*layer, plan.clone()))
-                .collect();
-            (platform.clone(), kept)
-        })
-        .filter(|(_, layers)| !layers.is_empty())
-        .collect()
+                .filter(|(platform, _)| platform.as_str() != target)
+                .map(|(platform, layers)| {
+                    let kept: BTreeMap<Layer, SeedHash> = layers
+                        .iter()
+                        .filter(|(layer, _)| **layer != obsolete)
+                        .map(|(layer, hash)| (*layer, hash.clone()))
+                        .collect();
+                    (platform.clone(), kept)
+                })
+                .filter(|(_, layers)| !layers.is_empty())
+                .collect(),
+        )
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -113,13 +79,11 @@ fn plans_kept_for_other_targets(
 pub struct ProjectionFile {
     pub normal_lock: CargoLock,
     #[serde(default)]
-    pub dependency_plans: DependencyPlans,
+    pub seed_hashes: SeedHashes,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine_lock: Option<CargoLock>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub features: Option<FeatureActivations>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub external_units: Option<BTreeSet<UnitRecord>>,
 }
 
 impl ProjectionFile {
@@ -127,24 +91,24 @@ impl ProjectionFile {
     pub fn new(normal_lock: CargoLock) -> Self {
         Self {
             normal_lock,
-            dependency_plans: DependencyPlans::new(),
+            seed_hashes: SeedHashes::default(),
             engine_lock: None,
             features: None,
-            external_units: None,
         }
     }
 
     #[must_use]
     pub fn prepared(&self, layer: Layer, target: &str) -> Self {
-        let dependency_plans =
-            plans_kept_for_other_targets(&self.dependency_plans, layer.other(), target);
+        let seed_hashes = self
+            .seed_hashes
+            .kept_for_other_targets(layer.other(), target);
         match layer {
             Layer::Engine => Self {
-                dependency_plans,
+                seed_hashes,
                 ..self.clone()
             },
             Layer::Registry => Self {
-                dependency_plans,
+                seed_hashes,
                 ..Self::new(self.normal_lock.clone())
             },
         }
@@ -162,8 +126,8 @@ impl ProjectionFile {
 #[serde(rename_all = "camelCase")]
 pub struct NativeProjection {
     pub lock: CargoLock,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub dependency_plans: DependencyPlans,
+    #[serde(default, skip_serializing_if = "SeedHashes::is_empty")]
+    pub seed_hashes: SeedHashes,
 }
 
 impl NativeProjection {
@@ -171,7 +135,7 @@ impl NativeProjection {
     pub fn new(lock: CargoLock) -> Self {
         Self {
             lock,
-            dependency_plans: DependencyPlans::new(),
+            seed_hashes: SeedHashes::default(),
         }
     }
 
@@ -184,19 +148,11 @@ impl NativeProjection {
     pub fn prepared(&self, lock: CargoLock, target: &str) -> Self {
         Self {
             lock,
-            dependency_plans: plans_kept_for_other_targets(
-                &self.dependency_plans,
-                Layer::Engine,
-                target,
-            ),
+            seed_hashes: self
+                .seed_hashes
+                .kept_for_other_targets(Layer::Engine, target),
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EngineProjection {
-    pub external_units: BTreeSet<UnitRecord>,
 }
 
 #[cfg(test)]

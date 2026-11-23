@@ -62,7 +62,7 @@ let
       ) manifest.package;
     };
   projectCrates =
-    crates: lockData:
+    package: crates: lockData:
     let
       members = map (crate: relative crate.key) crates;
       used = lib.unique (
@@ -112,6 +112,7 @@ let
         manifest
         lockFile
         ;
+      selectedPackages = [ package ] ++ lib.intersectLists contract.companions (crateNames crates);
     };
   metadataFor = memoizePerMember (
     directory:
@@ -128,7 +129,7 @@ let
       metadata = metadataFor directory;
       baseline = if metadata == null then nativeMetadata.lock else metadata.normalLock;
     in
-    projectCrates crates (lock.projected baseline (crateNames crates))
+    projectCrates (packageName directory) crates (lock.projected baseline (crateNames crates))
   );
   withoutNative =
     manifest:
@@ -230,7 +231,7 @@ let
     if metadata == null then
       throw "Run nix run .#refresh-cargo-projections for ${rootName}"
     else
-      projectCrates crates (
+      projectCrates rootName crates (
         lock.engine (
           metadata.engineLock
           // {
@@ -258,25 +259,29 @@ let
     lib.optionals (
       layer == types.layers.registry && buildsOnOwnRegistryLayer directory
     ) packageTests.testedCrates.${packageName directory};
+  seedProject =
+    directory: layer:
+    let
+      projected =
+        (if layer == types.layers.engine then engineSeedProject directory else project directory)
+        // {
+          testedByLayerAbove = testedByLayerAbove directory layer;
+        };
+      seed = plan projected // {
+        inherit (projected) testedByLayerAbove;
+      };
+    in
+    projected
+    // {
+      inherit seed;
+      seedHash = builtins.hashString "sha256" (builtins.toJSON seed);
+    };
   seedPlan =
     directory: layer:
     let
-      seed =
-        plan (if layer == types.layers.engine then engineSeedProject directory else project directory)
-        // {
-          testedByLayerAbove = testedByLayerAbove directory layer;
-        }
-        // lib.optionalAttrs (layer == types.layers.engine) {
-          originalContracts = map (crate: {
-            member = relative crate.key;
-            links = crate.manifest.package.links or null;
-            build =
-              crate.manifest.package.build
-                or (if builtins.pathExists (builtins.toPath (crate.key + "/build.rs")) then "build.rs" else false);
-          }) (engineCrates directory);
-        };
+      projected = seedProject directory layer;
     in
-    seed // { seedHash = builtins.hashString "sha256" (builtins.toJSON seed); };
+    projected.seed // { inherit (projected) seedHash selectedPackages; };
   nativeRegistry = map (package: package.name) (
     lib.filter (package: package ? source) nativeMetadata.lock.package
   );
@@ -312,6 +317,7 @@ in
     nativeMetadata
     project
     plan
+    seedProject
     seedPlan
     layerRouteOf
     ;

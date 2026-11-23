@@ -46,9 +46,9 @@ fn a_failed_refresh_leaves_every_projection_as_it_was() -> Result<(), TestError>
     let refreshed = publish_staged_refresh(projections.path(), |staged| {
         write_bytes(&staged.join("native.json"), REFRESHED)?;
         write_bytes(&staged.join("bevy.json"), REFRESHED)?;
-        Err::<(), _>(Error::NoUnitsSelected)
+        Err::<(), _>(Error::RefreshThread)
     });
-    assert!(matches!(refreshed, Err(Error::NoUnitsSelected)));
+    assert!(matches!(refreshed, Err(Error::RefreshThread)));
     assert_eq!(read_bytes(&projections.path().join("native.json"))?, STORED);
     assert_eq!(
         names_in(projections.path())?,

@@ -70,20 +70,13 @@ let
       withEngine = route == types.layerRoutes.frameworkWithEngine;
       engine = if withEngine then artifacts.engine directory else null;
       unified =
-        if withEngine then
-          artifacts.unified directory [
-            registry
-            engine
-          ] tested
-        else
-          null;
+        if withEngine then artifacts.unified directory { inherit registry engine; } tested else null;
       requirements = requirementsOf dependencies;
       routed =
         {
           ${types.layerRoutes.registryOnly} = artifacts.registry directory;
           ${types.layerRoutes.framework} = framework;
           ${types.layerRoutes.frameworkWithEngine} = artifacts.framework directory [ framework unified ] {
-            validateEngine = true;
             inherit tested;
           };
         }
@@ -112,8 +105,14 @@ let
         ) libraryCrates
       );
       restoredLayers = [ local ] ++ libraries;
-      stubLayerReuseChecks = [ (checkStubLayerReuse restoredLayers) ];
-      selected = artifacts.selectedPackages directory;
+      stubLayerReuseChecks = [
+        (checkStubLayerReuse {
+          checkedBuild = types.checkedBuilds.consumer;
+          lowerLayers = restoredLayers;
+        })
+      ];
+      inherit (sources.project directory) selectedPackages;
+      sourceAndCargoDeps = sources.sourceAndCargoDeps directory;
       testPackages = lib.subtractLists (artifacts.packagesTestedThrough [
         framework
         local
@@ -124,7 +123,7 @@ let
       // artifacts.tests testPackages
       // artifacts.lint testPackages
       // artifacts.enableFeatures featuresEnabledByDependents
-      // import ./vendored-source.nix (sources.sourceAndCargoDeps directory)
+      // import ./vendored-source.nix sourceAndCargoDeps
       // {
         pname = "lavashell-${name}";
         buildInputs = rustPackageDefaults.buildInputs ++ buildInputsOf dependencies;
@@ -132,7 +131,7 @@ let
           rustPackageDefaults.nativeCheckInputs
           ++ lib.concatMap (requirement: requirement.nativeCheckInputs) (requirementsOf testPackages);
         cargoBuildFlags =
-          artifacts.flags selected
+          artifacts.flags selectedPackages
           ++ [ "--frozen" ]
           ++ lib.optionals (!library) [
             "--bin"
@@ -146,10 +145,7 @@ let
           ''
           + lib.concatMapStrings (requirement: requirement.installLicenses) requirements
           + lib.concatMapStrings (check: check.script) stubLayerReuseChecks;
-        preBuild =
-          rustPackageDefaults.preBuild
-          + artifactLayers.restore restoredLayers
-          + lib.optionalString withEngine (artifacts.planCheck directory selected);
+        preBuild = rustPackageDefaults.preBuild + artifactLayers.restore restoredLayers;
         passthru = {
           inherit
             directory
@@ -157,6 +153,7 @@ let
             stubLayerReuseChecks
             testPackages
             ;
+          source = sourceAndCargoDeps.src;
           registryArtifacts = registry;
           engineArtifacts = engine;
           unifiedArtifacts = unified;

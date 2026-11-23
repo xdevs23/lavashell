@@ -36,15 +36,25 @@ fn reference_builds() -> Result<ReferenceBuilds, FixtureError> {
 }
 
 #[test]
-fn the_stub_layers_check_no_reuse_of_the_stub_layers_below() -> Result<(), FixtureError> {
+fn the_registry_and_engine_layers_check_no_reuse() -> Result<(), FixtureError> {
     let builds = reference_builds()?;
-    for stub_layer in [builds.registry, builds.engine, builds.unified] {
+    for stub_layer in [builds.registry, builds.engine] {
         assert!(
             stub_layer.reused_stub_layers.is_empty(),
             "{}",
             stub_layer.drv_path
         );
     }
+    Ok(())
+}
+
+#[test]
+fn the_unified_layer_checks_the_reuse_of_the_engine_layer_only() -> Result<(), FixtureError> {
+    let builds = reference_builds()?;
+    assert_eq!(
+        builds.unified.reused_stub_layers,
+        [[builds.engine.drv_path]]
+    );
     Ok(())
 }
 

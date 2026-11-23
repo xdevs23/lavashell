@@ -70,3 +70,35 @@ fn named_targets_without_a_path_use_the_default_directories_of_cargo() -> Result
     );
     Ok(())
 }
+
+#[test]
+fn an_example_built_as_a_library_gets_no_main_function() -> Result<(), FixtureError> {
+    let directory = tempfile::tempdir()?;
+    let manifest = toml! {
+        [package]
+        name = "crate-with-a-library-example"
+
+        [[example]]
+        name = "plugin"
+        path = "plugin/lib.rs"
+        crate-type = ["cdylib"]
+
+        [[example]]
+        name = "tool"
+        path = "tool/main.rs"
+        crate-type = ["bin"]
+    };
+    let mut targets: Vec<StubTarget> = evaluate(
+        "cargo-targets.nix",
+        &TargetArguments {
+            directory: directory.path(),
+            manifest,
+        },
+    )?;
+    targets.sort_by(|left, right| left.path.cmp(&right.path));
+    assert_eq!(
+        targets,
+        [target("plugin/lib.rs", false), target("tool/main.rs", true)]
+    );
+    Ok(())
+}

@@ -1,5 +1,4 @@
 {
-  "schema": 1,
   "profile": "packaged",
   "target": "x86_64-unknown-linux-gnu",
   "projectionDirectory": "nix/cargo-projections",

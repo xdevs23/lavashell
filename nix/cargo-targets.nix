@@ -37,7 +37,7 @@ let
         kind: directory:
         map (target: {
           path = target.path or "${directory}/${target.name}.rs";
-          main = true;
+          main = builtins.elem "bin" (target.crate-type or [ "bin" ]);
         }) (crate.manifest.${kind} or [ ])
       ) defaultDirectories
     );
