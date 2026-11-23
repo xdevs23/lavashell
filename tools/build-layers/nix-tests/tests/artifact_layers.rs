@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use lavashell_command_output::json::successful_output;
 use lavashell_nix_tests::evaluation::evaluate;
 use lavashell_nix_tests::file_tree::walk;
 use lavashell_nix_tests::fixture_error::FixtureError;
+use lavashell_nix_tests::shell::bash;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::Output;
 use std::time::{Duration, UNIX_EPOCH};
 use tempfile::TempDir;
 
@@ -159,17 +161,12 @@ impl LayerOutputs {
         script: &str,
         environment: &[(&str, &Path)],
     ) -> Result<(), FixtureError> {
-        let output = Command::new("bash")
-            .args(["-euo", "pipefail", "-c", script])
-            .current_dir(directory)
-            .env("NIX_BUILD_TOP", self.directory.path())
-            .envs(environment.iter().copied())
-            .output()?;
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let _output: Output = successful_output(
+            bash(script)
+                .current_dir(directory)
+                .env("NIX_BUILD_TOP", self.directory.path())
+                .envs(environment.iter().copied()),
+        )?;
         Ok(())
     }
 

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use lavashell_command_output::json::successful_output;
 use lavashell_nix_tests::evaluation::evaluate;
-use lavashell_nix_tests::file_tree::walk;
+use lavashell_nix_tests::file_tree::{walk, write_files};
 use lavashell_nix_tests::fixture_error::FixtureError;
+use lavashell_nix_tests::shell::bash;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 const STUBBED_PACKAGE: &str = "stubbed-member";
 const STUBBED_CRATE: &str = "stubbed_member";
@@ -50,27 +52,7 @@ struct LayerScripts {
 }
 
 fn run(directory: &Path, command: &mut Command) -> Result<(), FixtureError> {
-    let output = command.current_dir(directory).output()?;
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(())
-}
-
-fn bash(script: &str) -> Command {
-    let mut command = Command::new("bash");
-    let _command: &mut Command = command.args(["-euo", "pipefail", "-c", script]);
-    command
-}
-
-fn write_workspace(workspace: &Path) -> Result<(), FixtureError> {
-    for (relative, contents) in WORKSPACE {
-        let path = workspace.join(relative);
-        fs::create_dir_all(path.parent().unwrap_or(workspace))?;
-        fs::write(path, contents)?;
-    }
+    let _output: Output = successful_output(command.current_dir(directory))?;
     Ok(())
 }
 
@@ -84,7 +66,7 @@ fn a_restored_layer_holds_no_artifact_of_a_stubbed_member_built_for_the_host_or_
     let root = tempfile::tempdir()?;
     let [workspace, layer, consumer] =
         ["workspace", "layer", "consumer"].map(|name| root.path().join(name));
-    write_workspace(&workspace)?;
+    write_files(&workspace, &WORKSPACE)?;
     fs::create_dir(&consumer)?;
     let scripts: LayerScripts = evaluate(
         "stubbed-member-removal.nix",

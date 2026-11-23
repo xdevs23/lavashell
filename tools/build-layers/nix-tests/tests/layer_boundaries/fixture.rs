@@ -69,7 +69,6 @@ pub struct CrateWithEngine {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackagesByRoute {
     pub registry_only: Vec<Derivation>,
-    pub framework: Vec<Derivation>,
     pub framework_with_engine: Vec<CrateWithEngine>,
 }
 
@@ -81,22 +80,18 @@ impl PackagesByRoute {
     }
 
     pub fn built_on_framework(&self) -> Vec<Derivation> {
-        self.framework
+        self.framework_with_engine
             .iter()
-            .chain(
-                self.framework_with_engine
-                    .iter()
-                    .flat_map(|with_engine| [&with_engine.framework, &with_engine.package]),
-            )
+            .flat_map(|with_engine| [&with_engine.framework, &with_engine.package])
             .cloned()
             .collect()
     }
 
-    pub fn framework_crate(&self, name: &str) -> Result<&Derivation, LayerTestError> {
-        self.framework
+    pub fn registry_only_crate(&self, name: &str) -> Result<&Derivation, LayerTestError> {
+        self.registry_only
             .iter()
             .find(|package| is_package_named(package, name))
-            .ok_or_else(|| LayerTestError::MissingFrameworkCrate {
+            .ok_or_else(|| LayerTestError::MissingRegistryOnlyCrate {
                 name: name.to_owned(),
             })
     }
@@ -157,8 +152,8 @@ pub enum LayerTestError {
     Base(Arc<LayerTestError>),
     #[error("the reference directory {directory} is outside the repository")]
     ReferenceOutside { directory: PathBuf },
-    #[error("{name} is not a packaged crate on the framework route")]
-    MissingFrameworkCrate { name: String },
+    #[error("{name} is not a packaged crate on the route with only a registry layer")]
+    MissingRegistryOnlyCrate { name: String },
     #[error("{name} is not a packaged crate on the route with an engine layer")]
     MissingCrateWithEngine { name: String },
     #[error("{version} does not end in a patch number")]

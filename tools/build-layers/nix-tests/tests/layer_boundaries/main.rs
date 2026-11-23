@@ -97,7 +97,7 @@ fn an_edit_of_the_test_platform_source_changes_only_the_packages_built_on_it()
     let packages = &base()?.packages;
     let recordings = packages.crate_with_engine("recordings")?;
     let built_on_it = [
-        packages.framework_crate("test-platform")?.clone(),
+        packages.registry_only_crate("test-platform")?.clone(),
         recordings.framework.clone(),
         recordings.package.clone(),
     ];
@@ -111,10 +111,16 @@ fn an_edit_of_the_framework_source_leaves_the_registry_the_engine_and_the_unifie
     let fixture = Fixture::new()?;
     append_newline(&fixture.root().join("crates/lavashell-core/src/lib.rs"))?;
     let current = fixture.all_layers()?;
+    let packages = &base()?.packages;
+    let test_platform = packages.registry_only_crate("test-platform")?;
+    let without_framework_source: Vec<Derivation> = (packages.registry_only.iter())
+        .filter(|package| *package != test_platform)
+        .cloned()
+        .collect();
     assert_unchanged(&current, &[Derivation::Layer(LayerDerivation::Registry)])?;
     assert_unchanged(&current, &base()?.engines())?;
     assert_unchanged(&current, &base()?.unified_layers())?;
-    assert_unchanged(&current, &base()?.packages.registry_only)?;
+    assert_unchanged(&current, &without_framework_source)?;
     assert_changed(
         &current,
         &[
@@ -122,6 +128,7 @@ fn an_edit_of_the_framework_source_leaves_the_registry_the_engine_and_the_unifie
             Derivation::Layer(LayerDerivation::ReferenceFramework),
             Derivation::Layer(LayerDerivation::Reference),
             Derivation::Layer(LayerDerivation::Native),
+            test_platform.clone(),
         ],
     )
 }

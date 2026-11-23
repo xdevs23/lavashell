@@ -424,8 +424,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "lavashell-cargo-model",
+ "lavashell-command-output",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

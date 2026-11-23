@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+pub mod build_message;
 pub mod contract;
 pub mod dependency_kind;
 pub mod fixed_flag;

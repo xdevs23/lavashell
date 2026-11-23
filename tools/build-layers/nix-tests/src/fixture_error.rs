@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_command_output::json::CommandError;
 use lavashell_command_output::nix::NixError;
 use std::path::PathBuf;
 
@@ -10,6 +11,8 @@ pub enum FixtureError {
     Nix(#[from] NixError),
     #[error(transparent)]
     File(#[from] std::io::Error),
+    #[error(transparent)]
+    Command(#[from] CommandError),
     #[error("{path} cannot be copied: {source}")]
     Copy {
         path: PathBuf,

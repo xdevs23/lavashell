@@ -20,6 +20,7 @@ let
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
   removeStubbedMembers = import ./stubbed-member-removal.nix { inherit pkgs; };
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
+  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit lib buildLayers; };
   selectedPackages =
     directory:
     [ (sources.packageName directory) ]
@@ -61,7 +62,7 @@ let
     ''
       RUSTC_BOOTSTRAP=1 cargo build --unit-graph -Z unstable-options ${buildScope.target} \
         ${lib.escapeShellArgs (flags selected)} > consumer-cargo-plan.json
-      ${lib.getExe' buildLayers "lavashell-plan-check"} --contract ${./projection-contract.json} \
+      ${lib.getExe' buildLayers "lavashell-plan-check"} engine-units --contract ${./projection-contract.json} \
         --engine ${file} --consumer consumer-cargo-plan.json
     '';
   artifacts =
@@ -85,6 +86,7 @@ let
         dummyPackages ++ testedByOtherPackages ++ packagesTestedThrough previous
       ) names;
       stubLayer = lib.subtractLists dummyPackages names == [ ];
+      stubLayerReuseChecks = lib.optional (!stubLayer) (checkStubLayerReuse previous);
       checkedPackages = if stubLayer then testedByLayerAbove else testPackages;
       testPhase = (if stubLayer then compiledTests else tests) checkedPackages;
     in
@@ -112,12 +114,19 @@ let
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) (removeStubbedMembers (flags dummyPackages))}
           ${artifactLayers.storeLayerChanges}
-          install -Dm444 cargo-artifacts.jsonl "$out/share/lavashell/cargo-artifacts.jsonl"
+          install -Dm444 cargo-artifacts.jsonl "$out/${artifactLayers.buildRecord}"
           runHook postInstall
         '';
-        postInstall = "";
+        postInstall = lib.concatMapStrings (check: check.script) stubLayerReuseChecks;
         dontFixup = true;
-        passthru = { inherit previous testPackages; };
+        passthru = {
+          inherit
+            previous
+            testPackages
+            stubLayer
+            stubLayerReuseChecks
+            ;
+        };
       }
     );
   stubArtifacts =

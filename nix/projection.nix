@@ -287,12 +287,12 @@ let
         lib.any (dependency: !(builtins.elem dependency nativeRegistry)) (externalDependencies crates)
         || lib.any (name: name != package && !(builtins.elem name nativeNames)) names;
     in
-    if !(builtins.elem frameworkRoot names) then
-      types.layerRoutes.registryOnly
-    else if needsEngine then
+    if builtins.elem frameworkRoot names && needsEngine then
       types.layerRoutes.frameworkWithEngine
+    else if builtins.elem (packageName nativeDirectory) names then
+      types.layerRoutes.framework
     else
-      types.layerRoutes.framework;
+      types.layerRoutes.registryOnly;
 in
 {
   inherit

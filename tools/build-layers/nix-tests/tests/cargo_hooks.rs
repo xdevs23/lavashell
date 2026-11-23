@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use lavashell_command_output::json::successful_output;
 use lavashell_command_output::nix::NixEvaluator;
 use lavashell_nix_tests::fixture_error::FixtureError;
 use lavashell_nix_tests::repository::repository_root;
@@ -8,7 +9,7 @@ use serde::Deserialize;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 use tempfile::TempDir;
 
 const HARNESS: &str = concat!(
@@ -63,7 +64,7 @@ impl HookDirectory {
         self.0.path()
     }
 
-    fn run(&self, cargo: &CargoOutcome, log: &ArtifactLog) -> Result<Output, FixtureError> {
+    fn command(&self, cargo: &CargoOutcome, log: &ArtifactLog) -> Result<Command, FixtureError> {
         if let ArtifactLog::Full = log {
             symlink("/dev/full", self.path().join(ARTIFACT_LOG))?;
         }
@@ -71,7 +72,8 @@ impl HookDirectory {
             CargoOutcome::Succeeds => 0,
             CargoOutcome::FailsWith(status) => *status,
         };
-        Ok(Command::new("bash")
+        let mut command = Command::new("bash");
+        let _command: &mut Command = command
             .args(["-eu", "-c", "source harness.sh"])
             .current_dir(self.path())
             .env_clear()
@@ -83,21 +85,18 @@ impl HookDirectory {
                 "PHASE",
                 repository_root()?.join("nix/cargo-build-record.sh"),
             )
-            .env("CARGO_FIXTURE_STATUS", status.to_string())
-            .output()?)
+            .env("CARGO_FIXTURE_STATUS", status.to_string());
+        Ok(command)
     }
 }
 
 #[test]
 fn exports_install_bins_and_complete_log_survive() -> Result<(), FixtureError> {
     let directory = HookDirectory::new()?;
-    let output = directory.run(&CargoOutcome::Succeeds, &ArtifactLog::Writable)?;
+    let output = successful_output(
+        &mut directory.command(&CargoOutcome::Succeeds, &ArtifactLog::Writable)?,
+    )?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
     assert!(stdout.contains("CHECK_PKG_CONFIG=retained-pkg-config"));
     assert!(!stdout.contains("CHECK_BINS=missing"));
     assert!(directory.path().join("out/bin/fixture").is_file());
@@ -114,7 +113,9 @@ fn exports_install_bins_and_complete_log_survive() -> Result<(), FixtureError> {
 
 #[test]
 fn cargo_failure_is_propagated_before_install() -> Result<(), FixtureError> {
-    let output = HookDirectory::new()?.run(&CargoOutcome::FailsWith(42), &ArtifactLog::Writable)?;
+    let output = HookDirectory::new()?
+        .command(&CargoOutcome::FailsWith(42), &ArtifactLog::Writable)?
+        .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         output.status.code(),
@@ -129,7 +130,9 @@ fn cargo_failure_is_propagated_before_install() -> Result<(), FixtureError> {
 
 #[test]
 fn tee_write_failure_is_propagated_before_install() -> Result<(), FixtureError> {
-    let output = HookDirectory::new()?.run(&CargoOutcome::Succeeds, &ArtifactLog::Full)?;
+    let output = HookDirectory::new()?
+        .command(&CargoOutcome::Succeeds, &ArtifactLog::Full)?
+        .output()?;
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No space left on device"));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("INSTALL_FINISHED"));

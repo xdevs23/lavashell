@@ -50,6 +50,7 @@ let
   };
   buildLayers = layerTools.tools;
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
+  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit lib buildLayers; };
   artifacts = import ./artifacts.nix {
     inherit
       pkgs
@@ -106,16 +107,20 @@ let
           };
         }
         .${route};
+      withLibraryLayer = builtins.elem name contract.libraryLayers;
+      featuresEnabledByDependents = lib.optionals withLibraryLayer (
+        sources.dependencyFeaturesEnabledByDependents {
+          inherit directory;
+          dependents = lib.filter (
+            other: other != directory && builtins.elem program (sources.packageNames other)
+          ) packageDirectories;
+        }
+      );
       local =
-        if builtins.elem name contract.libraryLayers then
+        if withLibraryLayer then
           artifacts.framework directory [ routed ] {
             example = false;
-            features = sources.dependencyFeaturesEnabledByDependents {
-              inherit directory;
-              dependents = lib.filter (
-                other: other != directory && builtins.elem program (sources.packageNames other)
-              ) packageDirectories;
-            };
+            features = featuresEnabledByDependents;
             testedByOtherPackages = [ program ] ++ testedByOtherPackages;
           }
         else
@@ -125,6 +130,8 @@ let
           library: builtins.elem (sources.packageName library.directory) dependencies
         ) libraryCrates
       );
+      restoredLayers = [ local ] ++ libraries;
+      stubLayerReuseChecks = [ (checkStubLayerReuse restoredLayers) ];
       selected = artifacts.selectedPackages directory;
       testPackages = lib.subtractLists (
         artifacts.packagesTestedThrough [
@@ -139,7 +146,7 @@ let
       rustPackageDefaults
       // artifacts.tests testPackages
       // artifacts.lint testPackages
-      // artifacts.enableFeatures local.cargoBuildFeatures
+      // artifacts.enableFeatures featuresEnabledByDependents
       // {
         pname = "lavashell-${name}";
         inherit (sources.sourceAndCargoDeps directory) src cargoDeps;
@@ -160,16 +167,18 @@ let
           + ''
             install -Dm444 ${notices { inherit directory; }} "$out/share/licenses/lavashell/rust-crates.txt"
           ''
-          + lib.concatMapStrings (requirement: requirement.installLicenses) requirements;
+          + lib.concatMapStrings (requirement: requirement.installLicenses) requirements
+          + lib.concatMapStrings (check: check.script) stubLayerReuseChecks;
         preBuild =
           rustPackageDefaults.preBuild
           + (import ./vendor-directory-times.nix)
-          + artifactLayers.restore ([ local ] ++ libraries)
+          + artifactLayers.restore restoredLayers
           + lib.optionalString withEngine (artifacts.planCheck directory selected);
         passthru = {
           inherit
             directory
             route
+            stubLayerReuseChecks
             testPackages
             testedPackages
             ;

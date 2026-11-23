@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+pub mod stub_layer_reuse;
+
 use lavashell_cargo_model::unit_graph::{
     Unit, UnitGraph, UnitIdentity, UnitIndexError, UnitRecord,
 };

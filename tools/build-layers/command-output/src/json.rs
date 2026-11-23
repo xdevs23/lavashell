@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use serde::de::DeserializeOwned;
 use std::fmt;
-use std::process::Command;
+use std::process::{Command, Output};
 
 #[derive(Debug)]
 pub struct CommandLine(Vec<String>);
@@ -44,9 +44,7 @@ pub enum CommandError {
     },
 }
 
-pub fn read_json_output<Document: DeserializeOwned>(
-    command: &mut Command,
-) -> Result<Document, CommandError> {
+pub fn successful_output(command: &mut Command) -> Result<Output, CommandError> {
     let output = command.output().map_err(|source| CommandError::Start {
         command: CommandLine::from(&*command),
         source,
@@ -57,6 +55,13 @@ pub fn read_json_output<Document: DeserializeOwned>(
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         });
     }
+    Ok(output)
+}
+
+pub fn read_json_output<Document: DeserializeOwned>(
+    command: &mut Command,
+) -> Result<Document, CommandError> {
+    let output = successful_output(command)?;
     serde_json::from_slice(&output.stdout).map_err(|source| CommandError::Decode {
         command: CommandLine::from(&*command),
         source,
