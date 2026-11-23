@@ -91,7 +91,11 @@ mod tests {
             package: vec![LockedPackage {
                 name: name.to_owned(),
                 version: "1.0.0".to_owned(),
-                source: Some("registry+https://github.com/rust-lang/crates.io-index".to_owned()),
+                source: Some(
+                    "registry+https://github.com/rust-lang/crates.io-index"
+                        .to_owned()
+                        .into(),
+                ),
                 checksum: None,
                 dependencies: Vec::new(),
             }],

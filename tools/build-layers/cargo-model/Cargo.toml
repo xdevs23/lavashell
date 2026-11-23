@@ -10,6 +10,7 @@ publish = false
 workspace = true
 
 [dependencies]
+cargo-util-schemas.workspace = true
 lavashell-enum-values.workspace = true
 serde.workspace = true
 thiserror.workspace = true

@@ -78,7 +78,7 @@ pub enum Error {
         "the path package {package} is outside the workspace and cannot be replaced by a \
          workspace stub"
     )]
-    ExternalPathPackage { package: PackageId },
+    ExternalPathPackage { package: Box<PackageId> },
     #[error(
         "the member {member} is not a contained path of a virtual workspace, which dependency \
          projections need"
@@ -116,7 +116,7 @@ pub enum Error {
     #[error("Cargo selected no units")]
     NoUnitsSelected,
     #[error("Cargo metadata and the unit graph disagree on the package {package}")]
-    PackageIdentityMismatch { package: PackageId },
+    PackageIdentityMismatch { package: Box<PackageId> },
     #[error("several resolved packages occupy one workspace member")]
     SharedMember,
     #[error("the dependency alias of {crate_name} in {package} is ambiguous or missing")]
@@ -133,9 +133,9 @@ pub enum Error {
     #[error("the selected root package is missing from the active local closure")]
     RootPackageMissing,
     #[error("the feature context of {package} is ambiguous")]
-    AmbiguousFeatureContext { package: PackageId },
+    AmbiguousFeatureContext { package: Box<PackageId> },
     #[error("the package id {package} names no package and version")]
-    UnnamedPackage { package: PackageId },
+    UnnamedPackage { package: Box<PackageId> },
     #[error("the shared features of {package} did not change in the last round")]
     SharedFeaturesUnchanged { package: String },
     #[error(

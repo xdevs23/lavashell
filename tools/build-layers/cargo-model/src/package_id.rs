@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/cargo/reference/pkgid-spec.html
+use crate::package_source::PackageSource;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::str::FromStr;
 use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub struct PackageId {
     text: String,
-    source: Option<Result<SourceKind, UnknownSourceKind>>,
+    source: Option<PackageSource>,
     name: Option<String>,
     version: Option<String>,
 }
@@ -17,7 +17,7 @@ pub struct PackageId {
 impl PackageId {
     #[must_use]
     pub fn is_external(&self) -> bool {
-        !matches!(self.source, None | Some(Ok(SourceKind::Path)))
+        self.source.as_ref().is_some_and(PackageSource::is_external)
     }
 
     #[must_use]
@@ -34,7 +34,9 @@ impl PackageId {
 impl From<String> for PackageId {
     fn from(text: String) -> Self {
         let (location, fragment) = text.split_once('#').unwrap_or((&text, ""));
-        let source = location.split_once('+').map(|(scheme, _)| scheme.parse());
+        let source = location
+            .contains('+')
+            .then(|| PackageSource::from(location.to_owned()));
         let (name, version) = match fragment.rsplit_once('@') {
             Some((name, version)) => (Some(name.to_owned()), Some(version.to_owned())),
             None => (
@@ -71,39 +73,11 @@ impl fmt::Display for PackageId {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum SourceKind {
-    Registry,
-    SparseRegistry,
-    LocalRegistry,
-    Directory,
-    Git,
-    Path,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, thiserror::Error)]
-#[error("Cargo names no source kind {0}")]
-struct UnknownSourceKind(String);
-
-impl FromStr for SourceKind {
-    type Err = UnknownSourceKind;
-
-    fn from_str(scheme: &str) -> Result<Self, Self::Err> {
-        match scheme {
-            "registry" => Ok(Self::Registry),
-            "sparse" => Ok(Self::SparseRegistry),
-            "local-registry" => Ok(Self::LocalRegistry),
-            "directory" => Ok(Self::Directory),
-            "git" => Ok(Self::Git),
-            "path" => Ok(Self::Path),
-            unknown => Err(UnknownSourceKind(unknown.to_owned())),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{PackageId, SourceKind, UnknownSourceKind};
+    use super::PackageId;
+    use crate::package_source::PackageSource;
+    use cargo_util_schemas::core::{GitReference, SourceKind};
 
     fn package_id(text: &str) -> PackageId {
         PackageId::from(text.to_owned())
@@ -123,18 +97,8 @@ mod tests {
                 true,
             ),
             (
-                "local-registry+file:///work/registry#serde@1.0.229",
-                SourceKind::LocalRegistry,
-                true,
-            ),
-            (
-                "directory+file:///work/vendor#serde@1.0.229",
-                SourceKind::Directory,
-                true,
-            ),
-            (
                 "git+https://github.com/rust-skia/skia-bindings?rev=abc#0.82.0",
-                SourceKind::Git,
+                SourceKind::Git(GitReference::Rev("abc".to_owned())),
                 true,
             ),
             (
@@ -145,23 +109,50 @@ mod tests {
         ];
         for (text, kind, external) in cases {
             let id = package_id(text);
-            assert_eq!(id.source, Some(Ok(kind)), "{text}");
+            assert!(
+                matches!(&id.source, Some(PackageSource::Read(source)) if *source.kind() == kind),
+                "{text}"
+            );
             assert_eq!(id.is_external(), external, "{text}");
+        }
+    }
+
+    #[test]
+    fn marks_local_registry_and_directory_sources_unreadable_and_external() {
+        for text in [
+            "local-registry+file:///work/registry#serde@1.0.229",
+            "directory+file:///work/vendor#serde@1.0.229",
+        ] {
+            let id = package_id(text);
+            assert!(
+                matches!(id.source, Some(PackageSource::Unreadable(_))),
+                "{text}"
+            );
+            assert!(id.is_external(), "{text}");
+            assert_eq!(
+                (id.name(), id.version()),
+                (Some("serde"), Some("1.0.229")),
+                "{text}"
+            );
         }
     }
 
     #[test]
     fn keeps_a_source_kind_unknown_to_cargo_and_counts_it_external() {
         let unknown = package_id("svn+https://example.org/repository#serde@1.0.229");
-        assert_eq!(
-            unknown.source,
-            Some(Err(UnknownSourceKind("svn".to_owned())))
-        );
+        assert!(matches!(unknown.source, Some(PackageSource::Unreadable(_))));
         assert!(unknown.is_external());
         assert_eq!(
             String::from(unknown),
             "svn+https://example.org/repository#serde@1.0.229"
         );
+    }
+
+    #[test]
+    fn counts_an_id_without_a_source_as_local() {
+        let id = package_id("serde@1.0.229");
+        assert_eq!(id.source, None);
+        assert!(!id.is_external());
     }
 
     #[test]

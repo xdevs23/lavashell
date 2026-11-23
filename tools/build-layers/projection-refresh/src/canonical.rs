@@ -82,7 +82,7 @@ fn member_path(package: &Package, workspace_root: &Path) -> Result<String, Error
         .parent()
         .and_then(|directory| directory.strip_prefix(workspace_root).ok())
         .ok_or_else(|| Error::ExternalPathPackage {
-            package: package.id.clone(),
+            package: Box::new(package.id.clone()),
         })?;
     let contained = member
         .components()
@@ -118,7 +118,7 @@ impl<'metadata> Packages<'metadata> {
             .get(id)
             .copied()
             .ok_or_else(|| Error::PackageIdentityMismatch {
-                package: id.clone(),
+                package: Box::new(id.clone()),
             })
     }
 }

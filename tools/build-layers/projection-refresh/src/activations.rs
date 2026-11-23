@@ -42,12 +42,12 @@ pub fn missing_activations(
         }
         let [consumer_unit] = matches else {
             return Err(Error::AmbiguousFeatureContext {
-                package: unit.pkg_id.clone(),
+                package: Box::new(unit.pkg_id.clone()),
             });
         };
         let (Some(name), Some(version)) = (unit.pkg_id.name(), unit.pkg_id.version()) else {
             return Err(Error::UnnamedPackage {
-                package: unit.pkg_id.clone(),
+                package: Box::new(unit.pkg_id.clone()),
             });
         };
         let kind = match unit.platform {

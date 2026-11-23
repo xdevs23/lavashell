@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
+use crate::cargo_text::{CargoText, ReadByCargo};
+use crate::package_source::PackageSource;
+use cargo_util_schemas::lockfile::TomlLockfilePackageId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CargoLock {
@@ -12,15 +14,11 @@ pub struct CargoLock {
 
 impl CargoLock {
     pub fn external_packages(&self) -> impl Iterator<Item = &LockedPackage> {
-        self.package
-            .iter()
-            .filter(|package| package.source.is_some())
+        self.package.iter().filter(|package| package.is_external())
     }
 
     pub fn local_packages(&self) -> impl Iterator<Item = &LockedPackage> {
-        self.package
-            .iter()
-            .filter(|package| package.source.is_none())
+        self.package.iter().filter(|package| !package.is_external())
     }
 
     fn external_packages_by_name(&self) -> BTreeMap<&str, Vec<&LockedPackage>> {
@@ -53,106 +51,78 @@ pub struct LockedPackage {
     pub name: String,
     pub version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub source: Option<PackageSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checksum: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<LockReference>,
 }
 
+impl ReadByCargo for TomlLockfilePackageId {
+    fn read(text: &str) -> Option<Self> {
+        text.parse().ok()
+    }
+}
+
+pub type LockReference = CargoText<TomlLockfilePackageId>;
+
+impl LockReference {
+    #[must_use]
+    pub fn package_name(&self) -> Option<&str> {
+        match self {
+            Self::Read(id) => Some(&id.name),
+            Self::Unreadable(_) => None,
+        }
+    }
+}
+
 impl LockedPackage {
+    fn is_external(&self) -> bool {
+        self.source.as_ref().is_some_and(PackageSource::is_external)
+    }
+
     fn is_same_crate(&self, other: &LockedPackage) -> bool {
         (&self.name, &self.version, &self.source) == (&other.name, &other.version, &other.source)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "String", into = "String")]
-pub struct LockReference {
-    pub name: String,
-    pub version: Option<String>,
-    pub source: Option<String>,
-}
-
-impl From<String> for LockReference {
-    fn from(text: String) -> Self {
-        let mut words = text.splitn(3, ' ');
-        let name = words.next().unwrap_or_default().to_owned();
-        let version = words.next().map(str::to_owned);
-        let source = words.next().map(|source| {
-            source
-                .trim_start_matches('(')
-                .trim_end_matches(')')
-                .to_owned()
-        });
-        Self {
-            name,
-            version,
-            source,
-        }
-    }
-}
-
-impl fmt::Display for LockReference {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.name)?;
-        if let Some(version) = &self.version {
-            write!(formatter, " {version}")?;
-        }
-        if let Some(source) = &self.source {
-            write!(formatter, " ({source})")?;
-        }
-        Ok(())
-    }
-}
-
-impl From<LockReference> for String {
-    fn from(reference: LockReference) -> Self {
-        reference.to_string()
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::{CargoLock, LockReference, LockedPackage};
+    use crate::package_source::PackageSource;
 
     const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
 
-    fn locked(name: &str, version: &str, source: Option<&str>) -> LockedPackage {
+    fn locked(name: &str, version: &str, source: Option<PackageSource>) -> LockedPackage {
         LockedPackage {
             name: name.to_owned(),
             version: version.to_owned(),
-            source: source.map(str::to_owned),
+            source,
             checksum: None,
             dependencies: Vec::new(),
         }
     }
 
-    pub(crate) fn registry_lock(crates: &[(&str, &str)]) -> CargoLock {
+    fn lock_from(source: &str, crates: &[(&str, &str)]) -> CargoLock {
         CargoLock {
             version: 4,
             package: crates
                 .iter()
-                .map(|(name, version)| locked(name, version, Some(CRATES_IO)))
+                .map(|(name, version)| {
+                    locked(name, version, Some(PackageSource::from(source.to_owned())))
+                })
                 .collect(),
         }
+    }
+
+    pub(crate) fn registry_lock(crates: &[(&str, &str)]) -> CargoLock {
+        lock_from(CRATES_IO, crates)
     }
 
     fn unresolved(stored: &CargoLock, cargo_lock: &CargoLock) -> Option<(String, String)> {
         stored
             .find_crate_unresolved_in(cargo_lock)
             .map(|package| (package.name.clone(), package.version.clone()))
-    }
-
-    #[test]
-    fn writes_back_the_reference_it_reads() {
-        for text in [
-            "serde",
-            "serde 1.0.229",
-            "serde 1.0.229 (registry+https://github.com/rust-lang/crates.io-index)",
-        ] {
-            assert_eq!(String::from(LockReference::from(text.to_owned())), text);
-        }
     }
 
     #[test]
@@ -206,5 +176,76 @@ pub(crate) mod tests {
             ),
             Some(("foo".to_owned(), "1.0.0".to_owned()))
         );
+    }
+
+    #[test]
+    fn matches_a_source_that_cargo_reads_as_the_same_registry() {
+        let crates = [("foo", "1.0.0"), ("foo", "2.0.0")];
+        assert_eq!(
+            unresolved(
+                &lock_from("registry+https://registry.example.org", &crates),
+                &lock_from("registry+https://registry.example.org/", &crates)
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn finds_a_version_locked_from_another_registry() {
+        let crates = [("foo", "1.0.0"), ("foo", "2.0.0")];
+        assert_eq!(
+            unresolved(
+                &lock_from("registry+https://registry.example.org", &crates),
+                &lock_from("sparse+https://registry.example.org/", &crates)
+            ),
+            Some(("foo".to_owned(), "1.0.0".to_owned()))
+        );
+    }
+
+    #[test]
+    fn writes_back_a_readable_reference_unchanged() -> Result<(), serde_json::Error> {
+        for text in [
+            "serde".to_owned(),
+            "serde 1.0.229".to_owned(),
+            format!("serde 1.0.229 ({CRATES_IO})"),
+        ] {
+            let reference = LockReference::from(text.clone());
+            assert!(matches!(reference, LockReference::Read(_)), "{text}");
+            assert_eq!(serde_json::to_value(&reference)?, text, "{text}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn writes_back_what_cargo_cannot_read_unchanged() -> Result<(), serde_json::Error> {
+        let svn = "svn+https://svn.example.org/crates";
+        let stored = serde_json::json!({
+            "version": 4,
+            "package": [
+                {"name": "foo", "version": "1.0.0", "source": svn,
+                 "dependencies": [format!("bar 1.0.0 ({svn})"), "serde"]},
+                {"name": "serde", "version": "1.0.0", "source": CRATES_IO},
+            ],
+        });
+        let lock: CargoLock = serde_json::from_value(stored.clone())?;
+        let foo = &lock.package[0];
+        assert!(matches!(foo.source, Some(PackageSource::Unreadable(_))));
+        assert_eq!(
+            foo.dependencies,
+            [
+                LockReference::from(format!("bar 1.0.0 ({svn})")),
+                LockReference::from("serde".to_owned()),
+            ]
+        );
+        assert!(matches!(
+            foo.dependencies[..],
+            [LockReference::Unreadable(_), LockReference::Read(_)]
+        ));
+        assert!(matches!(
+            lock.package[1].source,
+            Some(PackageSource::Read(_))
+        ));
+        assert_eq!(serde_json::to_value(&lock)?, stored);
+        Ok(())
     }
 }

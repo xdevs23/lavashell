@@ -201,7 +201,7 @@ fn an_unrelated_example_and_its_registry_update_reach_no_layer() -> Result<(), L
             LockedPackage {
                 name: "foreign-registry-fixture".to_owned(),
                 version: "1.0.0".to_owned(),
-                source: Some(CRATES_IO.to_owned()),
+                source: Some(CRATES_IO.to_owned().into()),
                 checksum: Some("0".repeat(64)),
                 dependencies: Vec::new(),
             },

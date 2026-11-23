@@ -219,7 +219,11 @@ fn engine_seed_lock(
         dependencies: package
             .dependencies
             .iter()
-            .filter(|reference| !native_names.contains(&reference.name))
+            .filter(|reference| {
+                !reference
+                    .package_name()
+                    .is_some_and(|name| native_names.iter().any(|native| native == name))
+            })
             .cloned()
             .collect(),
         ..package.clone()
@@ -435,4 +439,51 @@ pub fn refresh_projections(
             .collect(),
     )?;
     Ok(std::iter::once(native_refresh).chain(refreshed).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::engine_seed_lock;
+    use lavashell_cargo_model::lock::{CargoLock, LockReference, LockedPackage};
+
+    fn local_package(name: &str, dependencies: &[&str]) -> LockedPackage {
+        LockedPackage {
+            name: name.to_owned(),
+            version: "0.1.0".to_owned(),
+            source: None,
+            checksum: None,
+            dependencies: dependencies
+                .iter()
+                .map(|&entry| LockReference::from(entry.to_owned()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn drops_only_readable_references_to_a_native_crate() {
+        let svn_entry = "shell-core 1.0.0 (svn+https://svn.example.org/crates)";
+        let original = CargoLock {
+            version: 4,
+            package: vec![
+                local_package("app", &["shell-core", svn_entry, "serde"]),
+                local_package("shell-core", &[]),
+            ],
+        };
+        let baseline = CargoLock {
+            version: 4,
+            package: Vec::new(),
+        };
+        let seed = engine_seed_lock(&original, &baseline, &["shell-core".to_owned()]);
+        assert_eq!(
+            seed.package[0].dependencies,
+            [
+                LockReference::from(svn_entry.to_owned()),
+                LockReference::from("serde".to_owned()),
+            ]
+        );
+        assert!(matches!(
+            seed.package[0].dependencies[0],
+            LockReference::Unreadable(_)
+        ));
+    }
 }

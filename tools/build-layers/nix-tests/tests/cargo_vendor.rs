@@ -32,7 +32,7 @@ fn locked(name: &str, source: &str) -> LockedPackage {
     LockedPackage {
         name: name.to_owned(),
         version: "1.0.0".to_owned(),
-        source: Some(source.to_owned()),
+        source: Some(source.to_owned().into()),
         checksum: (source == CRATES_IO).then(|| "0".repeat(64)),
         dependencies: Vec::new(),
     }
