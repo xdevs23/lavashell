@@ -2,9 +2,9 @@
 use super::*;
 use crate::test_error::{TestError, TestResult};
 use crate::test_host::{
-    StandIn, closed, created, empty_view, host, renderer_setup, runtime_setup, surface_requests,
-    window,
+    StandIn, closed, created, empty_view, host, runtime_setup, surface_requests, window,
 };
+use crate::test_renderer::TestBackend;
 use crate::watches::AfterReady;
 use crate::window::Window;
 use lavashell_actor::{Receiver, SystemClock, mailbox};
@@ -16,9 +16,6 @@ use lavashell_platform::{
     Readiness, Role, SurfaceAppearance, SurfaceRequest, SurfaceSpec, WatchEvent, WatchId,
     WatchRequest, WindowRole,
 };
-use lavashell_renderer::Painter;
-use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination, TextRendering};
-use lavashell_vulkan_renderer::HeadlessBackend;
 use rustix::event::{EventfdFlags, eventfd};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -48,7 +45,7 @@ impl Views {
         let (sender, requests) = mailbox();
         let offered = offered.into_iter().collect();
         let connected = Connected {
-            backend: Some(HeadlessBackend::without_surfaces()),
+            backend: Some(TestBackend::default()),
             host,
             clock: Arc::clone(&clock),
         };
@@ -302,20 +299,6 @@ fn a_watch_of_the_app_is_requested_from_the_platform_and_a_ready_report_runs_it(
         request,
         PlatformRequest::Watch(WatchRequest::Watch(id, _, Readiness::Readable)) if *id == watch
     )));
-    Ok(())
-}
-
-#[test]
-fn without_a_renderer_text_is_shaped_as_the_setup_of_the_painter_says() -> TestResult {
-    let rendering = TextRendering {
-        hinting: Hinting::None,
-        fractional_positioning: true,
-        antialiasing: TextAntialiasing::Aliased,
-    };
-    let setup = renderer_setup(Some(Box::new(move |painter: &mut Painter| {
-        painter.set_text_rendering(rendering, TextDestination::default());
-    })));
-    assert_eq!(actors::text_rendering_set_up_for_painter(setup)?, rendering);
     Ok(())
 }
 

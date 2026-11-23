@@ -5,7 +5,7 @@ use lavashell_actor::{
     Actor, Clock, Closed, Flow, Handle, JoinError, Merge, MergeEffect, Outlet, Sender, SpawnError,
     mailbox_on, spawn,
 };
-use lavashell_core::surface::SurfaceId;
+use lavashell_core::surface::{SurfaceId, SurfaceState};
 use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{Platform, SurfaceAttachment, SurfaceControl};
 use std::collections::BTreeMap;
@@ -80,7 +80,7 @@ impl<C: SurfaceControl + Send + 'static> SurfaceControls<C> {
         let (inputs, inbox) = mailbox_on(clock);
         let actor = spawn("surface controls", inbox, move || {
             Ok(ControlsActor {
-                controls: BTreeMap::new(),
+                controls: SurfaceControlTable::default(),
                 observer,
             })
         })?;
@@ -127,8 +127,53 @@ impl<C: SurfaceControl + Send + 'static> Drop for SurfaceControls<C> {
     }
 }
 
-struct ControlsActor<C> {
+pub(crate) struct SurfaceControlTable<C> {
     controls: BTreeMap<SurfaceId, C>,
+}
+
+impl<C> Default for SurfaceControlTable<C> {
+    fn default() -> Self {
+        Self {
+            controls: BTreeMap::new(),
+        }
+    }
+}
+
+impl<C: SurfaceControl> SurfaceControlTable<C> {
+    pub(crate) fn attach(
+        &mut self,
+        surface: SurfaceId,
+        control: C,
+    ) -> Result<(), ControlsError<C::Error>> {
+        let Entry::Vacant(entry) = self.controls.entry(surface) else {
+            return Err(ControlsError::AttachedTwice(surface));
+        };
+        let _attached_control_is_not_needed = entry.insert(control);
+        Ok(())
+    }
+
+    pub(crate) fn retire(&mut self, surface: SurfaceId) -> Option<C> {
+        self.controls.remove(&surface)
+    }
+
+    pub(crate) fn attached_control(
+        &mut self,
+        surface: SurfaceId,
+    ) -> Result<&mut C, ControlsError<C::Error>> {
+        (self.controls.get_mut(&surface)).ok_or(ControlsError::UnknownSurface(surface))
+    }
+
+    pub(crate) fn commit_state(
+        &mut self,
+        surface: SurfaceId,
+        state: &SurfaceState,
+    ) -> Result<(), ControlsError<C::Error>> {
+        (self.attached_control(surface)?.commit_state(state)).map_err(ControlsError::Control)
+    }
+}
+
+struct ControlsActor<C> {
+    controls: SurfaceControlTable<C>,
     observer: ControlsObserver,
 }
 
@@ -139,26 +184,21 @@ impl<C: SurfaceControl + Send + 'static> Actor for ControlsActor<C> {
     fn handle(&mut self, input: ControlsInput<C>) -> Result<Flow, ControlsError<C::Error>> {
         let output = match input {
             ControlsInput::Attach { surface, control } => {
-                let Entry::Vacant(entry) = self.controls.entry(surface) else {
-                    return Err(ControlsError::AttachedTwice(surface));
-                };
-                let _attached_control_is_not_needed = entry.insert(control);
+                self.controls.attach(surface, control)?;
                 None
             }
             ControlsInput::Control { surface, message } => {
-                if let Some(control) = self.controls.get_mut(&surface) {
+                if let Ok(control) = self.controls.attached_control(surface) {
                     control.receive(message);
                 }
                 None
             }
             ControlsInput::Detach(surface) => {
-                drop(self.controls.remove(&surface));
+                drop(self.controls.retire(surface));
                 Some(ControlsOutput::Retired(surface))
             }
             ControlsInput::CommitState { surface, built } => {
-                let control = (self.controls.get_mut(&surface))
-                    .ok_or(ControlsError::UnknownSurface(surface))?;
-                (control.commit_state(&built.state)).map_err(ControlsError::Control)?;
+                self.controls.commit_state(surface, &built.state)?;
                 Some(ControlsOutput::Committed(surface))
             }
             ControlsInput::Stop => return Ok(Flow::Stop),

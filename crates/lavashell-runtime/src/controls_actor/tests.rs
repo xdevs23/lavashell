@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::test_host::attachment;
 use lavashell_actor::SystemClock;
-use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::{SurfaceChange, SurfaceState};
-use lavashell_platform::{Attach, SurfaceAlpha};
 use std::convert::Infallible;
 use std::sync::mpsc;
 
@@ -62,17 +61,6 @@ fn start() -> Result<
     Ok((controls, received))
 }
 
-fn attach(control: RecordingControl) -> SurfaceAttachment<RecordingControl, ()> {
-    SurfaceAttachment::Attach(Box::new(Attach {
-        surface: SURFACE,
-        window: (),
-        alpha: SurfaceAlpha::Opaque,
-        output: OutputRequest::default(),
-        hdr_metadata: None,
-        control,
-    }))
-}
-
 fn built_with(state: SurfaceState) -> Arc<BuiltSurface> {
     Arc::new(BuiltSurface {
         sequence: None,
@@ -89,7 +77,7 @@ fn an_attached_control_receives_its_messages_and_states_until_its_surface_is_det
     let mut state = SurfaceState::default();
     state.apply(SurfaceChange::InputRegion(None));
     let attachments = controls.attachments();
-    attachments.push(attach(RecordingControl(seen)))?;
+    attachments.push(attachment(SURFACE, RecordingControl(seen)))?;
     attachments.push(SurfaceAttachment::Control {
         surface: SURFACE,
         message: 7,

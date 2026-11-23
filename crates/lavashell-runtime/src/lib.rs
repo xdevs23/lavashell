@@ -41,6 +41,8 @@ pub mod surface_slots;
 mod test_error;
 #[cfg(test)]
 mod test_host;
+#[cfg(test)]
+mod test_renderer;
 mod transfer_pipe;
 pub mod view_actions;
 mod view_actor;

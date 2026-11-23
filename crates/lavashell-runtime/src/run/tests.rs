@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::controls_actor::ControlsError;
 use crate::renderer_actor::RendererError;
 use crate::test_error::TestResult;
 use crate::test_host::{
     Scenario, StandIn, StandInError, closed, empty_view, end_on_marker, host, run_scripted,
     run_scripted_on, run_unreachable, runtime_setup, surface_requests, window,
 };
+use crate::test_renderer::TestBackend;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, PresentationFlags};
-use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
 use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{
     OutputEvent, OutputId, PlatformEvent, SurfaceEvent, SurfaceRequest, TimingEvent,
 };
-use lavashell_vulkan_renderer::vulkan::{PendingScene, SceneSource, VulkanRenderer};
-use lavashell_vulkan_renderer::{DrawError, FrameError, HeadlessBackend, StartError, StateError};
 use std::cell::Cell;
 use std::panic::resume_unwind;
 use std::rc::Rc;
@@ -94,7 +93,7 @@ fn a_run_ends_once_its_last_surface_closed_and_the_platform_returned() -> TestRe
 
 #[test]
 fn a_destroyed_surface_is_released_once_the_platform_detached_it_from_the_renderer() -> TestResult {
-    release_after_detach(Some(HeadlessBackend::without_surfaces()))
+    release_after_detach(Some(TestBackend::default()))
 }
 
 #[test]
@@ -103,7 +102,7 @@ fn a_destroyed_surface_is_released_once_the_platform_detached_it_without_a_rende
     release_after_detach(None)
 }
 
-fn release_after_detach(backend: Option<HeadlessBackend>) -> TestResult {
+fn release_after_detach(backend: Option<TestBackend>) -> TestResult {
     let mut setup = runtime_setup(vec![window("window")]);
     setup.panels_per_output = Some(PanelsPerOutput::new(|_| Vec::new()));
     end_on_marker(&mut setup);
@@ -196,42 +195,19 @@ fn a_renderer_that_fails_ends_the_run_with_its_failure() {
     assert!(matches!(
         run.outcome,
         Err(RunError::RunRenderer(JoinError::Failed(
-            RendererError::Draw(DrawError::Frame(FrameError::State(
-                StateError::UnknownSurface(WINDOW)
-            )))
+            RendererError::Draw(ControlsError::UnknownSurface(WINDOW))
         )))
     ));
 }
 
-struct EmptyScene;
-
-impl SceneSource for EmptyScene {
-    fn next_deadline(&self) -> Duration {
-        Duration::ZERO
-    }
-
-    fn produce(
-        &mut self,
-        _: &mut VulkanRenderer,
-        _: Duration,
-        _: ScaledViewport,
-    ) -> Result<Option<PendingScene>, lavashell_vulkan_renderer::Error> {
-        Ok(None)
-    }
-}
-
 #[test]
-fn a_scene_that_the_app_sets_on_the_backend_starts_with_the_renderer() -> TestResult {
+fn the_backend_that_the_app_configures_is_the_one_the_renderer_starts() -> TestResult {
     let mut app = App::new().facts(lavashell_test_fixtures::facts());
     app.window(Window::new("window", "test.app"), |_| {})?;
-    let (made, scenes) = mpsc::channel();
-    let make_scene = move || -> Box<dyn SceneSource> {
-        let _test_gone = made.send(());
-        Box::new(EmptyScene)
-    };
+    let (start_notice, starts) = mpsc::channel();
     let (log, _requests_kept_for_the_log) = mpsc::channel();
     let scenario = Scenario::Scripted {
-        backend: Some(HeadlessBackend::without_surfaces()),
+        backend: Some(TestBackend::default()),
         host: host([]),
         offered: Capability::ALL.into_iter().collect(),
         script: Box::new(|wire| {
@@ -240,10 +216,10 @@ fn a_scene_that_the_app_sets_on_the_backend_starts_with_the_renderer() -> TestRe
         }),
         log,
     };
-    run_with_backend::<StandIn>(app, scenario, |backend| {
-        backend.with_scene(Box::new(make_scene))
+    run_with_backend::<StandIn>(app, scenario, |_unconfigured| {
+        TestBackend::noticing_start(start_notice)
     })?;
-    assert_eq!(scenes.try_iter().count(), 1);
+    assert_eq!(starts.try_iter().count(), 1);
     Ok(())
 }
 
@@ -326,20 +302,17 @@ fn a_run_error_passes_up_the_next_step_of_the_platform_or_the_renderer_error_it_
 fn a_renderer_failure_takes_the_next_step_of_the_renderer_error_it_wraps() {
     let painter = lavashell_renderer::Error::SubpixelTileSize;
     let step = painter.next_step();
-    let started = StartError::State(StateError::CreatePainter(
-        lavashell_vulkan_renderer::Error::CreatePainter(painter),
-    ));
     let failed =
-        RunError::<StandIn>::StartRenderer(SpawnError::Start(RendererError::Start(started)));
+        RunError::<StandIn>::StartRenderer(SpawnError::Start(RendererError::Start(painter)));
     assert_eq!(failed.next_step(), step);
 }
 
 #[test]
-fn a_renderer_that_draws_a_surface_it_does_not_know_asks_for_a_report() {
-    let failed = RunError::<StandIn>::RunRenderer(JoinError::Failed(RendererError::Draw(
-        DrawError::Frame(FrameError::State(StateError::UnknownSurface(WINDOW))),
-    )));
-    assert_eq!(failed.next_step(), NextStep::ReportTheFailure);
+fn a_renderer_that_fails_while_running_takes_the_next_step_of_the_error_it_wraps() {
+    let unknown = ControlsError::UnknownSurface(WINDOW);
+    let step = unknown.next_step();
+    let failed = RunError::<StandIn>::RunRenderer(JoinError::Failed(RendererError::Draw(unknown)));
+    assert_eq!(failed.next_step(), step);
 }
 
 #[test]

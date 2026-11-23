@@ -64,8 +64,9 @@ impl<P: Platform> Actors<P> {
             let text_rendering = renderer.text_rendering();
             (AttachedSurfaces::Rendered(renderer), text_rendering)
         } else {
-            let text_rendering = text_rendering_set_up_for_painter(renderer_setup)
-                .map_err(RunError::CreatePainter)?;
+            let text_rendering = (renderer_setup.painter_without_device())
+                .map_err(RunError::CreatePainter)?
+                .text_rendering();
             let outputs = observer(inbox, ViewInput::Controls, Stopped::Controls);
             let controls =
                 SurfaceControls::start(clock.as_ref(), outputs).map_err(RunError::StartControls)?;
@@ -122,10 +123,4 @@ impl<P: Platform> Actors<P> {
                 .map_err(|Closed| ViewError::Stopped(Stopped::Controls)),
         }
     }
-}
-
-pub(super) fn text_rendering_set_up_for_painter(
-    setup: RendererSetup,
-) -> Result<TextRendering, lavashell_renderer::Error> {
-    Ok(setup.painter_without_device()?.text_rendering())
 }

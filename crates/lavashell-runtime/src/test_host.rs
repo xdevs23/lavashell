@@ -7,6 +7,7 @@ use crate::run::{RunError, RuntimeSetup, SurfaceSetup, drive};
 use crate::run_end::RunEnd;
 use crate::surface_records::SurfaceRecords;
 use crate::test_error::TestError;
+use crate::test_renderer::TestBackend;
 use crate::view_actions::ActionQueue;
 use crate::watches::Watches;
 use crate::window::Window;
@@ -28,8 +29,6 @@ use lavashell_platform::{
 };
 use lavashell_renderer::{DamageMode, Fonts, FrameTiming};
 use lavashell_test_fixtures::{FrameFailure, RecordedScene, WithoutFailures};
-use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::{HeadlessBackend, VulkanWindow};
 use std::cell::Cell;
 use std::collections::{BTreeSet, VecDeque};
 use std::convert::{self, Infallible};
@@ -43,6 +42,20 @@ impl SurfaceControl for NoControl {
     type Message = ();
 
     fn receive(&mut self, (): ()) {}
+}
+
+pub(crate) fn attachment<C: SurfaceControl>(
+    surface: SurfaceId,
+    control: C,
+) -> SurfaceAttachment<C, ()> {
+    SurfaceAttachment::Attach(Box::new(Attach {
+        surface,
+        window: (),
+        alpha: SurfaceAlpha::Opaque,
+        output: OutputRequest::default(),
+        hdr_metadata: None,
+        control,
+    }))
 }
 
 pub(crate) fn renderer_setup(painter: Option<PainterSetup>) -> RendererSetup {
@@ -206,7 +219,7 @@ type RequestLog = mpsc::Sender<Vec<PlatformRequest>>;
 pub(crate) enum Scenario {
     Unreachable,
     Scripted {
-        backend: Option<HeadlessBackend>,
+        backend: Option<TestBackend>,
         host: HostFacts,
         offered: BTreeSet<Capability>,
         script: Script,
@@ -223,7 +236,7 @@ pub(crate) struct StandIn {
 impl Platform for StandIn {
     type Setup = Scenario;
     type Error = StandInError;
-    type Backend = HeadlessBackend;
+    type Backend = TestBackend;
     type Control = NoControl;
 
     fn connect(scenario: Scenario) -> Result<Connection<Self>, StandInError> {
@@ -252,20 +265,20 @@ impl Platform for StandIn {
         self.offered.clone()
     }
 
-    fn serve(self, links: PlatformLinks<NoControl, HeadlessBackend>) -> Result<(), StandInError> {
+    fn serve(self, links: PlatformLinks<NoControl, TestBackend>) -> Result<(), StandInError> {
         (self.script)(Wire::new(links, self.log))
     }
 }
 
 pub(crate) struct Wire {
-    links: PlatformLinks<NoControl, HeadlessBackend>,
+    links: PlatformLinks<NoControl, TestBackend>,
     waiting: VecDeque<PlatformRequest>,
     taken: Vec<PlatformRequest>,
     log: RequestLog,
 }
 
 impl Wire {
-    fn new(links: PlatformLinks<NoControl, HeadlessBackend>, log: RequestLog) -> Self {
+    fn new(links: PlatformLinks<NoControl, TestBackend>, log: RequestLog) -> Self {
         Self {
             links,
             waiting: VecDeque::new(),
@@ -291,19 +304,10 @@ impl Wire {
     }
 
     pub(crate) fn attach(&self, surface: SurfaceId) -> Result<(), StandInError> {
-        let window: VulkanWindow = Arc::new(HeadlessWindow);
-        let attach = SurfaceAttachment::Attach(Box::new(Attach {
-            surface,
-            window,
-            alpha: SurfaceAlpha::Opaque,
-            output: OutputRequest::default(),
-            hdr_metadata: None,
-            control: NoControl,
-        }));
         self.links
             .reports
             .renderer
-            .push(attach)
+            .push(attachment(surface, NoControl))
             .map_err(StandInError::from)
     }
 
@@ -371,12 +375,11 @@ pub(crate) fn run_scripted(
     setup: RuntimeSetup,
     script: impl FnOnce(Wire) -> Result<(), StandInError> + Send + 'static,
 ) -> Run {
-    let backend = HeadlessBackend::without_surfaces();
-    run_scripted_on(Some(backend), host, offered, setup, script)
+    run_scripted_on(Some(TestBackend::default()), host, offered, setup, script)
 }
 
 pub(crate) fn run_scripted_on(
-    backend: Option<HeadlessBackend>,
+    backend: Option<TestBackend>,
     host: HostFacts,
     offered: impl IntoIterator<Item = Capability>,
     setup: RuntimeSetup,

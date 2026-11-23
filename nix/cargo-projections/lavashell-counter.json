@@ -1314,8 +1314,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
-          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "rustix",
@@ -2737,7 +2735,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "dd2ec45486e227aebf2feed7713227e412cd9be406f10816d2e6f77dee02b76a",
+        "seedHash": "17ae69922affde6758468f1f7690f4b8f709d2c52acb3e3fc65f94929d8e7d75",
         "plan": {
           "schema": 1,
           "selection": {

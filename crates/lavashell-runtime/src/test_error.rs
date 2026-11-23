@@ -4,13 +4,13 @@ use crate::renderer_actor::{RendererError, RendererStopped};
 use crate::run::RunError;
 use crate::scene_pipeline::BuilderReport;
 use crate::test_host::{NoControl, StandIn};
+use crate::test_renderer::TestBackend;
 use crate::view_actor::ViewError;
 use lavashell_actor::{Closed, JoinError, SpawnError};
 use lavashell_core::transfer::TransferError;
 use lavashell_core::units::NumberError;
 use lavashell_core::view::FrameError;
 use lavashell_test_fixtures::FrameFailure;
-use lavashell_vulkan_renderer::HeadlessBackend;
 use rustix::io::Errno;
 use std::io;
 use std::sync::Arc;
@@ -65,9 +65,9 @@ pub(crate) enum TestError {
     #[error("the scheduler could not start or stop")]
     SchedulerActor(#[from] crate::scheduler_actor::Error),
     #[error("the renderer could not start")]
-    RendererStart(#[from] SpawnError<RendererError<NoControl, HeadlessBackend>>),
+    RendererStart(#[from] SpawnError<RendererError<NoControl, TestBackend>>),
     #[error("the renderer failed")]
-    RendererJoin(#[from] JoinError<RendererError<NoControl, HeadlessBackend>>),
+    RendererJoin(#[from] JoinError<RendererError<NoControl, TestBackend>>),
     #[error("the renderer stopped")]
     RendererStopped(#[from] RendererStopped),
     #[error("a painter could not be created")]

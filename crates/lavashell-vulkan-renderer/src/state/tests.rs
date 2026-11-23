@@ -12,6 +12,7 @@ use lavashell_core::surface::SurfaceChange;
 use lavashell_platform::{FrameOutcome, SurfaceAlpha};
 use lavashell_renderer::test_scenes::insert;
 use lavashell_renderer::test_surfaces::{TestSurface, WIDE_SURFACE};
+use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
 use lavashell_renderer::{Fonts, FrameDevice, StreamFrames};
 use lavashell_test_fixtures::show_all;
 use lavashell_vulkan::HeadlessWindow;
@@ -189,6 +190,25 @@ fn each_shown_draw_prepares_requests_and_reports_its_present_in_order() -> Resul
             ]
         );
     }
+    Ok(())
+}
+
+#[test]
+fn the_text_rendering_is_the_one_the_setup_of_the_painter_chose() -> Result<(), TestError> {
+    let rendering = TextRendering {
+        hinting: Hinting::None,
+        fractional_positioning: true,
+        antialiasing: TextAntialiasing::Aliased,
+    };
+    let setup = RendererSetup {
+        painter: Some(Box::new(move |painter: &mut Painter| {
+            painter.set_text_rendering(rendering, TextDestination::default());
+        })),
+        ..setup()
+    };
+    let state =
+        RendererState::<RecordingControl>::new(&HeadlessPresentation::with_surfaces(), setup)?;
+    assert_eq!(state.text_rendering(), rendering);
     Ok(())
 }
 

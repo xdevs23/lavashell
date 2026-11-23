@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
+use crate::controls_actor::ControlsError;
 use crate::test_error::{TestError, TestResult};
-use crate::test_host::{NoControl, renderer_setup};
+use crate::test_host::{NoControl, attachment, renderer_setup};
+use crate::test_renderer::TestBackend;
 use lavashell_actor::{SystemClock, mailbox};
 use lavashell_core::geometry::{PixelScale, PixelSize, Size, Viewport};
-use lavashell_core::output::OutputRequest;
 use lavashell_core::scene::tree::SceneTree;
 use lavashell_core::surface::SurfaceState;
 use lavashell_core::units::{Density, DpExt};
-use lavashell_platform::{Attach, PainterSetup, SurfaceAlpha};
+use lavashell_platform::PainterSetup;
 use lavashell_renderer::Painter;
 use lavashell_renderer::text::{Hinting, TextAntialiasing, TextDestination};
-use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::{HeadlessBackend, NoStreams, VulkanWindow};
 use std::sync::mpsc;
 
 const SURFACE_3: SurfaceId = SurfaceId::numbered(3);
 
-type TestInput = RendererInput<NoControl, HeadlessBackend>;
+type TestInput = RendererInput<NoControl, TestBackend>;
 
 fn start(
     painter: Option<PainterSetup>,
 ) -> Result<
     (
-        Renderer<NoControl, HeadlessBackend>,
+        Renderer<NoControl, TestBackend>,
         mpsc::Receiver<RendererOutput>,
     ),
     TestError,
@@ -31,10 +30,15 @@ fn start(
     let (outputs, received) = mpsc::channel();
     let observer = move |output: RendererOutput| outputs.send(output).map_err(|_unsent| Closed);
     let setup = renderer_setup(painter);
-    let backend = HeadlessBackend::with_surfaces();
     let clock = Arc::new(SystemClock::start());
     let observer = Box::new(observer);
-    let renderer = Renderer::start(backend, setup, clock, CpuTiming::Skipped, observer)?;
+    let renderer = Renderer::start(
+        TestBackend::default(),
+        setup,
+        clock,
+        CpuTiming::Skipped,
+        observer,
+    )?;
     Ok((renderer, received))
 }
 
@@ -74,15 +78,7 @@ fn render(surface: u64, sequence: u64) -> TestInput {
 }
 
 fn attach(surface: u64) -> TestInput {
-    let window: VulkanWindow = Arc::new(HeadlessWindow);
-    RendererInput::Surface(SurfaceAttachment::Attach(Box::new(Attach {
-        surface: SurfaceId::numbered(surface),
-        window,
-        alpha: SurfaceAlpha::Opaque,
-        output: OutputRequest::default(),
-        hdr_metadata: None,
-        control: NoControl,
-    })))
+    RendererInput::Surface(attachment(SurfaceId::numbered(surface), NoControl))
 }
 
 fn outline(surface: u64) -> TestInput {
@@ -103,7 +99,7 @@ fn detach(surface: u64) -> TestInput {
     RendererInput::Surface(SurfaceAttachment::Detach(SurfaceId::numbered(surface)))
 }
 
-fn stream_task(task: impl FnOnce(&mut NoStreams, &Painter) + Send + 'static) -> TestInput {
+fn stream_task(task: impl FnOnce(&mut (), &Painter) + Send + 'static) -> TestInput {
     RendererInput::Streams(Box::new(task))
 }
 
@@ -196,7 +192,7 @@ fn a_message_a_commit_or_a_detach_keeps_the_frames_on_either_side() -> TestResul
 
 #[test]
 fn a_stream_task_keeps_the_frames_on_either_side() -> TestResult {
-    let inputs = [render(1, 1), stream_task(|_, _| {}), render(1, 2)];
+    let inputs = [render(1, 1), stream_task(|(), _| {}), render(1, 2)];
     let expected = [Taken::Render(1, 1), Taken::Streams, Taken::Render(1, 2)];
     assert_eq!(taken(inputs)?, expected);
     Ok(())
@@ -275,7 +271,7 @@ fn each_frame_is_drawn_at_the_scale_that_it_carries() -> TestResult {
 fn a_stream_task_runs_on_the_renderer_with_its_streams() -> TestResult {
     let (mut renderer, _outputs) = start(None)?;
     let (ran, received) = mpsc::channel();
-    renderer.send(stream_task(move |_, _| {
+    renderer.send(stream_task(move |(), _| {
         let _test_waits_below = ran.send(());
     }))?;
     received.recv()?;
@@ -293,7 +289,9 @@ fn a_failed_commit_ends_the_renderer_and_stop_returns_the_failure() -> TestResul
     renderer.send(commit)?;
     assert!(matches!(
         renderer.stop(),
-        Err(JoinError::Failed(RendererError::CommitState(_)))
+        Err(JoinError::Failed(RendererError::CommitState(
+            ControlsError::UnknownSurface(surface)
+        ))) if surface == SurfaceId::numbered(2)
     ));
     assert!(outputs.recv().is_err());
     Ok(())

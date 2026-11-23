@@ -169,3 +169,6 @@ impl<E: NamesNextStep> NamesNextStep for CommitError<E> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

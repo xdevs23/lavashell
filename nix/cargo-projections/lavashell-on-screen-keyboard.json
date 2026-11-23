@@ -1417,8 +1417,6 @@
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
-          "lavashell-vulkan-renderer",
           "log",
           "num-traits",
           "rustix",

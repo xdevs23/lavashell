@@ -37,3 +37,6 @@ impl RendererSetup {
         Ok(painter)
     }
 }
+
+#[cfg(test)]
+mod tests;

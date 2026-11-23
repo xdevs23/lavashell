@@ -28,5 +28,3 @@ unicode-segmentation.workspace = true
 [dev-dependencies]
 accesskit_consumer.workspace = true
 lavashell-test-fixtures.workspace = true
-lavashell-vulkan.workspace = true
-lavashell-vulkan-renderer.workspace = true
