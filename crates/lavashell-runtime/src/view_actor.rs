@@ -14,6 +14,7 @@ mod surfaces;
 mod transfers;
 
 pub use error::{Stopped, ViewError};
+pub(crate) use frames::ComposedFrame;
 
 use crate::controls_actor::ControlsOutput;
 use crate::deadline_receiver::{Arrival, DeadlineReceiver};

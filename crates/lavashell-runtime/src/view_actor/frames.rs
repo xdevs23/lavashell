@@ -39,9 +39,9 @@ impl FrameStart {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct ComposedFrame {
-    pub(super) timing: FrameTime,
-    pub(super) viewport: Viewport,
+pub(crate) struct ComposedFrame {
+    pub(crate) timing: FrameTime,
+    pub(crate) viewport: Viewport,
 }
 
 pub(super) struct StateCommit {
@@ -376,11 +376,10 @@ impl<P: Platform> ViewActor<P> {
         start: FrameStart,
         render_cpu: Option<Duration>,
     ) {
-        let Some((surface, view, viewport)) = self.surfaces.open_surface_and_view(id) else {
+        let Some((surface, view)) = self.surfaces.open_surface_and_view(id) else {
             return;
         };
-        self.observers
-            .observe_view(id, start.timing, viewport, view);
+        self.observers.observe_view(id, start.composed(), view);
         if let Some(info) = drawn.output
             && surface.output != Some(info)
         {

@@ -302,5 +302,6 @@ fn a_watch_of_the_app_is_requested_from_the_platform_and_a_ready_report_runs_it(
     Ok(())
 }
 
+mod frames;
 mod input;
 mod outputs;

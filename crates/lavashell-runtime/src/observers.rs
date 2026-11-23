@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::cpu_time::CpuTiming;
 use crate::failures::log_failure;
+use crate::view_actor::ComposedFrame;
 use lavashell_core::frame::{FrameReport, FrameTime};
 use lavashell_core::geometry::Viewport;
 use lavashell_core::output::OutputInfo;
@@ -45,15 +46,9 @@ impl Observers {
         }
     }
 
-    pub(crate) fn observe_view(
-        &mut self,
-        surface: SurfaceId,
-        timing: FrameTime,
-        viewport: Viewport,
-        view: &View,
-    ) {
+    pub(crate) fn observe_view(&mut self, surface: SurfaceId, frame: ComposedFrame, view: &View) {
         if let Some(observer) = &mut self.view {
-            observer(surface, timing, viewport, view);
+            observer(surface, frame.timing, frame.viewport, view);
         }
     }
 

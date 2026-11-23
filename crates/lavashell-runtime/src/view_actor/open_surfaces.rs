@@ -187,11 +187,10 @@ impl OpenSurfaces {
     pub(super) fn open_surface_and_view(
         &mut self,
         id: SurfaceId,
-    ) -> Option<(&mut ViewSurface, &mut View, Viewport)> {
-        let viewport = self.records.open_viewport(id)?;
+    ) -> Option<(&mut ViewSurface, &mut View)> {
         let surface = self.view_surfaces.get_mut(&id)?;
         let view = self.records.open_view_mut(id)?;
-        Some((surface, view, viewport))
+        Some((surface, view))
     }
 
     pub(super) fn open_view_surface(&mut self, id: SurfaceId) -> Option<&mut ViewSurface> {

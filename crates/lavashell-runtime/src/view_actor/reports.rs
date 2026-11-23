@@ -79,8 +79,7 @@ impl<P: Platform> ViewActor<P> {
         if let Some(frame) = self.surfaces.committed(id)
             && let Some(view) = self.surfaces.records().open_view(id)
         {
-            self.observers
-                .observe_view(id, frame.timing, frame.viewport, view);
+            self.observers.observe_view(id, frame, view);
         }
         self.schedule(SchedulerInput::Committed(id));
     }
