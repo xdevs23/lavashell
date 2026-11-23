@@ -26,8 +26,8 @@ impl Backend for TestBackend {
 }
 
 impl HeadlessRendererBackend for TestBackend {
-    fn create() -> Self {
-        Self
+    fn create() -> Option<Self> {
+        Some(Self)
     }
 
     fn create_surface() {}

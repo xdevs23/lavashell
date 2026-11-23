@@ -61,8 +61,8 @@ impl HeadlessBackend {
 }
 
 impl HeadlessRendererBackend for HeadlessBackend {
-    fn create() -> Self {
-        Self::with_surfaces()
+    fn create() -> Option<Self> {
+        Some(Self::with_surfaces())
     }
 
     fn create_surface() -> VulkanWindow {

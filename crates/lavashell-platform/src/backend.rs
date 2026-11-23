@@ -19,8 +19,8 @@ pub trait RendererBackend: Backend {
     ) -> Result<Self::Renderer<C>, Self::StartError>;
 }
 
-pub trait HeadlessRendererBackend: RendererBackend {
-    fn create() -> Self;
+pub trait HeadlessRendererBackend: RendererBackend + Sized {
+    fn create() -> Option<Self>;
 
     fn create_surface() -> Self::Surface;
 }

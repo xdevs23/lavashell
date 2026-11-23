@@ -31,7 +31,7 @@ impl<B: HeadlessRendererBackend> Platform for TestPlatform<B> {
     fn connect(host: ScriptedHost) -> Result<Connection<Self>, Error> {
         let clock = VirtualClock::default();
         Ok(Connection {
-            backend: Some(B::create()),
+            backend: B::create(),
             host: HostFacts {
                 outputs: vec![OUTPUT],
                 reports_presentation: true,

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::test_renderer::TestPlatformWithoutDrawing;
-use crate::{Error, FrameInterval, HostScript};
+use crate::{Error, FrameInterval, HostScript, NoBackend, TestPlatform};
 use lavashell_core::keyboard::KeyStroke;
-use lavashell_core::prelude::{Color, Density, DpExt, Easing, Modifier, Tween, Ui, constant};
+use lavashell_core::prelude::{Color, Density, DpExt, Easing, Modifier, Size, Tween, Ui, constant};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{
@@ -19,6 +19,7 @@ use std::time::Duration;
 
 mod paced;
 mod window_requests;
+mod without_backend;
 
 const APP_ID: &str = "test.app";
 const KEYBOARD: KeyboardDevice = KeyboardDevice(1);
@@ -33,6 +34,8 @@ enum TestError {
     #[error(transparent)]
     Run(#[from] RunError<TestPlatformWithoutDrawing>),
     #[error(transparent)]
+    RunWithoutBackend(#[from] RunError<TestPlatform<NoBackend>>),
+    #[error(transparent)]
     Platform(#[from] Error),
     #[error("cannot create a pipe")]
     Pipe(#[from] std::io::Error),
@@ -43,9 +46,16 @@ enum TestError {
 type TestResult = Result<(), TestError>;
 
 fn app(compose: impl FnMut(&mut Ui) + 'static) -> Result<App, SetupError> {
+    app_with_window_size(Size::new(100.dp(), 100.dp()), compose)
+}
+
+fn app_with_window_size(
+    size: Size,
+    compose: impl FnMut(&mut Ui) + 'static,
+) -> Result<App, SetupError> {
     let mut app = App::new().facts(lavashell_test_fixtures::facts());
     app.window(
-        Window::new("test", APP_ID).size(100.dp(), 100.dp()),
+        Window::new("test", APP_ID).size(size.width, size.height),
         compose,
     )?;
     Ok(app)
