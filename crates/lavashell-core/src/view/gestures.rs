@@ -10,7 +10,7 @@ mod still_press;
 use super::focus::FocusSource;
 use super::input::InputRouting;
 use super::pointers::PointerSample;
-use super::{Hit, View};
+use super::{Hit, InputTime, View};
 use crate::geometry::{Axis, Point, Rect};
 use crate::ui::{Gestures, NodeId, PointerId};
 use crate::units::Dp;
@@ -23,7 +23,10 @@ pub(super) type Effect = Box<dyn FnOnce(&mut View)>;
 #[derive(Clone, Copy)]
 pub(super) enum Event {
     Press(PointerSample),
-    Move(PointerSample),
+    Move {
+        sample: PointerSample,
+        time: Option<InputTime>,
+    },
     Release {
         sample: PointerSample,
         over: Option<NodeId>,
@@ -239,7 +242,7 @@ impl InputRouting {
 }
 
 fn accept_along(axis: Axis, slop: Dp, press: PointerSample, event: Event) -> Verdict {
-    let Event::Move(sample) = event else {
+    let Event::Move { sample, .. } = event else {
         return Verdict::Wait;
     };
     let along = axis.signed_distance(press.at(), sample.at()).abs();

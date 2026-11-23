@@ -298,6 +298,8 @@ mod gesture_handlers;
 mod gestures;
 #[path = "tests/slop.rs"]
 mod slop;
+#[path = "tests/touch_times.rs"]
+mod touch_times;
 
 #[path = "tests/pinch.rs"]
 mod pinch;

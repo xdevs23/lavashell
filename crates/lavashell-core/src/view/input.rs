@@ -4,7 +4,7 @@ use super::moving::Moving;
 use super::navigation::FocusDirection;
 use super::pointers::Pointer;
 use super::pointers::PointerSample;
-use super::{Hit, InputEvent, PaintedHit, View, WindowRegionHit};
+use super::{Hit, InputEvent, PaintedHit, TouchMove, View, WindowRegionHit};
 use crate::geometry::Point;
 use crate::input_method::TextAction;
 use crate::keyboard::{Key, Shortcut};
@@ -259,8 +259,10 @@ impl View {
                 }
                 self.redraw = true;
             }
-            InputEvent::Move(p) => self.move_pointer(PointerSample::Primary(p)),
-            InputEvent::TouchMove(moved) => self.move_pointer(PointerSample::Touch(moved.sample)),
+            InputEvent::Move(p) => self.move_pointer(PointerSample::Primary(p), None),
+            InputEvent::TouchMove(TouchMove { sample, time }) => {
+                self.move_pointer(PointerSample::Touch(sample), Some(time));
+            }
             InputEvent::Press(p) => self.press(PointerSample::Primary(p)),
             InputEvent::TouchDown(sample) => self.press(PointerSample::Touch(sample)),
             InputEvent::Release(p) => self.release(PointerSample::Primary(p)),

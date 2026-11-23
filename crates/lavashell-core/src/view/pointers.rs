@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::gestures::{Arena, Event};
 use super::input::InputRouting;
-use super::{Hit, TouchSample, View, gestures};
+use super::{Hit, InputTime, TouchSample, View, gestures};
 use crate::geometry::Point;
 use crate::ui::{NodeId, PointerId, PointerKind};
 use crate::window::{WindowControl, WindowRegion};
@@ -142,7 +142,7 @@ impl View {
         self.apply_outcome(outcome);
     }
 
-    pub(super) fn move_pointer(&mut self, sample: PointerSample) {
+    pub(super) fn move_pointer(&mut self, sample: PointerSample, time: Option<InputTime>) {
         let pointer = sample.pointer();
         if !pointer.hovers() && !self.routing.pointers.contains_key(&pointer) {
             return;
@@ -154,7 +154,7 @@ impl View {
         let state = self.routing.pointers.entry(pointer).or_default();
         self.redraw |= state.over() != hover.over;
         state.hover = Some(hover);
-        self.step_arena(pointer, Event::Move(sample));
+        self.step_arena(pointer, Event::Move { sample, time });
     }
 
     pub(super) fn hovered_window_region(&self) -> Option<WindowRegion> {

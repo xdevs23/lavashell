@@ -42,7 +42,7 @@ impl Recognizer for Select {
                 self.pressed = true;
                 Box::new(move |view: &mut View| view.press_text_at(node, sample.at()))
             }
-            Event::Move(sample) => {
+            Event::Move { sample, .. } => {
                 Box::new(move |view: &mut View| view.drag_text_to(node, sample.at()))
             }
             Event::Release { sample, .. } => {

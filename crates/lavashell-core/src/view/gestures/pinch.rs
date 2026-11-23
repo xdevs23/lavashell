@@ -107,8 +107,8 @@ impl Recognizer for PinchPoint {
         let mut effects = pinch.win(self.pointer);
         effects.extend(match event {
             Event::Release { .. } => pinch.leave(self.pointer, DragPhase::Ended),
-            Event::Move(_) if started => pinch.report(DragPhase::Moved),
-            Event::Press(_) | Event::Move(_) | Event::Peer => Vec::new(),
+            Event::Move { .. } if started => pinch.report(DragPhase::Moved),
+            Event::Press(_) | Event::Move { .. } | Event::Peer => Vec::new(),
         });
         effects
     }
@@ -131,7 +131,9 @@ impl Recognizer for PinchPoint {
 impl Pinch {
     fn follow(&mut self, pointer: PointerId, event: Event) {
         let sample = match event {
-            Event::Press(sample) | Event::Move(sample) | Event::Release { sample, .. } => sample,
+            Event::Press(sample) | Event::Move { sample, .. } | Event::Release { sample, .. } => {
+                sample
+            }
             Event::Peer => return,
         };
         match &mut self.phase {

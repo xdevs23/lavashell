@@ -2,8 +2,8 @@
 use super::{Contender, Effect, Event, Press, Recognizer, Verdict, relative};
 use crate::geometry::Point;
 use crate::ui::{Gestures, NodeId, PointerId, PointerInput, PointerPhase};
-use crate::view::View;
 use crate::view::pointers::PointerSample;
+use crate::view::{InputTime, View};
 
 pub(super) struct Raw {
     node: NodeId,
@@ -39,28 +39,28 @@ impl Recognizer for Raw {
     }
 
     fn run(&mut self, _: PointerSample, event: Event) -> Vec<Effect> {
-        let (sample, phase) = match event {
-            Event::Press(sample) => (sample, PointerPhase::Pressed),
-            Event::Move(sample) => (sample, PointerPhase::Moved),
-            Event::Release { sample, .. } => (sample, PointerPhase::Released),
+        let (sample, phase, time) = match event {
+            Event::Press(sample) => (sample, PointerPhase::Pressed, None),
+            Event::Move { sample, time } => (sample, PointerPhase::Moved, time),
+            Event::Release { sample, .. } => (sample, PointerPhase::Released, None),
             Event::Peer => return Vec::new(),
         };
         self.at = Some(sample.at());
-        vec![self.send(phase, sample.at())]
+        vec![self.send(phase, sample.at(), time)]
     }
 
     fn cancel(&mut self) -> Vec<Effect> {
         let at = self.at.take();
-        at.map(|at| self.send(PointerPhase::Cancelled, at))
+        at.map(|at| self.send(PointerPhase::Cancelled, at, None))
             .into_iter()
             .collect()
     }
 }
 
 impl Raw {
-    fn send(&self, phase: PointerPhase, at: Point) -> Effect {
+    fn send(&self, phase: PointerPhase, at: Point, time: Option<InputTime>) -> Effect {
         let (node, pointer) = (self.node, self.pointer);
-        Box::new(move |view: &mut View| view.send_pointer_input(pointer, node, at, phase))
+        Box::new(move |view: &mut View| view.send_pointer_input(pointer, node, at, phase, time))
     }
 }
 
@@ -71,6 +71,7 @@ impl View {
         node: NodeId,
         at: Point,
         phase: PointerPhase,
+        time: Option<InputTime>,
     ) {
         if let Some((callback, rect)) = self.handler(node, Gestures::pointer) {
             callback.borrow_mut()(PointerInput {
@@ -78,6 +79,7 @@ impl View {
                 size: rect.size(),
                 phase,
                 pointer,
+                time,
             });
         }
     }

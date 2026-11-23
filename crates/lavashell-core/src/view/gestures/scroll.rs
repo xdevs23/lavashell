@@ -63,7 +63,7 @@ impl Recognizer for Scroll {
 
     fn run(&mut self, press: PointerSample, event: Event) -> Vec<Effect> {
         let sample = match event {
-            Event::Move(sample) => sample,
+            Event::Move { sample, .. } => sample,
             Event::Release { .. } => return self.cancel(),
             Event::Press(_) | Event::Peer => return Vec::new(),
         };

@@ -3,8 +3,8 @@ use super::{Contender, Effect, Event, Press, Recognizer, Verdict, accept_along, 
 use crate::geometry::{Axis, Point};
 use crate::ui::{DragInput, DragPhase, Gestures, NodeId, PointerId};
 use crate::units::Dp;
-use crate::view::View;
 use crate::view::pointers::PointerSample;
+use crate::view::{InputTime, View};
 
 pub(super) struct Drag {
     node: NodeId,
@@ -40,9 +40,10 @@ impl Recognizer for Drag {
     }
 
     fn run(&mut self, _: PointerSample, event: Event) -> Vec<Effect> {
-        let (sample, released) = match event {
-            Event::Press(sample) | Event::Move(sample) => (sample, false),
-            Event::Release { sample, .. } => (sample, true),
+        let (sample, time, released) = match event {
+            Event::Press(sample) => (sample, None, false),
+            Event::Move { sample, time } => (sample, time, false),
+            Event::Release { sample, .. } => (sample, None, true),
             Event::Peer => return Vec::new(),
         };
         let at = sample.at();
@@ -52,32 +53,43 @@ impl Recognizer for Drag {
             (true, false) => &[DragPhase::Moved],
             (true, true) => &[DragPhase::Ended],
         };
-        phases.iter().map(|phase| self.send(*phase, at)).collect()
+        phases
+            .iter()
+            .map(|phase| self.send(*phase, at, time))
+            .collect()
     }
 
     fn cancel(&mut self) -> Vec<Effect> {
         let at = self.at.take();
-        at.map(|at| self.send(DragPhase::Cancelled, at))
+        at.map(|at| self.send(DragPhase::Cancelled, at, None))
             .into_iter()
             .collect()
     }
 }
 
 impl Drag {
-    fn send(&self, phase: DragPhase, at: Point) -> Effect {
+    fn send(&self, phase: DragPhase, at: Point, time: Option<InputTime>) -> Effect {
         let (node, pointer) = (self.node, self.pointer);
-        Box::new(move |view: &mut View| view.send_drag_input(pointer, node, at, phase))
+        Box::new(move |view: &mut View| view.send_drag_input(pointer, node, at, phase, time))
     }
 }
 
 impl View {
-    fn send_drag_input(&mut self, pointer: PointerId, node: NodeId, at: Point, phase: DragPhase) {
+    fn send_drag_input(
+        &mut self,
+        pointer: PointerId,
+        node: NodeId,
+        at: Point,
+        phase: DragPhase,
+        time: Option<InputTime>,
+    ) {
         if let Some((draggable, rect)) = self.handler(node, Gestures::drag) {
             draggable.handler.borrow_mut()(DragInput {
                 position: relative(at, rect),
                 size: rect.size(),
                 phase,
                 pointer,
+                time,
             });
         }
     }

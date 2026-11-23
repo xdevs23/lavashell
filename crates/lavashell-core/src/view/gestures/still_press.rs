@@ -35,7 +35,7 @@ pub(super) fn focusing(_: &View, press: &Press) -> Option<Box<dyn Recognizer>> {
 
 fn stays_still(slop: Dp, press: PointerSample, event: Event) -> Verdict {
     match event {
-        Event::Move(sample) if euclidean_distance(press.at(), sample.at()) > slop => {
+        Event::Move { sample, .. } if euclidean_distance(press.at(), sample.at()) > slop => {
             Verdict::Reject
         }
         _ => Verdict::Wait,

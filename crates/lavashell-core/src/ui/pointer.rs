@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::geometry::{Axis, Point, Size};
+use crate::view::InputTime;
 use std::cell::RefCell;
 use std::hash::Hash;
 use std::rc::Rc;
@@ -51,6 +52,7 @@ pub struct PointerInput {
     pub size: Size,
     pub phase: PointerPhase,
     pub pointer: PointerId,
+    pub time: Option<InputTime>,
 }
 
 pub type PointerAction = Rc<RefCell<dyn FnMut(PointerInput)>>;
@@ -69,6 +71,7 @@ pub struct DragInput {
     pub size: Size,
     pub phase: DragPhase,
     pub pointer: PointerId,
+    pub time: Option<InputTime>,
 }
 
 pub type DragHandler = Rc<RefCell<dyn FnMut(DragInput)>>;
