@@ -19,9 +19,9 @@ let
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
   removeStubbedMembers = import ./stubbed-member-removal.nix { inherit pkgs; };
-  artifactRecord = import ./cargo-artifact-record.nix;
+  artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
-  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit lib buildLayers; };
+  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit pkgs buildLayers; };
   selectedPackages =
     directory:
     [ (sources.packageName directory) ]

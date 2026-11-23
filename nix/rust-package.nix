@@ -17,7 +17,7 @@ let
     </fontconfig>
   '';
   runtime = import ./runtime.nix { inherit pkgs; };
-  artifactRecord = import ./cargo-artifact-record.nix;
+  artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
 in
 {
   inherit version;

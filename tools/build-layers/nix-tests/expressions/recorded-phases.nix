@@ -27,7 +27,7 @@ let
   };
 in
 {
-  inherit (import (/. + input.nix + "/cargo-artifact-record.nix")) fileName;
+  inherit (import (/. + input.nix + "/cargo-artifact-record.nix") { inherit pkgs; }) fileName;
   package = phasesOf reference;
   stubLayer = phasesOf reference.registryArtifacts;
 }

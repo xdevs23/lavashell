@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 use tempfile::TempDir;
 
 const HARNESS: &str = concat!(
@@ -71,14 +71,8 @@ fn recorded_phases() -> Result<RecordedPhases, FixtureError> {
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 enum CargoMessage {
-    CompilerArtifact {
-        target: CompiledTarget,
-    },
-    BuildFinished {
-        success: bool,
-    },
-    #[serde(other)]
-    Other,
+    CompilerArtifact { target: CompiledTarget },
+    BuildFinished { success: bool },
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
@@ -133,6 +127,19 @@ impl HookDirectory {
         self.path().join(&self.phases.file_name)
     }
 
+    fn recorded_messages(&self) -> Result<Vec<CargoMessage>, FixtureError> {
+        let record = self.record();
+        fs::read_to_string(&record)?
+            .lines()
+            .map(|line| {
+                serde_json::from_str(line).map_err(|source| FixtureError::ReadJson {
+                    path: record.clone(),
+                    source,
+                })
+            })
+            .collect()
+    }
+
     fn command(
         &self,
         cargo: &CargoOutcome,
@@ -163,15 +170,22 @@ impl HookDirectory {
     }
 }
 
-fn cargo_messages(log: &str) -> Vec<CargoMessage> {
-    log.lines()
-        .map(|line| serde_json::from_str(line).unwrap_or(CargoMessage::Other))
-        .filter(|message| *message != CargoMessage::Other)
-        .collect()
+fn build_log(output: &Output) -> String {
+    [&output.stdout, &output.stderr]
+        .map(|stream| String::from_utf8_lossy(stream))
+        .join("")
+}
+
+fn compiled_target(name: &str) -> CargoMessage {
+    CargoMessage::CompilerArtifact {
+        target: CompiledTarget {
+            name: name.to_owned(),
+        },
+    }
 }
 
 #[test]
-fn exports_install_bins_and_complete_log_survive() -> Result<(), FixtureError> {
+fn exports_install_bins_and_the_build_log_survive() -> Result<(), FixtureError> {
     let directory = HookDirectory::new()?;
     let output = successful_output(&mut directory.command(
         &CargoOutcome::Succeeds,
@@ -183,19 +197,14 @@ fn exports_install_bins_and_complete_log_survive() -> Result<(), FixtureError> {
     assert!(stdout.contains("CHECK_PKG_CONFIG=retained-pkg-config"));
     assert!(!stdout.contains("CHECK_BINS=missing"));
     assert!(directory.path().join("out/bin/fixture").is_file());
-    let log = fs::read_to_string(directory.record())?;
     assert_eq!(
-        cargo_messages(&log),
+        directory.recorded_messages()?,
         [
-            CargoMessage::CompilerArtifact {
-                target: CompiledTarget {
-                    name: "build".to_owned()
-                }
-            },
+            compiled_target("build"),
             CargoMessage::BuildFinished { success: true }
         ]
     );
-    assert!(log.contains("Finished cargoBuildHook"));
+    assert!(build_log(&output).contains("Finished cargoBuildHook"));
     Ok(())
 }
 
@@ -208,14 +217,35 @@ fn each_recorded_cargo_run_appends_the_messages_it_prints_to_the_log() -> Result
         &directory.phases.stub_layer,
         BUILD_TEST_AND_LINT,
     )?)?;
-    let compiled: Vec<String> = cargo_messages(&fs::read_to_string(directory.record())?)
+    let compiled: Vec<String> = directory
+        .recorded_messages()?
         .into_iter()
         .filter_map(|message| match message {
             CargoMessage::CompilerArtifact { target } => Some(target.name),
-            _ => None,
+            CargoMessage::BuildFinished { .. } => None,
         })
         .collect();
     assert_eq!(compiled, ["build", "check", "test", "clippy"]);
+    Ok(())
+}
+
+#[test]
+fn the_build_log_keeps_progress_and_test_output_but_no_cargo_message() -> Result<(), FixtureError> {
+    let directory = HookDirectory::new()?;
+    let log = build_log(&successful_output(&mut directory.command(
+        &CargoOutcome::Succeeds,
+        &ArtifactLog::Writable,
+        &directory.phases.stub_layer,
+        BUILD_TEST_AND_LINT,
+    )?)?);
+    for command in ["build", "check", "test", "clippy"] {
+        assert!(log.contains(&format!("Compiling {command}\n")), "{log}");
+    }
+    let messages: Vec<CargoMessage> = log
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    assert_eq!(messages, [compiled_target("printed-by-a-test")], "{log}");
     Ok(())
 }
 
@@ -243,7 +273,7 @@ fn cargo_failure_is_propagated_before_install() -> Result<(), FixtureError> {
 }
 
 #[test]
-fn tee_write_failure_is_propagated_before_install() -> Result<(), FixtureError> {
+fn record_write_failure_is_propagated_before_install() -> Result<(), FixtureError> {
     let directory = HookDirectory::new()?;
     let output = directory
         .command(

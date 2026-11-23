@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
-{ lib, buildLayers }:
+{ pkgs, buildLayers }:
 let
+  inherit (pkgs) lib;
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
-  artifactRecord = import ./cargo-artifact-record.nix;
+  artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
 in
 lowerLayers:
 let

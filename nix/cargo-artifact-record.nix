@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
+{ pkgs }:
 let
   fileName = "cargo-artifacts.jsonl";
   buildPath = ''"$NIX_BUILD_TOP/${fileName}"'';
@@ -9,7 +10,7 @@ in
   messageFormat = "--message-format=json-render-diagnostics";
   run = command: ''
     source ${./cargo-artifact-record.sh}
-    recordCargoArtifacts ${buildPath} ${command}
+    recordCargoArtifacts ${pkgs.lib.getExe pkgs.jq} ${buildPath} ${command}
   '';
   install = ''
     install -Dm444 ${buildPath} "$out/${installedPath}"

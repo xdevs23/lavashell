@@ -41,7 +41,7 @@ let
   };
   buildLayers = layerTools.tools;
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
-  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit lib buildLayers; };
+  checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit pkgs buildLayers; };
   artifacts = import ./artifacts.nix {
     inherit
       pkgs

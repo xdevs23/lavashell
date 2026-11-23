@@ -3,7 +3,7 @@
 let
   inherit (pkgs) lib;
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
-  artifactRecord = import ./cargo-artifact-record.nix;
+  artifactRecord = import ./cargo-artifact-record.nix { inherit pkgs; };
   denyLintsLeftAtWarn = "--deny warnings";
 in
 selection: {

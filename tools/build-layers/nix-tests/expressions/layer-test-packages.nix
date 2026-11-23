@@ -48,7 +48,7 @@ let
 in
 {
   inherit (workspaceCrates) nativeNames;
-  inherit (import (/. + input.nix + "/cargo-artifact-record.nix")) messageFormat;
+  inherit (import (/. + input.nix + "/cargo-artifact-record.nix") { inherit pkgs; }) messageFormat;
   members = map (
     member: workspaceCrates.packageName (root + "/${member}")
   ) workspaceCrates.workspace.workspace.members;
