@@ -49,6 +49,7 @@ in
       export PATH="$NIX_CC/bin:$PATH"
     '';
   buildPhase = artifactRecord.run "cargoBuildHook";
+  checkPhase = artifactRecord.run "cargoCheckHook";
   preCheck = ''
     export XDG_CACHE_HOME="$TMPDIR/lavashell-test-cache"
     mkdir -p "$XDG_CACHE_HOME"

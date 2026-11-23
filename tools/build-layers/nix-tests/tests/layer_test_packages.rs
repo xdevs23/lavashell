@@ -94,6 +94,7 @@ struct LibraryLayer {
 #[serde(rename_all = "camelCase")]
 struct CheckPhases {
     native_names: Vec<String>,
+    message_format: String,
     members: Vec<String>,
     checks: Vec<CheckPhase>,
     dependency_layers: Vec<CheckPhase>,
@@ -152,6 +153,31 @@ fn every_unified_layer_compiles_and_lints_the_tests_of_the_layers_above_it()
     assert!(!unified_layers.is_empty());
     for unified in &unified_layers {
         assert_compiles_and_lints_the_tests_above(&unified.layer, &unified.layers_above);
+    }
+    Ok(())
+}
+
+#[test]
+fn every_test_and_lint_run_of_a_layer_or_package_prints_cargo_messages_as_json()
+-> Result<(), FixtureError> {
+    let phases = check_phases()?;
+    for derivation in phases
+        .examples
+        .values()
+        .flat_map(|example| &example.derivations)
+    {
+        assert!(
+            !derivation.do_check || derivation.cargo_test_flags.contains(&phases.message_format),
+            "{}",
+            derivation.drv_path
+        );
+        assert!(
+            derivation
+                .cargo_clippy_flags
+                .contains(&phases.message_format),
+            "{}",
+            derivation.drv_path
+        );
     }
     Ok(())
 }

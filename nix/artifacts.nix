@@ -31,7 +31,10 @@ let
   packagesTestedThrough =
     layers: lib.concatMap (layer: layer.testPackages) (artifactLayers.stack layers);
   tests = packages: {
-    cargoTestFlags = flags packages ++ [ "--frozen" ];
+    cargoTestFlags = flags packages ++ [
+      "--frozen"
+      artifactRecord.messageFormat
+    ];
     doCheck = packages != [ ];
   };
   compiledTests =
@@ -107,10 +110,14 @@ let
           + import ./vendor-directory-times.nix
           + artifactLayers.restoreLowerLayers previous
           + lib.optionalString validateEngine (planCheck directory selected);
-        postBuild = lib.optionalString stubLayer ''
-          ${pkgs.rust.envVars.setEnv} cargo check -j "$NIX_BUILD_CORES" ${buildScope.target} \
-            ${lib.escapeShellArgs (flags selected)}
-        '';
+        buildPhase =
+          configuration.buildPhase
+          + lib.optionalString stubLayer (
+            artifactRecord.run ''
+              ${pkgs.rust.envVars.setEnv} cargo check -j "$NIX_BUILD_CORES" ${buildScope.target} \
+                ${lib.escapeShellArgs (flags selected ++ [ artifactRecord.messageFormat ])}
+            ''
+          );
         installPhase = ''
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) (removeStubbedMembers (flags dummyPackages))}

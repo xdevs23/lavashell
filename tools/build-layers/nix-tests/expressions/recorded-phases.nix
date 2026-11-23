@@ -15,10 +15,19 @@ let
     )
     reference
     ;
+  phasesOf = built: {
+    inherit (built)
+      buildPhase
+      checkPhase
+      clippyPhase
+      cargoBuildFlags
+      cargoTestFlags
+      cargoClippyFlags
+      ;
+  };
 in
 {
   inherit (import (/. + input.nix + "/cargo-artifact-record.nix")) fileName;
-  package = {
-    inherit (reference) buildPhase;
-  };
+  package = phasesOf reference;
+  stubLayer = phasesOf reference.registryArtifacts;
 }
