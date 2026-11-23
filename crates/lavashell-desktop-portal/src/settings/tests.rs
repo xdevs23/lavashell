@@ -80,7 +80,7 @@ fn a_settings_portal_that_fails_to_read_fails() -> Result<(), TestError> {
 #[test]
 fn a_namespace_missing_from_the_reply_has_no_values() -> Result<(), TestError> {
     test_bus::run(&["DBUS_SESSION_BUS_ADDRESS"], || {
-        let _service_stays_on_the_bus_for_the_test = serve(Ok(HashMap::new()), Vec::new())?;
+        let _portal_served_for_the_test = serve(Ok(HashMap::new()), Vec::new())?;
         assert!(watch()?.values.is_empty());
         Ok(())
     })
