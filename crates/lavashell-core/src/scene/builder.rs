@@ -65,7 +65,7 @@ impl ChangeSink for SceneBuilder {
     }
 
     fn change(&mut self, change: Change) -> Result<(), ApplyError> {
-        self.tree.show_change(change)
+        self.tree.apply_change(SceneTree::ROOT, change)
     }
 
     fn end_frame(&mut self) -> Result<(), ApplyError> {

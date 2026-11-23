@@ -10,7 +10,6 @@ use crate::streams::AospStreams;
 use crate::surface_stream::{StreamFormat, SurfaceStream};
 use crate::{BufferSizes, BufferSizesError, Error};
 use lavashell_core::prelude::*;
-use lavashell_core::scene::tree::{Change, Content, Node, Packet, SceneNodeId};
 use lavashell_core::surface::SurfaceId;
 use lavashell_platform::FrameOutcome;
 use lavashell_renderer::{
@@ -117,7 +116,7 @@ impl Display {
     }
 
     fn render(&mut self, image: StreamImage) -> Result<FrameOutcome, TestError> {
-        let (frame, streams) = self.draw(&scene(whole_surface(image))?);
+        let (frame, streams) = self.draw(&SceneTree::with_leaf(whole_surface(image))?);
         let outcome = frame?;
         streams?;
         Ok(outcome)
@@ -139,17 +138,4 @@ fn whole_surface(image: StreamImage) -> [DrawCommand; 1] {
         destination: whole,
         frame: whole,
     }]
-}
-
-fn scene(commands: impl Into<Arc<[DrawCommand]>>) -> Result<SceneTree, TestError> {
-    let leaf = Node::Leaf(Content::Packet(Packet::new(commands.into())?));
-    let insert = Change::Insert {
-        id: SceneNodeId(1),
-        parent: None,
-        index: 0,
-        node: leaf,
-    };
-    let mut tree = SceneTree::default();
-    tree.show_change(insert)?;
-    Ok(tree)
 }

@@ -241,7 +241,7 @@ fn a_failed_change_forgets_the_scene_and_the_next_update_inserts_all_of_it() -> 
         index: 0,
         node: Node::Group(Group::default()),
     };
-    consumer.shown.tree.show_change(planted)?;
+    consumer.shown.tree.apply_change(SceneTree::ROOT, planted)?;
     let failed = consumer
         .shown
         .update(&items, &BTreeMap::new(), &mut consumer.sink);

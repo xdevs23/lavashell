@@ -298,7 +298,7 @@ fn transient_packets_paint_correctly_without_allocating_cached_images() -> Resul
                 content: Content::Packet(filled),
             }
         };
-        tree.show_change(change)?;
+        tree.apply_change(SceneTree::ROOT, change)?;
         let scene = tree.snapshot();
         paint(&mut painter, &mut target, &scene)?;
         paint(&mut reference, &mut full, &scene)?;

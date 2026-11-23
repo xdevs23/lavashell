@@ -228,10 +228,6 @@ impl SceneTree {
         Ok(tree)
     }
 
-    pub fn show_change(&mut self, change: Change) -> Result<(), ApplyError> {
-        self.apply_change(Self::ROOT, change)
-    }
-
     pub(crate) fn children(
         &self,
         namespace: NamespaceId,
@@ -313,5 +309,5 @@ pub fn show_all(
     tree: &mut SceneTree,
     changes: impl IntoIterator<Item = Change>,
 ) -> Result<(), ApplyError> {
-    (changes.into_iter()).try_for_each(|change| tree.show_change(change))
+    (changes.into_iter()).try_for_each(|change| tree.apply_change(SceneTree::ROOT, change))
 }

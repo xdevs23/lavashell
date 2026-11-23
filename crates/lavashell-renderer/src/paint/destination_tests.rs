@@ -331,7 +331,7 @@ fn assert_partial_damage(include_known_reader: bool, isolated: bool) -> Result<(
     let mut reference = EFFECT_SURFACE.raster()?;
     let first = presented.damage(tree.at(Duration::ZERO), viewport);
     paint_damage(&mut partial, &mut retained, &tree, Density::ONE, first)?;
-    tree.show_change(changed)?;
+    tree.apply_change(SceneTree::ROOT, changed)?;
     let dirty = presented.damage(tree.at(Duration::ZERO), viewport);
     assert!(dirty.is_some(), "the change must damage the frame");
     if !isolated {

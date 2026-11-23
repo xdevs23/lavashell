@@ -96,7 +96,7 @@ fn a_frame_that_fails_to_import_leaves_out_only_its_stream() -> Result<(), TestE
         });
     let mut outcome = None;
     let logged = warnings(|| {
-        let (frame, streams) = renderer.draw(&scene(&commands[..])?);
+        let (frame, streams) = renderer.draw(&SceneTree::with_leaf(&commands[..])?);
         outcome = Some(frame?);
         streams?;
         Ok(())
@@ -128,7 +128,7 @@ fn a_frame_drawn_without_a_release_fence_returns_once_the_gpu_finished() -> Resu
     device.fails_release.set(true);
     device.busy.set(true);
     assert!(matches!(
-        renderer.draw(&scene(whole_surface(image))?),
+        renderer.draw(&SceneTree::with_leaf(whole_surface(image))?),
         (Ok(FrameOutcome::Shown), Err(Error::HandBack(_)))
     ));
 
@@ -203,7 +203,7 @@ fn a_render_on_a_lost_device_reports_every_step_that_failed() -> Result<(), Test
     let image = renderer.latched(stream)?;
     assert_eq!(renderer.render(image)?, FrameOutcome::Shown);
     renderer.device().lost.set(true);
-    let (frame, streams) = renderer.draw(&scene(whole_surface(image))?);
+    let (frame, streams) = renderer.draw(&SceneTree::with_leaf(whole_surface(image))?);
     assert!(matches!(frame, Err(TestError::Renderer(_))));
     assert!(matches!(
         streams,

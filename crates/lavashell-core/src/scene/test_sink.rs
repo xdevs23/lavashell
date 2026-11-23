@@ -58,7 +58,7 @@ impl ChangeSink for TestSink {
             Change::SetContent { .. } => Received::SetContent,
             Change::SetSlot { .. } => Received::SetSlot,
         })?;
-        (self.tree.show_change(change)).map_err(TestSinkError::Apply)
+        (self.tree.apply_change(SceneTree::ROOT, change)).map_err(TestSinkError::Apply)
     }
 
     fn end_frame(&mut self) -> Result<(), TestSinkError> {

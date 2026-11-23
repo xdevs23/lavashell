@@ -73,7 +73,7 @@ fn changes_read_back_one_at_a_time_as_the_same_changes() -> TestResult {
     ];
     let mut tree = SceneTree::default();
     for change in &changes {
-        tree.show_change(read(change)?)?;
+        tree.apply_change(SceneTree::ROOT, read(change)?)?;
     }
     let key = |node| NodeKey::new(SceneTree::ROOT, SceneNodeId(node));
     assert!(tree.group(key(1)) == Some(&group));

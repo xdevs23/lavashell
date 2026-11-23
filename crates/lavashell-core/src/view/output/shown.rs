@@ -100,7 +100,7 @@ impl Shown {
         change: Change,
         sink: &mut S,
     ) -> Result<(), FrameError<S::Error>> {
-        (self.tree.show_change(change.clone())).map_err(FrameError::Mirror)?;
+        (self.tree.apply_change(SceneTree::ROOT, change.clone())).map_err(FrameError::Mirror)?;
         sink.change(change).map_err(FrameError::Sink)
     }
 

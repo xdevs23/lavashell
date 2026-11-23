@@ -227,10 +227,13 @@ fn a_card_whose_height_alone_scales_paints_directly() -> Result<(), TestError> {
     }
     assert_eq!(cached.render_stats().cache_hits, 1);
     let squeezed = Affine::scale(1.0, 0.75).translated(at(12.0, 8.0));
-    tree.show_change(Change::SetSlot {
-        id: SceneNodeId(2),
-        slot: SlotChange::Transform(Slot::Value(squeezed)),
-    })?;
+    tree.apply_change(
+        SceneTree::ROOT,
+        Change::SetSlot {
+            id: SceneNodeId(2),
+            slot: SlotChange::Transform(Slot::Value(squeezed)),
+        },
+    )?;
     let mut direct = Painter::without_device(&Fonts::new())?;
     direct.set_packet_caching(crate::PacketCaching::Disabled);
     assert_eq!(paint(&mut cached, &tree)?, paint(&mut direct, &tree)?);
@@ -271,10 +274,13 @@ fn a_card_image_stands_in_under_a_clip_cutting_it_only_with_hard_edges() -> Resu
     let first = paint(&mut cached, &tree)?;
     assert_eq!(paint(&mut cached, &tree)?, first);
     for (clip, hits) in [(cutting(8.0), 0), (cutting(0.0), 1)] {
-        tree.show_change(Change::SetSlot {
-            id: SceneNodeId(2),
-            slot: SlotChange::Clip(Some(Slot::Value(clip))),
-        })?;
+        tree.apply_change(
+            SceneTree::ROOT,
+            Change::SetSlot {
+                id: SceneNodeId(2),
+                slot: SlotChange::Clip(Some(Slot::Value(clip))),
+            },
+        )?;
         let mut direct = Painter::without_device(&Fonts::new())?;
         direct.set_packet_caching(crate::PacketCaching::Disabled);
         assert!(

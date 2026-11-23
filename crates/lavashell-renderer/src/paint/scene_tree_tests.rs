@@ -312,7 +312,7 @@ fn a_group_reuses_the_cached_image_of_its_leaf_only_where_the_image_was_copied()
             id: SceneNodeId(1),
             slot: SlotChange::Transform(Slot::Value(at(x, y))),
         };
-        scene.show_change(moved)?;
+        scene.apply_change(SceneTree::ROOT, moved)?;
         assert_eq!(
             paint(&mut painter, &scene)?,
             painted(&scene, Density::ONE)?,
@@ -353,7 +353,7 @@ fn partial_damage_from_the_tree_matches_a_full_paint_while_glass_moves() -> Resu
             id: SceneNodeId(2),
             slot: SlotChange::Transform(Slot::Value(at(f64::from(sequence)))),
         };
-        scene.show_change(moved)?;
+        scene.apply_change(SceneTree::ROOT, moved)?;
         let damage = presented.damage(scene.at(Duration::ZERO), viewport);
         painter.paint_surface(
             retained.canvas(),
