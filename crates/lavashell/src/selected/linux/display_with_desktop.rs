@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::layer::build_services;
-use crate::services::{DesktopService, ServicesStartError, watch_services_while};
+use lavashell_desktop::{DesktopServices, ServicesStartError};
 use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{Capability, Connection, Platform, PlatformLinks};
 use lavashell_store::Store;
 use std::collections::BTreeSet;
 
-pub struct DesktopPlatform<P> {
-    display: P,
-    services: Vec<Box<dyn DesktopService>>,
+pub struct DisplayWithDesktop<D> {
+    display: D,
+    services: DesktopServices,
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum DesktopPlatformError<E> {
+pub enum DisplayWithDesktopError<E> {
     #[error(transparent)]
     Display(E),
-    #[error("the desktop platform cannot start the desktop services")]
+    #[error("the desktop services cannot start")]
     StartServices(#[source] ServicesStartError),
 }
 
-impl<E: NamesNextStep> NamesNextStep for DesktopPlatformError<E> {
+impl<E: NamesNextStep> NamesNextStep for DisplayWithDesktopError<E> {
     fn next_step(&self) -> NextStep {
         match self {
             Self::Display(error) => error.next_step(),
@@ -28,11 +27,11 @@ impl<E: NamesNextStep> NamesNextStep for DesktopPlatformError<E> {
     }
 }
 
-impl<P: Platform<Setup = ()>> Platform for DesktopPlatform<P> {
+impl<D: Platform<Setup = ()>> Platform for DisplayWithDesktop<D> {
     type Setup = Store;
-    type Error = DesktopPlatformError<P::Error>;
-    type Backend = P::Backend;
-    type Control = P::Control;
+    type Error = DisplayWithDesktopError<D::Error>;
+    type Backend = D::Backend;
+    type Control = D::Control;
 
     fn connect(registered: Store) -> Result<Connection<Self>, Self::Error> {
         let Connection {
@@ -40,11 +39,11 @@ impl<P: Platform<Setup = ()>> Platform for DesktopPlatform<P> {
             backend,
             host,
             clock,
-        } = P::connect(()).map_err(DesktopPlatformError::Display)?;
+        } = D::connect(()).map_err(DisplayWithDesktopError::Display)?;
         Ok(Connection {
             platform: Self {
                 display: platform,
-                services: build_services(&registered),
+                services: DesktopServices::set_up(&registered),
             },
             backend,
             host,
@@ -56,11 +55,12 @@ impl<P: Platform<Setup = ()>> Platform for DesktopPlatform<P> {
         self.display.capabilities()
     }
 
-    fn serve(self, links: PlatformLinks<P::Control, P::Backend>) -> Result<(), Self::Error> {
+    fn serve(self, links: PlatformLinks<D::Control, D::Backend>) -> Result<(), Self::Error> {
         let view = links.reports.view.clone();
-        watch_services_while(self.services, view, || self.display.serve(links))
-            .map_err(DesktopPlatformError::StartServices)?
-            .map_err(DesktopPlatformError::Display)
+        (self.services)
+            .watch_while(view, || self.display.serve(links))
+            .map_err(DisplayWithDesktopError::StartServices)?
+            .map_err(DisplayWithDesktopError::Display)
     }
 }
 

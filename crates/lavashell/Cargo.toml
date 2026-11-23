@@ -15,7 +15,9 @@ desktop = [
     "dep:lavashell-desktop",
     "dep:lavashell-desktop-settings",
     "dep:lavashell-desktop-settings-freedesktop",
+    "dep:lavashell-platform",
     "dep:lavashell-store",
+    "dep:thiserror",
 ]
 
 [dependencies]
@@ -34,8 +36,13 @@ lavashell-materials.workspace = true
 lavashell-desktop = { workspace = true, optional = true }
 lavashell-desktop-settings = { workspace = true, optional = true }
 lavashell-desktop-settings-freedesktop = { workspace = true, optional = true }
+lavashell-platform = { workspace = true, optional = true }
 lavashell-store = { workspace = true, optional = true }
 lavashell-wayland.workspace = true
+thiserror = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+lavashell-actor.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 lavashell-aosp.workspace = true

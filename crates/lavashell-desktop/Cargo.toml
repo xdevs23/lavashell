@@ -24,4 +24,3 @@ thiserror.workspace = true
 
 [dev-dependencies]
 lavashell-core.workspace = true
-lavashell-vulkan-renderer.workspace = true

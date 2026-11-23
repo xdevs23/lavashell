@@ -1025,6 +1025,7 @@
         "name": "lavashell",
         "version": "0.1.0",
         "dependencies": [
+          "lavashell-actor",
           "lavashell-aosp",
           "lavashell-build-script",
           "lavashell-components",
@@ -1037,11 +1038,13 @@
           "lavashell-error-chain",
           "lavashell-keyboard",
           "lavashell-materials",
+          "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
           "lavashell-store",
           "lavashell-vulkan-renderer",
-          "lavashell-wayland"
+          "lavashell-wayland",
+          "thiserror 2.0.21"
         ]
       },
       {
@@ -1135,7 +1138,6 @@
           "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-store",
-          "lavashell-vulkan-renderer",
           "log",
           "thiserror 2.0.21"
         ]
@@ -2735,7 +2737,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "17ae69922affde6758468f1f7690f4b8f709d2c52acb3e3fc65f94929d8e7d75",
+        "seedHash": "0316604e9b346ad07a27b208d7fe78a59572cc902a7f0174991367c0c1dc7155",
         "plan": {
           "schema": 1,
           "selection": {
@@ -2884,6 +2886,12 @@
                     "features": [],
                     "path": "../lavashell-materials"
                   },
+                  "lavashell-platform": {
+                    "package": "lavashell-platform",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-platform"
+                  },
                   "lavashell-renderer": {
                     "package": "lavashell-renderer",
                     "default-features": false,
@@ -2916,6 +2924,15 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-wayland"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
                   }
                 },
                 "build-dependencies": {
@@ -5789,11 +5806,13 @@
                   "lavashell-error-chain",
                   "lavashell-keyboard",
                   "lavashell-materials",
+                  "lavashell-platform",
                   "lavashell-renderer",
                   "lavashell-runtime",
                   "lavashell-store",
                   "lavashell-vulkan-renderer",
-                  "lavashell-wayland"
+                  "lavashell-wayland",
+                  "thiserror"
                 ]
               },
               {

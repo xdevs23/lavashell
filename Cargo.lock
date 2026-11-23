@@ -2681,6 +2681,7 @@ dependencies = [
 name = "lavashell"
 version = "0.1.0"
 dependencies = [
+ "lavashell-actor",
  "lavashell-aosp",
  "lavashell-build-script",
  "lavashell-components",
@@ -2693,11 +2694,13 @@ dependencies = [
  "lavashell-error-chain",
  "lavashell-keyboard",
  "lavashell-materials",
+ "lavashell-platform",
  "lavashell-renderer",
  "lavashell-runtime",
  "lavashell-store",
  "lavashell-vulkan-renderer",
  "lavashell-wayland",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2826,7 +2829,6 @@ dependencies = [
  "lavashell-event-loop",
  "lavashell-platform",
  "lavashell-store",
- "lavashell-vulkan-renderer",
  "log",
  "thiserror 2.0.21",
 ]

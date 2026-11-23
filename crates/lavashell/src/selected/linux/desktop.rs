@@ -3,9 +3,11 @@ use crate::RunError;
 use lavashell_runtime::App;
 use lavashell_store::Store;
 
+mod display_with_desktop;
+
 include!(concat!(env!("OUT_DIR"), "/registrations.rs"));
 
-pub type Platform = lavashell_desktop::DesktopPlatform<lavashell_wayland::Wayland>;
+pub type Platform = display_with_desktop::DisplayWithDesktop<lavashell_wayland::Wayland>;
 
 pub fn run(app: App) -> Result<(), RunError> {
     let mut store = Store::default();

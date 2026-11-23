@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
-use crate::layer::build_services;
 use crate::{plug_in, register_in_layers};
 use lavashell_actor::{Closed, mailbox};
 use lavashell_core::platform::ColorScheme;
 use lavashell_core::preferences::Appearance;
 use lavashell_platform::SettingsEvent;
 use lavashell_store::Store;
+use std::{future, panic};
 
 #[derive(Debug, thiserror::Error)]
 enum TestError {
@@ -80,7 +80,7 @@ fn a_service_registered_through_the_layers_reports_to_the_view_after_another_ser
     let (sender, view) = mailbox::<PlatformEvent>();
     let outlet = sender.outlet(|event| event);
     drop(sender);
-    let arrived = watch_services_while(build_services(&registered), outlet, || view.take())??;
+    let arrived = DesktopServices::set_up(&registered).watch_while(outlet, || view.take())??;
     assert!(matches!(
         arrived[..],
         [PlatformEvent::Settings(SettingsEvent::Appearance(
@@ -112,8 +112,53 @@ fn a_service_that_panics_while_the_app_runs_leaves_the_result_of_serve_in_place(
     let (sender, view) = mailbox::<PlatformEvent>();
     let outlet = sender.outlet(|event| event);
     drop(sender);
-    let arrived =
-        watch_services_while(vec![Box::new(PanicsAfterReporting)], outlet, || view.take())??;
+    let arrived = DesktopServices(vec![Box::new(PanicsAfterReporting)])
+        .watch_while(outlet, || view.take())??;
     assert_eq!(arrived.len(), 1);
     Ok(())
+}
+
+struct WatchesForever;
+
+impl DesktopService for WatchesForever {
+    fn into_watches(self: Box<Self>, _view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch> {
+        vec![Box::pin(future::pending())]
+    }
+}
+
+struct PanicsWhileStarting;
+
+impl DesktopService for PanicsWhileStarting {
+    fn into_watches(self: Box<Self>, _view: &Outlet<PlatformEvent>) -> Vec<ServiceWatch> {
+        panic::resume_unwind(Box::new("the service panics while its watches start"))
+    }
+}
+
+fn watch_service_while_serve_returns_at_once(
+    service: impl DesktopService + 'static,
+) -> Result<(), ServicesStartError> {
+    DesktopServices(vec![Box::new(service)]).watch_while(Outlet::new(|_| Ok(())), || ())
+}
+
+#[test]
+fn watch_while_returns_once_serve_returns_while_a_service_is_still_watching() {
+    assert!(matches!(
+        watch_service_while_serve_returns_at_once(WatchesForever),
+        Ok(())
+    ));
+}
+
+#[test]
+fn watch_while_fails_when_a_service_panics_while_its_watches_start() {
+    assert!(matches!(
+        watch_service_while_serve_returns_at_once(PanicsWhileStarting),
+        Err(ServicesStartError::Panicked {
+            value: PanicValue::Text(text)
+        }) if text == "the service panics while its watches start"
+    ));
+}
+
+#[test]
+fn set_up_does_not_build_a_service_from_a_store_without_the_desktop_layer() {
+    assert!(DesktopServices::set_up(&Store::default()).0.is_empty());
 }
