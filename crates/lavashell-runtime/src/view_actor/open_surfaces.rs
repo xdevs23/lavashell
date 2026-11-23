@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::frames::{FrameStart, ViewSurface};
+use super::frames::{ComposedFrame, FrameStart, StateCommit, ViewSurface};
 use super::panels::configured_length;
 use crate::focus_grab::{self, FocusGrabs};
-use crate::panels::{
-    ContentState, Panel, PanelContent, PanelRecords, PanelRequests, PanelUpdate, Transaction,
-};
+use crate::panels::{ContentState, Panel, PanelRecords, PanelRequests, PanelUpdate, Transaction};
 use crate::scheduler::{SchedulerInput, ViewState};
 use crate::shape::WindowShape;
 use crate::surface_records::{self, SurfaceRecords};
@@ -255,12 +253,16 @@ impl OpenSurfaces {
         updates
     }
 
-    pub(super) fn committed(&mut self, id: SurfaceId) {
-        let committing =
-            (self.view_surfaces.get_mut(&id)).and_then(|surface| surface.committing.take());
-        if let Some(requests) = committing {
-            self.panels.committed(id, requests);
+    pub(super) fn committed(&mut self, id: SurfaceId) -> Option<ComposedFrame> {
+        let surface = self.view_surfaces.get_mut(&id)?;
+        let StateCommit { composed, panel } = surface.finish_commit()?;
+        let shown = composed.map(|frame| surface.panel_content(frame.viewport.size));
+        match (shown, panel) {
+            (Some(content), Some(requests)) => self.panels.shown(id, content, requests),
+            (None, Some(requests)) => self.panels.committed(id, requests),
+            (_, None) => {}
         }
+        composed
     }
 
     pub(super) fn rendered(
@@ -273,16 +275,15 @@ impl OpenSurfaces {
     ) -> Option<FrameStart> {
         let surface = self.open_view_surface(id)?;
         let (start, panel) = surface.finish_drawing(scaled_viewport, contents, time)?;
-        let input = surface.accepts_input();
+        let content = surface.panel_content(scaled_viewport.viewport.size);
         if outcome == FrameOutcome::Shown
             && let Some(requests) = panel
         {
-            let content = PanelContent {
-                size: scaled_viewport.viewport.size,
-                input,
-            };
             self.panels.shown(id, content, requests);
         }
         Some(start)
     }
 }
+
+#[cfg(test)]
+mod tests;

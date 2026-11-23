@@ -68,7 +68,7 @@ impl<P: Platform> ViewActor<P> {
         for (id, built) in self.pacing.take_state_commits() {
             let requests = self.surfaces.panel_requests(id, &built.state);
             if let Some(surface) = self.surfaces.open_view_surface(id) {
-                surface.committing = requests;
+                surface.start_commit(requests);
                 self.actors.commit_state(id, built)?;
             }
         }
@@ -76,7 +76,12 @@ impl<P: Platform> ViewActor<P> {
     }
 
     fn committed(&mut self, id: SurfaceId) {
-        self.surfaces.committed(id);
+        if let Some(frame) = self.surfaces.committed(id)
+            && let Some(view) = self.surfaces.records().open_view(id)
+        {
+            self.observers
+                .observe_view(id, frame.timing, frame.viewport, view);
+        }
         self.schedule(SchedulerInput::Committed(id));
     }
 

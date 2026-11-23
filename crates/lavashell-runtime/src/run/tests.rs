@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::controls_actor::ControlsError;
+use crate::panels::KeyboardPolicy;
 use crate::renderer_actor::RendererError;
 use crate::test_error::TestResult;
 use crate::test_host::{
@@ -8,29 +9,32 @@ use crate::test_host::{
     run_scripted_on, run_unreachable, runtime_setup, surface_requests, window,
 };
 use crate::test_renderer::TestBackend;
+use lavashell_core::focus_grab::FocusGrab;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, PresentationFlags};
+use lavashell_core::geometry::{Size, Viewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
 use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{
-    OutputEvent, OutputId, PlatformEvent, SurfaceEvent, SurfaceRequest, TimingEvent,
+    FocusGrabRequest, OutputEvent, OutputId, PlatformEvent, PlatformRequest, SurfaceEvent,
+    SurfaceRequest, TimingEvent,
 };
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::panic::resume_unwind;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
 
 const WINDOW: SurfaceId = SurfaceId::numbered(0);
+const PANEL: SurfaceId = SurfaceId::numbered(0);
 const OUTPUT: OutputId = OutputId(1);
 
-fn configured() -> PlatformEvent {
-    let length = Some(100.dp());
+fn configured(surface: SurfaceId, size: Size) -> PlatformEvent {
     PlatformEvent::Surface(
-        WINDOW,
+        surface,
         SurfaceEvent::Configured {
-            width: length,
-            height: length,
+            width: Some(size.width),
+            height: Some(size.height),
             token: None,
             window: None,
         },
@@ -189,7 +193,7 @@ fn a_platform_that_panics_after_the_run_ended_is_reported() {
 fn a_renderer_that_fails_ends_the_run_with_its_failure() {
     let setup = runtime_setup(vec![window("window")]);
     let run = run_scripted(host([]), Capability::ALL, setup, |wire| {
-        wire.event(configured())?;
+        wire.event(configured(WINDOW, Size::new(100.dp(), 100.dp())))?;
         wire.finish()
     });
     assert!(matches!(
@@ -224,7 +228,8 @@ fn the_backend_that_the_app_configures_is_the_one_the_renderer_starts() -> TestR
 }
 
 #[test]
-fn without_a_renderer_frames_go_on_at_the_refresh_of_the_output_and_none_is_drawn() -> TestResult {
+fn without_a_renderer_frames_go_on_at_the_refresh_of_the_output_none_is_drawn_and_none_is_viewed_twice()
+-> TestResult {
     let mut setup = runtime_setup(vec![window("window")]);
     let frames = Rc::new(Cell::new(0_u32));
     let counted = Rc::clone(&frames);
@@ -232,8 +237,11 @@ fn without_a_renderer_frames_go_on_at_the_refresh_of_the_output_and_none_is_draw
     let drawn = Rc::new(Cell::new(false));
     let submitted = Rc::clone(&drawn);
     setup.observers.frame_report = Some(Box::new(move |_: FrameReport| submitted.set(true)));
-    let viewed = Rc::clone(&drawn);
-    setup.observers.view = Some(Box::new(move |_, _, _, _: &View| viewed.set(true)));
+    let viewed = Rc::new(RefCell::new(Vec::new()));
+    let views = Rc::clone(&viewed);
+    setup.observers.view = Some(Box::new(move |_, timing: FrameTime, _, _: &View| {
+        views.borrow_mut().push(timing.sequence);
+    }));
     setup.run_end.exit_when(move || frames.get() == 3);
     let run = run_scripted_on(None, host([OUTPUT]), Capability::ALL, setup, |wire| {
         wire.attach(WINDOW)?;
@@ -241,11 +249,42 @@ fn without_a_renderer_frames_go_on_at_the_refresh_of_the_output_and_none_is_draw
         wire.event(PlatformEvent::Output(OutputEvent::Entered(OUTPUT, WINDOW)))?;
         let refresh = Some(Duration::from_millis(1));
         wire.event(PlatformEvent::Output(OutputEvent::Refresh(OUTPUT, refresh)))?;
-        wire.event(configured())?;
+        wire.event(configured(WINDOW, Size::new(100.dp(), 100.dp())))?;
         wire.finish()
     });
     run.outcome?;
     assert!(!drawn.get());
+    let viewed = viewed.take();
+    assert_ne!(viewed, Vec::<u64>::new());
+    assert_eq!(BTreeSet::from_iter(&viewed).len(), viewed.len());
+    Ok(())
+}
+
+#[test]
+fn without_a_renderer_the_runtime_views_a_committed_panel_at_its_size_and_acquires_the_focus_grab()
+-> TestResult {
+    let mut launcher = LayerSurface::new("launcher").focus_grab(FocusGrab::new(|| true, || {}));
+    launcher.panel.keyboard = KeyboardPolicy::OnDemand;
+    let mut setup = runtime_setup(vec![SurfaceSetup::Panel(launcher, empty_view())]);
+    let viewed = Rc::new(Cell::new(None));
+    let seen = Rc::clone(&viewed);
+    setup.observers.view = Some(Box::new(move |_, _, viewport: Viewport, _: &View| {
+        seen.set(Some(viewport.size));
+    }));
+    let shown = Rc::clone(&viewed);
+    setup.run_end.exit_when(move || shown.get().is_some());
+    let size = Size::new(1366.dp(), 48.dp());
+    let run = run_scripted_on(None, host([]), Capability::ALL, setup, move |wire| {
+        wire.attach(PANEL)?;
+        wire.event(configured(PANEL, size))?;
+        wire.finish()
+    });
+    let requests = run.requests()?;
+    assert_eq!(viewed.get(), Some(size));
+    assert!(requests.iter().any(|request| matches!(
+        request,
+        PlatformRequest::FocusGrab(FocusGrabRequest::Acquire(PANEL))
+    )));
     Ok(())
 }
 

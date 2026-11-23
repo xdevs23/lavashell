@@ -2,7 +2,7 @@
 use super::open_surfaces::OpenSurfaces;
 use super::{ViewActor, send_request};
 use crate::cpu_time::CpuStamp;
-use crate::panels::PanelRequests;
+use crate::panels::{PanelContent, PanelRequests};
 use crate::renderer_actor::{Rendered, RendererInput};
 use crate::scene_pipeline::{FrameStatus, SceneSink};
 use crate::scheduler::{FrameKind, FrameSequence, SchedulerInput};
@@ -12,7 +12,7 @@ use crate::view_actions::ActionBatch;
 use crate::view_actor::{Stopped, ViewError};
 use lavashell_actor::Closed;
 use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, Submission};
-use lavashell_core::geometry::{ScaledViewport, Viewport};
+use lavashell_core::geometry::{ScaledViewport, Size, Viewport};
 use lavashell_core::output::OutputInfo;
 use lavashell_core::surface::{SurfaceChange, SurfaceId};
 use lavashell_core::view::{Failures, FrameError, View};
@@ -27,6 +27,26 @@ pub(super) struct FrameStart {
     view_cpu: Option<Duration>,
     timing: FrameTime,
     scaled_viewport: ScaledViewport,
+}
+
+impl FrameStart {
+    fn composed(self) -> ComposedFrame {
+        ComposedFrame {
+            timing: self.timing,
+            viewport: self.scaled_viewport.viewport,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ComposedFrame {
+    pub(super) timing: FrameTime,
+    pub(super) viewport: Viewport,
+}
+
+pub(super) struct StateCommit {
+    pub(super) composed: Option<ComposedFrame>,
+    pub(super) panel: Option<PanelRequests>,
 }
 
 #[derive(Clone, Copy)]
@@ -55,7 +75,7 @@ pub(super) struct ViewSurface {
     pub(super) composition_order: i32,
     frame: FrameProgress,
     last_frame: Option<LastFrame>,
-    pub(super) committing: Option<PanelRequests>,
+    committing: Option<StateCommit>,
     output: Option<OutputInfo>,
     shape: SurfaceShape,
 }
@@ -83,8 +103,26 @@ impl ViewSurface {
         }
     }
 
-    pub(super) fn accepts_input(&self) -> bool {
-        self.shape.accepts_input()
+    pub(super) fn panel_content(&self, size: Size) -> PanelContent {
+        PanelContent {
+            size,
+            input: self.shape.accepts_input(),
+        }
+    }
+
+    pub(super) fn start_commit(&mut self, panel: Option<PanelRequests>) {
+        let composed = match self.frame {
+            FrameProgress::Composed(start) => {
+                self.frame = FrameProgress::Idle;
+                Some(start.composed())
+            }
+            FrameProgress::Idle | FrameProgress::Drawing { .. } => None,
+        };
+        self.committing = Some(StateCommit { composed, panel });
+    }
+
+    pub(super) fn finish_commit(&mut self) -> Option<StateCommit> {
+        self.committing.take()
     }
 
     pub(super) fn finish_drawing(
@@ -341,9 +379,8 @@ impl<P: Platform> ViewActor<P> {
         let Some((surface, view, viewport)) = self.surfaces.open_surface_and_view(id) else {
             return;
         };
-        if let Some(observer) = &mut self.observers.view {
-            observer(id, start.timing, viewport, view);
-        }
+        self.observers
+            .observe_view(id, start.timing, viewport, view);
         if let Some(info) = drawn.output
             && surface.output != Some(info)
         {

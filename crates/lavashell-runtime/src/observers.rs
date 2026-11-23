@@ -45,6 +45,18 @@ impl Observers {
         }
     }
 
+    pub(crate) fn observe_view(
+        &mut self,
+        surface: SurfaceId,
+        timing: FrameTime,
+        viewport: Viewport,
+        view: &View,
+    ) {
+        if let Some(observer) = &mut self.view {
+            observer(surface, timing, viewport, view);
+        }
+    }
+
     pub(crate) fn report_failures(&mut self, surface: SurfaceId, failures: Failures) {
         for failure in failures {
             log_failure(&failure);
