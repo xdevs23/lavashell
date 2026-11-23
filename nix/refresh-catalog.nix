@@ -5,18 +5,12 @@ let
   checkout = import ./checkout-sources.nix { inherit (input) nixpkgs root projections; };
   inherit (checkout) sources directory;
   types = import ./types.nix;
-  routeOf =
-    relative:
-    sources.layerRoute {
-      package = sources.packageName (directory relative);
-      crates = sources.localCrates (directory relative);
-    };
 in
 {
   needsEngine = builtins.listToAttrs (
     map (relative: {
       name = relative;
-      value = routeOf relative == types.layerRoutes.frameworkWithEngine;
+      value = sources.layerRouteOf (directory relative) == types.layerRoutes.frameworkWithEngine;
     }) input.directories
   );
   inherit (sources) nativeNames;

@@ -63,14 +63,10 @@ let
     let
       program = sources.packageName directory;
       library = !builtins.pathExists (directory + "/src/main.rs");
-      crates = sources.localCrates directory;
       closure = closures.${program};
       tested = testedCrates.${program};
       dependencies = lib.remove program closure;
-      route = sources.layerRoute {
-        package = program;
-        inherit crates;
-      };
+      route = sources.layerRouteOf directory;
       withEngine = route == types.layerRoutes.frameworkWithEngine;
       engine = if withEngine then artifacts.engine directory else null;
       unified =

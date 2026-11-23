@@ -21,6 +21,7 @@ let
       projections
       toml
       workspaceCrates
+      packageTests
       lock
       targets
       ;
@@ -82,7 +83,7 @@ let
 in
 {
   inherit (projection)
-    layerRoute
+    layerRouteOf
     seedPlan
     ;
   inherit (workspaceCrates)

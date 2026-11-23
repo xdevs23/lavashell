@@ -15,6 +15,7 @@ let
     )).examples;
   workspaceCrates = import (/. + input.nix + "/workspace-crates.nix") { inherit lib root; };
   contract = import (/. + input.nix + "/projection-contract.nix");
+  types = import (/. + input.nix + "/types.nix");
   examples = removeAttrs tree.packages [ "examples" ] // tree.packagedCrates;
   checkOf = built: {
     inherit (built) drvPath doCheck cargoTestFlags;
@@ -28,6 +29,16 @@ let
     ++ lib.filter (above: above != layer && builtins.elem layer (layersThrough above)) (
       layersThrough package.frameworkArtifacts
     );
+  stubLayerOf = package: layer: {
+    layer = checkOf layer;
+    layersAbove = map checkOf (layersRestoring layer package);
+  };
+  stubLayersCompilingTestsOf =
+    package:
+    if package.route == types.layerRoutes.registryOnly then
+      lib.filter (layer: layer.stubLayer) (layersThrough package.frameworkArtifacts)
+    else
+      lib.remove null [ package.unifiedArtifacts ];
   withLayers =
     built:
     [ built ] ++ lib.optionals (built ? frameworkArtifacts) (layersThrough built.frameworkArtifacts);
@@ -71,13 +82,6 @@ in
     derivations = map checkOf ([ package ] ++ layersThrough package.frameworkArtifacts);
     libraryLayers = map (layer: layer.drvPath) package.libraryArtifacts;
     hasEngine = package.engineArtifacts != null;
-    unified =
-      if package.unifiedArtifacts == null then
-        null
-      else
-        {
-          layer = checkOf package.unifiedArtifacts;
-          layersAbove = map checkOf (layersRestoring package.unifiedArtifacts package);
-        };
+    stubLayers = map (stubLayerOf package) (stubLayersCompilingTestsOf package);
   }) examples;
 }

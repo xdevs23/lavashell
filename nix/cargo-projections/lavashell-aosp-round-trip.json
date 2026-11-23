@@ -529,7 +529,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "4d11b9f59953e9ed01041c1280445ecfcc095138f358b025c9687bfacaafa01e",
+        "seedHash": "5a3b7033a9aa155aec037ce4afbec0c3a93cd4e5c35cabf72324cc34292a936b",
         "plan": {
           "schema": 1,
           "selection": {
@@ -729,6 +729,102 @@
                     "features": [],
                     "version": "=3.0.0"
                   }
+                },
+                "dev-dependencies": {
+                  "clap": {
+                    "package": "clap",
+                    "default-features": false,
+                    "features": [
+                      "color",
+                      "default",
+                      "derive",
+                      "error-context",
+                      "help",
+                      "std",
+                      "suggestions",
+                      "usage"
+                    ],
+                    "version": "=4.6.7"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-error-chain"
+                  },
+                  "lavashell-process-scope": {
+                    "package": "lavashell-process-scope",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../process-scope"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "process",
+                      "rand",
+                      "std"
+                    ],
+                    "version": "=1.1.6"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "package": "serde_json",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "raw_value",
+                      "std"
+                    ],
+                    "version": "=1.0.151"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "x509-cert": {
+                    "package": "x509-cert",
+                    "default-features": false,
+                    "features": [
+                      "std"
+                    ],
+                    "version": "=0.3.0"
+                  },
+                  "xdg": {
+                    "package": "xdg",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=3.0.0"
+                  }
                 }
               },
               "targets": [
@@ -778,6 +874,49 @@
                       "std"
                     ],
                     "version": "=1.1.6"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "nix": {
+                    "package": "nix",
+                    "default-features": false,
+                    "features": [
+                      "process",
+                      "signal"
+                    ],
+                    "version": "=0.31.3"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "process",
+                      "rand",
+                      "std"
+                    ],
+                    "version": "=1.1.6"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -1034,6 +1173,7 @@
                 "dependencies": [
                   "nix",
                   "rustix",
+                  "tempfile",
                   "thiserror"
                 ]
               },

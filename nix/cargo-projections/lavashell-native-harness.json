@@ -1141,7 +1141,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "7b702aeb6ccabea65ede933b41bd9ca2c1dc50279d1be1c126fde79b6357d250",
+        "seedHash": "89f6814f62de1fdc9faa9d3cce89d3b16a656e347ac8e42a45366dc964a8d1b9",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1358,6 +1358,117 @@
                     ],
                     "version": "=2.5.8"
                   }
+                },
+                "dev-dependencies": {
+                  "clap": {
+                    "package": "clap",
+                    "default-features": false,
+                    "features": [
+                      "color",
+                      "default",
+                      "derive",
+                      "error-context",
+                      "help",
+                      "std",
+                      "suggestions",
+                      "usage"
+                    ],
+                    "version": "=4.6.7"
+                  },
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-error-chain"
+                  },
+                  "lavashell-output-capture": {
+                    "package": "lavashell-output-capture",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../output-capture"
+                  },
+                  "lavashell-process-scope": {
+                    "package": "lavashell-process-scope",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../process-scope"
+                  },
+                  "lavashell-wayland-input": {
+                    "package": "lavashell-wayland-input",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../wayland-input"
+                  },
+                  "rustix": {
+                    "package": "rustix",
+                    "default-features": false,
+                    "features": [
+                      "alloc",
+                      "default",
+                      "event",
+                      "fs",
+                      "net",
+                      "pipe",
+                      "process",
+                      "shm",
+                      "std",
+                      "time"
+                    ],
+                    "version": "=1.1.6"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "package": "serde_json",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=1.0.151"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "url": {
+                    "package": "url",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.5.8"
+                  }
                 }
               },
               "targets": [
@@ -1429,6 +1540,71 @@
                       "xkbcommon"
                     ],
                     "version": "=0.21.1"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  }
+                },
+                "dev-dependencies": {
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-error-chain"
+                  },
+                  "png": {
+                    "package": "png",
+                    "default-features": false,
+                    "features": [],
+                    "version": "=0.18.1"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "package": "serde_json",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=1.0.151"
+                  },
+                  "smithay-client-toolkit": {
+                    "package": "smithay-client-toolkit",
+                    "default-features": false,
+                    "features": [
+                      "bytemuck",
+                      "calloop",
+                      "calloop-wayland-source",
+                      "default",
+                      "pkg-config",
+                      "xkbcommon"
+                    ],
+                    "version": "=0.21.1"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
                   },
                   "thiserror": {
                     "package": "thiserror",
@@ -2073,6 +2249,7 @@
                   "serde",
                   "serde_json",
                   "smithay-client-toolkit",
+                  "tempfile",
                   "thiserror"
                 ]
               },

@@ -72,12 +72,12 @@ struct Example {
     derivations: Vec<CheckPhase>,
     library_layers: Vec<String>,
     has_engine: bool,
-    unified: Option<UnifiedLayer>,
+    stub_layers: Vec<StubLayer>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct UnifiedLayer {
+struct StubLayer {
     layer: CheckPhase,
     layers_above: Vec<CheckPhase>,
 }
@@ -143,16 +143,16 @@ fn the_registry_layer_compiles_and_lints_the_tests_of_the_support_layer() -> Res
 }
 
 #[test]
-fn every_unified_layer_compiles_and_lints_the_tests_of_the_layers_above_it()
+fn the_stub_layer_below_the_tests_of_each_package_compiles_and_lints_them()
 -> Result<(), FixtureError> {
-    let unified_layers: Vec<UnifiedLayer> = check_phases()?
+    let stub_layers: Vec<StubLayer> = check_phases()?
         .examples
         .into_values()
-        .filter_map(|example| example.unified)
+        .flat_map(|example| example.stub_layers)
         .collect();
-    assert!(!unified_layers.is_empty());
-    for unified in &unified_layers {
-        assert_compiles_and_lints_the_tests_above(&unified.layer, &unified.layers_above);
+    assert!(!stub_layers.is_empty());
+    for stub in &stub_layers {
+        assert_compiles_and_lints_the_tests_above(&stub.layer, &stub.layers_above);
     }
     Ok(())
 }

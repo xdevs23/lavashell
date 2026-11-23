@@ -5,6 +5,7 @@
   projections,
   toml,
   workspaceCrates,
+  packageTests,
   lock,
   targets,
 }:
@@ -248,11 +249,15 @@ let
       targets = targets crate;
     }) projectedWorkspace.crates;
   };
+  buildsOnOwnRegistryLayer =
+    directory:
+    toString directory == toString nativeDirectory
+    || layerRouteOf directory == types.layerRoutes.registryOnly;
   testedByLayerAbove =
     directory: layer:
     lib.optionals (
-      layer == types.layers.registry && toString directory == toString nativeDirectory
-    ) nativeNames;
+      layer == types.layers.registry && buildsOnOwnRegistryLayer directory
+    ) packageTests.testedCrates.${packageName directory};
   seedPlan =
     directory: layer:
     let
@@ -293,6 +298,12 @@ let
       types.layerRoutes.framework
     else
       types.layerRoutes.registryOnly;
+  layerRouteOf =
+    directory:
+    layerRoute {
+      package = packageName directory;
+      crates = localCrates directory;
+    };
 in
 {
   inherit
@@ -302,6 +313,6 @@ in
     project
     plan
     seedPlan
-    layerRoute
+    layerRouteOf
     ;
 }

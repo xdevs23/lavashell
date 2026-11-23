@@ -729,7 +729,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "f1832c345293c2179742ce466aa0688a0f5eecc89ec1fe7f993c866de2bdc603",
+        "seedHash": "ec692a064ae659335d17d68066f41c4b6fc62862cf4320a11586c9e33215321a",
         "plan": {
           "schema": 1,
           "selection": {
@@ -834,6 +834,90 @@
                 },
                 "features": {},
                 "dependencies": {
+                  "clap": {
+                    "package": "clap",
+                    "default-features": false,
+                    "features": [
+                      "color",
+                      "default",
+                      "derive",
+                      "error-context",
+                      "help",
+                      "std",
+                      "suggestions",
+                      "usage"
+                    ],
+                    "version": "=4.6.7"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../../crates/lavashell-error-chain"
+                  },
+                  "serde": {
+                    "package": "serde",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "derive",
+                      "serde_derive",
+                      "std"
+                    ],
+                    "version": "=1.0.229"
+                  },
+                  "serde_json": {
+                    "package": "serde_json",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=1.0.151"
+                  },
+                  "smithay-client-toolkit": {
+                    "package": "smithay-client-toolkit",
+                    "default-features": false,
+                    "features": [
+                      "bytemuck",
+                      "calloop",
+                      "calloop-wayland-source",
+                      "default",
+                      "pkg-config",
+                      "xkbcommon"
+                    ],
+                    "version": "=0.21.1"
+                  },
+                  "tempfile": {
+                    "package": "tempfile",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "getrandom"
+                    ],
+                    "version": "=3.27.0"
+                  },
+                  "thiserror": {
+                    "package": "thiserror",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "std"
+                    ],
+                    "version": "=2.0.21"
+                  },
+                  "xkbcommon": {
+                    "package": "xkbcommon",
+                    "default-features": false,
+                    "features": [
+                      "default",
+                      "memmap2",
+                      "wayland"
+                    ],
+                    "version": "=0.8.0"
+                  }
+                },
+                "dev-dependencies": {
                   "clap": {
                     "package": "clap",
                     "default-features": false,
