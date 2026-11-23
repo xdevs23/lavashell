@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::core::animation::{AnimationError, KeyframesError};
-use lavashell_example_support::{ExampleError, NextStep};
+use lavashell::error_chain::next_step::NextStep;
+use lavashell_example_support::{ExampleError, ExampleStep};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -15,10 +16,12 @@ pub enum Error {
 }
 
 impl ExampleError for Error {
-    fn next_step(&self) -> NextStep {
+    fn next_step(&self) -> ExampleStep {
         match self {
             Self::Example(error) => error.next_step(),
-            Self::Setup(_) | Self::PhaseLoop(_) | Self::PhaseMotion(_) => NextStep::ReportDefect,
+            Self::Setup(_) | Self::PhaseLoop(_) | Self::PhaseMotion(_) => {
+                NextStep::ReportTheFailure.into()
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::surface::SurfaceId;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionLockError {
@@ -13,4 +14,15 @@ pub enum SessionLockError {
     LockSurfaceWithoutLock(SurfaceId),
     #[error("the runtime requested an unlock while the session is not locked")]
     UnlockWithoutLock,
+}
+
+impl NamesNextStep for SessionLockError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::NotSupported => NextStep::UseSupportingPlatform,
+            Self::AlreadyUsed | Self::LockSurfaceWithoutLock(_) | Self::UnlockWithoutLock => {
+                NextStep::ReportTheFailure
+            }
+        }
+    }
 }

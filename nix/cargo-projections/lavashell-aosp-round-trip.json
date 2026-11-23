@@ -219,8 +219,15 @@
         ]
       },
       {
-        "name": "lavashell-error-chain",
+        "name": "lavashell-enum-values",
         "version": "0.1.0"
+      },
+      {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-process-scope",
@@ -522,7 +529,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "0a1d2ab102b194b135092cfed343f81bee428d2b542242c35809deac5479ef31",
+        "seedHash": "4d11b9f59953e9ed01041c1280445ecfcc095138f358b025c9687bfacaafa01e",
         "plan": {
           "schema": 1,
           "selection": {
@@ -545,6 +552,7 @@
             "workspace": {
               "resolver": "3",
               "members": [
+                "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
                 "tools/aosp-round-trip",
                 "tools/process-scope"
@@ -552,6 +560,31 @@
             }
           },
           "crates": [
+            {
+              "member": "crates/lavashell-enum-values",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-enum-values",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
             {
               "member": "crates/lavashell-error-chain",
               "manifest": {
@@ -568,7 +601,15 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {}
+                "features": {},
+                "dependencies": {
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                }
               },
               "targets": [
                 {
@@ -978,8 +1019,15 @@
                 ]
               },
               {
-                "name": "lavashell-error-chain",
+                "name": "lavashell-enum-values",
                 "version": "0.0.0"
+              },
+              {
+                "name": "lavashell-error-chain",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-enum-values"
+                ]
               },
               {
                 "name": "lavashell-process-scope",

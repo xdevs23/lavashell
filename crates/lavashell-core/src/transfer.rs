@@ -4,6 +4,7 @@ use crate::flag_set::flag_set;
 use crate::geometry::Point;
 use crate::surface::SurfaceId;
 use lavashell_enum_values::enum_with_values;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::cmp::Reverse;
 use std::sync::Arc;
 
@@ -170,6 +171,12 @@ pub enum Cancellation {
     SurfaceClosed,
     #[error("the host system cancelled the data source")]
     SourceCancelled,
+}
+
+impl NamesNextStep for Cancellation {
+    fn next_step(&self) -> NextStep {
+        NextStep::RepeatTheTransfer
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

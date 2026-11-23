@@ -21,6 +21,7 @@ use lavashell_actor::{JoinError, SpawnError, mailbox, mailbox_on};
 use lavashell_core::platform::PlatformFacts;
 use lavashell_core::preferences::PreferenceOverrides;
 use lavashell_core::view::View;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{Capability, Platform, PlatformLinks, RendererSetup};
 use std::collections::BTreeSet;
 use std::fmt;
@@ -81,11 +82,7 @@ impl RuntimeSetup {
 pub enum RunError<P: Platform> {
     #[error("the app has not added a window, a layer or a session lock")]
     NoSurfaces,
-    #[error(
-        "the platform does not support what the app uses: {}. Run the app on a platform that \
-         supports it, or remove the parts of the app that use it.",
-        registry::Listed(.0)
-    )]
+    #[error("the platform does not support what the app uses: {}", registry::Listed(.0))]
     Unsupported(BTreeSet<Capability>),
     #[error(transparent)]
     Platform(P::Error),
@@ -133,6 +130,36 @@ impl<P: Platform> fmt::Debug for RunError<P> {
                 tuple.field(field)
             })
             .finish()
+    }
+}
+
+impl<P: Platform> NamesNextStep for RunError<P>
+where
+    P::Error: NamesNextStep,
+    PlatformRendererError<P>: NamesNextStep,
+    PlatformControlsError<P>: NamesNextStep,
+{
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Unsupported(_) => NextStep::UseSupportingPlatform,
+            Self::Platform(error) => error.next_step(),
+            Self::SpawnPlatform(_)
+            | Self::StartRenderer(SpawnError::Thread(_))
+            | Self::StartControls(SpawnError::Thread(_)) => NextStep::FreeSystemResources,
+            Self::StartRenderer(SpawnError::Start(error))
+            | Self::RunRenderer(JoinError::Failed(error)) => error.next_step(),
+            Self::StartControls(SpawnError::Start(error))
+            | Self::RunControls(JoinError::Failed(error)) => error.next_step(),
+            Self::CreatePainter(error) | Self::CreateShaper(error) => error.next_step(),
+            Self::SceneFailed(error) => error.next_step(),
+            Self::View(error) => error.next_step(),
+            Self::NoSurfaces
+            | Self::PlatformPanicked
+            | Self::StartRenderer(SpawnError::Panicked)
+            | Self::RunRenderer(JoinError::Panicked)
+            | Self::StartControls(SpawnError::Panicked)
+            | Self::RunControls(JoinError::Panicked) => NextStep::ReportTheFailure,
+        }
     }
 }
 

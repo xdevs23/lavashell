@@ -2,6 +2,7 @@
 use crate::pipe_transfers;
 use lavashell_core::id_counter::IdsExhausted;
 use lavashell_core::transfer::Cancellation;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{DragReceiveRefusal, DragRefusal};
 use std::io;
 
@@ -25,4 +26,19 @@ pub enum Error {
     Transfer(#[from] pipe_transfers::Error),
     #[error("the transfer was cancelled")]
     Cancelled(#[from] Cancellation),
+}
+
+impl NamesNextStep for Error {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::StartDrag(refusal) => refusal.next_step(),
+            Self::ReceiveDrag(refusal) => refusal.next_step(),
+            Self::Transfer(error) => error.next_step(),
+            Self::Cancelled(cancellation) => cancellation.next_step(),
+            Self::WithoutTransfer | Self::SendDrag(_) => NextStep::RepeatTheTransfer,
+            Self::NumberDragSource(_) | Self::WithoutAction | Self::UnadvertisedFormat => {
+                NextStep::ReportTheFailure
+            }
+        }
+    }
 }

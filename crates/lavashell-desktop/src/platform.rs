@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::layer::build_services;
 use crate::services::{DesktopService, ServicesStartError, watch_services_while};
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{Capability, Connection, Platform, PlatformLinks};
 use lavashell_store::Store;
 use std::collections::BTreeSet;
@@ -16,6 +17,15 @@ pub enum DesktopPlatformError<E> {
     Display(E),
     #[error("the desktop platform cannot start the desktop services")]
     StartServices(#[source] ServicesStartError),
+}
+
+impl<E: NamesNextStep> NamesNextStep for DesktopPlatformError<E> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Display(error) => error.next_step(),
+            Self::StartServices(error) => error.next_step(),
+        }
+    }
 }
 
 impl<P: Platform<Setup = ()>> Platform for DesktopPlatform<P> {

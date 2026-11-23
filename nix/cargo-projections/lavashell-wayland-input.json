@@ -250,8 +250,15 @@
         "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
       },
       {
-        "name": "lavashell-error-chain",
+        "name": "lavashell-enum-values",
         "version": "0.1.0"
+      },
+      {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-wayland-input",
@@ -722,7 +729,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "23bc15c0bbdb670886de7353e77a237da63724de163819e15dbb28f81e430d85",
+        "seedHash": "f1832c345293c2179742ce466aa0688a0f5eecc89ec1fe7f993c866de2bdc603",
         "plan": {
           "schema": 1,
           "selection": {
@@ -745,12 +752,38 @@
             "workspace": {
               "resolver": "3",
               "members": [
+                "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
                 "tools/wayland-input"
               ]
             }
           },
           "crates": [
+            {
+              "member": "crates/lavashell-enum-values",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-enum-values",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
             {
               "member": "crates/lavashell-error-chain",
               "manifest": {
@@ -767,7 +800,15 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {}
+                "features": {},
+                "dependencies": {
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                }
               },
               "targets": [
                 {
@@ -1137,8 +1178,15 @@
                 "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
               },
               {
-                "name": "lavashell-error-chain",
+                "name": "lavashell-enum-values",
                 "version": "0.0.0"
+              },
+              {
+                "name": "lavashell-error-chain",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-enum-values"
+                ]
               },
               {
                 "name": "lavashell-wayland-input",

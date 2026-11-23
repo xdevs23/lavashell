@@ -6,6 +6,7 @@ use lavashell_actor::{
     mailbox_on, spawn,
 };
 use lavashell_core::surface::SurfaceId;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{Platform, SurfaceAttachment, SurfaceControl};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -52,6 +53,15 @@ pub enum ControlsError<E> {
     UnknownSurface(SurfaceId),
     #[error("the platform could not commit the state of a surface")]
     Control(#[source] E),
+}
+
+impl<E: NamesNextStep> NamesNextStep for ControlsError<E> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::AttachedTwice(_) | Self::UnknownSurface(_) => NextStep::ReportTheFailure,
+            Self::Control(error) => error.next_step(),
+        }
+    }
 }
 
 pub type PlatformControlsError<P> =

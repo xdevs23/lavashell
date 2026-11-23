@@ -19,7 +19,7 @@ pub use cover::cover;
 pub use error::{Error, reject_failures};
 pub use frame_log::{FrameLog, run, run_observed};
 pub use lavashell_lucide as lucide;
-pub use next_steps::{ExampleError, NextStep};
+pub use next_steps::{ExampleError, ExampleStep};
 pub use palette::{TEAL_PALETTE, TealPalette};
 pub use report::{exit_code, report, report_failure};
 pub use samples::{HARBOR_LIGHTS, SampleTrack, UNDERTOW};

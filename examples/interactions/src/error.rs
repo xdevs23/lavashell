@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::core::transfer::TransferError;
+use lavashell::error_chain::next_step::NextStep;
 use lavashell::prelude::NumberError;
-use lavashell_example_support::{ExampleError, NextStep};
+use lavashell_example_support::{ExampleError, ExampleStep};
 use std::{io, path::PathBuf};
 
 #[derive(Debug, thiserror::Error)]
@@ -46,17 +47,23 @@ pub enum Error {
     StartChild(#[source] io::Error),
     #[error("cannot watch the process of the shaped window")]
     WatchChild(#[source] rustix::io::Errno),
+    #[error("cannot read whether the process of the shaped window ended")]
+    ChildStatus(#[source] io::Error),
+    #[error("cannot end the process of the shaped window")]
+    EndChild(#[source] io::Error),
+    #[error("cannot wait for the end of the process of the shaped window")]
+    ReapChild(#[source] io::Error),
     #[error("cannot count the corners of the round hole of the shaped window")]
     HoleCorners(#[source] NumberError),
 }
 
 impl ExampleError for Error {
-    fn next_step(&self) -> NextStep {
+    fn next_step(&self) -> ExampleStep {
         match self {
             Self::Example(error) => error.next_step(),
-            Self::NoHome => NextStep::SetHome,
+            Self::NoHome => ExampleStep::SetHome,
             Self::CreateCache { .. } | Self::CreateSamples(_) | Self::WriteSample { .. } => {
-                NextStep::MakeCacheWritable
+                ExampleStep::MakeCacheWritable
             }
             Self::Setup(_)
             | Self::ResolveSample { .. }
@@ -67,7 +74,10 @@ impl ExampleError for Error {
             | Self::CurrentExecutable(_)
             | Self::StartChild(_)
             | Self::WatchChild(_)
-            | Self::HoleCorners(_) => NextStep::ReportDefect,
+            | Self::ChildStatus(_)
+            | Self::EndChild(_)
+            | Self::ReapChild(_)
+            | Self::HoleCorners(_) => NextStep::ReportTheFailure.into(),
         }
     }
 }

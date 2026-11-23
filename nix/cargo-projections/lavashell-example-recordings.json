@@ -1160,6 +1160,7 @@
         "dependencies": [
           "icu_locale_core",
           "lavashell-enum-values",
+          "lavashell-error-chain",
           "num-traits",
           "palette",
           "postcard",
@@ -1241,7 +1242,10 @@
       },
       {
         "name": "lavashell-error-chain",
-        "version": "0.1.0"
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-event-loop",
@@ -1269,7 +1273,6 @@
         "dependencies": [
           "clap",
           "lavashell",
-          "lavashell-actor",
           "lavashell-core",
           "lavashell-example-support",
           "lavashell-materials-example",
@@ -1376,6 +1379,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-enum-values",
+          "lavashell-error-chain",
           "lavashell-renderer",
           "thiserror 2.0.21"
         ]
@@ -1455,6 +1459,7 @@
         "dependencies": [
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
@@ -1470,6 +1475,7 @@
         "dependencies": [
           "ash",
           "lavashell-actor",
+          "lavashell-error-chain",
           "log",
           "thiserror 2.0.21"
         ]
@@ -1506,6 +1512,7 @@
           "lavashell-actor",
           "lavashell-build-script",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-event-loop",
           "lavashell-platform",
           "lavashell-test-fixtures",

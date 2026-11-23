@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_event_loop::EventLoopFailure;
 use std::io;
 
@@ -16,4 +17,16 @@ pub enum RequestsError {
     DuplicateSocket(#[source] io::Error),
     #[error("the writability of the connection could not join the event loop")]
     WatchWritable(#[source] EventLoopFailure),
+}
+
+impl NamesNextStep for RequestsError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::CreateRequestWake(_) | Self::DuplicateSocket(_) => NextStep::FreeSystemResources,
+            Self::WatchRequests(failure)
+            | Self::PauseRequests(failure)
+            | Self::ResumeRequests(failure)
+            | Self::WatchWritable(failure) => failure.next_step(),
+        }
+    }
 }

@@ -2,6 +2,7 @@
 use ash::vk;
 use lavashell_core::prelude::{OutputProfile, PixelSize};
 use lavashell_error_chain::InOrder;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_renderer::{DrawFailure, MultipleFailures};
 use std::ffi::CStr;
 use std::num::TryFromIntError;
@@ -220,6 +221,112 @@ impl MultipleFailures for Error {
         match self {
             Self::Several(failures) => failures,
             failure => vec![failure],
+        }
+    }
+}
+
+impl NamesNextStep for ContextState {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Usable => NextStep::ReportTheFailure,
+            Self::DeviceLost => NextStep::UpdateGraphicsDriver,
+            Self::OutOfMemory => NextStep::FreeGpuMemory,
+        }
+    }
+}
+
+impl NamesNextStep for Error {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::CreatePainter(error)
+            | Self::WorkingImageInfo(error)
+            | Self::ReadPngPixels(error)
+            | Self::EncodePng(error) => error.next_step(),
+            Self::InstanceExtensions(error)
+            | Self::Instance(error)
+            | Self::PhysicalDevices(error)
+            | Self::PhysicalDevice(error)
+            | Self::Device(error)
+            | Self::CreateTimer(error)
+            | Self::StartTimer(error)
+            | Self::StopTimer(error)
+            | Self::ReadTimer(error)
+            | Self::ResetTimer(error)
+            | Self::SubmitCompletion(error)
+            | Self::CompletionStatus(error)
+            | Self::ForeignExtensions(error)
+            | Self::ExportScene(error)
+            | Self::ImportScene(error)
+            | Self::AcquireScene(error)
+            | Self::ReleaseScene(error)
+            | Self::ReleaseSceneStatus(error)
+            | Self::ImportForeign(error)
+            | Self::SignalRelease(error)
+            | Self::ReadySemaphore(error)
+            | Self::ConsumeReadySignal(error)
+            | Self::CreateSurface(error)
+            | Self::QuerySurfacePresentation(error)
+            | Self::QuerySurfaceCapabilities(error)
+            | Self::QuerySurfaceFormats(error)
+            | Self::CreateSwapchain(error)
+            | Self::CreateSemaphore(error)
+            | Self::SetHdrMetadata(error)
+            | Self::WaitFrame(error)
+            | Self::Acquire(error)
+            | Self::SignalFrame(error)
+            | Self::Present(error) => error.next_step(),
+            Self::HdrMetadataRange(failure) | Self::OutputColorFilter(failure) => {
+                failure.next_step()
+            }
+            Self::WrapHostImage { context, .. } | Self::WrapSwapchainImage(context) => {
+                context.next_step()
+            }
+            Self::CoverageSurface
+            | Self::WorkingSurface
+            | Self::OffscreenSize(_)
+            | Self::OffscreenSurface(_)
+            | Self::PngSurface => NextStep::FreeGpuMemory,
+            Self::NoDevice
+            | Self::NoDeviceLocalHeap
+            | Self::SkiaContext
+            | Self::SkiaAbandoned
+            | Self::CoverageReadback
+            | Self::WrapScene
+            | Self::HandBackScenes
+            | Self::WrapForeign
+            | Self::HandBackForeign
+            | Self::HostApiVersion(_)
+            | Self::WaitSemaphore
+            | Self::EmbeddedSubmit
+            | Self::SurfacePresentation
+            | Self::NoSurfaceFormat
+            | Self::NoCompositeAlpha
+            | Self::WaitAcquisition
+            | Self::PresentationSemaphore
+            | Self::SubmitFrame
+            | Self::NoDisplayTiming => NextStep::UpdateGraphicsDriver,
+            Self::ForeignSize(_) => NextStep::ChangeTheStreamProducer,
+            Self::ExtensionName(..)
+            | Self::SkiaHandoff(_)
+            | Self::SceneFormat(_)
+            | Self::SceneSize(_)
+            | Self::SceneInUse
+            | Self::SceneMailboxFull
+            | Self::StaleScene { .. }
+            | Self::EmbeddedFormat(_)
+            | Self::EmbeddedImageSize(_)
+            | Self::EmbeddedImageHandle
+            | Self::EmbeddedImageUsage(_)
+            | Self::EmbeddedLayout(_)
+            | Self::EmbeddedReturnLayout(_)
+            | Self::InvalidHdrMetadata
+            | Self::ForeignTarget
+            | Self::SwapchainExtent(_)
+            | Self::SwapchainImageIndex(_)
+            | Self::OutputColorSpace(_)
+            | Self::PresentationTimeRange(_)
+            | Self::ExplicitTimestampRequired => NextStep::ReportTheFailure,
+            Self::Several(failures) => failures.next_step(),
         }
     }
 }

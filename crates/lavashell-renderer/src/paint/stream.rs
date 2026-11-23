@@ -98,8 +98,7 @@ impl fmt::Display for UnsampledFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NeedsYcbcrConversion => f.write_str(
-                "the format needs a YCbCr conversion, which the device does not support; let the \
-                 producer draw buffers in RGBA or RGBX with 8 bits per channel",
+                "the format needs a YCbCr conversion, which the device does not support",
             ),
         }
     }
@@ -121,15 +120,13 @@ impl fmt::Display for StreamRejection {
         match self {
             Self::TooLarge => write!(
                 f,
-                "a stream frame is larger than the maximum size set for the stream, {released}; \
-                 raise the maximum size of the stream or let the producer draw smaller buffers"
+                "a stream frame is larger than the maximum size set for the stream, {released}"
             ),
             Self::UnusableBuffer => write!(
                 f,
                 "a stream frame has a buffer with several layers, a complete mipmap chain, \
                  protected content or without GPU sampled usage, or a buffer that the driver \
-                 cannot describe, {released}; let the producer draw buffers of one layer and one \
-                 mipmap level with GPU sampled usage and unprotected content"
+                 cannot describe, {released}"
             ),
             Self::BufferFormat(reason) => write!(
                 f,
@@ -138,13 +135,11 @@ impl fmt::Display for StreamRejection {
             ),
             Self::CropOutside => write!(
                 f,
-                "a stream frame has a crop outside its buffer, {released}; let the producer set a \
-                 crop within the buffer"
+                "a stream frame has a crop outside its buffer, {released}"
             ),
             Self::ImportFailed => f.write_str(
-                "a stream frame failed to import into Vulkan or Skia, so it is released without \
-                 being drawn and the stream draws nothing until the next frame; free GPU memory \
-                 or let the producer draw smaller buffers when the cause is a lack of memory",
+                "a stream frame failed to import into Vulkan or Skia, so the renderer releases it \
+                 without drawing it, and the stream draws nothing until the next frame",
             ),
         }
     }

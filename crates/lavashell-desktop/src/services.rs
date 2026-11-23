@@ -4,7 +4,7 @@ use calloop::ping::{Ping, PingSource, make_ping};
 use calloop::{EventLoop, LoopSignal};
 use lavashell_actor::Outlet;
 use lavashell_error_chain::message_chain;
-use lavashell_error_chain::next_step::{FREE_SYSTEM_RESOURCES, REPORT_THE_FAILURE};
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_event_loop::EventLoopFailure;
 use lavashell_platform::PlatformEvent;
 use std::pin::Pin;
@@ -23,42 +23,50 @@ pub trait DesktopService: Send {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServicesStartError {
-    #[error("the desktop services cannot create their stop signal; {FREE_SYSTEM_RESOURCES}")]
+    #[error("the desktop services cannot create their stop signal")]
     CreateStop(#[source] io::Error),
-    #[error("the desktop services cannot start their thread; {FREE_SYSTEM_RESOURCES}")]
+    #[error("the desktop services cannot start their thread")]
     SpawnThread(#[source] io::Error),
-    #[error("the desktop services cannot create their event loop; {FREE_SYSTEM_RESOURCES}")]
+    #[error("the desktop services cannot create their event loop")]
     CreateEventLoop(#[source] EventLoopFailure),
-    #[error(
-        "the desktop services cannot create the executor that runs the watches; \
-         {FREE_SYSTEM_RESOURCES}"
-    )]
+    #[error("the desktop services cannot create the executor that runs the watches")]
     CreateWatch(#[source] EventLoopFailure),
     #[error(
-        "the desktop services cannot add the executor that runs the watches to their event loop; \
-         {FREE_SYSTEM_RESOURCES}"
+        "the desktop services cannot add the executor that runs the watches to their event loop"
     )]
     InsertWatches(#[source] EventLoopFailure),
-    #[error(
-        "the desktop services cannot add their stop signal to their event loop; \
-         {FREE_SYSTEM_RESOURCES}"
-    )]
+    #[error("the desktop services cannot add their stop signal to their event loop")]
     InsertStop(#[source] EventLoopFailure),
     #[error(
         "the desktop services cannot start a watch that a service returns, because the executor \
-         that runs the watches is gone; this is a defect in the desktop services, {REPORT_THE_FAILURE}"
+         that runs the watches is gone; this is a defect in the desktop services"
     )]
     ScheduleWatch(#[source] ExecutorDestroyed),
     #[error(
         "the thread of the desktop services panicked with {value} before the watches started; \
-         this is a defect in the desktop services, {REPORT_THE_FAILURE}"
+         this is a defect in the desktop services"
     )]
     Panicked { value: PanicValue },
     #[error(
         "the thread of the desktop services ended without reporting whether the watches started; \
-         this is a defect in the desktop services, {REPORT_THE_FAILURE}"
+         this is a defect in the desktop services"
     )]
     EndedWithoutReport,
+}
+
+impl NamesNextStep for ServicesStartError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::CreateStop(_) | Self::SpawnThread(_) => NextStep::FreeSystemResources,
+            Self::CreateEventLoop(failure)
+            | Self::CreateWatch(failure)
+            | Self::InsertWatches(failure)
+            | Self::InsertStop(failure) => failure.next_step(),
+            Self::ScheduleWatch(_) | Self::Panicked { .. } | Self::EndedWithoutReport => {
+                NextStep::ReportTheFailure
+            }
+        }
+    }
 }
 
 struct ServicesStop(Ping);
@@ -108,9 +116,9 @@ pub(crate) fn watch_services_while<T>(
         if let Err(payload) = services_thread.join() {
             log::error!(
                 "the thread of the desktop services panicked with {} while the app ran, and the \
-                 app ran on without them; this is a defect in the desktop services, \
-                 {REPORT_THE_FAILURE}",
-                PanicValue::of(payload.as_ref())
+                 app ran on without them; this is a defect in the desktop services. {}",
+                PanicValue::of(payload.as_ref()),
+                NextStep::ReportTheFailure
             );
         }
         Ok(served)
@@ -147,9 +155,11 @@ fn start_watches(
 fn run_watches(mut event_loop: EventLoop<'static, LoopSignal>) {
     let mut signal = event_loop.get_signal();
     if let Err(error) = event_loop.run(None, &mut signal, |_| {}) {
+        let failure = EventLoopFailure::from(error);
         log::error!(
-            "the desktop services stop watching because their event loop failed: {}",
-            message_chain(error)
+            "the desktop services stop watching because their event loop failed: {}. {}",
+            message_chain(&failure),
+            failure.next_step()
         );
     }
 }

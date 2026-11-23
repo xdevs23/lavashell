@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::{FiniteDp, NonNegativeDp};
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::num::TryFromIntError;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,4 +24,13 @@ pub enum LayerLayoutError {
     ReserveExtent(#[source] TryFromIntError),
     #[error("the layer margin {0:?} does not fit the protocol")]
     Margin(FiniteDp),
+}
+
+impl NamesNextStep for LayerError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::NoLayerShell => NextStep::UseSupportingPlatform,
+            Self::Layout(_) | Self::PanelWithoutLayer(_) => NextStep::ReportTheFailure,
+        }
+    }
 }

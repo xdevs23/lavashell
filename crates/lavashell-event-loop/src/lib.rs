@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![forbid(unsafe_code)]
 
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::error::Error;
 use std::fmt;
 
@@ -32,6 +33,17 @@ impl fmt::Display for EventLoopFailure {
 impl Error for EventLoopFailure {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.0.source()
+    }
+}
+
+impl NamesNextStep for EventLoopFailure {
+    fn next_step(&self) -> NextStep {
+        match self.0 {
+            calloop::Error::InvalidToken => NextStep::ReportTheFailure,
+            calloop::Error::IoError(_) | calloop::Error::OtherError(_) => {
+                NextStep::FreeSystemResources
+            }
+        }
     }
 }
 

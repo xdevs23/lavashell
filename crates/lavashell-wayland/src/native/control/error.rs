@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::LayerLayoutError;
+use crate::error::next_step_after;
 use crate::sctk;
 use lavashell_core::geometry::{Rect, Size};
 use lavashell_core::units::NumberError;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use sctk::reexports::client::backend::WaylandError;
 use std::num::TryFromIntError;
 
@@ -20,4 +22,17 @@ pub enum ControlError {
     Layout(#[from] LayerLayoutError),
     #[error("the requests of a surface could not be sent to the compositor")]
     Flush(#[source] WaylandError),
+}
+
+impl NamesNextStep for ControlError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Flush(error) => next_step_after(error),
+            Self::BufferSize(_)
+            | Self::BufferScale(_)
+            | Self::Destination(_)
+            | Self::Region(_)
+            | Self::Layout(_) => NextStep::ReportTheFailure,
+        }
+    }
 }

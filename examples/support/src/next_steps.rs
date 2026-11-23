@@ -1,36 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{Error, FONT_DIRECTORY};
+use lavashell::error_chain::next_step::{NamesNextStep, NextStep};
 use std::fmt;
 
-pub enum NextStep {
+pub enum ExampleStep {
     EnterDevelopmentShell,
-    ProvideVulkanDriver,
-    StartInWaylandSession,
     CorrectOptions,
     ChooseWritableCapture,
     ChooseWritableFrameLog,
     SetHome,
     MakeCacheWritable,
-    ReportDefect,
+    Shared(NextStep),
 }
 
 pub trait ExampleError: std::error::Error {
-    fn next_step(&self) -> NextStep;
+    fn next_step(&self) -> ExampleStep;
 }
 
-impl fmt::Display for NextStep {
+impl<E: std::error::Error + NamesNextStep> ExampleError for E {
+    fn next_step(&self) -> ExampleStep {
+        NamesNextStep::next_step(self).into()
+    }
+}
+
+impl From<NextStep> for ExampleStep {
+    fn from(step: NextStep) -> Self {
+        Self::Shared(step)
+    }
+}
+
+impl fmt::Display for ExampleStep {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EnterDevelopmentShell => write!(
                 formatter,
                 "Run the example with `nix run` or inside `nix develop`, which set {FONT_DIRECTORY}."
             ),
-            Self::ProvideVulkanDriver => {
-                formatter.write_str("Install a Vulkan driver, then run the example again.")
-            }
-            Self::StartInWaylandSession => {
-                formatter.write_str("Start the example inside a Wayland session.")
-            }
             Self::CorrectOptions => {
                 formatter.write_str("Correct the options of the example, then run it again.")
             }
@@ -49,31 +54,29 @@ impl fmt::Display for NextStep {
                 "Make the cache directory in the message above writable and give it free space, \
                  then run the example again.",
             ),
-            Self::ReportDefect => formatter.write_str(
-                "The example is defective. Report this output to the developers of the project.",
-            ),
+            Self::Shared(step) => fmt::Display::fmt(step, formatter),
         }
     }
 }
 
 impl ExampleError for Error {
-    fn next_step(&self) -> NextStep {
+    fn next_step(&self) -> ExampleStep {
         match self {
-            Self::FontDirectory | Self::Fonts(_) => NextStep::EnterDevelopmentShell,
-            Self::App(_) => NextStep::StartInWaylandSession,
+            Self::FontDirectory | Self::Fonts(_) => ExampleStep::EnterDevelopmentShell,
+            Self::App(error) => ExampleError::next_step(error),
+            Self::Shaper(error) => ExampleError::next_step(error),
             Self::Number(_) | Self::TextScale | Self::Seconds(_) | Self::Length(_) => {
-                NextStep::CorrectOptions
+                ExampleStep::CorrectOptions
             }
             Self::CreateFrameLog(_) | Self::WriteFrameReport(_) | Self::FlushFrameLog(_) => {
-                NextStep::ChooseWritableFrameLog
+                ExampleStep::ChooseWritableFrameLog
             }
-            Self::Shaper(_)
-            | Self::Frame(_)
+            Self::Frame(_)
             | Self::ComponentsFailed(_)
             | Self::MissingControl(_)
             | Self::MissingNode { .. }
             | Self::Setup(_)
-            | Self::Icon(_) => NextStep::ReportDefect,
+            | Self::Icon(_) => NextStep::ReportTheFailure.into(),
         }
     }
 }

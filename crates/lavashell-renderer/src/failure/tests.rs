@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{DrawFailure, FailedDraw, Failures};
-use crate::error::{Error, SkslDiagnostic};
+use crate::error::Error;
 use crate::test_error::TestError;
 use lavashell_core::prelude::NumberError;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::{cell::RefCell, rc::Rc, sync::OnceLock};
 
 impl FailedDraw {
@@ -98,25 +99,35 @@ fn a_failed_draw_is_logged_with_its_cause() -> Result<(), TestError> {
 }
 
 #[test]
-fn a_failed_draw_shows_the_defect_notice_once_whether_or_not_its_cause_shows_it()
+fn a_logged_failure_ends_on_the_next_step_of_its_renderer_cause_or_else_its_own()
 -> Result<(), TestError> {
-    let compile = Error::CompileProgram {
-        program: "glass".to_owned(),
-        source: SkslDiagnostic(String::new()),
+    let failures = Failures::default();
+    let other_cause = std::io::Error::other("unreadable");
+    let records = recorded(|| {
+        failures.record(DrawFailure::GpuTimestamp);
+        failures.record_caused(DrawFailure::SubpixelText, &Error::SubpixelTileSize);
+        failures.record_caused(DrawFailure::Allocation, &other_cause);
+    })?;
+    let [
+        (_level_outside_this_test, uncaused),
+        (_level_outside_this_test_too, renderer_caused),
+        (_level_also_outside_this_test, other_caused),
+    ] = records.as_slice()
+    else {
+        return Err(TestError::Unexpected("three log records"));
     };
-    for cause in [compile, Error::DecodeImage] {
-        let failed = FailedDraw::caused(DrawFailure::ShaderRejected, Rc::new(cause));
-        let records = recorded(|| Failures::default().record(failed))?;
-        let [(_level_not_under_test, message)] = records.as_slice() else {
-            return Err(TestError::Unexpected("one log record"));
-        };
-        assert_eq!(
-            message
-                .matches("This is a defect in this build of the renderer")
-                .count(),
-            1,
-            "{message}"
-        );
-    }
+    let ends_on = |message: &str, step: NextStep| message.ends_with(&format!(". {step}"));
+    assert!(
+        ends_on(uncaused, DrawFailure::GpuTimestamp.next_step()),
+        "{uncaused}"
+    );
+    assert!(
+        ends_on(renderer_caused, Error::SubpixelTileSize.next_step()),
+        "{renderer_caused}"
+    );
+    assert!(
+        ends_on(other_caused, DrawFailure::Allocation.next_step()),
+        "{other_caused}"
+    );
     Ok(())
 }

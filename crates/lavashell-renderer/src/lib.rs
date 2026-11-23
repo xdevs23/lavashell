@@ -11,7 +11,6 @@ pub mod effect_registry;
 mod effects;
 mod error;
 mod failure;
-mod fault;
 mod field;
 mod fonts;
 mod gpu_timing;

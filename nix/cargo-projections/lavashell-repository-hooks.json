@@ -159,8 +159,15 @@
         "checksum": "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
       },
       {
-        "name": "lavashell-error-chain",
+        "name": "lavashell-enum-values",
         "version": "0.1.0"
+      },
+      {
+        "name": "lavashell-error-chain",
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-repository-hooks",
@@ -351,7 +358,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "116f4456398a892f5f411d8c69390dcf97d98e98a3e05de8bafa66762db6eb0d",
+        "seedHash": "7dd9f2bcfa06d3117ce7b3eb4f5c8db6890ce3b5a0b2b7b7c715752c1b7d53bb",
         "plan": {
           "schema": 1,
           "selection": {
@@ -374,12 +381,38 @@
             "workspace": {
               "resolver": "3",
               "members": [
+                "crates/lavashell-enum-values",
                 "crates/lavashell-error-chain",
                 "tools/repository-hooks"
               ]
             }
           },
           "crates": [
+            {
+              "member": "crates/lavashell-enum-values",
+              "manifest": {
+                "package": {
+                  "name": "lavashell-enum-values",
+                  "version": "0.0.0",
+                  "edition": "2024",
+                  "autobins": false,
+                  "autotests": false,
+                  "autoexamples": false,
+                  "autobenches": false,
+                  "build": false
+                },
+                "lib": {
+                  "path": "src/lib.rs"
+                },
+                "features": {}
+              },
+              "targets": [
+                {
+                  "path": "src/lib.rs",
+                  "main": false
+                }
+              ]
+            },
             {
               "member": "crates/lavashell-error-chain",
               "manifest": {
@@ -396,7 +429,15 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {}
+                "features": {},
+                "dependencies": {
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                }
               },
               "targets": [
                 {
@@ -608,8 +649,15 @@
                 "checksum": "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
               },
               {
-                "name": "lavashell-error-chain",
+                "name": "lavashell-enum-values",
                 "version": "0.0.0"
+              },
+              {
+                "name": "lavashell-error-chain",
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-enum-values"
+                ]
               },
               {
                 "name": "lavashell-repository-hooks",

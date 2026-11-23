@@ -3,6 +3,7 @@ use super::Drawn;
 use crate::Error;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::NumberError;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::convert::Infallible;
 
 #[derive(Debug, thiserror::Error)]
@@ -35,6 +36,26 @@ pub enum StateError {
     PublishScene(#[source] Error),
 }
 
+impl NamesNextStep for StateError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::CreateRenderer(error)
+            | Self::CreatePainter(error)
+            | Self::CreateProfiler(error)
+            | Self::CreateTarget(error)
+            | Self::SetHdrMetadata(error)
+            | Self::ReadContents(error)
+            | Self::ReleaseSceneImports(error)
+            | Self::SceneCompletion(error)
+            | Self::ProduceScene(error)
+            | Self::PublishScene(error) => error.next_step(),
+            Self::AttachedTwice(_) | Self::UnknownSurface(_) | Self::BufferSize(_) => {
+                NextStep::ReportTheFailure
+            }
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum StartError<S> {
     #[error(transparent)]
@@ -52,6 +73,15 @@ impl StartError<Infallible> {
     }
 }
 
+impl<S: NamesNextStep> NamesNextStep for StartError<S> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::State(error) => error.next_step(),
+            Self::Streams(error) => error.next_step(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum FrameError<C> {
     #[error(transparent)]
@@ -62,6 +92,17 @@ pub enum FrameError<C> {
     Paint(#[source] lavashell_renderer::Error),
     #[error("the platform could not prepare the present of a frame")]
     Control(#[source] C),
+}
+
+impl<C: NamesNextStep> NamesNextStep for FrameError<C> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::State(error) => error.next_step(),
+            Self::Draw(error) => error.next_step(),
+            Self::Paint(error) => error.next_step(),
+            Self::Control(error) => error.next_step(),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -103,10 +144,28 @@ impl<C, S> DrawError<C, S> {
     }
 }
 
+impl<C: NamesNextStep, S: NamesNextStep> NamesNextStep for DrawError<C, S> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Frame(frame) | Self::FrameAndStreams { frame, .. } => frame.next_step(),
+            Self::StreamsOfShownFrame { streams, .. } => streams.next_step(),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommitError<E> {
     #[error(transparent)]
     State(#[from] StateError),
     #[error("the platform could not commit the state of a surface")]
     Control(#[source] E),
+}
+
+impl<E: NamesNextStep> NamesNextStep for CommitError<E> {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::State(error) => error.next_step(),
+            Self::Control(error) => error.next_step(),
+        }
+    }
 }

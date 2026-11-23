@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::error::next_step_after;
 use crate::sctk;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_event_loop::EventLoopFailure;
 use sctk::reexports::client::ConnectError;
 use sctk::reexports::client::backend::WaylandError;
@@ -27,4 +29,26 @@ pub enum EventLoopError {
     WatchConnection(#[source] EventLoopFailure),
     #[error("the event loop failed to dispatch")]
     DispatchEvents(#[source] EventLoopFailure),
+}
+
+impl NamesNextStep for ConnectionError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Connect(_) => NextStep::StartInDesktopSession,
+            Self::ReadGlobals(GlobalError::Backend(error)) | Self::Flush(error) => {
+                next_step_after(error)
+            }
+            Self::ReadGlobals(GlobalError::InvalidId(_)) => NextStep::ReportTheFailure,
+            Self::BindShm(_) | Self::BindCompositor(_) => NextStep::UseSupportingPlatform,
+        }
+    }
+}
+
+impl NamesNextStep for EventLoopError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::CreateEventLoop(failure) | Self::WatchConnection(failure) => failure.next_step(),
+            Self::DispatchEvents(_) => NextStep::StartInDesktopSession,
+        }
+    }
 }

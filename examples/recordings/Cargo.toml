@@ -12,7 +12,6 @@ workspace = true
 [dependencies]
 clap.workspace = true
 lavashell.workspace = true
-lavashell-actor.workspace = true
 lavashell-example-support.workspace = true
 lavashell-materials-example.workspace = true
 lavashell-music-player.workspace = true

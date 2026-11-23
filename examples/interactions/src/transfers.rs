@@ -10,7 +10,7 @@ use crate::{
 };
 use lavashell::prelude::*;
 use lavashell::renderer::encoded_image;
-use lavashell_example_support::report;
+use lavashell_example_support::{ExampleError, report};
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 const SOURCES: [(CopyKey, Source); 3] = [
@@ -103,7 +103,7 @@ fn accept(info: &DragOfferInfo) -> Option<DropAcceptance> {
     })
 }
 
-fn receipt(result: Result<ReceivedData, impl std::error::Error>) -> Receipt {
+fn receipt(result: Result<ReceivedData, impl ExampleError>) -> Receipt {
     match result {
         Ok(data) => match preview(&data) {
             Ok(preview) => Receipt::Accepted {

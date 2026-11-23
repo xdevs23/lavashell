@@ -629,6 +629,7 @@
         "dependencies": [
           "icu_locale_core",
           "lavashell-enum-values",
+          "lavashell-error-chain",
           "num-traits",
           "palette",
           "postcard",
@@ -652,7 +653,10 @@
       },
       {
         "name": "lavashell-error-chain",
-        "version": "0.1.0"
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-platform",
@@ -663,6 +667,7 @@
           "lavashell-actor",
           "lavashell-core",
           "lavashell-enum-values",
+          "lavashell-error-chain",
           "lavashell-renderer",
           "thiserror"
         ]
@@ -726,6 +731,7 @@
         "dependencies": [
           "lavashell-actor",
           "lavashell-core",
+          "lavashell-error-chain",
           "lavashell-platform",
           "lavashell-renderer",
           "lavashell-runtime",
@@ -741,6 +747,7 @@
         "dependencies": [
           "ash",
           "lavashell-actor",
+          "lavashell-error-chain",
           "log",
           "thiserror"
         ]
@@ -1564,7 +1571,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "49adf2adab867e064ec67a7fb33935cd687ee9a26983a0577dcd586d41836e72",
+        "seedHash": "2f89a339233376d31ff640de9d3089e8d1f1807c8f330870a298f109478f6bba",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1682,6 +1689,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
                   },
                   "num-traits": {
                     "package": "num-traits",
@@ -1802,7 +1815,15 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {}
+                "features": {},
+                "dependencies": {
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                }
               },
               "targets": [
                 {
@@ -1860,6 +1881,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-enum-values"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
                   },
                   "lavashell-renderer": {
                     "package": "lavashell-renderer",
@@ -2036,6 +2063,12 @@
                     "features": [],
                     "path": "../lavashell-core"
                   },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
+                  },
                   "lavashell-platform": {
                     "package": "lavashell-platform",
                     "default-features": false,
@@ -2114,6 +2147,12 @@
                     "default-features": false,
                     "features": [],
                     "path": "../lavashell-actor"
+                  },
+                  "lavashell-error-chain": {
+                    "package": "lavashell-error-chain",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-error-chain"
                   },
                   "log": {
                     "package": "log",
@@ -2525,6 +2564,7 @@
                 "dependencies": [
                   "icu_locale_core",
                   "lavashell-enum-values",
+                  "lavashell-error-chain",
                   "num-traits",
                   "palette",
                   "thiserror",
@@ -2544,7 +2584,10 @@
               },
               {
                 "name": "lavashell-error-chain",
-                "version": "0.0.0"
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-enum-values"
+                ]
               },
               {
                 "name": "lavashell-platform",
@@ -2555,6 +2598,7 @@
                   "lavashell-actor",
                   "lavashell-core",
                   "lavashell-enum-values",
+                  "lavashell-error-chain",
                   "lavashell-renderer",
                   "thiserror"
                 ]
@@ -2582,6 +2626,7 @@
                 "dependencies": [
                   "lavashell-actor",
                   "lavashell-core",
+                  "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
                   "lavashell-vulkan",
@@ -2595,6 +2640,7 @@
                 "dependencies": [
                   "ash",
                   "lavashell-actor",
+                  "lavashell-error-chain",
                   "log",
                   "thiserror"
                 ]

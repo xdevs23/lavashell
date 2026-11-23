@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::Error;
-use crate::fault::{DefectNotice, Fault};
 use crate::paint::StreamRejection;
 use lavashell_error_chain::message_chain;
-use lavashell_error_chain::next_step::REPORT_THE_FAILURE;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::{cell::RefCell, collections::BTreeMap, fmt, rc::Rc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,12 +28,22 @@ pub enum DrawFailure {
     NumberRange,
 }
 
-impl DrawFailure {
-    pub(crate) fn fault(self) -> Fault {
+impl NamesNextStep for DrawFailure {
+    fn next_step(&self) -> NextStep {
         match self {
-            Self::ColorSpace | Self::TileSize | Self::ShaderRejected => Fault::DefectInThisBuild,
-            Self::Allocation
-            | Self::SurfaceRead
+            Self::Allocation | Self::StreamRejected(StreamRejection::ImportFailed) => {
+                NextStep::FreeGpuMemory
+            }
+            Self::StreamRejected(
+                StreamRejection::TooLarge
+                | StreamRejection::UnusableBuffer
+                | StreamRejection::BufferFormat(_)
+                | StreamRejection::CropOutside,
+            ) => NextStep::ChangeTheStreamProducer,
+            Self::GpuTimestamp => NextStep::UpdateGraphicsDriver,
+            Self::SubpixelText => NextStep::FreeSystemResources,
+            Self::ColorSpace | Self::TileSize | Self::ShaderRejected => NextStep::ReportTheFailure,
+            Self::SurfaceRead
             | Self::LensWithoutSurface
             | Self::UnbalancedRestore
             | Self::ImageSize
@@ -42,93 +51,79 @@ impl DrawFailure {
             | Self::ImagePixels
             | Self::StreamUnbound
             | Self::StreamStale
-            | Self::StreamRejected(_)
-            | Self::GpuTimestamp
             | Self::SingularTransform
             | Self::OutlineLength
-            | Self::SubpixelText
-            | Self::NumberRange => Fault::OutsideThisBuild,
+            | Self::NumberRange => NextStep::ChangeTheScene,
         }
     }
+}
 
-    fn write_fact(self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Display for DrawFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::Allocation => {
-                "cannot allocate an offscreen texture, so shapes that need one are left out; \
-                 free GPU memory or lower the window size"
+                "cannot allocate an offscreen texture, so the renderer leaves out shapes that need one"
             }
             Self::SurfaceRead => {
-                "cannot read the surface below glass, so the glass is left out; \
-                 paint glass onto a surface"
+                "cannot read the surface below glass, so the renderer leaves out the glass"
             }
             Self::LensWithoutSurface => {
                 "glass on a union or a long contour cannot read the surface inside an \
                  opacity group, a content filter or encoded-sRGB blending, or under rotation \
-                 or skew, so it blurs and tints without its lens; paint that glass straight \
-                 onto the surface, unrotated"
+                 or skew, so it blurs and tints without its lens"
             }
             Self::UnbalancedRestore => {
-                "a command list restores more often than it saves, so the leaf is left out or \
-                 the extra restore is ignored; pair each restore with a save, an opacity group \
-                 or an effect layer"
+                "a command list restores more often than it saves, so the renderer leaves out the \
+                 leaf or ignores the extra restore"
             }
             Self::ImageSize => {
-                "an image declares another size than its decoded pixels, so it is left out; \
-                 give Image::encoded the width and height of the decoded image"
+                "an image declares another size than its decoded pixels, so the renderer leaves out \
+                 the image"
             }
             Self::ImageUndecodable => {
-                "an image has encoded bytes that Skia cannot decode, so it is left out; give \
-                 Image::encoded the bytes of an image in a format that Skia decodes"
+                "an image has encoded bytes that Skia cannot decode, so the renderer leaves out the \
+                 image"
             }
             Self::ImagePixels => {
-                "an image has more pixels than the largest image that the GPU holds, so it is not \
-                 decoded and is left out; give Image::encoded a smaller image"
+                "an image has more pixels than the largest image that the GPU supports, so the \
+                 renderer does not decode it and leaves it out"
             }
             Self::StreamUnbound => {
-                "a stream image is painted without a frame bound for the stream of the image, so \
-                 the image is left out; bind the frame of every stream drawn by the commands \
-                 before painting them"
+                "the program paints a stream image without a frame bound for the stream that the \
+                 image shows, so the renderer leaves out the image"
             }
             Self::StreamStale => {
                 "a stream image belongs to another frame than the frame bound for the stream, so \
-                 it is left out; draw the stream image of the frame that was bound last"
+                 the renderer leaves out the image"
             }
             Self::StreamRejected(rejection) => return fmt::Display::fmt(&rejection, f),
             Self::GpuTimestamp => {
-                return write!(
-                    f,
-                    "cannot write or read a GPU timestamp, so the GPU time of a frame or an effect \
-                     is not measured; update the graphics driver, or {REPORT_THE_FAILURE}"
-                );
+                "cannot write or read a GPU timestamp, so the renderer does not measure the GPU time \
+                 spent on a frame or an effect"
             }
             Self::ColorSpace => {
                 "Skia cannot build the working color space, so the renderer paints retained layers \
                  again on every frame instead of caching them"
             }
             Self::SingularTransform => {
-                "glass is drawn under a transform that scales it to almost nothing, so the \
-                 transform cannot be inverted and the glass is left out; draw the glass at a \
-                 visible scale"
+                "a transform that scales glass to almost nothing cannot be inverted, so the renderer \
+                 leaves out the glass"
             }
             Self::OutlineLength => {
-                "a contour has more segments than a shader float counts exactly, so it is left out; \
-                 draw it as several shorter contours"
+                "a contour has more segments than a shader float counts exactly, so the renderer \
+                 leaves out the contour"
             }
             Self::TileSize => {
                 "a raster tile is empty or has more bytes than the GPU context's resource cache \
                  allows, so the renderer leaves out the shape that needs it"
             }
             Self::SubpixelText => {
-                return write!(
-                    f,
-                    "subpixel text cannot be rasterized as subpixel coverage, so it is drawn with \
-                     the ordinary text rendering; free memory, or {REPORT_THE_FAILURE}"
-                );
+                "subpixel text cannot be rasterized as subpixel coverage, so the renderer draws it \
+                 with the ordinary text rendering"
             }
             Self::NumberRange => {
                 "a length, a color or another number of a draw lies beyond the range of the \
-                 floats that Skia and the GPU take, so the draw is left out; keep the numbers of \
-                 the scene within that range"
+                 floats that Skia and the GPU use, so the renderer leaves out the draw"
             }
             Self::ShaderRejected => {
                 "Skia rejects a shader that the renderer builds, so the renderer leaves out the \
@@ -136,21 +131,6 @@ impl DrawFailure {
             }
         };
         f.write_str(message)
-    }
-
-    fn write_with_notice(self, f: &mut fmt::Formatter<'_>, cause: Option<&Error>) -> fmt::Result {
-        self.write_fact(f)?;
-        let notice_in_cause = cause.map(Error::fault) == Some(Fault::DefectInThisBuild);
-        if self.fault() == Fault::DefectInThisBuild && !notice_in_cause {
-            write!(f, ". {DefectNotice}")?;
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for DrawFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.write_with_notice(f, None)
     }
 }
 
@@ -178,7 +158,7 @@ impl FailedDraw {
 
 impl fmt::Display for FailedDraw {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.failure.write_with_notice(f, self.cause.as_deref())
+        fmt::Display::fmt(&self.failure, f)
     }
 }
 
@@ -205,25 +185,32 @@ pub(crate) struct Failures(Rc<RefCell<BTreeMap<DrawFailure, u64>>>);
 impl Failures {
     pub fn record(&self, failed: impl Into<FailedDraw>) {
         let FailedDraw { failure, cause } = failed.into();
-        if let Some(cause) = cause {
-            self.record_caused(failure, &*cause);
-        } else if let Some(count) = self.count_logged(failure) {
-            log::warn!(
-                "{failure} (recorded {count} times since the renderer started; logged each time the \
-                 count doubles)"
-            );
-        }
+        self.log(
+            failure,
+            cause
+                .as_deref()
+                .map(|cause| cause as &(dyn std::error::Error + 'static)),
+        );
     }
 
     pub fn record_caused(&self, failure: DrawFailure, cause: &(dyn std::error::Error + 'static)) {
-        if let Some(count) = self.count_logged(failure) {
-            let failure = fmt::from_fn(|f| failure.write_with_notice(f, cause.downcast_ref()));
-            let cause = message_chain(cause);
-            log::warn!(
-                "{failure}; the cause this time: {cause} (recorded {count} times since the renderer \
-                 started; logged each time the count doubles)"
-            );
-        }
+        self.log(failure, Some(cause));
+    }
+
+    fn log(&self, failure: DrawFailure, cause: Option<&(dyn std::error::Error + 'static)>) {
+        let Some(count) = self.count_logged(failure) else {
+            return;
+        };
+        let next_step = (cause.and_then(<dyn std::error::Error>::downcast_ref::<Error>))
+            .map_or(failure.next_step(), Error::next_step);
+        let cause = fmt::from_fn(|f| match cause {
+            Some(cause) => write!(f, "; the cause this time: {}", message_chain(cause)),
+            None => Ok(()),
+        });
+        log::warn!(
+            "{failure}{cause} (recorded {count} times since the renderer started; the renderer logs \
+             it each time the count doubles). {next_step}"
+        );
     }
 
     fn count_logged(&self, failure: DrawFailure) -> Option<u64> {

@@ -10,11 +10,12 @@ use lavashell_core::frame::{FrameReport, FrameStage, FrameTime, PresentationFlag
 use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::DpExt;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{
     OutputEvent, OutputId, PlatformEvent, SurfaceEvent, SurfaceRequest, TimingEvent,
 };
 use lavashell_vulkan_renderer::vulkan::{PendingScene, SceneSource, VulkanRenderer};
-use lavashell_vulkan_renderer::{DrawError, FrameError, HeadlessBackend, StateError};
+use lavashell_vulkan_renderer::{DrawError, FrameError, HeadlessBackend, StartError, StateError};
 use std::cell::Cell;
 use std::panic::resume_unwind;
 use std::rc::Rc;
@@ -303,4 +304,49 @@ fn frame_reports_reach_the_frame_observer_on_the_thread_of_the_views() -> TestRe
     ];
     assert_eq!(reports.iter().collect::<Vec<_>>(), expected);
     Ok(())
+}
+
+impl NamesNextStep for StandInError {
+    fn next_step(&self) -> NextStep {
+        NextStep::FreeGpuMemory
+    }
+}
+
+#[test]
+fn a_run_error_passes_up_the_next_step_of_the_platform_or_the_renderer_error_it_wraps() {
+    let platform = StandInError::Failed;
+    let step = platform.next_step();
+    assert_eq!(RunError::<StandIn>::Platform(platform).next_step(), step);
+    let shaper = lavashell_renderer::Error::SubpixelTileSize;
+    let step = shaper.next_step();
+    assert_eq!(RunError::<StandIn>::CreateShaper(shaper).next_step(), step);
+}
+
+#[test]
+fn a_renderer_failure_takes_the_next_step_of_the_renderer_error_it_wraps() {
+    let painter = lavashell_renderer::Error::SubpixelTileSize;
+    let step = painter.next_step();
+    let started = StartError::State(StateError::CreatePainter(
+        lavashell_vulkan_renderer::Error::CreatePainter(painter),
+    ));
+    let failed =
+        RunError::<StandIn>::StartRenderer(SpawnError::Start(RendererError::Start(started)));
+    assert_eq!(failed.next_step(), step);
+}
+
+#[test]
+fn a_renderer_that_draws_a_surface_it_does_not_know_asks_for_a_report() {
+    let failed = RunError::<StandIn>::RunRenderer(JoinError::Failed(RendererError::Draw(
+        DrawError::Frame(FrameError::State(StateError::UnknownSurface(WINDOW))),
+    )));
+    assert_eq!(failed.next_step(), NextStep::ReportTheFailure);
+}
+
+#[test]
+fn a_scene_pipeline_without_a_thread_asks_to_free_system_resources() {
+    let failed =
+        RunError::<StandIn>::SceneFailed(Arc::new(scene_pipeline::Error::StartChoreographer(
+            SpawnError::Thread(std::io::Error::from_raw_os_error(11)),
+        )));
+    assert_eq!(failed.next_step(), NextStep::FreeSystemResources);
 }

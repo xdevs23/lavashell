@@ -15,6 +15,7 @@ icu_locale_core.workspace = true
 lavashell-actor.workspace = true
 lavashell-core.workspace = true
 lavashell-enum-values.workspace = true
+lavashell-error-chain.workspace = true
 lavashell-renderer.workspace = true
 thiserror.workspace = true
 

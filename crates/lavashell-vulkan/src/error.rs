@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::SwapchainProperty;
 use ash::vk;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::ffi::{CStr, FromBytesUntilNulError};
 use std::num::TryFromIntError;
 use std::str::Utf8Error;
@@ -135,3 +136,94 @@ pub enum Error {
     #[error("cannot present a swapchain image")]
     Present(#[source] vk::Result),
 }
+
+impl NamesNextStep for Error {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::InstanceExtensions(result)
+            | Self::CreateInstance(result)
+            | Self::PhysicalDevices(result)
+            | Self::DeviceExtensions(result)
+            | Self::CreateDevice(result)
+            | Self::WaitIdle(result)
+            | Self::CreateFence(result)
+            | Self::FenceStatus(result)
+            | Self::WaitFence(result)
+            | Self::CreateSemaphore(result)
+            | Self::ExportSemaphore(result)
+            | Self::Submit(result)
+            | Self::CreateCommandPool(result)
+            | Self::AllocateCommandBuffer(result)
+            | Self::ResetCommandPool(result)
+            | Self::BeginCommands(result)
+            | Self::EndCommands(result)
+            | Self::ImageSupport(result)
+            | Self::CreateImage(result)
+            | Self::AllocateMemory(result)
+            | Self::BindMemory(result)
+            | Self::ExportMemory(result)
+            | Self::CreateQueryPool(result)
+            | Self::QueryResults(result)
+            | Self::CreateSurface(result)
+            | Self::SurfaceSupport(result)
+            | Self::SurfaceCapabilities(result)
+            | Self::SurfaceFormats(result)
+            | Self::SurfacePresentModes(result)
+            | Self::CreateSwapchain(result)
+            | Self::SwapchainImages(result)
+            | Self::Acquire(result)
+            | Self::Present(result) => next_step_after(*result),
+            Self::DuplicateDescriptor(_) => NextStep::FreeSystemResources,
+            Self::DeviceName(_)
+            | Self::DeviceNameEncoding(_)
+            | Self::ApiVersion { .. }
+            | Self::MissingExtension(_)
+            | Self::MissingYcbcrConversion
+            | Self::MissingSwapchainMaintenance
+            | Self::NoCommandBuffer
+            | Self::DeviceCannotShare
+            | Self::NoMemoryType
+            | Self::MemoryWithoutDescriptor
+            | Self::NoTimestamps
+            | Self::TimestampPeriod(_)
+            | Self::SurfacePresentation
+            | Self::SwapchainRequest(_) => NextStep::UpdateGraphicsDriver,
+            Self::QueueFamily(_)
+            | Self::UnknownImageState
+            | Self::TargetLayout(_)
+            | Self::ExternalTransition
+            | Self::ClearLayout(_)
+            | Self::ForeignObject
+            | Self::ImageExtent
+            | Self::DifferentDevice
+            | Self::ExportedMemoryMismatch
+            | Self::TimestampDuration(_)
+            | Self::DestroyedWindow
+            | Self::PresentTime(_) => NextStep::ReportTheFailure,
+        }
+    }
+}
+
+fn next_step_after(result: vk::Result) -> NextStep {
+    match result {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_TOO_MANY_OBJECTS => {
+            NextStep::FreeSystemResources
+        }
+        vk::Result::ERROR_OUT_OF_DEVICE_MEMORY
+        | vk::Result::ERROR_OUT_OF_POOL_MEMORY
+        | vk::Result::ERROR_FRAGMENTED_POOL
+        | vk::Result::ERROR_FRAGMENTATION => NextStep::FreeGpuMemory,
+        vk::Result::ERROR_INITIALIZATION_FAILED
+        | vk::Result::ERROR_DEVICE_LOST
+        | vk::Result::ERROR_INCOMPATIBLE_DRIVER
+        | vk::Result::ERROR_LAYER_NOT_PRESENT
+        | vk::Result::ERROR_EXTENSION_NOT_PRESENT
+        | vk::Result::ERROR_FEATURE_NOT_PRESENT
+        | vk::Result::ERROR_FORMAT_NOT_SUPPORTED => NextStep::UpdateGraphicsDriver,
+        vk::Result::ERROR_SURFACE_LOST_KHR => NextStep::StartInDesktopSession,
+        _ => NextStep::ReportTheFailure,
+    }
+}
+
+#[cfg(test)]
+mod tests;

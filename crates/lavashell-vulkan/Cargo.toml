@@ -12,5 +12,6 @@ workspace = true
 [dependencies]
 ash = { workspace = true, features = ["debug"] }
 lavashell-actor.workspace = true
+lavashell-error-chain.workspace = true
 log.workspace = true
 thiserror.workspace = true

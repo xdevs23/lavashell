@@ -6,6 +6,7 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::transfer::{
     Cancellation, DragAction, DragActions, DragOfferInfo, DropAcceptance, TransferId,
 };
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::io;
 use std::os::fd::OwnedFd;
 
@@ -29,12 +30,31 @@ pub enum DragRefusal {
     SurfaceClosed,
 }
 
+impl NamesNextStep for DragRefusal {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Unavailable | Self::CompletionUnavailable => NextStep::UseSupportingPlatform,
+            Self::InputDeviceGone | Self::SurfaceClosed => NextStep::RepeatTheTransfer,
+            Self::NoPress => NextStep::ReportTheFailure,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DragReceiveRefusal {
     #[error("the platform does not know the dropped drag")]
     UnknownOffer,
     #[error("the pipe could not be made")]
     Pipe(#[source] io::Error),
+}
+
+impl NamesNextStep for DragReceiveRefusal {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::UnknownOffer => NextStep::ReportTheFailure,
+            Self::Pipe(_) => NextStep::FreeSystemResources,
+        }
+    }
 }
 
 #[derive(Debug)]

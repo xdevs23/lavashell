@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::failure::DrawFailure;
-use crate::fault::{DefectNotice, Fault};
 use crate::fonts::RegisteredFont;
 use lavashell_core::prelude::NumberError;
 use lavashell_core::scene::FontWeight;
 use lavashell_effect_quality::EffectId;
 use lavashell_error_chain::InOrder;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use skia_safe::gpu::DirectContextId;
 use std::collections::BTreeMap;
 use std::num::TryFromIntError;
 use std::path::PathBuf;
-
-const FONT_NEXT_STEP: &str = "register a different TrueType or OpenType font file under that alias";
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -25,11 +23,11 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    #[error("cannot decode the {font}; {}", FONT_NEXT_STEP)]
+    #[error("cannot decode the {font}")]
     DecodeFont { font: RegisteredFont },
-    #[error("cannot read the variation axes of the {font}; {}", FONT_NEXT_STEP)]
+    #[error("cannot read the variation axes of the {font}")]
     ReadFontAxes { font: RegisteredFont },
-    #[error("cannot instantiate the {font} at weight {}; {}", .weight.get(), FONT_NEXT_STEP)]
+    #[error("cannot instantiate the {font} at weight {}", .weight.get())]
     InstantiateFont {
         font: RegisteredFont,
         weight: FontWeight,
@@ -38,14 +36,14 @@ pub enum Error {
     DuplicateFontAlias(String),
     #[error("the font alias {alias} is registered with an empty list of font files")]
     NoFontFiles { alias: String },
-    #[error("cannot compile the {program} program. {DefectNotice}")]
+    #[error("cannot compile the {program} program")]
     CompileProgram {
         program: String,
         #[source]
         source: SkslDiagnostic,
     },
     #[error(
-        "the {program} program declares the uniforms {declared:?} where the renderer writes {expected:?}. {DefectNotice}"
+        "the {program} program declares the uniforms {declared:?} where the renderer writes {expected:?}"
     )]
     ProgramUniforms {
         program: String,
@@ -53,7 +51,7 @@ pub enum Error {
         expected: BTreeMap<String, usize>,
     },
     #[error(
-        "the {program} program declares the children {declared:?} where the renderer passes {expected:?}. {DefectNotice}"
+        "the {program} program declares the children {declared:?} where the renderer passes {expected:?}"
     )]
     ProgramChildren {
         program: String,
@@ -61,16 +59,14 @@ pub enum Error {
         expected: Vec<String>,
     },
     #[error(
-        "Skia finds no uniform {name} in the {program} program although the program declares it. {DefectNotice}"
+        "Skia finds no uniform {name} in the {program} program although the program declares it"
     )]
     MissingUniform { program: String, name: String },
-    #[error(
-        "Skia finds no child {name} in the {program} program although the program declares it. {DefectNotice}"
-    )]
+    #[error("Skia finds no child {name} in the {program} program although the program declares it")]
     MissingChild { program: String, name: &'static str },
     #[error(
-        "the uniform range of the device leaves the {program} program no room for its geometry; use a device with \
-         a larger maxUniformBufferRange"
+        "the uniform range of the device leaves the {program} program no room for the geometry it \
+         draws"
     )]
     NoUniformRoom { program: String },
     #[error("the uniform range of the device lies beyond the address space of this platform")]
@@ -81,7 +77,7 @@ pub enum Error {
         #[source]
         source: TryFromIntError,
     },
-    #[error("the {effect} effect of subpixel text does not compile. {DefectNotice}")]
+    #[error("the {effect} effect of subpixel text does not compile")]
     CompileSubpixelEffect {
         effect: &'static str,
         #[source]
@@ -91,7 +87,7 @@ pub enum Error {
     SubpixelTile,
     #[error(
         "the coverage tile of subpixel text is empty or has more bytes than the resource cache allows, although \
-         the renderer sized it to fit. {DefectNotice}"
+         the renderer sized it to fit"
     )]
     SubpixelTileSize,
     #[error("Skia cannot sample the coverage mask of subpixel text")]
@@ -159,27 +155,52 @@ pub enum Error {
     Several(Vec<Error>),
 }
 
-impl Error {
-    pub(crate) fn fault(&self) -> Fault {
+impl NamesNextStep for Error {
+    fn next_step(&self) -> NextStep {
         match self {
-            Self::CompileProgram { .. }
+            Self::ReadFont { .. }
+            | Self::DecodeFont { .. }
+            | Self::ReadFontAxes { .. }
+            | Self::InstantiateFont { .. } => NextStep::ReplaceTheFontFile,
+            Self::NoUniformRoom { .. } | Self::UniformRangeSize(_) => {
+                NextStep::UseSupportingPlatform
+            }
+            Self::SubpixelTile | Self::RasterSurface | Self::PngSurface => NextStep::FreeGpuMemory,
+            Self::DecodeImage
+            | Self::ReadImageHeader
+            | Self::TexelCount(_)
+            | Self::TexelSide(_)
+            | Self::ShaderCount { .. }
+            | Self::InexactShaderCount(_) => NextStep::ChangeTheScene,
+            Self::SubpixelBlendTolerance(failure)
+            | Self::ShaderCountRange {
+                source: failure, ..
+            }
+            | Self::OutputTransform(failure) => failure.next_step(),
+            Self::DuplicateFontAlias(_)
+            | Self::NoFontFiles { .. }
+            | Self::CompileProgram { .. }
             | Self::ProgramUniforms { .. }
             | Self::ProgramChildren { .. }
             | Self::MissingUniform { .. }
             | Self::MissingChild { .. }
+            | Self::UniformCount { .. }
             | Self::CompileSubpixelEffect { .. }
-            | Self::SubpixelTileSize => Fault::DefectInThisBuild,
-            Self::Several(failures) => {
-                if failures
-                    .iter()
-                    .any(|failure| failure.fault() == Fault::DefectInThisBuild)
-                {
-                    Fault::DefectInThisBuild
-                } else {
-                    Fault::OutsideThisBuild
-                }
-            }
-            _ => Fault::OutsideThisBuild,
+            | Self::SubpixelTileSize
+            | Self::SubpixelMask
+            | Self::SubpixelBlender
+            | Self::SubpixelColorType
+            | Self::SceneOfAnotherRenderer { .. }
+            | Self::DuplicateEffect(_)
+            | Self::DuplicateTextRasterizer(_)
+            | Self::NumberImageSurface(_)
+            | Self::DecodedImageSize(_)
+            | Self::ImageHeaderSize(_)
+            | Self::RasterSize { .. }
+            | Self::WorkingColorSpace
+            | Self::EncodePng
+            | Self::ReadPixels => NextStep::ReportTheFailure,
+            Self::Several(failures) => failures.next_step(),
         }
     }
 }
@@ -255,5 +276,21 @@ mod tests {
             [Error::ReadPixels, Error::EncodePng, Error::PngSurface]
         ));
         Ok(())
+    }
+
+    #[test]
+    fn several_errors_take_the_next_step_of_their_failures() {
+        let failures = vec![Error::RasterSurface, Error::SubpixelTileSize];
+        let step = failures.next_step();
+        assert_eq!(Error::Several(failures).next_step(), step);
+    }
+
+    #[test]
+    fn an_error_that_wraps_a_draw_failure_takes_the_next_step_of_the_draw_failure() {
+        let wrapped = DrawFailure::NumberRange;
+        assert_eq!(
+            Error::OutputTransform(wrapped).next_step(),
+            wrapped.next_step()
+        );
     }
 }

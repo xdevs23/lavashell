@@ -5,6 +5,7 @@ use lavashell_actor::Closed;
 use lavashell_core::shape::PointsError;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::FrameError;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Stopped {
@@ -46,6 +47,25 @@ pub enum ViewError {
     ShapeGeometry(#[from] ShapeGeometryError),
     #[error("surface {0:?} is not open")]
     SurfaceNotOpen(SurfaceId),
+}
+
+impl NamesNextStep for ViewError {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::ScenePipeline(error) => error.next_step(),
+            Self::DeadlineReceiver(_)
+            | Self::FocusGrab(_)
+            | Self::Panels(_)
+            | Self::SchedulerActor(_)
+            | Self::SessionLock(_)
+            | Self::SurfaceRecords(_)
+            | Self::ShowScene(_)
+            | Self::Stopped(_)
+            | Self::ShapeContour(_)
+            | Self::ShapeGeometry(_)
+            | Self::SurfaceNotOpen(_) => NextStep::ReportTheFailure,
+        }
+    }
 }
 
 impl From<RendererStopped> for ViewError {

@@ -73,7 +73,7 @@ impl ChildWindow {
                 self.open.set_if_changed(false);
             }
             Ok(None) => {}
-            Err(error) => report("shaped child status", error),
+            Err(error) => report("shaped child status", Error::ChildStatus(error)),
         }
     }
 
@@ -89,10 +89,10 @@ impl ChildWindow {
 
 fn stop(mut child: Child) {
     if let Err(error) = child.kill() {
-        report("shaped child termination", error);
+        report("shaped child termination", Error::EndChild(error));
     }
     if let Err(error) = child.wait() {
-        report("shaped child reap", error);
+        report("shaped child reap", Error::ReapChild(error));
     }
 }
 

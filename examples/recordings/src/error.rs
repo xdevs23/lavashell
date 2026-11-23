@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use lavashell::PlatformRunError;
-use lavashell::vulkan_renderer::{StartError, StateError};
-use lavashell_actor::SpawnError;
-use lavashell_example_support::{ExampleError, NextStep};
-use lavashell_runtime::RendererError;
+use lavashell::error_chain::next_step::NextStep;
+use lavashell_example_support::{ExampleError, ExampleStep};
 use lavashell_test_platform::TestPlatform;
 use std::path::PathBuf;
 use std::time::TryFromFloatSecsError;
@@ -57,32 +55,26 @@ pub enum Error {
 }
 
 impl ExampleError for Error {
-    fn next_step(&self) -> NextStep {
+    fn next_step(&self) -> ExampleStep {
         match self {
             Self::Example(error) => error.next_step(),
             Self::Keyboard(error) => error.next_step(),
             Self::Taskbar(error) => error.next_step(),
             Self::Materials(error) => error.next_step(),
             Self::MusicPlayer(error) => error.next_step(),
-            Self::Record(PlatformRunError::StartRenderer(SpawnError::Start(
-                RendererError::Start(StartError::State(StateError::CreateRenderer(_))),
-            ))) => NextStep::ProvideVulkanDriver,
+            Self::Record(error) => error.next_step(),
             Self::FrameRateNotPositive { .. } | Self::FrameRateAboveOnePerNanosecond { .. } => {
-                NextStep::CorrectOptions
+                ExampleStep::CorrectOptions
             }
             Self::CreateDirectory { .. } | Self::WriteCapture { .. } => {
-                NextStep::ChooseWritableCapture
+                ExampleStep::ChooseWritableCapture
             }
-            Self::Record(_)
-            | Self::NotServed(_)
+            Self::NotServed(_)
             | Self::UnplayedSteps(_)
             | Self::Press(_)
             | Self::UnreadDelay
             | Self::MissingField
-            | Self::NothingShown { .. } => NextStep::ReportDefect,
+            | Self::NothingShown { .. } => NextStep::ReportTheFailure.into(),
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

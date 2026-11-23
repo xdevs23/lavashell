@@ -13,6 +13,12 @@ use std::sync::Arc;
 #[error("the stand-in display fails")]
 struct DisplayFailed;
 
+impl NamesNextStep for DisplayFailed {
+    fn next_step(&self) -> NextStep {
+        NextStep::UseSupportingPlatform
+    }
+}
+
 struct NoControl;
 
 impl SurfaceControl for NoControl {
@@ -117,6 +123,19 @@ fn serve_fails_when_the_desktop_services_cannot_start() {
             }
         )) if text == "the service panics while its watches start"
     ));
+}
+
+#[test]
+fn a_display_failure_and_a_services_failure_each_pass_their_own_step_up() {
+    assert_eq!(
+        DesktopPlatformError::Display(DisplayFailed).next_step(),
+        DisplayFailed.next_step()
+    );
+    let failure = ServicesStartError::CreateStop(std::io::Error::from_raw_os_error(24));
+    let step = failure.next_step();
+    let services: DesktopPlatformError<DisplayFailed> =
+        DesktopPlatformError::StartServices(failure);
+    assert_eq!(services.next_step(), step);
 }
 
 #[test]

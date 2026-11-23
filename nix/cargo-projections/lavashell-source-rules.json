@@ -309,7 +309,10 @@
       },
       {
         "name": "lavashell-error-chain",
-        "version": "0.1.0"
+        "version": "0.1.0",
+        "dependencies": [
+          "lavashell-enum-values"
+        ]
       },
       {
         "name": "lavashell-source-rules",
@@ -941,7 +944,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "436596a16f812b0495d3e8b40e74770563a459400c19d5b5e71df7b05fccf700",
+        "seedHash": "119d0a66d7fc9626240d419d8bda57c4e55c59193647ad07f333362918929433",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1012,7 +1015,15 @@
                 "lib": {
                   "path": "src/lib.rs"
                 },
-                "features": {}
+                "features": {},
+                "dependencies": {
+                  "lavashell-enum-values": {
+                    "package": "lavashell-enum-values",
+                    "default-features": false,
+                    "features": [],
+                    "path": "../lavashell-enum-values"
+                  }
+                }
               },
               "targets": [
                 {
@@ -1511,7 +1522,10 @@
               },
               {
                 "name": "lavashell-error-chain",
-                "version": "0.0.0"
+                "version": "0.0.0",
+                "dependencies": [
+                  "lavashell-enum-values"
+                ]
               },
               {
                 "name": "lavashell-source-rules",

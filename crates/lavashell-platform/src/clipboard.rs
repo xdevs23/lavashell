@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use std::io;
 use std::os::fd::OwnedFd;
 
@@ -19,6 +20,16 @@ pub enum SelectionRefusal {
     NoInput,
     #[error("the input device of the selection disappeared")]
     InputDeviceGone,
+}
+
+impl NamesNextStep for SelectionRefusal {
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Unavailable => NextStep::UseSupportingPlatform,
+            Self::NoInput => NextStep::ReportTheFailure,
+            Self::InputDeviceGone => NextStep::RepeatTheTransfer,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

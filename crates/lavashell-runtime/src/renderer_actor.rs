@@ -9,6 +9,7 @@ use lavashell_actor::{
 use lavashell_core::frame::FrameTime;
 use lavashell_core::geometry::ScaledViewport;
 use lavashell_core::surface::SurfaceId;
+use lavashell_error_chain::next_step::{NamesNextStep, NextStep};
 use lavashell_platform::{
     Backend, Drawn, Platform, PresentFrame, RendererBackend, RendererSetup, StreamTask,
     SurfaceAttachment, SurfaceContents, SurfaceControl, SurfaceRenderer,
@@ -141,6 +142,26 @@ impl<C: SurfaceControl, B: RendererBackend> fmt::Debug for RendererError<C, B> {
             Self::AdvanceScene(error) => ("AdvanceScene", error),
         };
         formatter.debug_tuple(name).field(source).finish()
+    }
+}
+
+impl<C: SurfaceControl, B: RendererBackend> NamesNextStep for RendererError<C, B>
+where
+    B::StartError: NamesNextStep,
+    SurfaceError<C, B>: NamesNextStep,
+    SurfaceDrawError<C, B>: NamesNextStep,
+    SurfaceCommitError<C, B>: NamesNextStep,
+{
+    fn next_step(&self) -> NextStep {
+        match self {
+            Self::Start(error) => error.next_step(),
+            Self::Attach(error)
+            | Self::Outline(error)
+            | Self::ReadContents(error)
+            | Self::AdvanceScene(error) => error.next_step(),
+            Self::Draw(error) => error.next_step(),
+            Self::CommitState(error) => error.next_step(),
+        }
     }
 }
 
