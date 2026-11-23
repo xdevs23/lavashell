@@ -41,16 +41,11 @@ in
     // {
       FONTCONFIG_FILE = "${fontConfig}";
     };
-  preBuild =
-    (import ./build-environment.nix {
-      inherit pkgs;
-      libraries = runtime.libraries;
-    })
-    + ''
-      export NIX_CC=${pkgs.stdenv.cc}
-      export CC=gcc CXX=g++
-      export PATH="$NIX_CC/bin:$PATH"
-    '';
+  preBuild = ''
+    export NIX_CC=${pkgs.stdenv.cc}
+    export CC=gcc CXX=g++
+    export PATH="$NIX_CC/bin:$PATH"
+  '';
   buildPhase = artifactRecord.run "cargoBuildHook";
   checkPhase = artifactRecord.run "cargoCheckHook";
   preCheck = ''

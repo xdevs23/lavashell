@@ -47,11 +47,7 @@ let
   enableFeatures = features: lib.optionalAttrs (features != [ ]) { buildFeatures = features; };
   engineDefaults = rustPackageDefaults // {
     nativeBuildInputs = [ pkgs.pkg-config ] ++ artifactRecord.nativeBuildInputs;
-    buildInputs = [ pkgs.wayland ];
-    preBuild = import ./build-environment.nix {
-      inherit pkgs;
-      libraries = [ pkgs.wayland ];
-    };
+    preBuild = "";
     nativeCheckInputs = [ ];
     env = { };
     preCheck = "";

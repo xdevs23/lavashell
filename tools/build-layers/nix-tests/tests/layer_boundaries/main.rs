@@ -53,11 +53,9 @@ fn reference_source(directory: &Path) -> PathBuf {
 }
 
 #[test]
-fn changed_gui_tools_leave_every_engine_layer() -> Result<(), LayerTestError> {
+fn changed_gui_tools_reach_every_layer() -> Result<(), LayerTestError> {
     let tools = Fixture::new()?.layers(Variant::GuiTools, &base()?.all())?;
-    let engines = base()?.engines();
-    assert_unchanged(&tools, &engines)?;
-    assert_changed(&tools, &base()?.all_except(&engines))
+    assert_changed(&tools, &base()?.all())
 }
 
 #[test]
