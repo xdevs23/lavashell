@@ -47,9 +47,11 @@ pub(crate) type ControlsObserver = Box<dyn FnMut(ControlsOutput) -> Result<(), C
 
 #[derive(Debug, thiserror::Error)]
 pub enum ControlsError<E> {
-    #[error("the surface {0:?} is attached already")]
+    #[error("the runtime could not attach a control to the surface {0:?}, which already has one")]
     AttachedTwice(SurfaceId),
-    #[error("the surface {0:?} is not attached")]
+    #[error(
+        "the runtime could not look up the control of the surface {0:?}, which does not have one"
+    )]
     UnknownSurface(SurfaceId),
     #[error("the platform could not commit the state of a surface")]
     Control(#[source] E),
