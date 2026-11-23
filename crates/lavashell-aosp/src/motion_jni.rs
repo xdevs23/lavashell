@@ -2,7 +2,8 @@
 use crate::Error;
 use crate::error::ensure_no_exception;
 use crate::input::{
-    Motion, MotionEvent, MouseAction, MousePosition, TouchAction, TouchPointer, TouchPositions,
+    HistoricalPositions, Motion, MotionEvent, MouseAction, MousePosition, PixelPosition,
+    TouchAction, TouchPointer, TouchPositions,
 };
 use jni::objects::JObject;
 use jni::{Env, JValueOwned, jni_sig, jni_str};
@@ -104,7 +105,10 @@ fn touch_action(
             PointerEnding::Lifted => TouchAction::Up(touch_pointer(changed)),
         },
         ActionCode::Up => TouchAction::Up(touch_pointer(changed)),
-        ActionCode::Move => TouchAction::Move(batched_touch_positions(native, pointers)?),
+        ActionCode::Move => TouchAction::Move {
+            history: touch_history(native)?,
+            current: current_touch_positions(native, pointers)?,
+        },
         ActionCode::Cancel => {
             TouchAction::Cancel(pointers.iter().map(Pointer::pointer_id).collect())
         }
@@ -134,39 +138,38 @@ fn pointer_ending(
 }
 
 fn touch_pointer(pointer: &Pointer<'_>) -> TouchPointer {
-    touch_pointer_at(pointer, pointer.x(), pointer.y())
-}
-
-fn touch_pointer_at(pointer: &Pointer<'_>, x: f32, y: f32) -> TouchPointer {
     TouchPointer {
         id: pointer.pointer_id(),
         kind: kind_of_tool(pointer.tool_type()),
-        x: to_px(x),
-        y: to_px(y),
+        x: to_px(pointer.x()),
+        y: to_px(pointer.y()),
     }
 }
 
-fn batched_touch_positions(
+fn touch_history(
+    native: &ndk::event::MotionEvent,
+) -> Result<Vec<HistoricalPositions>, MalformedMotion> {
+    (native.history())
+        .map(|moment| {
+            let positions = (moment.pointers())
+                .map(|position| PixelPosition {
+                    x: to_px(position.x()),
+                    y: to_px(position.y()),
+                })
+                .collect();
+            input_time(moment.event_time()).map(|time| HistoricalPositions { time, positions })
+        })
+        .collect()
+}
+
+fn current_touch_positions(
     native: &ndk::event::MotionEvent,
     pointers: &[Pointer<'_>],
-) -> Result<Vec<TouchPositions>, MalformedMotion> {
-    let historical = native.history().map(|moment| {
-        let historical_pointers = (moment.pointers())
-            .map(|position| {
-                let pointer = native.pointer_at_index(position.pointer_index());
-                touch_pointer_at(&pointer, position.x(), position.y())
-            })
-            .collect();
-        input_time(moment.event_time()).map(|time| TouchPositions {
-            time,
-            pointers: historical_pointers,
-        })
-    });
-    let current = input_time(native.event_time()).map(|time| TouchPositions {
+) -> Result<TouchPositions, MalformedMotion> {
+    input_time(native.event_time()).map(|time| TouchPositions {
         time,
         pointers: pointers.iter().map(touch_pointer).collect(),
-    });
-    historical.chain([current]).collect()
+    })
 }
 
 fn input_time(nanos: i64) -> Result<InputTime, MalformedMotion> {

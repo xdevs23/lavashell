@@ -4,8 +4,11 @@ use lavashell_core::geometry::{Point, Rect, ScaledViewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::Px;
-use lavashell_core::view::{InputTime, TouchMove, TouchSample};
-use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState};
+use lavashell_core::view::{InputTime, TouchSample};
+use lavashell_platform::{
+    Button, DeviceEvent, InputSerial, MovingTouch, PointerDevice, PressState, TouchFrame,
+    TouchMotion,
+};
 
 pub(crate) const MOUSE: PointerDevice = PointerDevice(0);
 
@@ -29,7 +32,10 @@ pub(crate) enum Motion {
 pub enum TouchAction {
     Down(TouchPointer),
     Up(TouchPointer),
-    Move(Vec<TouchPositions>),
+    Move {
+        history: Vec<HistoricalPositions>,
+        current: TouchPositions,
+    },
     Cancel(Vec<i32>),
 }
 
@@ -37,6 +43,18 @@ pub enum TouchAction {
 pub struct TouchPositions {
     pub time: InputTime,
     pub pointers: Vec<TouchPointer>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistoricalPositions {
+    pub time: InputTime,
+    pub positions: Vec<PixelPosition>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PixelPosition {
+    pub x: Px,
+    pub y: Px,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -179,21 +197,49 @@ fn touch_events(seat: i64, action: TouchAction, shown: ShownSurface) -> Vec<Devi
             sample: sample(pointer),
         }],
         TouchAction::Up(pointer) => vec![DeviceEvent::TouchUp(sample(pointer))],
-        TouchAction::Move(batched) => (batched.into_iter())
-            .flat_map(|TouchPositions { time, pointers }| {
-                pointers
-                    .into_iter()
-                    .map(move |pointer| DeviceEvent::TouchMotion {
-                        earlier: Vec::new(),
-                        latest: TouchMove {
-                            sample: sample(pointer),
-                            time,
-                        },
-                    })
-            })
-            .collect(),
+        TouchAction::Move { history, current } => {
+            vec![DeviceEvent::TouchMotion(touch_motion(
+                seat, history, current, shown,
+            ))]
+        }
         TouchAction::Cancel(points) => (points.into_iter())
             .map(|point| DeviceEvent::TouchCancel(id(point)))
             .collect(),
+    }
+}
+
+fn touch_motion(
+    seat: i64,
+    history: Vec<HistoricalPositions>,
+    current: TouchPositions,
+    shown: ShownSurface,
+) -> TouchMotion {
+    let touches = (current.pointers.iter())
+        .map(|pointer| MovingTouch {
+            id: TouchId {
+                seat,
+                point: pointer.id,
+            },
+            kind: pointer.kind,
+        })
+        .collect();
+    let earlier = (history.into_iter())
+        .map(|moment| TouchFrame {
+            time: moment.time,
+            positions: (moment.positions.into_iter())
+                .map(|position| shown.point(position.x, position.y))
+                .collect(),
+        })
+        .collect();
+    let latest = TouchFrame {
+        time: current.time,
+        positions: (current.pointers.into_iter())
+            .map(|pointer| shown.point(pointer.x, pointer.y))
+            .collect(),
+    };
+    TouchMotion {
+        touches,
+        earlier,
+        latest,
     }
 }

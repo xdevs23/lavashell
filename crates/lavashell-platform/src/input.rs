@@ -3,8 +3,8 @@ use lavashell_actor::{Merge, MergeEffect};
 use lavashell_core::geometry::Point;
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::surface::SurfaceId;
-use lavashell_core::ui::{InputModifiers, TouchId};
-use lavashell_core::view::{Cursor, TouchMove, TouchSample};
+use lavashell_core::ui::{InputModifiers, PointerKind, TouchId};
+use lavashell_core::view::{Cursor, InputTime, TouchMove, TouchSample};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerDevice(pub u64);
@@ -97,19 +97,54 @@ pub enum DeviceEvent {
         surface: SurfaceId,
         sample: TouchSample,
     },
-    TouchMotion {
-        earlier: Vec<TouchMove>,
-        latest: TouchMove,
-    },
+    TouchMotion(TouchMotion),
     TouchUp(TouchSample),
     TouchCancel(TouchId),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq)]
+pub struct TouchMotion {
+    pub touches: Vec<MovingTouch>,
+    pub earlier: Vec<TouchFrame>,
+    pub latest: TouchFrame,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MovingTouch {
+    pub id: TouchId,
+    pub kind: PointerKind,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TouchFrame {
+    pub time: InputTime,
+    pub positions: Vec<Point>,
+}
+
+impl TouchMotion {
+    pub fn moves(&self) -> impl Iterator<Item = TouchMove> + '_ {
+        (self.earlier.iter().chain([&self.latest])).flat_map(|frame| {
+            (self.touches.iter().zip(&frame.positions)).map(|(touch, &at)| TouchMove {
+                sample: TouchSample {
+                    id: touch.id,
+                    at,
+                    kind: touch.kind,
+                },
+                time: frame.time,
+            })
+        })
+    }
+
+    fn touch_ids(&self) -> Vec<TouchId> {
+        self.touches.iter().map(|touch| touch.id).collect()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DeviceEventKey {
     PointerPosition(PointerDevice),
     Scroll(PointerDevice),
-    TouchPosition(TouchId),
+    TouchPositions(Vec<TouchId>),
 }
 
 impl Merge for DeviceEvent {
@@ -125,8 +160,8 @@ impl Merge for DeviceEvent {
                 key: DeviceEventKey::Scroll(*pointer),
                 fenced: DeviceEventKey::PointerPosition(*pointer),
             },
-            Self::TouchMotion { latest, .. } => {
-                MergeEffect::Overwrites(DeviceEventKey::TouchPosition(latest.sample.id))
+            Self::TouchMotion(motion) => {
+                MergeEffect::Overwrites(DeviceEventKey::TouchPositions(motion.touch_ids()))
             }
             _ => MergeEffect::Appends,
         }
@@ -144,17 +179,6 @@ impl Merge for DeviceEvent {
             ) => {
                 *at = later_at;
                 *delta = delta.offset(later_delta.x, later_delta.y);
-            }
-            (
-                Self::TouchMotion { earlier, latest },
-                Self::TouchMotion {
-                    earlier: later_earlier,
-                    latest: later_latest,
-                },
-            ) => {
-                earlier.push(*latest);
-                earlier.extend(later_earlier);
-                *latest = later_latest;
             }
             (earlier, later) => *earlier = later,
         }

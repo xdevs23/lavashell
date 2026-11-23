@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_merge::merged;
-use crate::{Button, InputSerial, PointerDevice, PressState};
+use crate::{Button, InputSerial, MovingTouch, PointerDevice, PressState, TouchFrame, TouchMotion};
 use lavashell_actor::{Closed, mailbox};
 use lavashell_core::geometry::Point;
 use lavashell_core::platform::KeyRepeat;
 use lavashell_core::surface::ConfigureToken;
-use lavashell_core::ui::TouchId;
+use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::{Density, Dp, DpExt, NumberError};
-use lavashell_core::view::{InputTime, TouchMove, TouchSample};
+use lavashell_core::view::fixture::input_time_at_millis;
+use lavashell_core::view::{InputTime, TouchSample};
 use std::time::Duration;
 
 const MOUSE: PointerDevice = PointerDevice(1);
@@ -67,28 +68,38 @@ fn touch_sample(point: i32, x: f64) -> TouchSample {
     TouchSample::finger(TouchId { seat: 1, point }, Point::new(x.dp(), 0.dp()))
 }
 
-fn touch_motion(point: i32, x: f64, millis: u64) -> PlatformEvent {
-    let latest = TouchMove {
-        sample: touch_sample(point, x),
-        time: InputTime(Duration::from_millis(millis)),
-    };
-    PlatformEvent::Device(DeviceEvent::TouchMotion {
-        earlier: Vec::new(),
+fn touch_frame(millis: u64, xs: &[f64]) -> TouchFrame {
+    TouchFrame {
+        time: input_time_at_millis(millis),
+        positions: xs.iter().map(|&x| Point::new(x.dp(), 0.dp())).collect(),
+    }
+}
+
+fn touch_motion(points: &[i32], earlier: Vec<TouchFrame>, latest: TouchFrame) -> PlatformEvent {
+    let touches = (points.iter())
+        .map(|&point| MovingTouch {
+            id: TouchId { seat: 1, point },
+            kind: PointerKind::Finger,
+        })
+        .collect();
+    PlatformEvent::Device(DeviceEvent::TouchMotion(TouchMotion {
+        touches,
+        earlier,
         latest,
-    })
+    }))
 }
 
 fn touch_up(point: i32) -> PlatformEvent {
     PlatformEvent::Device(DeviceEvent::TouchUp(touch_sample(point, 0.0)))
 }
 
-fn touch_moves(event: &PlatformEvent) -> Option<(i32, Vec<(Dp, InputTime)>)> {
+fn touch_moves(event: &PlatformEvent) -> Option<Vec<(i32, Dp, InputTime)>> {
     match event {
-        PlatformEvent::Device(DeviceEvent::TouchMotion { earlier, latest }) => {
-            let moves = earlier.iter().chain([latest]);
-            let xs = moves.map(|moved| (moved.sample.at.x, moved.time));
-            Some((latest.sample.id.point, xs.collect()))
-        }
+        PlatformEvent::Device(DeviceEvent::TouchMotion(motion)) => Some(
+            (motion.moves())
+                .map(|moved| (moved.sample.id.point, moved.sample.at.x, moved.time))
+                .collect(),
+        ),
         _ => None,
     }
 }
@@ -241,22 +252,35 @@ fn a_scroll_between_motions_keeps_both_motions_apart() -> Result<(), Closed> {
 }
 
 #[test]
-fn touch_motions_merge_per_point_with_every_position_until_another_touch_event()
+fn touch_motions_of_the_same_touches_merge_into_the_latest_motion_until_another_touch_event()
 -> Result<(), Closed> {
     let events = [
-        touch_motion(1, 1.0, 10),
-        touch_motion(2, 5.0, 10),
-        touch_motion(1, 2.0, 18),
+        touch_motion(
+            &[1, 2],
+            vec![touch_frame(6, &[1.0, 5.0])],
+            touch_frame(10, &[2.0, 6.0]),
+        ),
+        touch_motion(&[3], Vec::new(), touch_frame(10, &[9.0])),
+        touch_motion(
+            &[1, 2],
+            vec![touch_frame(14, &[3.0, 7.0])],
+            touch_frame(18, &[4.0, 8.0]),
+        ),
         touch_up(1),
-        touch_motion(1, 3.0, 26),
+        touch_motion(&[2], Vec::new(), touch_frame(26, &[9.0])),
     ];
-    let at = |millis| InputTime(Duration::from_millis(millis));
+    let at = input_time_at_millis;
     let taken: Vec<_> = merged(events)?.iter().map(touch_moves).collect();
     let expected = [
-        Some((1, vec![(1.dp(), at(10)), (2.dp(), at(18))])),
-        Some((2, vec![(5.dp(), at(10))])),
+        Some(vec![
+            (1, 3.dp(), at(14)),
+            (2, 7.dp(), at(14)),
+            (1, 4.dp(), at(18)),
+            (2, 8.dp(), at(18)),
+        ]),
+        Some(vec![(3, 9.dp(), at(10))]),
         None,
-        Some((1, vec![(3.dp(), at(26))])),
+        Some(vec![(2, 9.dp(), at(26))]),
     ];
     assert_eq!(taken, expected);
     Ok(())

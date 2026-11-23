@@ -4,33 +4,41 @@ use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::TouchId;
 use lavashell_core::units::DpExt;
-use lavashell_core::view::{InputEvent, InputTime, TouchMove, TouchSample};
-use lavashell_platform::DeviceEvent;
-use std::time::Duration;
+use lavashell_core::view::{InputEvent, TouchMove, TouchSample};
+use lavashell_platform::{DeviceEvent, MovingTouch, TouchFrame, TouchMotion};
+use lavashell_test_fixtures::{input_time_at_millis, touch_move_at};
 
 const WINDOW: SurfaceId = SurfaceId::numbered(0);
 const PANEL: SurfaceId = SurfaceId::numbered(1);
 
+fn at(x: i32, y: i32) -> Point {
+    Point::new(x.dp(), y.dp())
+}
+
 fn sample(seat: i64, point: i32, x: i32, y: i32) -> TouchSample {
-    TouchSample::finger(TouchId { seat, point }, Point::new(x.dp(), y.dp()))
+    TouchSample::finger(TouchId { seat, point }, at(x, y))
+}
+
+fn moving(sample: TouchSample) -> MovingTouch {
+    MovingTouch {
+        id: sample.id,
+        kind: sample.kind,
+    }
 }
 
 fn down(surface: SurfaceId, sample: TouchSample) -> DeviceEvent {
     DeviceEvent::TouchDown { surface, sample }
 }
 
-fn moved(sample: TouchSample, millis: u64) -> TouchMove {
-    TouchMove {
-        sample,
-        time: InputTime(Duration::from_millis(millis)),
-    }
-}
-
-fn motion(latest: TouchMove) -> DeviceEvent {
-    DeviceEvent::TouchMotion {
+fn motion(moved: TouchMove) -> DeviceEvent {
+    DeviceEvent::TouchMotion(TouchMotion {
+        touches: vec![moving(moved.sample)],
         earlier: Vec::new(),
-        latest,
-    }
+        latest: TouchFrame {
+            time: moved.time,
+            positions: vec![moved.sample.at],
+        },
+    })
 }
 
 fn on(surface: SurfaceId, input: InputEvent) -> RoutedInput {
@@ -44,7 +52,10 @@ fn on(surface: SurfaceId, input: InputEvent) -> RoutedInput {
 #[test]
 fn a_touch_point_moves_and_goes_up_on_the_surface_where_it_went_down() {
     let mut router = InputRouter::new(None);
-    let (pressed, movement) = (sample(4, 3, 10, 20), moved(sample(4, 3, 30, 40), 16));
+    let (pressed, movement) = (
+        sample(4, 3, 10, 20),
+        touch_move_at(sample(4, 3, 30, 40), 16),
+    );
     let lifted = sample(4, 3, 35, 45);
     assert_eq!(
         router.route(down(PANEL, pressed)),
@@ -63,18 +74,29 @@ fn a_touch_point_moves_and_goes_up_on_the_surface_where_it_went_down() {
 }
 
 #[test]
-fn a_batched_touch_motion_moves_the_point_through_every_position_with_its_time_oldest_first() {
+fn a_batched_touch_motion_moves_every_touch_through_each_position_in_the_order_taken() {
     let mut router = InputRouter::new(None);
+    let (first, second) = (sample(1, 2, 2, 2), sample(1, 5, 9, 2));
+    for pressed in [first, second] {
+        assert_eq!(router.route(down(PANEL, pressed)).len(), 1);
+    }
+    let batched = DeviceEvent::TouchMotion(TouchMotion {
+        touches: vec![moving(first), moving(second)],
+        earlier: vec![TouchFrame {
+            time: input_time_at_millis(8),
+            positions: vec![at(3, 3), at(8, 3)],
+        }],
+        latest: TouchFrame {
+            time: input_time_at_millis(16),
+            positions: vec![at(4, 3), at(7, 3)],
+        },
+    });
     let movements = [
-        moved(sample(1, 2, 3, 3), 8),
-        moved(sample(1, 2, 4, 3), 16),
-        moved(sample(1, 2, 5, 4), 24),
+        touch_move_at(sample(1, 2, 3, 3), 8),
+        touch_move_at(sample(1, 5, 8, 3), 8),
+        touch_move_at(sample(1, 2, 4, 3), 16),
+        touch_move_at(sample(1, 5, 7, 3), 16),
     ];
-    assert_eq!(router.route(down(PANEL, sample(1, 2, 2, 2))).len(), 1);
-    let batched = DeviceEvent::TouchMotion {
-        earlier: movements[..2].to_vec(),
-        latest: movements[2],
-    };
     let moves = movements.map(|movement| on(PANEL, InputEvent::TouchMove(movement)));
     assert_eq!(router.route(batched), moves);
 }

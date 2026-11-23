@@ -52,7 +52,7 @@ pub(crate) enum ViewInput {
     Stopped(Stopped),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ViewKey {
     Platform(<PlatformEvent as Merge>::Key),
     SceneWake,

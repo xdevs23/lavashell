@@ -58,7 +58,7 @@ from_concern_events! {
     AccessibilityEvent => Accessibility,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum EventKey {
     Surface(SurfaceId, SurfaceEventKey),
     Output(OutputEventKey),
