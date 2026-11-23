@@ -40,12 +40,6 @@
         ]
       },
       {
-        "name": "ash",
-        "version": "0.38.0+1.3.281",
-        "source": "registry+https://github.com/rust-lang/crates.io-index",
-        "checksum": "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
-      },
-      {
         "name": "async-broadcast",
         "version": "0.7.2",
         "source": "registry+https://github.com/rust-lang/crates.io-index",
@@ -734,37 +728,6 @@
           "lavashell-renderer",
           "lavashell-runtime",
           "lavashell-test-fixtures",
-          "lavashell-vulkan",
-          "lavashell-vulkan-renderer",
-          "thiserror"
-        ]
-      },
-      {
-        "name": "lavashell-vulkan",
-        "version": "0.1.0",
-        "dependencies": [
-          "ash",
-          "lavashell-actor",
-          "lavashell-error-chain",
-          "log",
-          "thiserror"
-        ]
-      },
-      {
-        "name": "lavashell-vulkan-renderer",
-        "version": "0.1.0",
-        "dependencies": [
-          "ash",
-          "lavashell-core",
-          "lavashell-effect-quality",
-          "lavashell-enum-values",
-          "lavashell-error-chain",
-          "lavashell-platform",
-          "lavashell-renderer",
-          "lavashell-test-fixtures",
-          "lavashell-vulkan",
-          "log",
-          "skia-safe",
           "thiserror"
         ]
       },
@@ -1569,7 +1532,7 @@
   "dependencyPlans": {
     "x86_64-unknown-linux-gnu": {
       "registry": {
-        "seedHash": "f02355b4e1dd7d91079d915839ab8f2fc920bfdfe63908fb9021ecc6eccb1baa",
+        "seedHash": "a5d0285b75c47a46c2f3da89ffc6bc56c889e49accbd28e1068486352d19107e",
         "plan": {
           "schema": 1,
           "selection": {
@@ -1577,8 +1540,7 @@
             "profile": "packaged",
             "packages": [
               "lavashell-test-platform",
-              "lavashell-renderer",
-              "lavashell-vulkan-renderer"
+              "lavashell-renderer"
             ]
           },
           "manifest": {
@@ -1612,9 +1574,7 @@
                 "crates/lavashell-error-chain",
                 "crates/lavashell-platform",
                 "crates/lavashell-renderer",
-                "crates/lavashell-test-platform",
-                "crates/lavashell-vulkan",
-                "crates/lavashell-vulkan-renderer"
+                "crates/lavashell-test-platform"
               ]
             }
           },
@@ -2007,8 +1967,7 @@
                       "jpeg",
                       "no-compile",
                       "pdf",
-                      "textlayout",
-                      "vulkan"
+                      "textlayout"
                     ],
                     "version": "=0.153.3"
                   },
@@ -2081,199 +2040,6 @@
                     ],
                     "path": "../lavashell-renderer"
                   },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
-                  },
-                  "lavashell-vulkan-renderer": {
-                    "package": "lavashell-vulkan-renderer",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan-renderer"
-                  },
-                  "thiserror": {
-                    "package": "thiserror",
-                    "default-features": false,
-                    "features": [
-                      "default",
-                      "std"
-                    ],
-                    "version": "=2.0.21"
-                  }
-                }
-              },
-              "targets": [
-                {
-                  "path": "src/lib.rs",
-                  "main": false
-                }
-              ]
-            },
-            {
-              "member": "crates/lavashell-vulkan",
-              "manifest": {
-                "package": {
-                  "name": "lavashell-vulkan",
-                  "version": "0.0.0",
-                  "edition": "2024",
-                  "autobins": false,
-                  "autotests": false,
-                  "autoexamples": false,
-                  "autobenches": false,
-                  "build": false
-                },
-                "lib": {
-                  "path": "src/lib.rs"
-                },
-                "features": {},
-                "dependencies": {
-                  "ash": {
-                    "package": "ash",
-                    "default-features": false,
-                    "features": [
-                      "debug",
-                      "linked",
-                      "std"
-                    ],
-                    "version": "=0.38.0+1.3.281"
-                  },
-                  "lavashell-actor": {
-                    "package": "lavashell-actor",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-actor"
-                  },
-                  "lavashell-error-chain": {
-                    "package": "lavashell-error-chain",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-error-chain"
-                  },
-                  "log": {
-                    "package": "log",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "std"
-                    ],
-                    "version": "=0.4.34"
-                  },
-                  "thiserror": {
-                    "package": "thiserror",
-                    "default-features": false,
-                    "features": [
-                      "default",
-                      "std"
-                    ],
-                    "version": "=2.0.21"
-                  }
-                }
-              },
-              "targets": [
-                {
-                  "path": "src/lib.rs",
-                  "main": false
-                }
-              ]
-            },
-            {
-              "member": "crates/lavashell-vulkan-renderer",
-              "manifest": {
-                "package": {
-                  "name": "lavashell-vulkan-renderer",
-                  "version": "0.0.0",
-                  "edition": "2024",
-                  "autobins": false,
-                  "autotests": false,
-                  "autoexamples": false,
-                  "autobenches": false,
-                  "build": false
-                },
-                "lib": {
-                  "path": "src/lib.rs"
-                },
-                "features": {},
-                "dependencies": {
-                  "ash": {
-                    "package": "ash",
-                    "default-features": false,
-                    "features": [
-                      "debug",
-                      "linked",
-                      "std"
-                    ],
-                    "version": "=0.38.0+1.3.281"
-                  },
-                  "lavashell-core": {
-                    "package": "lavashell-core",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-core"
-                  },
-                  "lavashell-effect-quality": {
-                    "package": "lavashell-effect-quality",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-effect-quality"
-                  },
-                  "lavashell-enum-values": {
-                    "package": "lavashell-enum-values",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-enum-values"
-                  },
-                  "lavashell-error-chain": {
-                    "package": "lavashell-error-chain",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-error-chain"
-                  },
-                  "lavashell-platform": {
-                    "package": "lavashell-platform",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-platform"
-                  },
-                  "lavashell-renderer": {
-                    "package": "lavashell-renderer",
-                    "default-features": false,
-                    "features": [
-                      "backdrop",
-                      "default"
-                    ],
-                    "path": "../lavashell-renderer"
-                  },
-                  "lavashell-vulkan": {
-                    "package": "lavashell-vulkan",
-                    "default-features": false,
-                    "features": [],
-                    "path": "../lavashell-vulkan"
-                  },
-                  "log": {
-                    "package": "log",
-                    "default-features": false,
-                    "features": [
-                      "alloc",
-                      "std"
-                    ],
-                    "version": "=0.4.34"
-                  },
-                  "skia-safe": {
-                    "package": "skia-safe",
-                    "default-features": false,
-                    "features": [
-                      "embed-icudtl",
-                      "ganesh",
-                      "jpeg",
-                      "no-compile",
-                      "pdf",
-                      "textlayout",
-                      "vulkan"
-                    ],
-                    "version": "=0.153.3"
-                  },
                   "thiserror": {
                     "package": "thiserror",
                     "default-features": false,
@@ -2322,12 +2088,6 @@
                 "dependencies": [
                   "num-traits"
                 ]
-              },
-              {
-                "name": "ash",
-                "version": "0.38.0+1.3.281",
-                "source": "registry+https://github.com/rust-lang/crates.io-index",
-                "checksum": "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
               },
               {
                 "name": "autocfg",
@@ -2626,36 +2386,6 @@
                   "lavashell-error-chain",
                   "lavashell-platform",
                   "lavashell-renderer",
-                  "lavashell-vulkan",
-                  "lavashell-vulkan-renderer",
-                  "thiserror"
-                ]
-              },
-              {
-                "name": "lavashell-vulkan",
-                "version": "0.0.0",
-                "dependencies": [
-                  "ash",
-                  "lavashell-actor",
-                  "lavashell-error-chain",
-                  "log",
-                  "thiserror"
-                ]
-              },
-              {
-                "name": "lavashell-vulkan-renderer",
-                "version": "0.0.0",
-                "dependencies": [
-                  "ash",
-                  "lavashell-core",
-                  "lavashell-effect-quality",
-                  "lavashell-enum-values",
-                  "lavashell-error-chain",
-                  "lavashell-platform",
-                  "lavashell-renderer",
-                  "lavashell-vulkan",
-                  "log",
-                  "skia-safe",
                   "thiserror"
                 ]
               },

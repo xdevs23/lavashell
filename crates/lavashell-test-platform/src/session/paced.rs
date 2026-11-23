@@ -2,8 +2,9 @@
 use super::{Session, Stop};
 use crate::{Error, Pace, PacedLinks, is_at_rest};
 use lavashell_actor::Clock;
+use lavashell_platform::HeadlessRendererBackend;
 
-impl Session {
+impl<B: HeadlessRendererBackend> Session<B> {
     pub(super) fn record_paced(&mut self, links: &PacedLinks) -> Result<(), Stop> {
         match self.play_paced(links) {
             Err(Stop::Failed(error)) => Err(Stop::Failed(error)),

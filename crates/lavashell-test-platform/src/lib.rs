@@ -16,6 +16,8 @@ mod screen;
 mod script;
 mod session;
 #[cfg(test)]
+mod test_renderer;
+#[cfg(test)]
 mod tests;
 mod windows;
 

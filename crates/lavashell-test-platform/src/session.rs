@@ -9,20 +9,19 @@ use lavashell_actor::{Clock, mailbox};
 use lavashell_core::frame::PresentationFlags;
 use lavashell_core::units::Density;
 use lavashell_platform::{
-    DeviceEvent, PlatformEvent, PlatformLinks, PlatformRequest, Role, SurfaceEvent, SurfaceRequest,
-    TimingEvent,
+    DeviceEvent, HeadlessRendererBackend, PlatformEvent, PlatformLinks, PlatformRequest, Role,
+    SurfaceEvent, SurfaceRequest, TimingEvent,
 };
-use lavashell_vulkan_renderer::HeadlessBackend;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
 mod paced;
 
-pub(crate) struct Session {
+pub(crate) struct Session<B: HeadlessRendererBackend> {
     clock: VirtualClock,
-    links: PlatformLinks<FrameCapture, HeadlessBackend>,
+    links: PlatformLinks<FrameCapture, B>,
     screen: Screen,
-    windows: Windows,
+    windows: Windows<B>,
 }
 
 enum Stop {
@@ -36,10 +35,10 @@ impl From<Error> for Stop {
     }
 }
 
-impl Session {
+impl<B: HeadlessRendererBackend> Session<B> {
     pub(crate) fn new(
         clock: VirtualClock,
-        links: PlatformLinks<FrameCapture, HeadlessBackend>,
+        links: PlatformLinks<FrameCapture, B>,
         density: Density,
     ) -> Self {
         let (shown_by_controls, shown) = mailbox();

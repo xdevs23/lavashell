@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::RecordingPlatform;
 use lavashell::PlatformRunError;
 use lavashell::error_chain::next_step::NextStep;
 use lavashell_example_support::{ExampleError, ExampleStep};
-use lavashell_test_platform::TestPlatform;
 use std::path::PathBuf;
 use std::time::TryFromFloatSecsError;
 
@@ -21,7 +21,7 @@ pub enum Error {
     #[error("the keyboard scene does not show a search field")]
     MissingField,
     #[error("the app failed on the test platform")]
-    Record(#[source] PlatformRunError<TestPlatform>),
+    Record(#[source] PlatformRunError<RecordingPlatform>),
     #[error("the test platform did not return the recorded frames")]
     NotServed(#[source] lavashell_test_platform::Error),
     #[error("the recording ended with {0} steps left to play")]

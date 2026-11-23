@@ -19,6 +19,12 @@ pub trait RendererBackend: Backend {
     ) -> Result<Self::Renderer<C>, Self::StartError>;
 }
 
+pub trait HeadlessRendererBackend: RendererBackend {
+    fn create() -> Self;
+
+    fn create_surface() -> Self::Surface;
+}
+
 pub type PainterSetup = Box<dyn FnOnce(&mut Painter) + Send>;
 
 pub struct RendererSetup {

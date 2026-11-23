@@ -15,8 +15,6 @@ lavashell-core.workspace = true
 lavashell-error-chain.workspace = true
 lavashell-platform.workspace = true
 lavashell-renderer.workspace = true
-lavashell-vulkan-renderer.workspace = true
-lavashell-vulkan.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

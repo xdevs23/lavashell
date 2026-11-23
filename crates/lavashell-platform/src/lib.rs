@@ -26,7 +26,7 @@ mod watch;
 mod window_control;
 
 pub use accessibility::{AccessibilityEvent, AccessibilityRequest, tree_difference};
-pub use backend::{Backend, PainterSetup, RendererBackend, RendererSetup};
+pub use backend::{Backend, HeadlessRendererBackend, PainterSetup, RendererBackend, RendererSetup};
 pub use capability::Capability;
 pub use clipboard::{
     ClipboardEvent, ClipboardRequest, FormatId, ReceiveId, ReceiveRefusal, SelectionId,

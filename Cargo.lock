@@ -2924,6 +2924,7 @@ dependencies = [
  "lavashell-on-screen-keyboard",
  "lavashell-runtime",
  "lavashell-taskbar",
+ "lavashell-test-fixtures",
  "lavashell-test-platform",
  "png",
  "thiserror 2.0.21",
@@ -3217,8 +3218,6 @@ dependencies = [
  "lavashell-renderer",
  "lavashell-runtime",
  "lavashell-test-fixtures",
- "lavashell-vulkan",
- "lavashell-vulkan-renderer",
  "thiserror 2.0.21",
 ]
 

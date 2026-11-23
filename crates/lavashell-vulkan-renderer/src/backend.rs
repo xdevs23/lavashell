@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::vulkan::{HeadlessPresentation, PresentationBackend, Window};
 use crate::{NoStreams, RendererState, RendererStreams, SceneSetup, StartError};
-use lavashell_platform::{Backend, RendererBackend, RendererSetup, SurfaceControl};
+use lavashell_platform::{
+    Backend, HeadlessRendererBackend, RendererBackend, RendererSetup, SurfaceControl,
+};
 use lavashell_renderer::StreamBackend;
+use lavashell_vulkan::HeadlessWindow;
 use std::sync::Arc;
 
 type StreamSetup<S> =
@@ -54,6 +57,16 @@ impl HeadlessBackend {
     #[must_use]
     pub fn without_surfaces() -> Self {
         Self::without_streams(HeadlessPresentation::without_surfaces())
+    }
+}
+
+impl HeadlessRendererBackend for HeadlessBackend {
+    fn create() -> Self {
+        Self::with_surfaces()
+    }
+
+    fn create_surface() -> VulkanWindow {
+        Arc::new(HeadlessWindow)
     }
 }
 

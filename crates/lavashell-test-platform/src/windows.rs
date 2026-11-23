@@ -6,21 +6,20 @@ use lavashell_core::surface::SurfaceId;
 use lavashell_core::units::Density;
 use lavashell_core::window::{WindowCapabilities, WindowState};
 use lavashell_platform::{
-    Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec, WindowControlRequest,
+    HeadlessRendererBackend, Reports, Role, SurfaceAttachment, SurfaceEvent, SurfaceSpec,
+    WindowControlRequest,
 };
-use lavashell_vulkan::HeadlessWindow;
-use lavashell_vulkan_renderer::{HeadlessBackend, VulkanWindow};
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::marker::PhantomData;
 
-type TestReports = Reports<FrameCapture, HeadlessBackend>;
+type TestReports<B> = Reports<FrameCapture, B>;
 
 pub(crate) struct WindowRecording {
     pub app_ids: BTreeMap<SurfaceId, String>,
     pub requests: Vec<WindowControlRequest>,
 }
 
-pub(crate) struct Windows {
+pub(crate) struct Windows<B> {
     density: Density,
     capture: CaptureMode,
     shown_by_controls: Sender<ShownFrame>,
@@ -28,9 +27,10 @@ pub(crate) struct Windows {
     app_ids: BTreeMap<SurfaceId, String>,
     states: BTreeMap<SurfaceId, WindowState>,
     recorded_requests: Vec<WindowControlRequest>,
+    backend: PhantomData<B>,
 }
 
-impl Windows {
+impl<B: HeadlessRendererBackend> Windows<B> {
     pub(crate) fn new(density: Density, shown_by_controls: Sender<ShownFrame>) -> Self {
         Self {
             density,
@@ -40,10 +40,11 @@ impl Windows {
             app_ids: BTreeMap::new(),
             states: BTreeMap::new(),
             recorded_requests: Vec::new(),
+            backend: PhantomData,
         }
     }
 
-    pub(crate) fn capture(&mut self, reports: &TestReports, mode: CaptureMode) {
+    pub(crate) fn capture(&mut self, reports: &TestReports<B>, mode: CaptureMode) {
         self.capture = mode;
         for &(surface, _) in &self.open {
             reports.attach(SurfaceAttachment::Control {
@@ -53,10 +54,14 @@ impl Windows {
         }
     }
 
-    pub(crate) fn create(&mut self, reports: &TestReports, surface: SurfaceId, spec: SurfaceSpec) {
+    pub(crate) fn create(
+        &mut self,
+        reports: &TestReports<B>,
+        surface: SurfaceId,
+        spec: SurfaceSpec,
+    ) {
         let control = FrameCapture::new(surface, self.capture, self.shown_by_controls.clone());
-        let headless: VulkanWindow = Arc::new(HeadlessWindow);
-        let attach = spec.attach(surface, headless, control);
+        let attach = spec.attach(surface, B::create_surface(), control);
         reports.attach(SurfaceAttachment::Attach(Box::new(attach)));
         reports.report((surface, SurfaceEvent::DensityChanged(self.density)));
         let window = opened_window_state(&spec.role);
@@ -78,7 +83,7 @@ impl Windows {
         self.open.push((surface, spec.role));
     }
 
-    pub(crate) fn destroy(&mut self, reports: &TestReports, surface: SurfaceId) {
+    pub(crate) fn destroy(&mut self, reports: &TestReports<B>, surface: SurfaceId) {
         self.open.retain(|&(window, _)| window != surface);
         let _state_of_destroyed_window = self.states.remove(&surface);
         reports.attach(SurfaceAttachment::Detach(surface));
@@ -86,7 +91,7 @@ impl Windows {
 
     pub(crate) fn control(
         &mut self,
-        reports: &TestReports,
+        reports: &TestReports<B>,
         request: WindowControlRequest,
     ) -> Result<(), Error> {
         match request {
@@ -110,7 +115,7 @@ impl Windows {
 
     fn reconfigure(
         &mut self,
-        reports: &TestReports,
+        reports: &TestReports<B>,
         surface: SurfaceId,
         change: impl FnOnce(WindowState) -> WindowState,
     ) -> Result<(), Error> {

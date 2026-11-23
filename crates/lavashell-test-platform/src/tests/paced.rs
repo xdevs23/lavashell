@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{TestResult, app, growing_bar, observed_times, recorded_times, size_and_middle};
+use super::{TestResult, app, growing_bar, observed_times, recorded_times};
 use crate::linux_key_code::convert_to_linux_key_code;
-use crate::{Error, FrameInterval, HostScript, Pace, PacedLinks, TestPlatform};
+use crate::test_renderer::TestPlatformWithoutDrawing;
+use crate::{Error, FrameInterval, HostScript, Pace, PacedLinks};
 use lavashell_core::keyboard::Key;
 use lavashell_core::prelude::{Density, constant};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::view::View;
 use lavashell_platform::{KeyAction, SurfaceEvent};
-use lavashell_renderer::skia::ISize;
 use lavashell_runtime::{RunError, run};
 use std::time::Duration;
 use std::{cell::RefCell, mem, rc::Rc};
@@ -89,7 +89,7 @@ fn paced_play_without_steps_follows_the_deadlines_until_the_run_rests() -> TestR
 fn frames_that_keep_arriving_at_an_unchanged_time_fail_paced_play() -> TestResult {
     let app = app(|_| {})?.on_frame(|_| {});
     let (ran, _frames_before_the_failure) =
-        paced(PacedLinks::default()).serve(|host| run::<TestPlatform>(app, host));
+        paced(PacedLinks::default()).serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     assert!(matches!(ran, Err(RunError::Platform(Error::NoRest { time })) if time.is_zero()));
     Ok(())
 }
@@ -112,7 +112,7 @@ fn paced_play_reports_the_keys_that_the_steps_press_through_the_pace() -> TestRe
             pressing.pace.publish(Pace::Finished);
         });
     let (ran, _frames_of_the_empty_window) =
-        paced(links).serve(|host| run::<TestPlatform>(app, host));
+        paced(links).serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     pressed.replace(Ok(()))?;
     let enter = convert_to_linux_key_code(Key::Enter);
@@ -152,17 +152,5 @@ fn paced_play_records_the_frame_of_a_window_closed_during_the_step() -> TestResu
         }
     });
     assert_eq!(recorded_times(paced(links), app)?, [Duration::ZERO]);
-    Ok(())
-}
-
-#[test]
-fn a_default_pace_records_one_frame_at_the_end_decoded_at_the_painted_size() -> TestResult {
-    let app = app(|_| {})?;
-    let (ran, frames) = paced(PacedLinks::default()).serve(|host| run::<TestPlatform>(app, host));
-    ran?;
-    let sizes: Vec<_> = (frames?.frames().iter())
-        .map(|frame| size_and_middle(frame).map(|(size, _)| size))
-        .collect();
-    assert_eq!(sizes, [Some(ISize::new(100, 100))]);
     Ok(())
 }

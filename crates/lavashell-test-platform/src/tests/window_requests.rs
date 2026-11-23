@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{APP_ID, KEYBOARD, SIXTY_HERTZ, TestResult, app, key_a};
-use crate::{HostScript, TestPlatform};
+use crate::HostScript;
+use crate::test_renderer::TestPlatformWithoutDrawing;
 use lavashell_core::geometry::Point;
 use lavashell_core::prelude::{ContextRequest, Density, DpExt, Modifier};
 use lavashell_core::surface::SurfaceId;
@@ -63,7 +64,7 @@ fn a_maximize_comes_back_as_a_configure_and_a_minimize_is_recorded() -> TestResu
         vec![WindowRequest::SetMaximized(true), WindowRequest::Minimize]
     })?;
     let script = typing_one_key().record_until_rest(SIXTY_HERTZ);
-    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    let (ran, frames) = script.serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     let maximized = (window.borrow().as_ref()).map(|window| window.state().maximized);
     assert_eq!(maximized, Some(true));
@@ -86,7 +87,7 @@ fn each_fullscreen_request_flips_the_state_of_the_window() -> TestResult {
     let script = (typing_one_key().record_until_rest(SIXTY_HERTZ))
         .report(key_a())
         .record_until_rest(SIXTY_HERTZ);
-    let (ran, _frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    let (ran, _frames) = script.serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     assert_eq!(*seen.borrow(), [false, true]);
     let fullscreen = (window.borrow().as_ref()).map(|window| window.state().fullscreen);
@@ -108,7 +109,7 @@ fn a_right_click_opens_the_window_menu_with_the_serial_of_its_press() -> TestRes
         ui.spacer(100.dp(), 100.dp(), Modifier::new().on_context(open_menu));
     })?;
     let script = pressing(Button::Secondary, at);
-    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    let (ran, frames) = script.serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     let menu = WindowControlRequest::ShowMenu {
         surface: SURFACE,
@@ -126,7 +127,7 @@ fn the_test_platform_records_the_move_started_by_a_press_in_a_drag_region() -> T
         ui.spacer(100.dp(), 100.dp(), whole_window);
     })?;
     let script = pressing(Button::Primary, Point::new(21.dp(), 23.dp()));
-    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    let (ran, frames) = script.serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     let begin_move = WindowControlRequest::BeginMove {
         surface: SURFACE,
@@ -144,7 +145,7 @@ fn the_test_platform_records_the_resize_started_by_a_press_in_a_resize_region() 
         ui.spacer(100.dp(), 100.dp(), whole_window);
     })?;
     let script = pressing(Button::Primary, Point::new(21.dp(), 23.dp()));
-    let (ran, frames) = script.serve(|host| run::<TestPlatform>(app, host));
+    let (ran, frames) = script.serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     let begin_resize = WindowControlRequest::BeginResize {
         surface: SURFACE,
@@ -159,7 +160,7 @@ fn the_test_platform_records_the_resize_started_by_a_press_in_a_resize_region() 
 fn a_window_menu_requested_from_a_key_does_not_open() -> TestResult {
     let (app, _window) =
         app_requesting_on_each_key(|_| vec![WindowRequest::ShowMenu(Point::new(1.dp(), 1.dp()))])?;
-    let (ran, frames) = typing_one_key().serve(|host| run::<TestPlatform>(app, host));
+    let (ran, frames) = typing_one_key().serve(|host| run::<TestPlatformWithoutDrawing>(app, host));
     ran?;
     assert_eq!(frames?.window_requests(), []);
     Ok(())

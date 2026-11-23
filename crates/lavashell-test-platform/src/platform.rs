@@ -2,9 +2,11 @@
 use crate::clock::VirtualClock;
 use crate::session::Session;
 use crate::{Error, FrameCapture, HostScript, RecordedFrames};
-use lavashell_platform::{Capability, Connection, HostFacts, OutputId, Platform, PlatformLinks};
-use lavashell_vulkan_renderer::HeadlessBackend;
+use lavashell_platform::{
+    Capability, Connection, HeadlessRendererBackend, HostFacts, OutputId, Platform, PlatformLinks,
+};
 use std::collections::BTreeSet;
+use std::marker::PhantomData;
 use std::sync::{Arc, mpsc};
 
 const OUTPUT: OutputId = OutputId(0);
@@ -14,27 +16,32 @@ pub struct ScriptedHost {
     pub(crate) recorded: mpsc::Sender<RecordedFrames>,
 }
 
-pub struct TestPlatform {
+pub struct TestPlatform<B> {
     clock: VirtualClock,
     host: ScriptedHost,
+    backend: PhantomData<B>,
 }
 
-impl Platform for TestPlatform {
+impl<B: HeadlessRendererBackend> Platform for TestPlatform<B> {
     type Setup = ScriptedHost;
     type Error = Error;
-    type Backend = HeadlessBackend;
+    type Backend = B;
     type Control = FrameCapture;
 
     fn connect(host: ScriptedHost) -> Result<Connection<Self>, Error> {
         let clock = VirtualClock::default();
         Ok(Connection {
-            backend: Some(HeadlessBackend::with_surfaces()),
+            backend: Some(B::create()),
             host: HostFacts {
                 outputs: vec![OUTPUT],
                 reports_presentation: true,
             },
             clock: Arc::new(clock.clone()),
-            platform: Self { clock, host },
+            platform: Self {
+                clock,
+                host,
+                backend: PhantomData,
+            },
         })
     }
 
@@ -42,9 +49,9 @@ impl Platform for TestPlatform {
         BTreeSet::new()
     }
 
-    fn serve(self, links: PlatformLinks<FrameCapture, HeadlessBackend>) -> Result<(), Error> {
+    fn serve(self, links: PlatformLinks<FrameCapture, B>) -> Result<(), Error> {
         let ScriptedHost { script, recorded } = self.host;
-        let mut session = Session::new(self.clock, links, script.density);
+        let mut session = Session::<B>::new(self.clock, links, script.density);
         let served = session.play(script.steps);
         let _test_gone = recorded.send(session.into_frames());
         served
