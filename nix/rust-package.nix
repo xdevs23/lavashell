@@ -17,11 +17,12 @@ let
     </fontconfig>
   '';
   runtime = import ./runtime.nix { inherit pkgs; };
+  artifactRecord = import ./cargo-artifact-record.nix;
 in
 {
   inherit version;
   buildType = contract.profile;
-  cargoBuildFlags = [ "--message-format=json-render-diagnostics" ];
+  cargoBuildFlags = [ artifactRecord.messageFormat ];
   nativeBuildInputs = with pkgs; [
     pkg-config
     clang
@@ -47,7 +48,7 @@ in
       export CC=gcc CXX=g++
       export PATH="$NIX_CC/bin:$PATH"
     '';
-  buildPhase = builtins.readFile ./cargo-build-record.sh;
+  buildPhase = artifactRecord.run "cargoBuildHook";
   preCheck = ''
     export XDG_CACHE_HOME="$TMPDIR/lavashell-test-cache"
     mkdir -p "$XDG_CACHE_HOME"
@@ -62,8 +63,8 @@ in
       done
     fi
     install -Dm444 COPYING "$out/share/licenses/lavashell/COPYING"
-    install -Dm444 cargo-artifacts.jsonl "$out/share/lavashell/cargo-artifacts.jsonl"
-  '';
+  ''
+  + artifactRecord.install;
   meta = {
     description = "Lavashell native UI examples";
     license = lib.licenses.gpl3Only;

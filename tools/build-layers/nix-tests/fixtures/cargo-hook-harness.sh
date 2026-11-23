@@ -27,7 +27,7 @@ cargo() {
 }
 source build-hook.sh
 source install-hook.sh
-source "$PHASE"
+eval "$buildPhase"
 printf 'CHECK_PKG_CONFIG=%s\n' "${PKG_CONFIG-missing}"
 printf 'CHECK_BINS=%s\n' "${bins-missing}"
 cargoInstallHook

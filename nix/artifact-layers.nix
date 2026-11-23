@@ -21,7 +21,6 @@ let
 in
 {
   inherit stack restore;
-  buildRecord = "share/lavashell/cargo-artifacts.jsonl";
   restoreLowerLayers = previous: restore previous + listTarget lowerTarget;
   storeLayerChanges = ''
     mkdir -p "$out/target" "$out/${dirOf removedPaths}"

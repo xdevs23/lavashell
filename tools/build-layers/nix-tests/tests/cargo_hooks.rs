@@ -3,12 +3,13 @@
 
 use lavashell_command_output::json::successful_output;
 use lavashell_command_output::nix::NixEvaluator;
+use lavashell_nix_tests::evaluation::evaluate;
 use lavashell_nix_tests::fixture_error::FixtureError;
-use lavashell_nix_tests::repository::repository_root;
-use serde::Deserialize;
+use lavashell_nix_tests::repository::copy_repository;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::os::unix::fs::symlink;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -18,7 +19,31 @@ const HARNESS: &str = concat!(
 );
 const HOOKS: &str = "pkgs/build-support/rust/hooks";
 const TARGET: &str = "x86_64-unknown-linux-gnu";
-const ARTIFACT_LOG: &str = "cargo-artifacts.jsonl";
+
+#[derive(Serialize)]
+struct TreeArguments {
+    root: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Phases {
+    build_phase: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordedPhases {
+    file_name: String,
+    package: Phases,
+}
+
+fn recorded_phases() -> Result<RecordedPhases, FixtureError> {
+    let directory = tempfile::tempdir()?;
+    let root = directory.path().join("repository");
+    copy_repository(&root)?;
+    evaluate("recorded-phases.nix", &TreeArguments { root })
+}
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
@@ -40,10 +65,14 @@ enum ArtifactLog {
     Full,
 }
 
-struct HookDirectory(TempDir);
+struct HookDirectory {
+    directory: TempDir,
+    phases: RecordedPhases,
+}
 
 impl HookDirectory {
     fn new() -> Result<Self, FixtureError> {
+        let phases = recorded_phases()?;
         let directory = tempfile::tempdir()?;
         let hooks = NixEvaluator::from_environment()?.nixpkgs().join(HOOKS);
         for (source, destination) in [
@@ -57,16 +86,20 @@ impl HookDirectory {
             fs::write(directory.path().join(destination), contents)?;
         }
         let _bytes: u64 = fs::copy(HARNESS, directory.path().join("harness.sh"))?;
-        Ok(Self(directory))
+        Ok(Self { directory, phases })
     }
 
     fn path(&self) -> &Path {
-        self.0.path()
+        self.directory.path()
+    }
+
+    fn record(&self) -> PathBuf {
+        self.path().join(&self.phases.file_name)
     }
 
     fn command(&self, cargo: &CargoOutcome, log: &ArtifactLog) -> Result<Command, FixtureError> {
         if let ArtifactLog::Full = log {
-            symlink("/dev/full", self.path().join(ARTIFACT_LOG))?;
+            symlink("/dev/full", self.record())?;
         }
         let status = match cargo {
             CargoOutcome::Succeeds => 0,
@@ -81,10 +114,7 @@ impl HookDirectory {
                 "PATH",
                 std::env::var_os("PATH").ok_or(FixtureError::PathUnset)?,
             )
-            .env(
-                "PHASE",
-                repository_root()?.join("nix/cargo-build-record.sh"),
-            )
+            .env("buildPhase", &self.phases.package.build_phase)
             .env("CARGO_FIXTURE_STATUS", status.to_string());
         Ok(command)
     }
@@ -100,7 +130,7 @@ fn exports_install_bins_and_complete_log_survive() -> Result<(), FixtureError> {
     assert!(stdout.contains("CHECK_PKG_CONFIG=retained-pkg-config"));
     assert!(!stdout.contains("CHECK_BINS=missing"));
     assert!(directory.path().join("out/bin/fixture").is_file());
-    let log = fs::read_to_string(directory.path().join(ARTIFACT_LOG))?;
+    let log = fs::read_to_string(directory.record())?;
     let messages: Vec<CargoMessage> = log
         .lines()
         .map(|line| serde_json::from_str(line).unwrap_or(CargoMessage::Other))

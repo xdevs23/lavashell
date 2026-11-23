@@ -19,6 +19,7 @@ let
   artifactLayers = import ./artifact-layers.nix { inherit lib; };
   buildScope = import ./cargo-build-scope.nix { inherit pkgs; };
   removeStubbedMembers = import ./stubbed-member-removal.nix { inherit pkgs; };
+  artifactRecord = import ./cargo-artifact-record.nix;
   clippy = import ./cargo-clippy.nix { inherit pkgs; };
   checkStubLayerReuse = import ./stub-layer-reuse-check.nix { inherit lib buildLayers; };
   selectedPackages =
@@ -114,7 +115,7 @@ let
           runHook preInstall
           ${lib.optionalString (dummyPackages != [ ]) (removeStubbedMembers (flags dummyPackages))}
           ${artifactLayers.storeLayerChanges}
-          install -Dm444 cargo-artifacts.jsonl "$out/${artifactLayers.buildRecord}"
+          ${artifactRecord.install}
           runHook postInstall
         '';
         postInstall = lib.concatMapStrings (check: check.script) stubLayerReuseChecks;
