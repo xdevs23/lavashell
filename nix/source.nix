@@ -12,6 +12,8 @@ let
   toml = import ./cargo-toml.nix { inherit lib; };
   targets = import ./cargo-targets.nix { inherit lib; };
   dependencyWorkspace = import ./dependency-workspace.nix { inherit root toml; };
+  packageDirectories = import ./package-directories.nix { inherit lib root; };
+  packageTests = import ./package-tests.nix { inherit lib workspaceCrates packageDirectories; };
   projection = import ./projection.nix {
     inherit
       lib
@@ -96,6 +98,8 @@ in
   inherit
     project
     metadataFor
+    packageDirectories
+    packageTests
     ;
   cargoWorkspaces = lib.mapAttrs (_: directory: {
     inherit directory;

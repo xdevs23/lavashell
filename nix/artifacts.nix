@@ -78,7 +78,7 @@ let
       previous ? [ ],
       dummyPackages,
       testedByLayerAbove ? [ ],
-      testedByOtherPackages ? [ ],
+      tested,
       configuration,
       validateEngine ? false,
       features ? [ ],
@@ -86,9 +86,9 @@ let
     let
       names = sources.crateNames projection.crates;
       selected = projection.selectedPackages or (selectedPackages directory);
-      testPackages = lib.subtractLists (
-        dummyPackages ++ testedByOtherPackages ++ packagesTestedThrough previous
-      ) names;
+      testPackages = lib.subtractLists (dummyPackages ++ packagesTestedThrough previous) (
+        lib.intersectLists tested names
+      );
       stubLayer = lib.subtractLists dummyPackages names == [ ];
       stubLayerReuseChecks = lib.optional (!stubLayer) (checkStubLayerReuse previous);
       checkedPackages = if stubLayer then testedByLayerAbove else testPackages;
@@ -156,6 +156,7 @@ let
         ;
       inherit (layer) projection source;
       dummyPackages = sources.crateNames layer.projection.crates;
+      tested = [ ];
     };
 in
 {
@@ -195,7 +196,7 @@ in
       example ? true,
       validateEngine ? false,
       features ? [ ],
-      testedByOtherPackages ? [ ],
+      tested,
     }:
     let
       root = sources.packageName directory;
@@ -207,7 +208,7 @@ in
         previous
         validateEngine
         features
-        testedByOtherPackages
+        tested
         ;
       projection = sources.project directory;
       source = if example then sources.frameworkSource directory else sources.sourceFor directory;
