@@ -118,7 +118,7 @@ fn a_finger_slid_to_the_upper_row_types_the_letter_there() -> Result<(), TestErr
     let mut host = host_at(docked(Side::Right, 640.dp())?, vec![nine_under_a()?])?;
     long_press(&mut host, "a")?;
     let upper = bounds(&host, &Role::MenuItem, "ã")?.center();
-    host.view.input(InputEvent::TouchMove(finger(1, upper)));
+    host.view.input(touch_move(finger(1, upper)));
     host.view.input(InputEvent::TouchUp(finger(1, upper)));
     assert_eq!(host.sent(), [Host::commit("ã")]);
     Ok(())
@@ -150,7 +150,7 @@ fn a_finger_sliding_in_a_popup_beside_another_finger_types_its_letter_and_passes
     host.view.input(InputEvent::TouchDown(finger(2, resting)));
     long_press(&mut host, "a")?;
     let third = bounds(&host, &Role::MenuItem, "æ")?.center();
-    host.view.input(InputEvent::TouchMove(finger(1, third)));
+    host.view.input(touch_move(finger(1, third)));
     host.view.input(InputEvent::TouchUp(finger(1, third)));
     assert!(host.transforms.borrow().is_empty());
     assert_eq!(host.sent(), [Host::commit("æ")]);

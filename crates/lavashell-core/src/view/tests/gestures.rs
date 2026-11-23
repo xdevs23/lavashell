@@ -48,22 +48,13 @@ fn a_tab_dragged_along_the_list_containing_it_scrolls_the_list_past_the_slop_and
     )?;
     let start = view.tagged_center(&("tab", 0))?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -4.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -4.dp()))));
     assert!(view.tagged_state(&("tab", 0))?.pointer.active);
     assert_eq!(scroll.offset(), Dp::ZERO);
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -30.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -30.dp()))));
     assert_eq!(scroll.offset(), 22.dp());
     assert!(!view.tagged_state(&("tab", 0))?.pointer.active);
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -50.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -50.dp()))));
     view.input(InputEvent::TouchUp(finger(
         1,
         start.offset(Dp::ZERO, -50.dp()),
@@ -94,10 +85,7 @@ fn a_list_drawn_at_half_size_scrolls_by_twice_the_movement_of_the_finger() -> Te
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let start = view.tagged_center(&("row", 0))?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -18.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -18.dp()))));
     assert_eq!(scroll.offset(), 20.dp());
     Ok(())
 }
@@ -109,15 +97,9 @@ fn a_diagonal_move_that_rejects_a_still_press_scrolls_the_list_only_past_the_slo
     let mut view = list(&mut scene, scroll.clone(), State::new(0), Rc::default())?;
     let start = view.tagged_center(&("tab", 0))?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(7.dp(), -5.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(7.dp(), -5.dp()))));
     assert_eq!(scroll.offset(), Dp::ZERO);
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(7.dp(), -30.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(7.dp(), -30.dp()))));
     assert_eq!(scroll.offset(), 22.dp());
     Ok(())
 }
@@ -134,10 +116,7 @@ fn a_touch_press_that_does_not_move_activates_and_takes_focus_at_the_release() -
     )?;
     let start = view.tagged_center(&("tab", 0))?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(3.dp(), 3.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(3.dp(), 3.dp()))));
     assert!(!view.tagged_state(&("tab", 0))?.focus.focused);
     view.input(InputEvent::TouchUp(finger(1, start.offset(3.dp(), 3.dp()))));
     assert_eq!(activations.get(), 1);
@@ -235,14 +214,8 @@ fn a_drag_inside_a_list_receives_a_diagonal_move_and_not_a_move_along_the_list()
     let mut view = list(&mut scene, scroll.clone(), State::new(0), drags.clone())?;
     let start = view.tagged_center(&"slider")?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(30.dp(), -30.dp()),
-    )));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(40.dp(), -60.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(30.dp(), -30.dp()))));
+    view.input(touch_move(finger(1, start.offset(40.dp(), -60.dp()))));
     view.input(InputEvent::TouchUp(finger(
         1,
         start.offset(40.dp(), -60.dp()),
@@ -253,10 +226,7 @@ fn a_drag_inside_a_list_receives_a_diagonal_move_and_not_a_move_along_the_list()
     );
     assert_eq!(scroll.offset(), Dp::ZERO);
     view.input(InputEvent::TouchDown(finger(2, start)));
-    view.input(InputEvent::TouchMove(finger(
-        2,
-        start.offset(2.dp(), -20.dp()),
-    )));
+    view.input(touch_move(finger(2, start.offset(2.dp(), -20.dp()))));
     assert_eq!(scroll.offset(), 12.dp());
     assert_eq!(drags.borrow().len(), 3);
     Ok(())
@@ -272,10 +242,7 @@ fn a_flick_mostly_along_the_list_that_starts_on_a_sideways_drag_scrolls_the_list
     let mut view = list(&mut scene, scroll.clone(), State::new(0), drags.clone())?;
     let start = view.tagged_center(&"slider")?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(9.dp(), -30.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(9.dp(), -30.dp()))));
     assert_eq!(scroll.offset(), 22.dp());
     assert!(drags.borrow().is_empty());
     Ok(())
@@ -300,10 +267,7 @@ fn a_node_with_drag_and_activate_handlers_is_activated_only_by_a_press_that_does
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let start = view.tagged_center(&"card")?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(20.dp(), Dp::ZERO),
-    )));
+    view.input(touch_move(finger(1, start.offset(20.dp(), Dp::ZERO))));
     view.input(InputEvent::TouchUp(finger(
         1,
         start.offset(20.dp(), Dp::ZERO),
@@ -351,10 +315,7 @@ fn removing_a_node_cancels_its_drag() -> TestResult {
     advance(&mut scene, &mut view, WINDOW_SIZE, 0)?;
     let start = view.tagged_center(&"handle")?;
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, 20.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, 20.dp()))));
     shown.set(false);
     advance(&mut scene, &mut view, WINDOW_SIZE, 16)?;
     view.input(InputEvent::TouchUp(finger(

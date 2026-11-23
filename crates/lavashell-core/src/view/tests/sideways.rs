@@ -63,7 +63,7 @@ fn page(
 
 fn swipe(view: &mut View, point: i32, from: Point, to: Point) {
     view.input(InputEvent::TouchDown(finger(point, from)));
-    view.input(InputEvent::TouchMove(finger(point, to)));
+    view.input(touch_move(finger(point, to)));
     view.input(InputEvent::TouchUp(finger(point, to)));
 }
 

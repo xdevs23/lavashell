@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use lavashell_core::view::{ComponentError, CompositionError};
-use lavashell_test_fixtures::failure_causes;
+use lavashell_test_fixtures::{failure_causes, touch_move};
 
 #[test]
 fn button_behavior_survives_caller_styling_and_respects_clip_and_disabled() -> Result<(), TestError>
@@ -130,7 +130,7 @@ fn a_slider_restores_its_value_from_before_a_drag_that_is_cancelled() -> Result<
     )));
     assert_close(value.get(), 0.25);
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    view.input(InputEvent::TouchMove(TouchSample::finger(
+    view.input(touch_move(TouchSample::finger(
         touch,
         Point::new(80.dp(), 10.dp()),
     )));
@@ -156,7 +156,7 @@ fn a_slider_restores_the_value_from_before_its_drags_when_the_last_running_drag_
         Point::new(60.dp(), 10.dp()),
     )));
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    view.input(InputEvent::TouchMove(TouchSample::finger(
+    view.input(touch_move(TouchSample::finger(
         first,
         Point::new(80.dp(), 10.dp()),
     )));
@@ -311,7 +311,7 @@ fn each_finger_on_a_scrollbar_drags_from_the_point_where_it_grabbed_the_thumb()
         Point::new(150.dp(), 45.dp()),
     )));
     render(&mut view, viewport, &mut HalfEmMetrics)?;
-    view.input(InputEvent::TouchMove(TouchSample::finger(
+    view.input(touch_move(TouchSample::finger(
         first,
         Point::new(55.dp(), 45.dp()),
     )));

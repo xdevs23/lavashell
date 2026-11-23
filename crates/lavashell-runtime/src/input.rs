@@ -180,7 +180,7 @@ impl InputRouter {
             }
             DeviceEvent::TouchDown { surface, sample } => vec![self.touches.down(surface, sample)],
             DeviceEvent::TouchMotion { earlier, latest } => (earlier.into_iter().chain([latest]))
-                .filter_map(|moved| self.touches.motion(moved.sample))
+                .filter_map(|moved| self.touches.motion(moved))
                 .collect(),
             DeviceEvent::TouchUp(sample) => self.touches.up(sample).into_iter().collect(),
             DeviceEvent::TouchCancel(touch) => self.touches.cancel(touch).into_iter().collect(),

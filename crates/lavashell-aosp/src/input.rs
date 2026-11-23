@@ -4,10 +4,8 @@ use lavashell_core::geometry::{Point, Rect, ScaledViewport};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::Px;
-use lavashell_core::view::TouchSample;
-use lavashell_platform::{
-    Button, DeviceEvent, InputSerial, InputTime, PointerDevice, PressState, TouchMove,
-};
+use lavashell_core::view::{InputTime, TouchMove, TouchSample};
+use lavashell_platform::{Button, DeviceEvent, InputSerial, PointerDevice, PressState};
 
 pub(crate) const MOUSE: PointerDevice = PointerDevice(0);
 

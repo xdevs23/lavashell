@@ -218,7 +218,7 @@ fn a_long_press_offers_more_letters_and_sliding_chooses_one() -> Result<(), Test
         "the popup replaces the preview"
     );
     let second = node(&host.view, &Role::MenuItem, &chosen)?.bounds.center();
-    host.view.input(InputEvent::TouchMove(finger(1, second)));
+    host.view.input(touch_move(finger(1, second)));
     host.view.input(InputEvent::TouchUp(finger(1, second)));
     host.frame()?;
     assert!(!has(&host.view, &Role::Menu, "More letters"));
@@ -242,8 +242,7 @@ fn a_long_press_on_the_globe_lists_the_layouts_to_choose_by_sliding_or_by_a_tap(
     let portuguese = node(&host.view, &Role::MenuItem, shipped()?.portuguese.name())?
         .bounds
         .center();
-    host.view
-        .input(InputEvent::TouchMove(finger(1, portuguese)));
+    host.view.input(touch_move(finger(1, portuguese)));
     host.view.input(InputEvent::TouchUp(finger(1, portuguese)));
     host.frame()?;
     assert_eq!(host.layout.get().id(), shipped()?.portuguese.id());
@@ -324,7 +323,7 @@ fn a_finger_that_slides_off_the_letters_of_a_long_press_types_none() -> Result<(
     host.view.input(InputEvent::TouchDown(finger(1, e)));
     host.at(host.time + LONG_PRESS)?;
     let away = Point::new(e.x, e.y + 200.dp());
-    host.view.input(InputEvent::TouchMove(finger(1, away)));
+    host.view.input(touch_move(finger(1, away)));
     host.view.input(InputEvent::TouchUp(finger(1, away)));
     host.frame()?;
     assert!(!has(&host.view, &Role::Menu, "More letters"));

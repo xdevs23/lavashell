@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Play, near, set, settled, shot};
+use lavashell::core::view::fixture::touch_move;
 use lavashell::keyboard::{Placement, Side};
 use lavashell::prelude::*;
 use lavashell_example_recordings::Error;
@@ -52,8 +53,8 @@ fn pinch_keys(play: &mut Play, first: &'static str, second: &'static str, by: Dp
         for input in [
             InputEvent::TouchDown(finger(1, start)),
             InputEvent::TouchDown(finger(2, end)),
-            InputEvent::TouchMove(finger(2, halfway)),
-            InputEvent::TouchMove(finger(2, moved)),
+            touch_move(finger(2, halfway)),
+            touch_move(finger(2, moved)),
             InputEvent::TouchUp(finger(2, moved)),
             InputEvent::TouchUp(finger(1, start)),
         ] {

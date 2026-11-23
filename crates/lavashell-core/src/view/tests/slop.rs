@@ -26,15 +26,9 @@ fn without_a_slop_of_the_platform_a_finger_scrolls_past_one_device_pixel() -> Te
     )?;
     let start = Point::new(100.dp(), 50.dp());
     view.input(InputEvent::TouchDown(finger(1, start)));
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -0.5.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -0.5.dp()))));
     assert_eq!(scroll.offset(), Dp::ZERO);
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -3.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -3.dp()))));
     assert_eq!(scroll.offset(), 2.5.dp());
     Ok(())
 }

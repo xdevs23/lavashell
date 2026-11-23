@@ -15,20 +15,14 @@ fn two_fingers_moving_together_on_a_list_scroll_it_as_far_as_one_finger() -> Tes
     view.input(InputEvent::TouchDown(finger(1, first)));
     view.input(InputEvent::TouchDown(finger(2, second)));
     for (index, lift) in [-30.dp(), -50.dp()].into_iter().enumerate() {
-        view.input(InputEvent::TouchMove(finger(
-            1,
-            first.offset(Dp::ZERO, lift),
-        )));
+        view.input(touch_move(finger(1, first.offset(Dp::ZERO, lift))));
         advance(
             &mut scene,
             &mut view,
             WINDOW_SIZE,
             16 * (2 * index as u64 + 1),
         )?;
-        view.input(InputEvent::TouchMove(finger(
-            2,
-            second.offset(Dp::ZERO, lift),
-        )));
+        view.input(touch_move(finger(2, second.offset(Dp::ZERO, lift))));
         advance(
             &mut scene,
             &mut view,
@@ -65,10 +59,7 @@ fn a_tab_removed_before_the_finger_moves_leaves_the_finger_to_the_list() -> Test
     view.input(InputEvent::TouchDown(finger(1, start)));
     shown.set(false);
     advance(&mut scene, &mut view, WINDOW_SIZE, 16)?;
-    view.input(InputEvent::TouchMove(finger(
-        1,
-        start.offset(Dp::ZERO, -30.dp()),
-    )));
+    view.input(touch_move(finger(1, start.offset(Dp::ZERO, -30.dp()))));
     view.input(InputEvent::TouchUp(finger(
         1,
         start.offset(Dp::ZERO, -30.dp()),

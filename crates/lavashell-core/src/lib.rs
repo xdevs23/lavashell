@@ -120,9 +120,9 @@ pub mod prelude {
         Pct, PctExt, Positive, PositiveDp, Px, PxExt, ScaleFactor, Sp, SpExt, Vh, VhExt, Vw, VwExt,
     };
     pub use crate::view::{
-        BoundsMotion, Cursor, InputEvent, Presence, PresenceParts, Proposal, ScaleOrigin,
-        TextCaret, TextCluster, TextDropTarget, TextGeometry, TextMeasurer, TextPasteTarget,
-        TextSelectionSource, TouchSample, Transition, View,
+        BoundsMotion, Cursor, InputEvent, InputTime, Presence, PresenceParts, Proposal,
+        ScaleOrigin, TextCaret, TextCluster, TextDropTarget, TextGeometry, TextMeasurer,
+        TextPasteTarget, TextSelectionSource, TouchMove, TouchSample, Transition, View,
     };
     pub use crate::window::{
         Edge, Edges, ResizeEdge, WINDOW, WindowCapabilities, WindowControl, WindowHandle,

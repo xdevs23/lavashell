@@ -67,13 +67,10 @@ fn each_touch_point_captures_the_node_it_pressed_and_releases_it_alone() -> Test
     assert!(view.tagged_state(&"a")?.pointer.active && view.tagged_state(&"b")?.pointer.active);
     view.input(InputEvent::TouchUp(finger(1, a)));
     assert!(!view.tagged_state(&"a")?.pointer.active && view.tagged_state(&"b")?.pointer.active);
-    view.input(InputEvent::TouchMove(finger(
-        2,
-        Point::new(300.dp(), 200.dp()),
-    )));
+    view.input(touch_move(finger(2, Point::new(300.dp(), 200.dp()))));
     let state = view.tagged_state(&"b")?;
     assert!(state.pointer.captured && !state.pointer.active);
-    view.input(InputEvent::TouchMove(finger(2, b)));
+    view.input(touch_move(finger(2, b)));
     view.input(InputEvent::TouchUp(finger(2, b)));
     assert_eq!(
         *log.borrow(),
@@ -111,7 +108,7 @@ fn a_captured_handler_receives_the_end_of_a_press_without_a_release() -> TestRes
     let KeysFixture { mut view, log } = keys(&mut scene)?;
     let (a, b) = (at(&view, "a")?, at(&view, "b")?);
     view.input(InputEvent::TouchDown(finger(1, a)));
-    view.input(InputEvent::TouchMove(finger(1, b)));
+    view.input(touch_move(finger(1, b)));
     view.input(InputEvent::WindowFocus(false));
     view.input(InputEvent::WindowFocus(true));
     view.input(InputEvent::Press(a));
@@ -261,8 +258,8 @@ fn a_touch_point_that_is_not_down_neither_moves_nor_hovers() -> TestResult {
     let a = at(&view, "a")?;
     view.input(InputEvent::TouchDown(finger(1, a)));
     view.input(InputEvent::TouchCancel(touch(1)));
-    view.input(InputEvent::TouchMove(finger(1, a)));
-    view.input(InputEvent::TouchMove(finger(2, a)));
+    view.input(touch_move(finger(1, a)));
+    view.input(touch_move(finger(2, a)));
     assert!(!view.tagged_state(&"a")?.pointer.hovered);
     view.input(InputEvent::TouchUp(finger(1, a)));
     assert_eq!(*log.borrow(), ["a touch 0.1 down", "a touch 0.1 cancel"]);

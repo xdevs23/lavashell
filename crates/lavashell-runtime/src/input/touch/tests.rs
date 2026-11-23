@@ -4,8 +4,8 @@ use lavashell_core::geometry::Point;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::TouchId;
 use lavashell_core::units::DpExt;
-use lavashell_core::view::{InputEvent, TouchSample};
-use lavashell_platform::{DeviceEvent, InputTime, TouchMove};
+use lavashell_core::view::{InputEvent, InputTime, TouchMove, TouchSample};
+use lavashell_platform::DeviceEvent;
 use std::time::Duration;
 
 const WINDOW: SurfaceId = SurfaceId::numbered(0);
@@ -44,35 +44,39 @@ fn on(surface: SurfaceId, input: InputEvent) -> RoutedInput {
 #[test]
 fn a_touch_point_moves_and_goes_up_on_the_surface_where_it_went_down() {
     let mut router = InputRouter::new(None);
-    let (pressed, position) = (sample(4, 3, 10, 20), sample(4, 3, 30, 40));
+    let (pressed, movement) = (sample(4, 3, 10, 20), moved(sample(4, 3, 30, 40), 16));
     let lifted = sample(4, 3, 35, 45);
     assert_eq!(
         router.route(down(PANEL, pressed)),
         [on(PANEL, InputEvent::TouchDown(pressed))]
     );
     assert_eq!(
-        router.route(motion(moved(position, 16))),
-        [on(PANEL, InputEvent::TouchMove(position))]
+        router.route(motion(movement)),
+        [on(PANEL, InputEvent::TouchMove(movement))]
     );
     assert_eq!(
         router.route(DeviceEvent::TouchUp(lifted)),
         [on(PANEL, InputEvent::TouchUp(lifted))]
     );
     assert_eq!(router.route(DeviceEvent::TouchUp(lifted)), []);
-    assert_eq!(router.route(motion(moved(position, 16))), []);
+    assert_eq!(router.route(motion(movement)), []);
 }
 
 #[test]
-fn a_merged_touch_motion_moves_the_point_through_every_position_oldest_first() {
+fn a_batched_touch_motion_moves_the_point_through_every_position_with_its_time_oldest_first() {
     let mut router = InputRouter::new(None);
-    let positions = [sample(1, 2, 3, 3), sample(1, 2, 4, 3), sample(1, 2, 5, 4)];
+    let movements = [
+        moved(sample(1, 2, 3, 3), 8),
+        moved(sample(1, 2, 4, 3), 16),
+        moved(sample(1, 2, 5, 4), 24),
+    ];
     assert_eq!(router.route(down(PANEL, sample(1, 2, 2, 2))).len(), 1);
-    let merged = DeviceEvent::TouchMotion {
-        earlier: vec![moved(positions[0], 8), moved(positions[1], 16)],
-        latest: moved(positions[2], 24),
+    let batched = DeviceEvent::TouchMotion {
+        earlier: movements[..2].to_vec(),
+        latest: movements[2],
     };
-    let moves = positions.map(|position| on(PANEL, InputEvent::TouchMove(position)));
-    assert_eq!(router.route(merged), moves);
+    let moves = movements.map(|movement| on(PANEL, InputEvent::TouchMove(movement)));
+    assert_eq!(router.route(batched), moves);
 }
 
 #[test]

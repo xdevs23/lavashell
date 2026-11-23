@@ -8,8 +8,8 @@ use lavashell_core::geometry::{PixelScale, Point, ScaledViewport, Size, Viewport
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{PointerKind, TouchId};
 use lavashell_core::units::{Density, DpExt, NumberError};
-use lavashell_core::view::TouchSample;
-use lavashell_platform::{Button, DeviceEvent, InputSerial, InputTime, PressState, TouchMove};
+use lavashell_core::view::{InputTime, TouchMove, TouchSample};
+use lavashell_platform::{Button, DeviceEvent, InputSerial, PressState};
 use std::time::Duration;
 
 const SURFACE: SurfaceId = SurfaceId::numbered(1);

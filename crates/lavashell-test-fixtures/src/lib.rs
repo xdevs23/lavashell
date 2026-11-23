@@ -11,5 +11,6 @@ pub use lavashell_core::platform::fixture::{
     DOUBLE_PRESS, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, facts,
 };
 pub use lavashell_core::scene::tree::show_all;
+pub use lavashell_core::view::fixture::touch_move;
 pub use scene::RecordedScene;
 pub use text::NoText;

@@ -2,7 +2,7 @@
 use super::{RoutedInput, input_without_pointer};
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::TouchId;
-use lavashell_core::view::{InputEvent, TouchSample};
+use lavashell_core::view::{InputEvent, TouchMove, TouchSample};
 use std::collections::BTreeMap;
 
 #[derive(Default)]
@@ -16,12 +16,9 @@ impl TouchPoints {
         input_without_pointer(surface, InputEvent::TouchDown(sample))
     }
 
-    pub(super) fn motion(&self, sample: TouchSample) -> Option<RoutedInput> {
-        let &surface = self.points.get(&sample.id)?;
-        Some(input_without_pointer(
-            surface,
-            InputEvent::TouchMove(sample),
-        ))
+    pub(super) fn motion(&self, moved: TouchMove) -> Option<RoutedInput> {
+        let &surface = self.points.get(&moved.sample.id)?;
+        Some(input_without_pointer(surface, InputEvent::TouchMove(moved)))
     }
 
     pub(super) fn up(&mut self, sample: TouchSample) -> Option<RoutedInput> {

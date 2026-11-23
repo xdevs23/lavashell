@@ -2,7 +2,8 @@
 use super::Translator;
 use crate::protocol_serial::ProtocolSerial;
 use crate::sctk;
-use lavashell_platform::{DeviceEvent, InputTime};
+use lavashell_core::view::InputTime;
+use lavashell_platform::DeviceEvent;
 use sctk::reexports::client::protocol::{wl_surface, wl_touch};
 use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::seat::touch::TouchHandler;

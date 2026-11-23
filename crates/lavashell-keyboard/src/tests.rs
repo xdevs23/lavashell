@@ -6,6 +6,7 @@ use lavashell_core::accessibility::AccessibleNode;
 use lavashell_core::prelude::*;
 use lavashell_test_fixtures::{
     DOUBLE_PRESS, FrameFailure, LONG_PRESS, REPEAT_DELAY, REPEAT_INTERVAL, WithoutFailures,
+    touch_move,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

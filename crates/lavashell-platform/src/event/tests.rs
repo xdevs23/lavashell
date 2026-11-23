@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::*;
 use crate::test_merge::merged;
-use crate::{Button, InputSerial, InputTime, PointerDevice, PressState, TouchMove};
+use crate::{Button, InputSerial, PointerDevice, PressState};
 use lavashell_actor::{Closed, mailbox};
 use lavashell_core::geometry::Point;
 use lavashell_core::platform::KeyRepeat;
 use lavashell_core::surface::ConfigureToken;
 use lavashell_core::ui::TouchId;
 use lavashell_core::units::{Density, Dp, DpExt, NumberError};
-use lavashell_core::view::TouchSample;
+use lavashell_core::view::{InputTime, TouchMove, TouchSample};
 use std::time::Duration;
 
 const MOUSE: PointerDevice = PointerDevice(1);

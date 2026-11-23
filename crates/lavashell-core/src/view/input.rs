@@ -260,7 +260,7 @@ impl View {
                 self.redraw = true;
             }
             InputEvent::Move(p) => self.move_pointer(PointerSample::Primary(p)),
-            InputEvent::TouchMove(sample) => self.move_pointer(PointerSample::Touch(sample)),
+            InputEvent::TouchMove(moved) => self.move_pointer(PointerSample::Touch(moved.sample)),
             InputEvent::Press(p) => self.press(PointerSample::Primary(p)),
             InputEvent::TouchDown(sample) => self.press(PointerSample::Touch(sample)),
             InputEvent::Release(p) => self.release(PointerSample::Primary(p)),

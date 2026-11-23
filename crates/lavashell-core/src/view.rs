@@ -56,6 +56,8 @@ pub use transition::{BoundsMotion, Exit, Transition};
 
 #[cfg(test)]
 mod component_tests;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
 #[cfg(test)]
 pub(crate) mod test_scene;
 #[cfg(test)]
@@ -79,6 +81,7 @@ use crate::ui::{
 use crate::units::{Density, Dp};
 use crate::window::{ResizeEdge, WINDOW, WindowRegion};
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -103,7 +106,7 @@ pub enum InputEvent {
     Press(Point),
     Release(Point),
     TouchDown(TouchSample),
-    TouchMove(TouchSample),
+    TouchMove(TouchMove),
     TouchUp(TouchSample),
     TouchCancel(TouchId),
     Scroll { at: Point, delta: Point },
@@ -129,6 +132,17 @@ impl TouchSample {
             kind: PointerKind::Finger,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct InputTime(pub Duration);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TouchMove {
+    pub sample: TouchSample,
+    pub time: InputTime,
 }
 
 #[derive(Clone)]

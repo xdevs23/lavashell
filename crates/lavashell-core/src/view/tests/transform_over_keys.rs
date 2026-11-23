@@ -54,7 +54,7 @@ fn two_fingers_on_two_keys_that_stay_apart_type_on_both_keys() -> TestResult {
     let mut view = keys(&mut scene, transforms.clone(), presses.clone())?;
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchDown(finger_in_row(2, 250.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 246.dp())));
+    view.input(touch_move(finger_in_row(2, 246.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(2, 246.dp())));
     assert!(transforms.borrow().is_empty());
@@ -78,8 +78,8 @@ fn two_fingers_on_two_keys_that_move_together_cancel_the_keys_and_report_the_sca
     let mut view = keys(&mut scene, transforms.clone(), presses.clone())?;
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchDown(finger_in_row(2, 280.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 250.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 150.dp())));
+    view.input(touch_move(finger_in_row(2, 250.dp())));
+    view.input(touch_move(finger_in_row(2, 150.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(2, 150.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(1, 50.dp())));
     assert_eq!(
@@ -121,8 +121,8 @@ fn two_fingers_on_two_keys_that_move_apart_cancel_the_keys_and_report_the_scale(
     let mut view = keys(&mut scene, transforms.clone(), presses.clone())?;
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchDown(finger_in_row(2, 220.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 250.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 290.dp())));
+    view.input(touch_move(finger_in_row(2, 250.dp())));
+    view.input(touch_move(finger_in_row(2, 290.dp())));
     assert_eq!(
         phases_and_scales(&transforms),
         [(DragPhase::Started, 1.0), (DragPhase::Moved, 1.2)]
@@ -145,8 +145,8 @@ fn a_single_finger_on_a_key_never_starts_the_transform() -> TestResult {
     let mut scene = Scene::default();
     let mut view = keys(&mut scene, transforms.clone(), presses.clone())?;
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(1, 90.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(1, 10.dp())));
+    view.input(touch_move(finger_in_row(1, 90.dp())));
+    view.input(touch_move(finger_in_row(1, 10.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(1, 10.dp())));
     assert!(transforms.borrow().is_empty());
     assert_eq!(
@@ -168,9 +168,9 @@ fn a_finger_beside_the_keys_takes_the_key_of_the_other_finger_past_the_slop() ->
     let mut view = keys(&mut scene, transforms.clone(), presses.clone())?;
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchDown(finger_in_row(2, 150.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 145.dp())));
+    view.input(touch_move(finger_in_row(2, 145.dp())));
     assert!(transforms.borrow().is_empty());
-    view.input(InputEvent::TouchMove(finger_in_row(2, 130.dp())));
+    view.input(touch_move(finger_in_row(2, 130.dp())));
     assert_eq!(phases_and_scales(&transforms), [(DragPhase::Started, 1.0)]);
     assert_eq!(
         *presses.borrow(),
@@ -188,7 +188,7 @@ fn a_finger_lifted_from_a_key_leaves_the_transform_and_the_other_key_keeps_its_f
     view.input(InputEvent::TouchDown(finger_in_row(1, 50.dp())));
     view.input(InputEvent::TouchDown(finger_in_row(2, 250.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(1, 50.dp())));
-    view.input(InputEvent::TouchMove(finger_in_row(2, 150.dp())));
+    view.input(touch_move(finger_in_row(2, 150.dp())));
     assert!(transforms.borrow().is_empty());
     assert_eq!(presses.borrow().last(), Some(&("k", PointerPhase::Moved)));
     Ok(())
@@ -209,7 +209,7 @@ fn a_node_composed_again_without_on_transform_leaves_the_keys_their_fingers() ->
     view.input(InputEvent::TouchDown(finger_in_row(2, 250.dp())));
     transforming.set(false);
     advance(&mut scene, &mut view, WINDOW_SIZE, 16)?;
-    view.input(InputEvent::TouchMove(finger_in_row(2, 150.dp())));
+    view.input(touch_move(finger_in_row(2, 150.dp())));
     view.input(InputEvent::TouchUp(finger_in_row(2, 150.dp())));
     assert!(transforms.borrow().is_empty());
     assert_eq!(

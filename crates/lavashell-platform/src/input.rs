@@ -4,8 +4,7 @@ use lavashell_core::geometry::Point;
 use lavashell_core::keyboard::KeyStroke;
 use lavashell_core::surface::SurfaceId;
 use lavashell_core::ui::{InputModifiers, TouchId};
-use lavashell_core::view::{Cursor, TouchSample};
-use std::time::Duration;
+use lavashell_core::view::{Cursor, TouchMove, TouchSample};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PointerDevice(pub u64);
@@ -15,15 +14,6 @@ pub struct KeyboardDevice(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InputSerial(pub u64);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InputTime(pub Duration);
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TouchMove {
-    pub sample: TouchSample,
-    pub time: InputTime,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PointerPress {

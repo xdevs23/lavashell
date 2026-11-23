@@ -231,7 +231,7 @@ fn shift_leaves_a_letter_without_a_single_capital_as_it_is() -> Result<(), TestE
     host.at(host.time + LONG_PRESS)?;
     assert!(has(&host.view, &Role::MenuItem, "ß"));
     let sharp = node(&host.view, &Role::MenuItem, "ß")?.bounds.center();
-    host.view.input(InputEvent::TouchMove(finger(1, sharp)));
+    host.view.input(touch_move(finger(1, sharp)));
     host.view.input(InputEvent::TouchUp(finger(1, sharp)));
     assert_eq!(host.sent(), [Host::commit("ß")]);
     Ok(())

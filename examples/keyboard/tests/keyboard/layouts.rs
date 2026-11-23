@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use super::{Play, platform, query, settled, shot, showing, touch_key};
 use icu_locale_core::langid;
+use lavashell::core::view::fixture::touch_move;
 use lavashell::core::view::press_and_release_at;
 use lavashell::keyboard::{Layout, ShippedLayouts};
 use lavashell::prelude::*;
@@ -132,7 +133,7 @@ pub(super) fn further_letters(play: &mut Play, shipped: &'static ShippedLayouts)
     shot(play, more_letters(), "accents-portugues-e");
     play.push(Start::NEXT, |view, _, _| {
         let circumflex = node(view, &Role::MenuItem, "ê")?.bounds.center();
-        view.input(InputEvent::TouchMove(finger(1, circumflex)));
+        view.input(touch_move(finger(1, circumflex)));
         view.input(InputEvent::TouchUp(finger(1, circumflex)));
         Ok(())
     });

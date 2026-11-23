@@ -24,7 +24,7 @@ fn on_keys(first: &'static str, second: &'static str) -> impl Fn(&View) -> Find 
 
 fn slide(host: &mut Host, points: &[Point]) {
     for point in points {
-        host.view.input(InputEvent::TouchMove(finger(2, *point)));
+        host.view.input(touch_move(finger(2, *point)));
     }
 }
 
