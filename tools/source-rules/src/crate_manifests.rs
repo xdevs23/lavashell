@@ -46,6 +46,17 @@ enum_with_values! {
 #[derive(Debug)]
 pub struct UnknownInheritedTable;
 
+enum_with_values! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum DependencyTable {
+        Dependencies,
+        DevDependencies,
+        BuildDependencies,
+    }
+
+    pub const ALL;
+}
+
 #[derive(Clone, Copy)]
 struct RootTables<'a> {
     workspace: &'a Workspace,
@@ -174,17 +185,16 @@ impl DependencyEntry {
 }
 
 impl DependencyTables {
-    fn entries(&self) -> impl Iterator<Item = (&String, &DependencyEntry)> {
-        self.dependencies
-            .iter()
-            .chain(&self.dev_dependencies)
-            .chain(&self.build_dependencies)
+    fn table(&self, table: DependencyTable) -> &BTreeMap<String, DependencyEntry> {
+        match table {
+            DependencyTable::Dependencies => &self.dependencies,
+            DependencyTable::DevDependencies => &self.dev_dependencies,
+            DependencyTable::BuildDependencies => &self.build_dependencies,
+        }
     }
 
-    fn build_names(&self) -> impl Iterator<Item = &str> {
-        (self.dependencies.keys())
-            .chain(self.build_dependencies.keys())
-            .map(String::as_str)
+    fn entries(&self) -> impl Iterator<Item = (&String, &DependencyEntry)> {
+        (DependencyTable::ALL.into_iter()).flat_map(|table| self.table(table))
     }
 }
 
@@ -231,15 +241,23 @@ impl<'a> RootTables<'a> {
 }
 
 impl MemberManifest {
-    fn build_dependencies(&self) -> impl Iterator<Item = &str> {
-        std::iter::once(&self.tables)
-            .chain(self.target.values())
-            .flat_map(DependencyTables::build_names)
+    fn dependency_tables(&self) -> impl Iterator<Item = &DependencyTables> {
+        std::iter::once(&self.tables).chain(self.target.values())
+    }
+
+    fn dependencies_in<'a>(
+        &'a self,
+        tables: &'a [DependencyTable],
+    ) -> impl Iterator<Item = (DependencyTable, &'a str)> {
+        tables.iter().flat_map(move |&table| {
+            (self.dependency_tables())
+                .flat_map(move |tables| tables.table(table).keys())
+                .map(move |name| (table, name.as_str()))
+        })
     }
 
     fn rules(&self) -> Vec<CrateRule> {
-        let mut rules: Vec<CrateRule> = std::iter::once(&self.tables)
-            .chain(self.target.values())
+        let mut rules: Vec<CrateRule> = (self.dependency_tables())
             .flat_map(DependencyTables::entries)
             .filter(|(_, entry)| !entry.is_inherited())
             .map(|(name, _)| CrateRule::OwnDependency { name: name.clone() })

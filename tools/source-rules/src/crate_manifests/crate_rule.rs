@@ -1,20 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::InheritedTable;
+use super::{DependencyTable, InheritedTable};
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CrateRule {
-    InexactWorkspaceDependency { name: String },
-    UnlistedMember { member: String },
-    UnlistedWorkspace { listing: &'static str },
-    ListedWithoutWorkspace { directory: String },
-    UnknownInheritedTable { name: String },
-    DifferentWorkspaceTable { table: InheritedTable },
-    OwnDependency { name: String },
+    InexactWorkspaceDependency {
+        name: String,
+    },
+    UnlistedMember {
+        member: String,
+    },
+    UnlistedWorkspace {
+        listing: &'static str,
+    },
+    ListedWithoutWorkspace {
+        directory: String,
+    },
+    UnknownInheritedTable {
+        name: String,
+    },
+    DifferentWorkspaceTable {
+        table: InheritedTable,
+    },
+    OwnDependency {
+        name: String,
+    },
     OwnVersion,
     OwnEdition,
     OwnLints,
-    VulkanDependency { vulkan: String, through: String },
+    VulkanDependency {
+        vulkan: String,
+        through: String,
+        table: DependencyTable,
+    },
 }
 
 impl fmt::Display for CrateRule {
@@ -59,9 +77,29 @@ impl fmt::Display for CrateRule {
             Self::OwnLints => formatter.write_str(
                 "take the lints from the workspace with `[lints]` and `workspace = true`",
             ),
-            Self::VulkanDependency { vulkan, through } => write!(
+            Self::VulkanDependency {
+                vulkan,
+                through,
+                table: DependencyTable::Dependencies,
+            } => write!(
                 formatter,
-                "remove the dependency {through}, which brings {vulkan} into a crate that builds without Vulkan",
+                "remove the dependency {through}, which adds {vulkan} to a crate that builds without Vulkan",
+            ),
+            Self::VulkanDependency {
+                vulkan,
+                through,
+                table: DependencyTable::BuildDependencies,
+            } => write!(
+                formatter,
+                "remove the build-dependency {through}, which adds {vulkan} to the build of a crate that builds without Vulkan",
+            ),
+            Self::VulkanDependency {
+                vulkan,
+                through,
+                table: DependencyTable::DevDependencies,
+            } => write!(
+                formatter,
+                "remove the dev-dependency {through}, which adds {vulkan} to the tests of a crate whose tests build without Vulkan",
             ),
         }
     }
